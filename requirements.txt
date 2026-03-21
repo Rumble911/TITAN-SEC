@@ -11,4 +11,3 @@ faker
 gunicorn
 opencv-python-headless
 numpy
-appwrite
