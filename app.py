@@ -36,13 +36,7 @@ import urllib.parse
 import urllib.request
 import json as _json
 
-# --- Appwrite SDK ---
-from appwrite.client import Client
-from appwrite.services.databases import Databases
-from appwrite.services.users import Users
-from appwrite.services.storage import Storage
-from appwrite.id import ID
-from appwrite.query import Query
+# --- Appwrite REST API (no SDK needed) ---
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -74,20 +68,16 @@ TESTMAIL_NAMESPACE = os.environ.get('TESTMAIL_NAMESPACE', '')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'abdallahalqam4040@gmail.com')
 
 
-def get_appwrite_client():
-    client = Client()
-    client.set_endpoint(APPWRITE_ENDPOINT)
-    client.set_project(APPWRITE_PROJECT_ID)
-    client.set_key(APPWRITE_API_KEY)
-    return client
+def _aw_headers():
+    return {
+        "Content-Type": "application/json",
+        "X-Appwrite-Project": APPWRITE_PROJECT_ID,
+        "X-Appwrite-Key": APPWRITE_API_KEY,
+    }
 
 
-def get_db():
-    return Databases(get_appwrite_client())
-
-
-def get_users_service():
-    return Users(get_appwrite_client())
+def _aw_url(path):
+    return f"{APPWRITE_ENDPOINT}{path}"
 
 
 # =====================================================================
@@ -199,54 +189,82 @@ def send_canary_alert(ip, user_agent):
 # === Appwrite DB Helpers ===
 # =====================================================================
 
+def _unique_id():
+    return secrets.token_hex(10)
+
+
 def aw_create(collection_id, data, doc_id=None):
-    db = get_db()
-    return db.create_document(
-        database_id=APPWRITE_DB_ID,
-        collection_id=collection_id,
-        document_id=doc_id or ID.unique(),
-        data=data
-    )
+    doc_id = doc_id or _unique_id()
+    url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections/{collection_id}/documents")
+    payload = {"documentId": doc_id, "data": data}
+    r = requests.post(url, headers=_aw_headers(), json=payload, timeout=15)
+    r.raise_for_status()
+    return r.json()
 
 
 def aw_get(collection_id, doc_id):
-    db = get_db()
+    url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections/{collection_id}/documents/{doc_id}")
     try:
-        return db.get_document(APPWRITE_DB_ID, collection_id, doc_id)
+        r = requests.get(url, headers=_aw_headers(), timeout=10)
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json()
     except Exception:
         return None
 
 
 def aw_list(collection_id, queries=None):
-    db = get_db()
+    url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections/{collection_id}/documents")
+    params = {}
+    if queries:
+        params['queries[]'] = queries
     try:
-        result = db.list_documents(APPWRITE_DB_ID, collection_id, queries=queries or [])
-        return result.get('documents', [])
+        r = requests.get(url, headers=_aw_headers(), params=params, timeout=10)
+        r.raise_for_status()
+        return r.json().get('documents', [])
     except Exception:
         return []
 
 
 def aw_update(collection_id, doc_id, data):
-    db = get_db()
-    return db.update_document(APPWRITE_DB_ID, collection_id, doc_id, data)
+    url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections/{collection_id}/documents/{doc_id}")
+    payload = {"data": data}
+    r = requests.patch(url, headers=_aw_headers(), json=payload, timeout=15)
+    r.raise_for_status()
+    return r.json()
 
 
 def aw_delete(collection_id, doc_id):
-    db = get_db()
+    url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections/{collection_id}/documents/{doc_id}")
     try:
-        db.delete_document(APPWRITE_DB_ID, collection_id, doc_id)
-        return True
+        r = requests.delete(url, headers=_aw_headers(), timeout=10)
+        return r.status_code in [200, 204]
     except Exception:
         return False
 
 
+def aw_list_query(collection_id, field, value):
+    """List documents filtered by field=value using Appwrite REST query"""
+    url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections/{collection_id}/documents")
+    query = f'equal("{field}", ["{value}"])'
+    try:
+        r = requests.get(url, headers=_aw_headers(),
+                         params={"queries[]": query}, timeout=10)
+        r.raise_for_status()
+        return r.json().get('documents', [])
+    except Exception as e:
+        print(f"[TITAN] aw_list_query error: {e}")
+        return []
+
+
 def find_user_by_username(username):
-    docs = aw_list(COL_USERS, [Query.equal('username', username)])
+    docs = aw_list_query(COL_USERS, 'username', username)
     return docs[0] if docs else None
 
 
 def find_user_by_email(email):
-    docs = aw_list(COL_USERS, [Query.equal('email', email)])
+    docs = aw_list_query(COL_USERS, 'email', email)
     return docs[0] if docs else None
 
 
@@ -428,48 +446,37 @@ def init_db():
     ]
 
     for col_id, attributes in collections_needed:
-        try:
-            db.get_collection(APPWRITE_DB_ID, col_id)
+        check_url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections/{col_id}")
+        r = requests.get(check_url, headers=_aw_headers(), timeout=10)
+        if r.status_code == 200:
             print(f"[TITAN] Collection {col_id} already exists.")
-        except Exception:
-            try:
-                db.create_collection(
-                    database_id=APPWRITE_DB_ID,
-                    collection_id=col_id,
-                    name=col_id,
-                    document_security=False
-                )
-                print(f"[TITAN] Created collection: {col_id}")
-                for attr in attributes:
-                    try:
-                        attr_type = attr.get("type")
-                        if attr_type == "string":
-                            db.create_string_attribute(
-                                APPWRITE_DB_ID, col_id,
-                                key=attr["key"],
-                                size=attr.get("size", 255),
-                                required=attr.get("required", False),
-                                default=attr.get("default", None)
-                            )
-                        elif attr_type == "boolean":
-                            db.create_boolean_attribute(
-                                APPWRITE_DB_ID, col_id,
-                                key=attr["key"],
-                                required=attr.get("required", False),
-                                default=attr.get("default", False)
-                            )
-                        elif attr_type == "integer":
-                            db.create_integer_attribute(
-                                APPWRITE_DB_ID, col_id,
-                                key=attr["key"],
-                                required=attr.get("required", False),
-                                default=attr.get("default", 0)
-                            )
-                        time.sleep(0.3)
-                    except Exception as ae:
-                        print(f"[TITAN] Attr error {col_id}.{attr['key']}: {ae}")
-            except Exception as ce:
-                print(f"[TITAN] Collection create error {col_id}: {ce}")
+            continue
+        try:
+            create_url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections")
+            r = requests.post(create_url, headers=_aw_headers(), json={
+                "collectionId": col_id, "name": col_id, "documentSecurity": False
+            }, timeout=10)
+            r.raise_for_status()
+            print(f"[TITAN] Created collection: {col_id}")
+            time.sleep(1)
+            for attr in attributes:
+                try:
+                    attr_type = attr.get("type")
+                    attr_url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections/{col_id}/attributes/{attr_type}")
+                    payload = {"key": attr["key"], "required": attr.get("required", False)}
+                    if attr_type == "string":
+                        payload["size"] = attr.get("size", 255)
+                        if attr.get("default") is not None:
+                            payload["default"] = attr["default"]
+                    elif attr_type in ("boolean", "integer"):
+                        if attr.get("default") is not None:
+                            payload["default"] = attr["default"]
+                    requests.post(attr_url, headers=_aw_headers(), json=payload, timeout=10)
+                    time.sleep(0.3)
+                except Exception as ae:
+                    print(f"[TITAN] Attr error {col_id}.{attr['key']}: {ae}")
+        except Exception as ce:
+            print(f"[TITAN] Collection create error {col_id}: {ce}")
 
     # Root user
     time.sleep(2)
@@ -505,7 +512,7 @@ def _create_canary_file():
 def _ensure_integrity_baseline():
     app_path = os.path.abspath(__file__)
     try:
-        existing = aw_list(COL_INTEGRITY, [Query.equal('file_path', app_path)])
+        existing = aw_list_query(COL_INTEGRITY, "file_path", app_path)
         if not existing:
             with open(app_path, 'rb') as f:
                 file_hash = hashlib.sha256(f.read()).hexdigest()
@@ -978,7 +985,7 @@ def auth_logout():
     token = session.get('token')
     if token:
         try:
-            sessions = aw_list(COL_ACTIVE_SESSIONS, [Query.equal('token', token)])
+            sessions = aw_list_query(COL_ACTIVE_SESSIONS, "token", token)
             for s in sessions:
                 aw_delete(COL_ACTIVE_SESSIONS, s['$id'])
         except Exception:
@@ -1100,11 +1107,9 @@ def auth_backup_login():
             return jsonify({"error": "المستخدم غير موجود أو غير مفعّل"}), 404
         user_id = user['$id']
         code_hash = hashlib.sha256(code.encode()).hexdigest()
-        codes = aw_list(COL_BACKUP_CODES, [
-            Query.equal('user_id', user_id),
-            Query.equal('code_hash', code_hash),
-            Query.equal('used', False)
-        ])
+        # Find backup code matching user_id and code_hash
+        all_codes = aw_list_query(COL_BACKUP_CODES, "user_id", user_id)
+        codes = [c for c in all_codes if c.get('code_hash') == code_hash and not c.get('used', True)]
         if not codes:
             return jsonify({"error": "الكود غير صحيح أو مستخدم مسبقاً"}), 401
         aw_update(COL_BACKUP_CODES, codes[0]['$id'], {"used": True})
@@ -1124,7 +1129,7 @@ def auth_regenerate_backup_codes():
     user_id = session['user_id']
     username = session['username']
     try:
-        existing = aw_list(COL_BACKUP_CODES, [Query.equal('user_id', user_id)])
+        existing = aw_list_query(COL_BACKUP_CODES, "user_id", user_id)
         for doc in existing:
             aw_delete(COL_BACKUP_CODES, doc['$id'])
         codes = [''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8)) for _ in range(8)]
@@ -1374,7 +1379,7 @@ def vault_timelocked_list():
     if 'user_id' not in session:
         return jsonify({"error": "غير مصرح"}), 401
     try:
-        docs = aw_list(COL_VAULT_TIMELOCKED, [Query.equal('user_id', session['user_id'])])
+        docs = aw_list_query(COL_VAULT_TIMELOCKED, 'user_id', session['user_id'])
         now = datetime.datetime.now()
         files = []
         for r in docs:
@@ -1430,7 +1435,7 @@ def security_integrity_check():
     try:
         with open(app_path, 'rb') as f:
             current_hash = hashlib.sha256(f.read()).hexdigest()
-        docs = aw_list(COL_INTEGRITY, [Query.equal('file_path', app_path)])
+        docs = aw_list_query(COL_INTEGRITY, "file_path", app_path)
         if not docs:
             return jsonify({"intact": True, "message": "لا يوجد baseline محفوظ بعد."})
         stored_hash = docs[0]['hash']
@@ -1454,7 +1459,7 @@ def security_integrity_reset():
         with open(app_path, 'rb') as f:
             new_hash = hashlib.sha256(f.read()).hexdigest()
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        existing = aw_list(COL_INTEGRITY, [Query.equal('file_path', app_path)])
+        existing = aw_list_query(COL_INTEGRITY, "file_path", app_path)
         for doc in existing:
             aw_delete(COL_INTEGRITY, doc['$id'])
         aw_create(COL_INTEGRITY, {"file_path": app_path, "hash": new_hash, "set_at": now})
@@ -1482,10 +1487,10 @@ def security_panic():
                 vf.write(f_obj.encrypt(data))
             del random_key, f_obj
             nuked = True
-        tl_docs = aw_list(COL_VAULT_TIMELOCKED, [Query.equal('user_id', user_id)])
+        tl_docs = aw_list_query(COL_VAULT_TIMELOCKED, "user_id", user_id)
         for doc in tl_docs:
             aw_delete(COL_VAULT_TIMELOCKED, doc['$id'])
-        sessions = aw_list(COL_ACTIVE_SESSIONS, [Query.equal('user_id', user_id)])
+        sessions = aw_list_query(COL_ACTIVE_SESSIONS, "user_id", user_id)
         for s in sessions:
             aw_delete(COL_ACTIVE_SESSIONS, s['$id'])
         session.clear()
@@ -1503,7 +1508,11 @@ def security_logs_api():
         return jsonify({"error": "غير مصرح"}), 401
     limit = min(int(request.args.get('limit', 50)), 200)
     try:
-        docs = aw_list(COL_SECURITY_LOGS, [Query.limit(limit), Query.order_desc('$createdAt')])
+        url = _aw_url(f"/databases/{APPWRITE_DB_ID}/collections/{COL_SECURITY_LOGS}/documents")
+        r = requests.get(url, headers=_aw_headers(),
+                         params={"queries[]": [f'limit({limit})', 'orderDesc("$createdAt")']}, timeout=10)
+        r.raise_for_status()
+        docs = r.json().get('documents', [])
         logs = [{"time": d.get('time'), "action": d.get('action'), "details": d.get('details'),
                  "ip": d.get('ip'), "username": d.get('username')} for d in docs]
         return jsonify({"logs": logs})
@@ -1523,7 +1532,7 @@ def admin_users():
     if not user or not user.get('is_admin'):
         return jsonify({"error": "ليس لديك صلاحية"}), 403
     try:
-        users = aw_list(COL_USERS, [Query.limit(100)])
+        users = aw_list(COL_USERS)
         result = []
         for u in users:
             result.append({
