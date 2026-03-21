@@ -1,0 +1,14 @@
+flask
+requests
+cryptography
+Pillow
+pypdf
+pyotp
+qrcode
+psutil
+exifread
+faker
+gunicorn
+opencv-python-headless
+numpy
+appwrite
