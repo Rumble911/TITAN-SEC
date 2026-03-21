@@ -53,34 +53,25 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=12)
 # --- قاعدة بيانات المستخدمين (SQLite) ---
 # PostgreSQL - connection via DATABASE_URL env var
 
-# --- إعدادات الإيميل الخاصة بك يا عبد الله ---
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "noreply@titan-cyber.me")
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+# --- إعدادات الإيميل ---
+SENDER_EMAIL = os.environ.get("GMAIL_USER", "abdallahalqam4040@gmail.com")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 
 
 def _resend_send(to_email, subject, body):
-    """إرسال إيميل عبر Resend API"""
-    data = _json.dumps({
-        "from": f"TITAN SEC <noreply@titan-cyber.me>",
-        "to": [to_email],
-        "subject": subject,
-        "text": body
-    }).encode('utf-8')
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        method="POST"
-    )
+    """إرسال إيميل عبر Gmail SMTP"""
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return resp.status == 200
+        msg = MIMEText(body, 'plain', 'utf-8')
+        msg['Subject'] = subject
+        msg['From'] = f"TITAN SEC <{SENDER_EMAIL}>"
+        msg['To'] = to_email
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
+            server.login(SENDER_EMAIL, GMAIL_APP_PASSWORD)
+            server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
+        return True
     except Exception as e:
-        print(f"[Resend] Error: {e}")
+        print(f"[Gmail SMTP] Error: {e}")
         return False
 
 def send_otp_email(target_email, otp_code):
