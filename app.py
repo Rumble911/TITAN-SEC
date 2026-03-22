@@ -1201,63 +1201,52 @@ HTML_TEMPLATE = """
 
             <!-- ===== AI SECTION ===== -->
             <div id="ai-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-green-400 border-b border-slate-700 pb-2 flex items-center gap-2">🤖 الذكاء الاصطناعي (TITAN AI)</h2>
-                
-                <!-- Model selector -->
+                <h2 class="text-xl font-bold text-green-400 border-b border-slate-700 pb-2">&#129302; الذكاء الاصطناعي (TITAN AI)</h2>
                 <div class="flex items-center gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700">
                     <span class="text-xs text-gray-400 font-bold">النموذج:</span>
-                    <select id="ai-model-select" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none focus:ring-1 focus:ring-green-500">
-                        <option value="llama3:latest">Llama 3 (8B) - أقوى</option>
-                        <option value="llama3.2:latest">Llama 3.2 (3B) - أسرع</option>
+                    <select id="ai-model-select" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
+                        <option value="llama3:latest">Llama 3 (8B)</option>
+                        <option value="llama3.2:latest">Llama 3.2 (3B)</option>
                     </select>
-                    <span id="ai-status" class="text-xs text-green-400 animate-pulse">● متصل</span>
                 </div>
-
-                <!-- Chat Box -->
                 <div class="bg-slate-900/70 rounded-2xl border border-green-900/30 overflow-hidden">
-                    <div class="p-3 border-b border-slate-700 flex items-center gap-2">
-                        <span class="text-green-400 text-sm font-bold">💬 محادثة مع AI</span>
+                    <div class="p-3 border-b border-slate-700">
+                        <span class="text-green-400 text-sm font-bold">&#128172; محادثة مع AI</span>
                     </div>
-                    <div id="ai-chat-messages" class="h-80 overflow-y-auto p-4 space-y-3 flex flex-col">
+                    <div id="ai-chat-messages" class="h-80 overflow-y-auto p-4 space-y-3">
                         <div class="flex justify-start">
-                            <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[80%] text-sm">
-                                مرحباً! أنا TITAN AI مبني على Llama 3. كيف يمكنني مساعدتك في الأمن السيبراني؟ 🛡️
+                            <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl max-w-xs text-sm">
+                                مرحباً! أنا TITAN AI. كيف يمكنني مساعدتك؟
                             </div>
                         </div>
                     </div>
                     <div class="p-3 border-t border-slate-700 flex gap-2">
-                        <input type="text" id="ai-chat-input" placeholder="اسأل عن أي شيء في الأمن السيبراني..." 
-                            class="flex-1 bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none focus:ring-1 focus:ring-green-500"
-                            onkeydown="if(event.key==='Enter') sendAiMessage()">
+                        <input type="text" id="ai-chat-input" placeholder="اسأل عن الأمن السيبراني..."
+                            class="flex-1 bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none">
                         <button onclick="sendAiMessage()" id="ai-send-btn"
-                            class="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all">
+                            class="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-xl font-bold text-sm">
                             إرسال
                         </button>
                     </div>
                 </div>
-
-                <!-- AI Analysis Tools -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Password Analyzer -->
                     <div class="bg-slate-900/50 p-5 rounded-xl border border-purple-900/40">
-                        <h3 class="font-bold text-purple-400 mb-3 flex items-center gap-2">🔑 تحليل كلمة السر بالـ AI</h3>
+                        <h3 class="font-bold text-purple-400 mb-3">&#128273; تحليل كلمة السر بالـ AI</h3>
                         <input type="password" id="ai-pass-input" placeholder="أدخل كلمة السر للتحليل..."
-                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none focus:ring-1 focus:ring-purple-500 mb-3">
-                        <button onclick="analyzePassword()" class="w-full bg-purple-900/50 hover:bg-purple-800 text-purple-300 font-bold p-2 rounded-xl border border-purple-800/50 transition-all text-sm">
-                            تحليل بالذكاء الاصطناعي 🧠
+                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none mb-3">
+                        <button onclick="analyzePassword()" class="w-full bg-purple-900/50 hover:bg-purple-800 text-purple-300 font-bold p-2 rounded-xl border border-purple-800/50 text-sm">
+                            تحليل بالذكاء الاصطناعي
                         </button>
-                        <div id="ai-pass-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700 whitespace-pre-wrap leading-relaxed"></div>
+                        <div id="ai-pass-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700"></div>
                     </div>
-
-                    <!-- Security Analyzer -->
                     <div class="bg-slate-900/50 p-5 rounded-xl border border-blue-900/40">
-                        <h3 class="font-bold text-blue-400 mb-3 flex items-center gap-2">🔍 تحليل أمني بالـ AI</h3>
-                        <textarea id="ai-security-input" rows="3" placeholder="الصق نتائج فحص IP أو scan هنا..."
-                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none focus:ring-1 focus:ring-blue-500 mb-3 resize-none"></textarea>
-                        <button onclick="analyzeSecurity()" class="w-full bg-blue-900/50 hover:bg-blue-800 text-blue-300 font-bold p-2 rounded-xl border border-blue-800/50 transition-all text-sm">
-                            تحليل بالذكاء الاصطناعي 🧠
+                        <h3 class="font-bold text-blue-400 mb-3">&#128269; تحليل أمني بالـ AI</h3>
+                        <textarea id="ai-security-input" rows="3" placeholder="الصق نتائج فحص IP هنا..."
+                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none mb-3 resize-none"></textarea>
+                        <button onclick="analyzeSecurity()" class="w-full bg-blue-900/50 hover:bg-blue-800 text-blue-300 font-bold p-2 rounded-xl border border-blue-800/50 text-sm">
+                            تحليل بالذكاء الاصطناعي
                         </button>
-                        <div id="ai-security-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700 whitespace-pre-wrap leading-relaxed"></div>
+                        <div id="ai-security-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700"></div>
                     </div>
                 </div>
             </div>
@@ -4986,55 +4975,56 @@ HTML_TEMPLATE = """
         // === AI Functions ===
         // =====================================================================
 
+        document.addEventListener('DOMContentLoaded', function() {
+            var aiInput = document.getElementById('ai-chat-input');
+            if (aiInput) {
+                aiInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') sendAiMessage();
+                });
+            }
+        });
+
         async function sendAiMessage() {
-            const input = document.getElementById('ai-chat-input');
-            const messages = document.getElementById('ai-chat-messages');
-            const btn = document.getElementById('ai-send-btn');
-            const model = document.getElementById('ai-model-select').value;
-            const msg = input.value.trim();
+            var input = document.getElementById('ai-chat-input');
+            var messages = document.getElementById('ai-chat-messages');
+            var btn = document.getElementById('ai-send-btn');
+            var modelEl = document.getElementById('ai-model-select');
+            var model = modelEl ? modelEl.value : 'llama3:latest';
+            var msg = input.value.trim();
             if (!msg) return;
 
-            messages.innerHTML += `<div class="flex justify-end"><div class="bg-green-800/60 text-white px-4 py-3 rounded-2xl rounded-tr-sm max-w-[80%] text-sm">${msg}</div></div>`;
+            var userDiv = document.createElement('div');
+            userDiv.className = 'flex justify-end';
+            userDiv.innerHTML = '<div class="bg-green-800/60 text-white px-4 py-3 rounded-2xl max-w-xs text-sm">' + msg + '</div>';
+            messages.appendChild(userDiv);
             input.value = '';
             btn.disabled = true;
-            btn.textContent = '⏳';
+            btn.textContent = '...';
             messages.scrollTop = messages.scrollHeight;
 
-            const replyId = 'reply-' + Date.now();
-            messages.innerHTML += `<div class="flex justify-start"><div id="${replyId}" class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[85%] text-sm whitespace-pre-wrap leading-relaxed border border-green-900/30"><span class="text-green-400 animate-pulse">●</span></div></div>`;
+            var replyDiv = document.createElement('div');
+            replyDiv.className = 'flex justify-start';
+            var replyInner = document.createElement('div');
+            replyInner.className = 'bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl max-w-xs text-sm';
+            replyInner.textContent = '...';
+            replyDiv.appendChild(replyInner);
+            messages.appendChild(replyDiv);
             messages.scrollTop = messages.scrollHeight;
 
             try {
-                const res = await fetch('/api/ai/chat', {
+                var res = await fetch('/api/ai/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: msg, model})
+                    body: JSON.stringify({message: msg, model: model})
                 });
-
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                let fullText = '';
-                const replyEl = document.getElementById(replyId);
-
-                while (true) {
-                    const {done, value} = await reader.read();
-                    if (done) break;
-                    const lines = decoder.decode(value).split('\n');
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const chunk = JSON.parse(line.slice(6));
-                                if (chunk.error) { replyEl.innerHTML = '<span class="text-red-400">' + chunk.error + '</span>'; break; }
-                                fullText += chunk.token || '';
-                                if (replyEl) replyEl.textContent = fullText || '●';
-                                messages.scrollTop = messages.scrollHeight;
-                            } catch(e) {}
-                        }
-                    }
+                var data = await res.json();
+                if (data.reply) {
+                    replyInner.textContent = data.reply;
+                } else {
+                    replyInner.textContent = data.error || 'حدث خطأ';
                 }
             } catch(e) {
-                const replyEl = document.getElementById(replyId);
-                if(replyEl) replyEl.innerHTML = '<span class="text-red-400">فشل الاتصال بالـ AI</span>';
+                replyInner.textContent = 'فشل الاتصال';
             }
             btn.disabled = false;
             btn.textContent = 'إرسال';
@@ -7524,41 +7514,21 @@ def ai_chat():
     model = data.get('model', OLLAMA_MODEL)
     if not message:
         return jsonify({"error": "الرسالة مطلوبة"}), 400
-
-    system_prompt = """أنت TITAN AI، مساعد ذكاء اصطناعي متخصص في الأمن السيبراني.
-قواعد صارمة يجب اتباعها دائماً:
-1. أجب دائماً باللغة العربية الفصحى فقط
-2. لا تستخدم أي كلمات إنجليزية إلا للمصطلحات التقنية الضرورية جداً
-3. اجعل ردودك منظمة وواضحة
-4. كن مختصراً ومفيداً"""
-
-    full_prompt = f"{system_prompt}\n\nالمستخدم: {message}\n\nTITAN AI:"
-
-    def generate():
-        try:
-            res = requests.post(
-                f"{OLLAMA_URL}/api/generate",
-                json={"model": model, "prompt": full_prompt, "stream": True},
-                stream=True,
-                timeout=120
-            )
-            full_response = ""
-            for line in res.iter_lines():
-                if line:
-                    import json as _j
-                    chunk = _j.loads(line.decode('utf-8'))
-                    token = chunk.get('response', '')
-                    full_response += token
-                    yield "data: " + _j.dumps({'token': token, 'done': chunk.get('done', False)}) + "\n\n"
-                    if chunk.get('done'):
-                        break
-        except Exception as e:
-            yield "data: " + _j.dumps({'error': str(e), 'done': True}) + "\n\n"
-
-    add_audit_log("AI Chat 🤖", f"استخدام AI: {message[:50]}", username=session.get('username', ''))
-    from flask import Response
-    return Response(generate(), mimetype='text/event-stream',
-                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+    system_prompt = "أنت TITAN AI مساعد أمن سيبراني. أجب دائماً باللغة العربية فقط بشكل مختصر وواضح."
+    full_prompt = system_prompt + "\n\nالمستخدم: " + message + "\n\nTITAN AI:"
+    try:
+        res = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": model, "prompt": full_prompt, "stream": False},
+            timeout=120
+        )
+        res.raise_for_status()
+        reply = res.json().get('response', '')
+        add_audit_log("AI Chat", f"AI: {message[:50]}", username=session.get('username', ''))
+        return jsonify({"success": True, "reply": reply, "model": model})
+    except Exception as e:
+        print(f"[TITAN AI] Error: {e}")
+        return jsonify({"error": "فشل الاتصال بـ AI"}), 500
 
 
 @app.route('/api/ai/analyze', methods=['POST'])
