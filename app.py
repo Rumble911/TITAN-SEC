@@ -1179,6 +1179,7 @@ HTML_TEMPLATE = """
                 <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
                 <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
                 <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
+                <button onclick="showTab('ai')" id="btn-ai" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> TITAN AI</button>
                 <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
             </div>
 
@@ -2305,6 +2306,41 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
+            <!-- ===== AI CHAT SECTION ===== -->
+            <div id="ai-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-purple-400 border-b border-slate-700 pb-2 flex items-center gap-2">🤖 TITAN AI – المساعد الأمني الذكي</h2>
+                
+                <div class="bg-slate-900/80 rounded-2xl border border-purple-900/40 overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)]">
+                    <!-- Chat Display -->
+                    <div id="aiChatDisplay" class="h-80 overflow-y-auto p-5 space-y-4 flex flex-col">
+                        <div class="flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-purple-700/50 flex items-center justify-center text-sm flex-shrink-0">🤖</div>
+                            <div class="bg-slate-800/80 rounded-2xl rounded-tl-none p-4 max-w-[85%] border border-purple-900/30">
+                                <p class="text-sm text-gray-200 leading-relaxed">مرحباً! أنا TITAN AI، مساعدك المتخصص في الأمن السيبراني. كيف يمكنني مساعدتك اليوم؟</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Input Area -->
+                    <div class="border-t border-slate-700/50 p-4 flex gap-3 items-end bg-slate-900/50">
+                        <textarea id="aiChatInput" rows="2" placeholder="اكتب سؤالك الأمني هنا..." class="flex-1 p-3 rounded-xl bg-slate-800 border border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none text-sm resize-none" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendAiMessage();}"></textarea>
+                        <button onclick="sendAiMessage()" id="aiSendBtn" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-5 py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] flex items-center gap-2 text-sm whitespace-nowrap">
+                            <span>إرسال</span> <span>🚀</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <button onclick="sendAiQuick('كيف أحمي حسابي من الاختراق؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🛡️ نصائح حماية الحساب</button>
+                    <button onclick="sendAiQuick('ما هي أفضل ممارسات كلمات السر؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🔑 أفضل ممارسات كلمات السر</button>
+                    <button onclick="sendAiQuick('كيف أكتشف إذا كان جهازي مخترقاً؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🔍 فحص الاختراق</button>
+                    <button onclick="sendAiQuick('ما هي أنواع هجمات التصيد الاحتيالي؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🎣 هجمات التصيد</button>
+                    <button onclick="sendAiQuick('كيف أشفر ملفاتي الحساسة؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🔐 تشفير الملفات</button>
+                    <button onclick="sendAiQuick('ما هو VPN وكيف يحمي خصوصيتي؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🌐 VPN والخصوصية</button>
+                </div>
+            </div>
+
             <!-- ===== EXTREME PRIVACY SECTION ===== -->
             <div id="extreme-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-teal-400 border-b border-slate-700 pb-2">🛡️ أدوات الخصوصية القصوى (Extreme Privacy)</h2>
@@ -3119,7 +3155,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','qr','identity','audio','extreme','netintel'];
+        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','qr','identity','audio','ai','extreme','netintel'];
         let _prevTab = 'pass';
         function showTab(type) {
             // Auto-lock vault silently when leaving it
@@ -4669,6 +4705,72 @@ HTML_TEMPLATE = """
             `).join('');
         }
         
+        // ===== TITAN AI Chat JS =====
+        async function sendAiMessage() {
+            const input = document.getElementById('aiChatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+            input.value = '';
+            
+            // Show user message
+            const display = document.getElementById('aiChatDisplay');
+            display.innerHTML += `
+                <div class="flex items-start gap-3 justify-end">
+                    <div class="bg-purple-700/40 rounded-2xl rounded-tr-none p-4 max-w-[85%] border border-purple-700/30">
+                        <p class="text-sm text-gray-100 leading-relaxed">${msg}</p>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm flex-shrink-0">👤</div>
+                </div>
+                <div id="ai-typing" class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-full bg-purple-700/50 flex items-center justify-center text-sm flex-shrink-0">🤖</div>
+                    <div class="bg-slate-800/80 rounded-2xl rounded-tl-none p-4 border border-purple-900/30">
+                        <div class="flex gap-1"><span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce"></span><span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style="animation-delay:0.1s"></span><span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style="animation-delay:0.2s"></span></div>
+                    </div>
+                </div>
+            `;
+            display.scrollTop = display.scrollHeight;
+            
+            const btn = document.getElementById('aiSendBtn');
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: msg})
+                });
+                const data = await res.json();
+                
+                const typingEl = document.getElementById('ai-typing');
+                if (typingEl) typingEl.remove();
+                
+                const reply = data.reply || data.error || 'حدث خطأ في الاتصال';
+                display.innerHTML += `
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-full bg-purple-700/50 flex items-center justify-center text-sm flex-shrink-0">🤖</div>
+                        <div class="bg-slate-800/80 rounded-2xl rounded-tl-none p-4 max-w-[85%] border border-purple-900/30">
+                            <p class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">${reply}</p>
+                        </div>
+                    </div>
+                `;
+                display.scrollTop = display.scrollHeight;
+                soundManager.success();
+            } catch(e) {
+                const typingEl = document.getElementById('ai-typing');
+                if (typingEl) typingEl.remove();
+                titanAlert('فشل الاتصال بـ TITAN AI');
+                soundManager.error();
+            }
+            btn.disabled = false;
+        }
+        
+        function sendAiQuick(msg) {
+            document.getElementById('aiChatInput').value = msg;
+            sendAiMessage();
+            showTab('ai');
+        }
+        // ===== END TITAN AI Chat JS =====
+
         // Initial setup
         showTab('pass');
         refreshLogs();
