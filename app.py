@@ -5036,7 +5036,7 @@ HTML_TEMPLATE = """
             const result = document.getElementById('ai-pass-result');
             if (!pass) return titanAlert('أدخل كلمة السر للتحليل');
             result.classList.remove('hidden');
-            result.textContent = '🤔 جاري التحليل...';
+            result.textContent = 'جاري التحليل... قد يستغرق 30-60 ثانية ⏳';
             try {
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
@@ -5044,28 +5044,28 @@ HTML_TEMPLATE = """
                     body: JSON.stringify({type: 'password', content: pass})
                 });
                 const data = await res.json();
-                result.textContent = data.analysis || data.error;
+                result.textContent = data.analysis || data.error || 'فشل التحليل';
             } catch(e) {
-                result.textContent = 'فشل التحليل';
+                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
             }
         }
 
         async function analyzeSecurity() {
-            const content = document.getElementById('ai-security-input').value;
+            const secVal = document.getElementById('ai-security-input').value;
             const result = document.getElementById('ai-security-result');
-            if (!content) return titanAlert('أدخل البيانات للتحليل');
+            if (!secVal) return titanAlert('أدخل البيانات للتحليل');
             result.classList.remove('hidden');
-            result.textContent = '🤔 جاري التحليل الأمني...';
+            result.textContent = 'جاري التحليل الأمني... قد يستغرق 30-60 ثانية ⏳';
             try {
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'security', content})
+                    body: JSON.stringify({type: 'security', content: secVal})
                 });
                 const data = await res.json();
-                result.textContent = data.analysis || data.error;
+                result.textContent = data.analysis || data.error || 'فشل التحليل';
             } catch(e) {
-                result.textContent = 'فشل التحليل';
+                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
             }
         }
 
@@ -7571,7 +7571,7 @@ def ai_analyze():
         res = requests.post(
             f"{OLLAMA_URL}/api/generate",
             json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=120
+            timeout=180
         )
         res.raise_for_status()
         reply = res.json().get('response', '')
