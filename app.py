@@ -59,8 +59,13 @@ BREVO_SMTP_PORT = 587
 BREVO_SMTP_LOGIN = os.environ.get('BREVO_SMTP_LOGIN', '')
 BREVO_SMTP_KEY = os.environ.get('BREVO_SMTP_KEY', '')
 SENDER_EMAIL = 'noreply@titan-cyber.me'
-SENDER_NAME = 'TITAN SEC'
+SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
+
+# --- Ollama AI Config ---
+OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://localhost:11434')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3:latest')
+
 
 
 def _resend_send(to_email, subject, body):
@@ -89,7 +94,7 @@ def send_otp_email(target_email, otp_code):
     body = f"""مرحباً بك في TITAN SEC.
 كود التحقق الخاص بك هو: {otp_code}
 يرجى إدخاله في الموقع لإتمام عملية التسجيل."""
-    return _resend_send(target_email, "كود التحقق الخاص بك - TITAN", body)
+    return _resend_send(target_email, "TITAN", body)
 
 def _send_email_async(subject, body, to=None):
     """إرسال إيميل في الخلفية (بدون تأخير الاستجابة)"""
@@ -114,7 +119,7 @@ def send_login_alert_email(username, ip, user_agent):
 - الوقت: {now}
 
 """
-    _send_email_async(f"TITAN - دخول جديد: {username}", body)
+    _send_email_async(f"TITAN - {username}", body)
 
 
 def send_new_device_alert(username, ip, user_agent, email):
@@ -130,8 +135,8 @@ def send_new_device_alert(username, ip, user_agent, email):
 
 اذا لم تكن انت، غير كلمة السر فورا.
 """
-    _send_email_async(f"TITAN - جهاز جديد: {username}", body, to=email)
-    _send_email_async(f"TITAN ADMIN - جهاز جديد لـ {username}", body)
+    _send_email_async(f"TITAN - {username}", body, to=email)
+    _send_email_async(f"TITAN - {username}", body)
 
 
 def send_geo_fence_alert(username, ip, old_country, new_country, email):
@@ -146,8 +151,8 @@ def send_geo_fence_alert(username, ip, old_country, new_country, email):
 - IP: {ip}
 - الوقت: {now}
 """
-    _send_email_async(f"TITAN - دخول مشبوه لـ {username}", body, to=email)
-    _send_email_async(f"TITAN ADMIN - دخول مشبوه لـ {username}", body)
+    _send_email_async(f"TITAN - {username}", body, to=email)
+    _send_email_async(f"TITAN - {username}", body)
 
 
 def send_canary_alert(ip, user_agent):
@@ -160,7 +165,7 @@ def send_canary_alert(ip, user_agent):
 - المتصفح: {user_agent[:150]}
 - الوقت: {now}
 """
-    _send_email_async("TITAN HONEYPOT - تنبيه تجسس!", body)
+    _send_email_async("TITAN", body)
 
 
 
@@ -1189,7 +1194,72 @@ HTML_TEMPLATE = """
                 <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
                 <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
                 <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
+                <button onclick="showTab('ai')" id="btn-ai" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
                 <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
+            </div>
+
+
+            <!-- ===== AI SECTION ===== -->
+            <div id="ai-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-green-400 border-b border-slate-700 pb-2 flex items-center gap-2">🤖 الذكاء الاصطناعي (TITAN AI)</h2>
+                
+                <!-- Model selector -->
+                <div class="flex items-center gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700">
+                    <span class="text-xs text-gray-400 font-bold">النموذج:</span>
+                    <select id="ai-model-select" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none focus:ring-1 focus:ring-green-500">
+                        <option value="llama3:latest">Llama 3 (8B) - أقوى</option>
+                        <option value="llama3.2:latest">Llama 3.2 (3B) - أسرع</option>
+                    </select>
+                    <span id="ai-status" class="text-xs text-green-400 animate-pulse">● متصل</span>
+                </div>
+
+                <!-- Chat Box -->
+                <div class="bg-slate-900/70 rounded-2xl border border-green-900/30 overflow-hidden">
+                    <div class="p-3 border-b border-slate-700 flex items-center gap-2">
+                        <span class="text-green-400 text-sm font-bold">💬 محادثة مع AI</span>
+                    </div>
+                    <div id="ai-chat-messages" class="h-80 overflow-y-auto p-4 space-y-3 flex flex-col">
+                        <div class="flex justify-start">
+                            <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[80%] text-sm">
+                                مرحباً! أنا TITAN AI مبني على Llama 3. كيف يمكنني مساعدتك في الأمن السيبراني؟ 🛡️
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-3 border-t border-slate-700 flex gap-2">
+                        <input type="text" id="ai-chat-input" placeholder="اسأل عن أي شيء في الأمن السيبراني..." 
+                            class="flex-1 bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none focus:ring-1 focus:ring-green-500"
+                            onkeydown="if(event.key===\'Enter\') sendAiMessage()">
+                        <button onclick="sendAiMessage()" id="ai-send-btn"
+                            class="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all">
+                            إرسال
+                        </button>
+                    </div>
+                </div>
+
+                <!-- AI Analysis Tools -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Password Analyzer -->
+                    <div class="bg-slate-900/50 p-5 rounded-xl border border-purple-900/40">
+                        <h3 class="font-bold text-purple-400 mb-3 flex items-center gap-2">🔑 تحليل كلمة السر بالـ AI</h3>
+                        <input type="password" id="ai-pass-input" placeholder="أدخل كلمة السر للتحليل..."
+                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none focus:ring-1 focus:ring-purple-500 mb-3">
+                        <button onclick="analyzePassword()" class="w-full bg-purple-900/50 hover:bg-purple-800 text-purple-300 font-bold p-2 rounded-xl border border-purple-800/50 transition-all text-sm">
+                            تحليل بالذكاء الاصطناعي 🧠
+                        </button>
+                        <div id="ai-pass-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700 whitespace-pre-wrap leading-relaxed"></div>
+                    </div>
+
+                    <!-- Security Analyzer -->
+                    <div class="bg-slate-900/50 p-5 rounded-xl border border-blue-900/40">
+                        <h3 class="font-bold text-blue-400 mb-3 flex items-center gap-2">🔍 تحليل أمني بالـ AI</h3>
+                        <textarea id="ai-security-input" rows="3" placeholder="الصق نتائج فحص IP أو scan هنا..."
+                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none focus:ring-1 focus:ring-blue-500 mb-3 resize-none"></textarea>
+                        <button onclick="analyzeSecurity()" class="w-full bg-blue-900/50 hover:bg-blue-800 text-blue-300 font-bold p-2 rounded-xl border border-blue-800/50 transition-all text-sm">
+                            تحليل بالذكاء الاصطناعي 🧠
+                        </button>
+                        <div id="ai-security-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700 whitespace-pre-wrap leading-relaxed"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- ===== ADMIN SECTION ===== -->
@@ -3129,7 +3199,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','qr','identity','audio','extreme','netintel'];
+        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','qr','identity','audio','extreme','netintel','ai'];
         let _prevTab = 'pass';
         function showTab(type) {
             // Auto-lock vault silently when leaving it
@@ -4912,6 +4982,97 @@ HTML_TEMPLATE = """
         style.textContent = '@keyframes fadeInDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
         document.head.appendChild(style);
         // ===== END TITAN Notifications =====
+        // =====================================================================
+        // === AI Functions ===
+        // =====================================================================
+
+        async function sendAiMessage() {
+            const input = document.getElementById('ai-chat-input');
+            const messages = document.getElementById('ai-chat-messages');
+            const btn = document.getElementById('ai-send-btn');
+            const model = document.getElementById('ai-model-select').value;
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            // Show user message
+            messages.innerHTML += `
+                <div class="flex justify-end">
+                    <div class="bg-green-800/60 text-white px-4 py-3 rounded-2xl rounded-tr-sm max-w-[80%] text-sm">${msg}</div>
+                </div>`;
+            input.value = '';
+            btn.disabled = true;
+            btn.textContent = '⏳';
+            messages.scrollTop = messages.scrollHeight;
+
+            // Thinking indicator
+            const thinkId = 'think-' + Date.now();
+            messages.innerHTML += `<div id="${thinkId}" class="flex justify-start"><div class="bg-slate-800 text-green-400 px-4 py-3 rounded-2xl rounded-tl-sm text-sm animate-pulse">🤔 جاري التفكير...</div></div>`;
+            messages.scrollTop = messages.scrollHeight;
+
+            try {
+                const res = await fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: msg, model})
+                });
+                const data = await res.json();
+                document.getElementById(thinkId)?.remove();
+
+                if (data.success) {
+                    messages.innerHTML += `
+                        <div class="flex justify-start">
+                            <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[85%] text-sm whitespace-pre-wrap leading-relaxed border border-green-900/30">${data.reply}</div>
+                        </div>`;
+                } else {
+                    messages.innerHTML += `<div class="flex justify-start"><div class="bg-red-900/30 text-red-400 px-4 py-3 rounded-2xl text-sm">${data.error}</div></div>`;
+                }
+            } catch(e) {
+                document.getElementById(thinkId)?.remove();
+                messages.innerHTML += `<div class="flex justify-start"><div class="bg-red-900/30 text-red-400 px-4 py-3 rounded-2xl text-sm">فشل الاتصال بالـ AI</div></div>`;
+            }
+            btn.disabled = false;
+            btn.textContent = 'إرسال';
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        async function analyzePassword() {
+            const pass = document.getElementById('ai-pass-input').value;
+            const result = document.getElementById('ai-pass-result');
+            if (!pass) return titanAlert('أدخل كلمة السر للتحليل');
+            result.classList.remove('hidden');
+            result.textContent = '🤔 جاري التحليل...';
+            try {
+                const res = await fetch('/api/ai/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({type: 'password', content: pass})
+                });
+                const data = await res.json();
+                result.textContent = data.analysis || data.error;
+            } catch(e) {
+                result.textContent = 'فشل التحليل';
+            }
+        }
+
+        async function analyzeSecurity() {
+            const content = document.getElementById('ai-security-input').value;
+            const result = document.getElementById('ai-security-result');
+            if (!content) return titanAlert('أدخل البيانات للتحليل');
+            result.classList.remove('hidden');
+            result.textContent = '🤔 جاري التحليل الأمني...';
+            try {
+                const res = await fetch('/api/ai/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({type: 'security', content})
+                });
+                const data = await res.json();
+                result.textContent = data.analysis || data.error;
+            } catch(e) {
+                result.textContent = 'فشل التحليل';
+            }
+        }
+
 
         async function generateQR() {
             const text = document.getElementById('qrText').value.trim();
@@ -7214,7 +7375,7 @@ def security_panic():
 
         session.clear()
         add_audit_log("PANIC BUTTON PRESSED", f"تم تفعيل زر الطوارئ بواسطة: {username}", username=username)
-        _send_email_async("TITAN PANIC – تم تفعيل زر الانتحار!",
+        _send_email_async("TITAN",
                           f"تم تفعيل زر الانتحار بواسطة المستخدم: {username}\nجميع بيانات القبو مشفرة ومكتاح محذوف.")
         return jsonify({"success": True, "nuked": nuked, "message": "تم تدمير البيانات بشكل آمن. تم تسجيل الخروج."})
     except Exception as e:
@@ -7341,6 +7502,99 @@ def vault_timelocked_download():
             conn.close()
 
 
+
+
+
+# =====================================================================
+# === AI Routes (Ollama) ===
+# =====================================================================
+
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    if 'user_id' not in session:
+        return jsonify({"error": "غير مصرح"}), 401
+    data = request.json or {}
+    message = data.get('message', '').strip()
+    model = data.get('model', OLLAMA_MODEL)
+    if not message:
+        return jsonify({"error": "الرسالة مطلوبة"}), 400
+    try:
+        res = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": model, "prompt": message, "stream": False},
+            timeout=60
+        )
+        res.raise_for_status()
+        response_data = res.json()
+        reply = response_data.get('response', '')
+        add_audit_log("AI Chat 🤖", f"استخدام AI: {message[:50]}", username=session.get('username', ''))
+        return jsonify({"success": True, "reply": reply, "model": model})
+    except Exception as e:
+        print(f"[TITAN AI] Error: {e}")
+        return jsonify({"error": "فشل الاتصال بـ AI. تأكد من تشغيل Ollama."}), 500
+
+
+@app.route('/api/ai/analyze', methods=['POST'])
+def ai_analyze():
+    """تحليل نتائج الأمان بالذكاء الاصطناعي"""
+    if 'user_id' not in session:
+        return jsonify({"error": "غير مصرح"}), 401
+    data = request.json or {}
+    analyze_type = data.get('type', 'security')
+    content_to_analyze = data.get('content', '')
+    if not content_to_analyze:
+        return jsonify({"error": "المحتوى مطلوب"}), 400
+
+    prompts = {
+        'password': f"""أنت خبير أمن معلومات. حلل كلمة السر التالية وأعطني:
+1. مستوى الأمان (ضعيف/متوسط/قوي/ممتاز)
+2. نقاط الضعف
+3. اقتراحات للتحسين
+4. هل يمكن تخمينها بسهولة؟
+
+كلمة السر: {content_to_analyze}
+
+أجب باللغة العربية بشكل مختصر وواضح.""",
+        'ip': f"""أنت خبير أمن شبكات. حلل بيانات IP التالية وأخبرني:
+1. هل هناك أي مؤشرات خطر؟
+2. ما هو تقييمك للأمان؟
+3. توصياتك
+
+البيانات: {content_to_analyze}
+
+أجب باللغة العربية بشكل مختصر.""",
+        'security': f"""أنت خبير أمن معلومات. حلل هذه البيانات الأمنية وأعطني تقييماً:
+{content_to_analyze}
+
+أجب باللغة العربية بشكل مختصر وواضح مع توصيات عملية."""
+    }
+
+    prompt = prompts.get(analyze_type, prompts['security'])
+    try:
+        res = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+            timeout=90
+        )
+        res.raise_for_status()
+        reply = res.json().get('response', '')
+        add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
+        return jsonify({"success": True, "analysis": reply})
+    except Exception as e:
+        print(f"[TITAN AI] Analyze error: {e}")
+        return jsonify({"error": "فشل التحليل بالذكاء الاصطناعي"}), 500
+
+
+@app.route('/api/ai/models', methods=['GET'])
+def ai_models():
+    """جلب النماذج المتاحة"""
+    try:
+        res = requests.get(f"{OLLAMA_URL}/api/tags", timeout=10)
+        res.raise_for_status()
+        models = [m['name'] for m in res.json().get('models', [])]
+        return jsonify({"models": models})
+    except Exception as e:
+        return jsonify({"error": str(e), "models": []}), 500
 
 
 # --- تهيئة قاعدة البيانات عند بدء التطبيق ---
