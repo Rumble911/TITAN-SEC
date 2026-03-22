@@ -7549,15 +7549,11 @@ def ai_chat():
                     chunk = _j.loads(line.decode('utf-8'))
                     token = chunk.get('response', '')
                     full_response += token
-                    yield f"data: {_j.dumps({'token': token, 'done': chunk.get('done', False)})}
-
-"
+                    yield "data: " + _j.dumps({'token': token, 'done': chunk.get('done', False)}) + "\n\n"
                     if chunk.get('done'):
                         break
         except Exception as e:
-            yield f"data: {_j.dumps({'error': str(e), 'done': True})}
-
-"
+            yield "data: " + _j.dumps({'error': str(e), 'done': True}) + "\n\n"
 
     add_audit_log("AI Chat 🤖", f"استخدام AI: {message[:50]}", username=session.get('username', ''))
     from flask import Response
