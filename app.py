@@ -62,9 +62,28 @@ SENDER_EMAIL = 'noreply@titan-cyber.me'
 SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 
-# --- Ollama AI Config ---
-OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://localhost:11434')
-OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3:latest')
+# --- DigitalOcean AI Agent Config ---
+DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://y4l7lnqc5wj5frtdqugl6dqs.agents.do-ai.run')
+DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
+
+def _call_do_ai(message: str) -> str:
+    """استدعاء TITAN AI عبر DigitalOcean Agent"""
+    headers = {
+        'Authorization': f'Bearer {DO_AI_KEY}',
+        'Content-Type': 'application/json',
+    }
+    payload = {
+        "messages": [{"role": "user", "content": message}]
+    }
+    res = requests.post(
+        f"{DO_AI_ENDPOINT}/api/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=30
+    )
+    res.raise_for_status()
+    data = res.json()
+    return data['choices'][0]['message']['content']
 
 
 def _resend_send(to_email, subject, body):
@@ -7512,21 +7531,15 @@ def ai_chat():
     message = data.get('message', '').strip()
     if not message:
         return jsonify({"error": "الرسالة مطلوبة"}), 400
-    system_prompt = "أنت TITAN AI مساعد أمن سيبراني. أجب دائماً باللغة العربية فقط بشكل مختصر وواضح."
-    full_prompt = system_prompt + "\n\nالمستخدم: " + message + "\n\nTITAN AI:"
+    if not DO_AI_KEY:
+        return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
     try:
-        res = requests.post(
-            f"{OLLAMA_URL}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": full_prompt, "stream": False},
-            timeout=120
-        )
-        res.raise_for_status()
-        reply = res.json().get('response', '')
+        reply = _call_do_ai(message)
         add_audit_log("AI Chat 🤖", f"AI: {message[:50]}", username=session.get('username', ''))
         return jsonify({"success": True, "reply": reply})
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
-        return jsonify({"error": "فشل الاتصال بـ AI"}), 500
+        return jsonify({"error": f"فشل الاتصال بـ TITAN AI: {str(e)}"}), 500
 
 
 @app.route('/api/ai/analyze', methods=['POST'])
@@ -7547,29 +7560,20 @@ def ai_analyze():
     }
 
     prompt = prompts.get(analyze_type, prompts['security'])
+    if not DO_AI_KEY:
+        return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
     try:
-        res = requests.post(
-            f"{OLLAMA_URL}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=180
-        )
-        res.raise_for_status()
-        reply = res.json().get('response', '')
+        analysis = _call_do_ai(prompt)
         add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
-        return jsonify({"success": True, "analysis": reply})
+        return jsonify({"success": True, "analysis": analysis})
     except Exception as e:
         print(f"[TITAN AI] Analyze error: {e}")
-        return jsonify({"error": "فشل التحليل"}), 500
+        return jsonify({"error": f"فشل التحليل: {str(e)}"}), 500
 
 
 @app.route('/api/ai/models', methods=['GET'])
 def ai_models():
-    try:
-        res = requests.get(f"{OLLAMA_URL}/api/tags", timeout=10)
-        models = [m['name'] for m in res.json().get('models', [])]
-        return jsonify({"models": models})
-    except Exception as e:
-        return jsonify({"models": [], "error": str(e)})
+    return jsonify({"models": ["TITAN-SEC AI (DigitalOcean)"], "success": True})
 
 
 # --- تهيئة قاعدة البيانات عند بدء التطبيق ---
