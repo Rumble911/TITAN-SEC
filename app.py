@@ -4994,19 +4994,14 @@ HTML_TEMPLATE = """
             const msg = input.value.trim();
             if (!msg) return;
 
-            // Show user message
-            messages.innerHTML += `
-                <div class="flex justify-end">
-                    <div class="bg-green-800/60 text-white px-4 py-3 rounded-2xl rounded-tr-sm max-w-[80%] text-sm">${msg}</div>
-                </div>`;
+            messages.innerHTML += `<div class="flex justify-end"><div class="bg-green-800/60 text-white px-4 py-3 rounded-2xl rounded-tr-sm max-w-[80%] text-sm">${msg}</div></div>`;
             input.value = '';
             btn.disabled = true;
             btn.textContent = '⏳';
             messages.scrollTop = messages.scrollHeight;
 
-            // Thinking indicator
-            const thinkId = 'think-' + Date.now();
-            messages.innerHTML += `<div id="${thinkId}" class="flex justify-start"><div class="bg-slate-800 text-green-400 px-4 py-3 rounded-2xl rounded-tl-sm text-sm animate-pulse">🤔 جاري التفكير...</div></div>`;
+            const replyId = 'reply-' + Date.now();
+            messages.innerHTML += `<div class="flex justify-start"><div id="${replyId}" class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[85%] text-sm whitespace-pre-wrap leading-relaxed border border-green-900/30"><span class="text-green-400 animate-pulse">●</span></div></div>`;
             messages.scrollTop = messages.scrollHeight;
 
             try {
@@ -5015,20 +5010,31 @@ HTML_TEMPLATE = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({message: msg, model})
                 });
-                const data = await res.json();
-                document.getElementById(thinkId)?.remove();
 
-                if (data.success) {
-                    messages.innerHTML += `
-                        <div class="flex justify-start">
-                            <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[85%] text-sm whitespace-pre-wrap leading-relaxed border border-green-900/30">${data.reply}</div>
-                        </div>`;
-                } else {
-                    messages.innerHTML += `<div class="flex justify-start"><div class="bg-red-900/30 text-red-400 px-4 py-3 rounded-2xl text-sm">${data.error}</div></div>`;
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = '';
+                const replyEl = document.getElementById(replyId);
+
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    const lines = decoder.decode(value).split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const chunk = JSON.parse(line.slice(6));
+                                if (chunk.error) { replyEl.innerHTML = '<span class="text-red-400">' + chunk.error + '</span>'; break; }
+                                fullText += chunk.token || '';
+                                if (replyEl) replyEl.textContent = fullText || '●';
+                                messages.scrollTop = messages.scrollHeight;
+                            } catch(e) {}
+                        }
+                    }
                 }
             } catch(e) {
-                document.getElementById(thinkId)?.remove();
-                messages.innerHTML += `<div class="flex justify-start"><div class="bg-red-900/30 text-red-400 px-4 py-3 rounded-2xl text-sm">فشل الاتصال بالـ AI</div></div>`;
+                const replyEl = document.getElementById(replyId);
+                if(replyEl) replyEl.innerHTML = '<span class="text-red-400">فشل الاتصال بالـ AI</span>';
             }
             btn.disabled = false;
             btn.textContent = 'إرسال';
@@ -7518,20 +7524,45 @@ def ai_chat():
     model = data.get('model', OLLAMA_MODEL)
     if not message:
         return jsonify({"error": "الرسالة مطلوبة"}), 400
-    try:
-        res = requests.post(
-            f"{OLLAMA_URL}/api/generate",
-            json={"model": model, "prompt": message, "stream": False},
-            timeout=60
-        )
-        res.raise_for_status()
-        response_data = res.json()
-        reply = response_data.get('response', '')
-        add_audit_log("AI Chat 🤖", f"استخدام AI: {message[:50]}", username=session.get('username', ''))
-        return jsonify({"success": True, "reply": reply, "model": model})
-    except Exception as e:
-        print(f"[TITAN AI] Error: {e}")
-        return jsonify({"error": "فشل الاتصال بـ AI. تأكد من تشغيل Ollama."}), 500
+
+    system_prompt = """أنت TITAN AI، مساعد ذكاء اصطناعي متخصص في الأمن السيبراني.
+قواعد صارمة يجب اتباعها دائماً:
+1. أجب دائماً باللغة العربية الفصحى فقط
+2. لا تستخدم أي كلمات إنجليزية إلا للمصطلحات التقنية الضرورية جداً
+3. اجعل ردودك منظمة وواضحة
+4. كن مختصراً ومفيداً"""
+
+    full_prompt = f"{system_prompt}\n\nالمستخدم: {message}\n\nTITAN AI:"
+
+    def generate():
+        try:
+            res = requests.post(
+                f"{OLLAMA_URL}/api/generate",
+                json={"model": model, "prompt": full_prompt, "stream": True},
+                stream=True,
+                timeout=120
+            )
+            full_response = ""
+            for line in res.iter_lines():
+                if line:
+                    import json as _j
+                    chunk = _j.loads(line.decode('utf-8'))
+                    token = chunk.get('response', '')
+                    full_response += token
+                    yield f"data: {_j.dumps({'token': token, 'done': chunk.get('done', False)})}
+
+"
+                    if chunk.get('done'):
+                        break
+        except Exception as e:
+            yield f"data: {_j.dumps({'error': str(e), 'done': True})}
+
+"
+
+    add_audit_log("AI Chat 🤖", f"استخدام AI: {message[:50]}", username=session.get('username', ''))
+    from flask import Response
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 @app.route('/api/ai/analyze', methods=['POST'])
@@ -7574,7 +7605,7 @@ def ai_analyze():
         res = requests.post(
             f"{OLLAMA_URL}/api/generate",
             json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=90
+            timeout=120
         )
         res.raise_for_status()
         reply = res.json().get('response', '')
