@@ -1228,7 +1228,7 @@ HTML_TEMPLATE = """
                     <div class="p-3 border-t border-slate-700 flex gap-2">
                         <input type="text" id="ai-chat-input" placeholder="اسأل عن أي شيء في الأمن السيبراني..." 
                             class="flex-1 bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none focus:ring-1 focus:ring-green-500"
-                            onkeydown="if(event.key===\'Enter\') sendAiMessage()">
+                            onkeydown="if(event.key==='Enter') sendAiMessage()">
                         <button onclick="sendAiMessage()" id="ai-send-btn"
                             class="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all">
                             إرسال
