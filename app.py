@@ -62,29 +62,9 @@ SENDER_EMAIL = 'noreply@titan-cyber.me'
 SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 
-# --- Camber AI Config ---
-CAMBER_API_KEY = os.environ.get('CAMBER_API_KEY', '')
-TITAN_ENDPOINT = "https://api.cambercloud.com/v1/agents/abdallahalqam4040gmailcom/TITAN/chat"
-
-def _call_camber(message: str, context: str = None) -> str:
-    """استدعاء TITAN AI عبر Camber API"""
-    headers = {
-        'Authorization': f'Bearer {CAMBER_API_KEY}',
-        'Content-Type': 'application/json',
-        'User-Agent': 'CyberSecPlatform/1.0'
-    }
-    payload = {
-        "message": message,
-        "context": context or "TITAN SEC Cybersecurity Platform",
-        "timestamp": datetime.datetime.now().isoformat(),
-        "source": "cybersec_platform"
-    }
-    res = requests.post(TITAN_ENDPOINT, headers=headers, json=payload, timeout=30)
-    res.raise_for_status()
-    data = res.json()
-    if isinstance(data, dict):
-        return data.get('response') or data.get('message') or data.get('reply') or data.get('text') or str(data)
-    return str(data)
+# --- Ollama AI Config ---
+OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://localhost:11434')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3:latest')
 
 
 def _resend_send(to_email, subject, body):
@@ -7532,18 +7512,21 @@ def ai_chat():
     message = data.get('message', '').strip()
     if not message:
         return jsonify({"error": "الرسالة مطلوبة"}), 400
-    if not CAMBER_API_KEY:
-        return jsonify({"error": "CAMBER_API_KEY غير مضبوط"}), 500
+    system_prompt = "أنت TITAN AI مساعد أمن سيبراني. أجب دائماً باللغة العربية فقط بشكل مختصر وواضح."
+    full_prompt = system_prompt + "\n\nالمستخدم: " + message + "\n\nTITAN AI:"
     try:
-        reply = _call_camber(message, "Security analysis request from TITAN SEC")
+        res = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": OLLAMA_MODEL, "prompt": full_prompt, "stream": False},
+            timeout=120
+        )
+        res.raise_for_status()
+        reply = res.json().get('response', '')
         add_audit_log("AI Chat 🤖", f"AI: {message[:50]}", username=session.get('username', ''))
         return jsonify({"success": True, "reply": reply})
-    except requests.exceptions.HTTPError as e:
-        print(f"[TITAN AI] HTTP Error: {e.response.status_code} - {e.response.text}")
-        return jsonify({"error": f"خطأ HTTP {e.response.status_code}"}), 500
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
-        return jsonify({"error": f"فشل الاتصال بـ TITAN AI: {str(e)}"}), 500
+        return jsonify({"error": "فشل الاتصال بـ AI"}), 500
 
 
 @app.route('/api/ai/analyze', methods=['POST'])
@@ -7556,8 +7539,6 @@ def ai_analyze():
     content_to_analyze = data.get('content', '')
     if not content_to_analyze:
         return jsonify({"error": "المحتوى مطلوب"}), 400
-    if not CAMBER_API_KEY:
-        return jsonify({"error": "CAMBER_API_KEY غير مضبوط"}), 500
 
     prompts = {
         'password': f"حلل كلمة السر هذه أمنياً بالعربية: مستوى الأمان، نقاط الضعف، اقتراحات للتحسين. كلمة السر: {content_to_analyze}",
@@ -7567,17 +7548,28 @@ def ai_analyze():
 
     prompt = prompts.get(analyze_type, prompts['security'])
     try:
-        analysis = _call_camber(prompt, f"Security analysis - type: {analyze_type}")
+        res = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+            timeout=180
+        )
+        res.raise_for_status()
+        reply = res.json().get('response', '')
         add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
-        return jsonify({"success": True, "analysis": analysis})
+        return jsonify({"success": True, "analysis": reply})
     except Exception as e:
         print(f"[TITAN AI] Analyze error: {e}")
-        return jsonify({"error": f"فشل التحليل: {str(e)}"}), 500
+        return jsonify({"error": "فشل التحليل"}), 500
 
 
 @app.route('/api/ai/models', methods=['GET'])
 def ai_models():
-    return jsonify({"models": ["TITAN-AI (Camber)"], "success": True})
+    try:
+        res = requests.get(f"{OLLAMA_URL}/api/tags", timeout=10)
+        models = [m['name'] for m in res.json().get('models', [])]
+        return jsonify({"models": models})
+    except Exception as e:
+        return jsonify({"models": [], "error": str(e)})
 
 
 # --- تهيئة قاعدة البيانات عند بدء التطبيق ---
