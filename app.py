@@ -7469,9 +7469,12 @@ def ai_chat():
         reply = _call_camber(message)
         add_audit_log("AI Chat 🤖", f"رسالة: {message[:50]}", username=session.get('username', ''))
         return jsonify({"success": True, "reply": reply})
+    except requests.exceptions.HTTPError as e:
+        print(f"[TITAN AI] HTTP Error: {e.response.status_code} - {e.response.text}")
+        return jsonify({"error": f"خطأ HTTP {e.response.status_code}: {e.response.text[:200]}"}), 500
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
-        return jsonify({"error": "فشل الاتصال بـ TITAN AI"}), 500
+        return jsonify({"error": f"خطأ: {str(e)}"}), 500
 
 
 @app.route('/api/ai/analyze', methods=['POST'])
