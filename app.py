@@ -43,7 +43,7 @@ import json as _json
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # حد أقصى للملفات 16 ميجابايت
-app.secret_key = 'TITAN_ULTRA_SECRET_KEY_2025_SECURE_BY_DEFAULT_CHANGE_THIS'
+app.secret_key = os.environ.get('SECRET_KEY', 'TITAN_ULTRA_SECRET_KEY_2025')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = True   # HTTPS only on Render
@@ -53,25 +53,59 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=12)
 # --- قاعدة بيانات المستخدمين (SQLite) ---
 # PostgreSQL - connection via DATABASE_URL env var
 
-# --- إعدادات الإيميل ---
-SENDER_EMAIL = os.environ.get("GMAIL_USER", "abdallahalqam4040@gmail.com")
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+# --- إعدادات الإيميل (Brevo SMTP) ---
+BREVO_SMTP_SERVER = 'smtp-relay.brevo.com'
+BREVO_SMTP_PORT = 587
+BREVO_SMTP_LOGIN = os.environ.get('BREVO_SMTP_LOGIN', '')
+BREVO_SMTP_KEY = os.environ.get('BREVO_SMTP_KEY', '')
+SENDER_EMAIL = 'noreply@titan-cyber.me'
+SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
+
+# --- Camber AI Config ---
+CAMBER_API_KEY = os.environ.get('CAMBER_API_KEY', '')
+TITAN_ENDPOINT = "https://api.cambercloud.com/v1/agents/abdallahalqam4040gmailcom/TITAN/chat"
+
+def _call_camber(message: str, context: str = None) -> str:
+    """استدعاء TITAN AI عبر Camber API"""
+    headers = {
+        'Authorization': f'Bearer {CAMBER_API_KEY}',
+        'Content-Type': 'application/json',
+        'User-Agent': 'CyberSecPlatform/1.0'
+    }
+    payload = {
+        "message": message,
+        "context": context or "TITAN SEC Cybersecurity Platform",
+        "timestamp": datetime.datetime.now().isoformat(),
+        "source": "cybersec_platform"
+    }
+    res = requests.post(TITAN_ENDPOINT, headers=headers, json=payload, timeout=30)
+    res.raise_for_status()
+    data = res.json()
+    if isinstance(data, dict):
+        return data.get('response') or data.get('message') or data.get('reply') or data.get('text') or str(data)
+    return str(data)
 
 
 def _resend_send(to_email, subject, body):
-    """إرسال إيميل عبر Gmail SMTP"""
+    """إرسال إيميل عبر Brevo SMTP"""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
     try:
-        msg = MIMEText(body, 'plain', 'utf-8')
+        msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = f"TITAN SEC <{SENDER_EMAIL}>"
+        msg['From'] = f"{SENDER_NAME} <{SENDER_EMAIL}>"
         msg['To'] = to_email
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
-            server.login(SENDER_EMAIL, GMAIL_APP_PASSWORD)
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        with smtplib.SMTP(BREVO_SMTP_SERVER, BREVO_SMTP_PORT) as server:
+            server.starttls()
+            server.login(BREVO_SMTP_LOGIN, BREVO_SMTP_KEY)
             server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
+        print(f"[Brevo] Email sent to {to_email}")
         return True
     except Exception as e:
-        print(f"[Gmail SMTP] Error: {e}")
+        print(f"[Brevo] Error: {e}")
         return False
 
 def send_otp_email(target_email, otp_code):
@@ -79,7 +113,7 @@ def send_otp_email(target_email, otp_code):
     body = f"""مرحباً بك في TITAN SEC.
 كود التحقق الخاص بك هو: {otp_code}
 يرجى إدخاله في الموقع لإتمام عملية التسجيل."""
-    return _resend_send(target_email, "كود التحقق الخاص بك - TITAN", body)
+    return _resend_send(target_email, "TITAN", body)
 
 def _send_email_async(subject, body, to=None):
     """إرسال إيميل في الخلفية (بدون تأخير الاستجابة)"""
@@ -104,7 +138,7 @@ def send_login_alert_email(username, ip, user_agent):
 - الوقت: {now}
 
 """
-    _send_email_async(f"TITAN - دخول جديد: {username}", body)
+    _send_email_async(f"TITAN - {username}", body)
 
 
 def send_new_device_alert(username, ip, user_agent, email):
@@ -120,8 +154,8 @@ def send_new_device_alert(username, ip, user_agent, email):
 
 اذا لم تكن انت، غير كلمة السر فورا.
 """
-    _send_email_async(f"TITAN - جهاز جديد: {username}", body, to=email)
-    _send_email_async(f"TITAN ADMIN - جهاز جديد لـ {username}", body)
+    _send_email_async(f"TITAN - {username}", body, to=email)
+    _send_email_async(f"TITAN - {username}", body)
 
 
 def send_geo_fence_alert(username, ip, old_country, new_country, email):
@@ -136,8 +170,8 @@ def send_geo_fence_alert(username, ip, old_country, new_country, email):
 - IP: {ip}
 - الوقت: {now}
 """
-    _send_email_async(f"TITAN - دخول مشبوه لـ {username}", body, to=email)
-    _send_email_async(f"TITAN ADMIN - دخول مشبوه لـ {username}", body)
+    _send_email_async(f"TITAN - {username}", body, to=email)
+    _send_email_async(f"TITAN - {username}", body)
 
 
 def send_canary_alert(ip, user_agent):
@@ -150,7 +184,7 @@ def send_canary_alert(ip, user_agent):
 - المتصفح: {user_agent[:150]}
 - الوقت: {now}
 """
-    _send_email_async("TITAN HONEYPOT - تنبيه تجسس!", body)
+    _send_email_async("TITAN", body)
 
 
 
@@ -1179,8 +1213,61 @@ HTML_TEMPLATE = """
                 <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
                 <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
                 <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
-                <button onclick="showTab('ai')" id="btn-ai" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> TITAN AI</button>
+                <button onclick="showTab('ai')" id="btn-ai" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
                 <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
+            </div>
+
+
+            <!-- ===== AI SECTION ===== -->
+            <div id="ai-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-green-400 border-b border-slate-700 pb-2">&#129302; الذكاء الاصطناعي (TITAN AI)</h2>
+                <div class="flex items-center gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700">
+                    <span class="text-xs text-gray-400 font-bold">النموذج:</span>
+                    <select id="ai-model-select" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
+                        <option value="llama3:latest">Llama 3 (8B)</option>
+                        <option value="llama3.2:latest">Llama 3.2 (3B)</option>
+                    </select>
+                </div>
+                <div class="bg-slate-900/70 rounded-2xl border border-green-900/30 overflow-hidden">
+                    <div class="p-3 border-b border-slate-700">
+                        <span class="text-green-400 text-sm font-bold">&#128172; محادثة مع AI</span>
+                    </div>
+                    <div id="ai-chat-messages" class="h-80 overflow-y-auto p-4 space-y-3">
+                        <div class="flex justify-start">
+                            <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl max-w-xs text-sm">
+                                مرحباً! أنا TITAN AI. كيف يمكنني مساعدتك؟
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-3 border-t border-slate-700 flex gap-2">
+                        <input type="text" id="ai-chat-input" placeholder="اسأل عن الأمن السيبراني..."
+                            class="flex-1 bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none">
+                        <button onclick="sendAiMessage()" id="ai-send-btn"
+                            class="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-xl font-bold text-sm">
+                            إرسال
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/50 p-5 rounded-xl border border-purple-900/40">
+                        <h3 class="font-bold text-purple-400 mb-3">&#128273; تحليل كلمة السر بالـ AI</h3>
+                        <input type="password" id="ai-pass-input" placeholder="أدخل كلمة السر للتحليل..."
+                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none mb-3">
+                        <button onclick="analyzePassword()" class="w-full bg-purple-900/50 hover:bg-purple-800 text-purple-300 font-bold p-2 rounded-xl border border-purple-800/50 text-sm">
+                            تحليل بالذكاء الاصطناعي
+                        </button>
+                        <div id="ai-pass-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700"></div>
+                    </div>
+                    <div class="bg-slate-900/50 p-5 rounded-xl border border-blue-900/40">
+                        <h3 class="font-bold text-blue-400 mb-3">&#128269; تحليل أمني بالـ AI</h3>
+                        <textarea id="ai-security-input" rows="3" placeholder="الصق نتائج فحص IP هنا..."
+                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none mb-3 resize-none"></textarea>
+                        <button onclick="analyzeSecurity()" class="w-full bg-blue-900/50 hover:bg-blue-800 text-blue-300 font-bold p-2 rounded-xl border border-blue-800/50 text-sm">
+                            تحليل بالذكاء الاصطناعي
+                        </button>
+                        <div id="ai-security-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- ===== ADMIN SECTION ===== -->
@@ -2306,41 +2393,6 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <!-- ===== AI CHAT SECTION ===== -->
-            <div id="ai-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-purple-400 border-b border-slate-700 pb-2 flex items-center gap-2">🤖 TITAN AI – المساعد الأمني الذكي</h2>
-                
-                <div class="bg-slate-900/80 rounded-2xl border border-purple-900/40 overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)]">
-                    <!-- Chat Display -->
-                    <div id="aiChatDisplay" class="h-80 overflow-y-auto p-5 space-y-4 flex flex-col">
-                        <div class="flex items-start gap-3">
-                            <div class="w-8 h-8 rounded-full bg-purple-700/50 flex items-center justify-center text-sm flex-shrink-0">🤖</div>
-                            <div class="bg-slate-800/80 rounded-2xl rounded-tl-none p-4 max-w-[85%] border border-purple-900/30">
-                                <p class="text-sm text-gray-200 leading-relaxed">مرحباً! أنا TITAN AI، مساعدك المتخصص في الأمن السيبراني. كيف يمكنني مساعدتك اليوم؟</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Input Area -->
-                    <div class="border-t border-slate-700/50 p-4 flex gap-3 items-end bg-slate-900/50">
-                        <textarea id="aiChatInput" rows="2" placeholder="اكتب سؤالك الأمني هنا..." class="flex-1 p-3 rounded-xl bg-slate-800 border border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none text-sm resize-none" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendAiMessage();}"></textarea>
-                        <button onclick="sendAiMessage()" id="aiSendBtn" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-5 py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] flex items-center gap-2 text-sm whitespace-nowrap">
-                            <span>إرسال</span> <span>🚀</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Quick Actions -->
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <button onclick="sendAiQuick('كيف أحمي حسابي من الاختراق؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🛡️ نصائح حماية الحساب</button>
-                    <button onclick="sendAiQuick('ما هي أفضل ممارسات كلمات السر؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🔑 أفضل ممارسات كلمات السر</button>
-                    <button onclick="sendAiQuick('كيف أكتشف إذا كان جهازي مخترقاً؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🔍 فحص الاختراق</button>
-                    <button onclick="sendAiQuick('ما هي أنواع هجمات التصيد الاحتيالي؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🎣 هجمات التصيد</button>
-                    <button onclick="sendAiQuick('كيف أشفر ملفاتي الحساسة؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🔐 تشفير الملفات</button>
-                    <button onclick="sendAiQuick('ما هو VPN وكيف يحمي خصوصيتي؟')" class="bg-slate-900/60 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500/50 p-3 rounded-xl text-xs text-gray-400 transition-all text-right">🌐 VPN والخصوصية</button>
-                </div>
-            </div>
-
             <!-- ===== EXTREME PRIVACY SECTION ===== -->
             <div id="extreme-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-teal-400 border-b border-slate-700 pb-2">🛡️ أدوات الخصوصية القصوى (Extreme Privacy)</h2>
@@ -3155,7 +3207,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','qr','identity','audio','ai','extreme','netintel'];
+        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','qr','identity','audio','extreme','netintel','ai'];
         let _prevTab = 'pass';
         function showTab(type) {
             // Auto-lock vault silently when leaving it
@@ -4705,72 +4757,6 @@ HTML_TEMPLATE = """
             `).join('');
         }
         
-        // ===== TITAN AI Chat JS =====
-        async function sendAiMessage() {
-            const input = document.getElementById('aiChatInput');
-            const msg = input.value.trim();
-            if (!msg) return;
-            input.value = '';
-            
-            // Show user message
-            const display = document.getElementById('aiChatDisplay');
-            display.innerHTML += `
-                <div class="flex items-start gap-3 justify-end">
-                    <div class="bg-purple-700/40 rounded-2xl rounded-tr-none p-4 max-w-[85%] border border-purple-700/30">
-                        <p class="text-sm text-gray-100 leading-relaxed">${msg}</p>
-                    </div>
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm flex-shrink-0">👤</div>
-                </div>
-                <div id="ai-typing" class="flex items-start gap-3">
-                    <div class="w-8 h-8 rounded-full bg-purple-700/50 flex items-center justify-center text-sm flex-shrink-0">🤖</div>
-                    <div class="bg-slate-800/80 rounded-2xl rounded-tl-none p-4 border border-purple-900/30">
-                        <div class="flex gap-1"><span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce"></span><span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style="animation-delay:0.1s"></span><span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style="animation-delay:0.2s"></span></div>
-                    </div>
-                </div>
-            `;
-            display.scrollTop = display.scrollHeight;
-            
-            const btn = document.getElementById('aiSendBtn');
-            btn.disabled = true;
-            
-            try {
-                const res = await fetch('/api/ai/chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: msg})
-                });
-                const data = await res.json();
-                
-                const typingEl = document.getElementById('ai-typing');
-                if (typingEl) typingEl.remove();
-                
-                const reply = data.reply || data.error || 'حدث خطأ في الاتصال';
-                display.innerHTML += `
-                    <div class="flex items-start gap-3">
-                        <div class="w-8 h-8 rounded-full bg-purple-700/50 flex items-center justify-center text-sm flex-shrink-0">🤖</div>
-                        <div class="bg-slate-800/80 rounded-2xl rounded-tl-none p-4 max-w-[85%] border border-purple-900/30">
-                            <p class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">${reply}</p>
-                        </div>
-                    </div>
-                `;
-                display.scrollTop = display.scrollHeight;
-                soundManager.success();
-            } catch(e) {
-                const typingEl = document.getElementById('ai-typing');
-                if (typingEl) typingEl.remove();
-                titanAlert('فشل الاتصال بـ TITAN AI');
-                soundManager.error();
-            }
-            btn.disabled = false;
-        }
-        
-        function sendAiQuick(msg) {
-            document.getElementById('aiChatInput').value = msg;
-            sendAiMessage();
-            showTab('ai');
-        }
-        // ===== END TITAN AI Chat JS =====
-
         // Initial setup
         showTab('pass');
         refreshLogs();
@@ -5004,6 +4990,104 @@ HTML_TEMPLATE = """
         style.textContent = '@keyframes fadeInDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
         document.head.appendChild(style);
         // ===== END TITAN Notifications =====
+        // =====================================================================
+        // === AI Functions ===
+        // =====================================================================
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var aiInput = document.getElementById('ai-chat-input');
+            if (aiInput) {
+                aiInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') sendAiMessage();
+                });
+            }
+        });
+
+        async function sendAiMessage() {
+            var input = document.getElementById('ai-chat-input');
+            var messages = document.getElementById('ai-chat-messages');
+            var btn = document.getElementById('ai-send-btn');
+            var modelEl = document.getElementById('ai-model-select');
+            var model = modelEl ? modelEl.value : 'llama3:latest';
+            var msg = input.value.trim();
+            if (!msg) return;
+
+            var userDiv = document.createElement('div');
+            userDiv.className = 'flex justify-end';
+            userDiv.innerHTML = '<div class="bg-green-800/60 text-white px-4 py-3 rounded-2xl max-w-xs text-sm">' + msg + '</div>';
+            messages.appendChild(userDiv);
+            input.value = '';
+            btn.disabled = true;
+            btn.textContent = '...';
+            messages.scrollTop = messages.scrollHeight;
+
+            var replyDiv = document.createElement('div');
+            replyDiv.className = 'flex justify-start';
+            var replyInner = document.createElement('div');
+            replyInner.className = 'bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl max-w-xs text-sm';
+            replyInner.textContent = '...';
+            replyDiv.appendChild(replyInner);
+            messages.appendChild(replyDiv);
+            messages.scrollTop = messages.scrollHeight;
+
+            try {
+                var res = await fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: msg, model: model})
+                });
+                var data = await res.json();
+                if (data.reply) {
+                    replyInner.textContent = data.reply;
+                } else {
+                    replyInner.textContent = data.error || 'حدث خطأ';
+                }
+            } catch(e) {
+                replyInner.textContent = 'فشل الاتصال';
+            }
+            btn.disabled = false;
+            btn.textContent = 'إرسال';
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        async function analyzePassword() {
+            const pass = document.getElementById('ai-pass-input').value;
+            const result = document.getElementById('ai-pass-result');
+            if (!pass) return titanAlert('أدخل كلمة السر للتحليل');
+            result.classList.remove('hidden');
+            result.textContent = 'جاري التحليل... قد يستغرق 30-60 ثانية ⏳';
+            try {
+                const res = await fetch('/api/ai/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({type: 'password', content: pass})
+                });
+                const data = await res.json();
+                result.textContent = data.analysis || data.error || 'فشل التحليل';
+            } catch(e) {
+                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
+            }
+        }
+
+        async function analyzeSecurity() {
+            const secVal = document.getElementById('ai-security-input').value;
+            const result = document.getElementById('ai-security-result');
+            if (!secVal) return titanAlert('أدخل البيانات للتحليل');
+            result.classList.remove('hidden');
+            result.textContent = 'جاري التحليل الأمني... قد يستغرق 30-60 ثانية ⏳';
+            try {
+                const res = await fetch('/api/ai/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({type: 'security', content: secVal})
+                });
+                const data = await res.json();
+                result.textContent = data.analysis || data.error || 'فشل التحليل';
+            } catch(e) {
+                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
+            }
+        }
+
 
         async function generateQR() {
             const text = document.getElementById('qrText').value.trim();
@@ -6974,16 +7058,23 @@ def forgot_password_send():
 إذا لم تطلب ذلك، تجاهل هذا البريد.
 — فريق TITAN Security
 """, 'plain', 'utf-8')
-        msg['Subject'] = "TITAN - كود استعادة كلمة السر"
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = email
+        body_text = msg.get_payload(decode=True).decode('utf-8') if hasattr(msg, 'get_payload') else str(msg)
         try:
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login(SENDER_EMAIL, SENDER_PASSWORD)
-                server.send_message(msg)
+            _resend_send(email, "TITAN - كود استعادة كلمة السر", f"""
+مرحباً {username}،
+
+طُلب استعادة كلمة السر لحسابك في TITAN.
+
+كود التحقق الخاص بك هو: {otp}
+
+هذا الكود صالح لمدة 10 دقائق فقط.
+
+إذا لم تطلب ذلك، تجاهل هذا البريد.
+— فريق TITAN Security
+""")
         except Exception as e:
             print(f"[TITAN] Forgot password email error: {e}")
-            return jsonify({"error": "فشل إرسال البريد الإلكتروني. تأكد من إعدادات الإيميل."}), 500
+            return jsonify({"error": "فشل إرسال البريد الإلكتروني."}), 500
         add_audit_log("طلب استعادة كلمة السر", f"تم إرسال كود لـ: {username}", username=username)
         return jsonify({"success": True})
     except Exception as e:
@@ -7299,7 +7390,7 @@ def security_panic():
 
         session.clear()
         add_audit_log("PANIC BUTTON PRESSED", f"تم تفعيل زر الطوارئ بواسطة: {username}", username=username)
-        _send_email_async("TITAN PANIC – تم تفعيل زر الانتحار!",
+        _send_email_async("TITAN",
                           f"تم تفعيل زر الانتحار بواسطة المستخدم: {username}\nجميع بيانات القبو مشفرة ومكتاح محذوف.")
         return jsonify({"success": True, "nuked": nuked, "message": "تم تدمير البيانات بشكل آمن. تم تسجيل الخروج."})
     except Exception as e:
@@ -7428,32 +7519,10 @@ def vault_timelocked_download():
 
 
 
+
 # =====================================================================
-# === AI Routes (Camber - TITAN Agent) ===
+# === AI Routes (Ollama) ===
 # =====================================================================
-
-CAMBER_API_KEY = os.environ.get('CAMBER_API_KEY', '')
-TITAN_ENDPOINT = "https://api.cambercloud.com/v1/agents/abdallahalqam4040gmailcom/TITAN/chat"
-
-def _call_camber(message: str) -> str:
-    """استدعاء TITAN AI عبر Camber API"""
-    headers = {
-        'Authorization': f'Bearer {CAMBER_API_KEY}',
-        'Content-Type': 'application/json',
-        'User-Agent': 'TITAN-SEC/1.0'
-    }
-    payload = {
-        "message": message,
-        "context": "TITAN SEC Cybersecurity Platform",
-        "timestamp": datetime.datetime.now().isoformat()
-    }
-    res = requests.post(TITAN_ENDPOINT, headers=headers, json=payload, timeout=30)
-    res.raise_for_status()
-    data = res.json()
-    if isinstance(data, dict):
-        return data.get('response') or data.get('message') or data.get('reply') or data.get('text') or str(data)
-    return str(data)
-
 
 @app.route('/api/ai/chat', methods=['POST'])
 def ai_chat():
@@ -7466,15 +7535,15 @@ def ai_chat():
     if not CAMBER_API_KEY:
         return jsonify({"error": "CAMBER_API_KEY غير مضبوط"}), 500
     try:
-        reply = _call_camber(message)
-        add_audit_log("AI Chat 🤖", f"رسالة: {message[:50]}", username=session.get('username', ''))
+        reply = _call_camber(message, "Security analysis request from TITAN SEC")
+        add_audit_log("AI Chat 🤖", f"AI: {message[:50]}", username=session.get('username', ''))
         return jsonify({"success": True, "reply": reply})
     except requests.exceptions.HTTPError as e:
         print(f"[TITAN AI] HTTP Error: {e.response.status_code} - {e.response.text}")
-        return jsonify({"error": f"خطأ HTTP {e.response.status_code}: {e.response.text[:200]}"}), 500
+        return jsonify({"error": f"خطأ HTTP {e.response.status_code}"}), 500
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
-        return jsonify({"error": f"خطأ: {str(e)}"}), 500
+        return jsonify({"error": f"فشل الاتصال بـ TITAN AI: {str(e)}"}), 500
 
 
 @app.route('/api/ai/analyze', methods=['POST'])
@@ -7491,24 +7560,24 @@ def ai_analyze():
         return jsonify({"error": "CAMBER_API_KEY غير مضبوط"}), 500
 
     prompts = {
-        'password': f"حلل كلمة السر هذه أمنياً وأعطني: مستوى الأمان، نقاط الضعف، اقتراحات للتحسين. كلمة السر: {content_to_analyze}",
-        'ip': f"حلل بيانات IP هذه أمنياً وأعطني تقييم وتوصيات: {content_to_analyze}",
-        'security': f"حلل هذه البيانات الأمنية وأعطني تقييماً شاملاً وتوصيات عملية: {content_to_analyze}"
+        'password': f"حلل كلمة السر هذه أمنياً بالعربية: مستوى الأمان، نقاط الضعف، اقتراحات للتحسين. كلمة السر: {content_to_analyze}",
+        'ip': f"حلل بيانات IP هذه أمنياً بالعربية وأعطني تقييم وتوصيات: {content_to_analyze}",
+        'security': f"حلل هذه البيانات الأمنية بالعربية وأعطني تقييماً شاملاً وتوصيات عملية: {content_to_analyze}"
     }
 
     prompt = prompts.get(analyze_type, prompts['security'])
     try:
-        analysis = _call_camber(prompt)
+        analysis = _call_camber(prompt, f"Security analysis - type: {analyze_type}")
         add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
         return jsonify({"success": True, "analysis": analysis})
     except Exception as e:
         print(f"[TITAN AI] Analyze error: {e}")
-        return jsonify({"error": "فشل التحليل"}), 500
+        return jsonify({"error": f"فشل التحليل: {str(e)}"}), 500
 
 
 @app.route('/api/ai/models', methods=['GET'])
 def ai_models():
-    return jsonify({"models": ["TITAN-AI (Camber)"]})
+    return jsonify({"models": ["TITAN-AI (Camber)"], "success": True})
 
 
 # --- تهيئة قاعدة البيانات عند بدء التطبيق ---
