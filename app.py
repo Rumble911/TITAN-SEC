@@ -1458,14 +1458,12 @@ HTML_TEMPLATE = """
                         <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;letter-spacing:0.05em;">اسم المستخدم</label>
                         <input id="auth-login-user" type="text" placeholder="اسم المستخدم..." autocomplete="username" style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;transition:border-color 0.2s;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(139,92,246,0.3)'">
                     </div>
-                    <div style="margin-bottom:1.5rem;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <label style="display:block;color:#9ca3af;font-size:0.78rem;letter-spacing:0.05em;">كلمة السر</label>
-                            <div>
-                                <a href="#" onclick="switchAuthTab('forgot'); return false;" style="color:#a855f7;font-size:0.75rem;text-decoration:none;transition:color 0.2s;" onmouseover="this.style.color='#e9d5ff'" onmouseout="this.style.color='#a855f7'">نسيت كلمة السر؟</a>
-                            </div>
-                        </div>
+                    <div style="margin-bottom:1.7rem;">
+                        <label style="display:block;color:#9ca3af;font-size:0.78rem;letter-spacing:0.05em;margin-bottom:6px;">كلمة السر</label>
                         <input id="auth-login-pass" type="password" placeholder="كلمة السر..." autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;transition:border-color 0.2s;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(139,92,246,0.3)'">
+                        <div style="margin-top:0.95rem;display:flex;justify-content:flex-end;">
+                            <a href="#" onclick="switchAuthTab('forgot'); return false;" style="color:#a855f7;font-size:0.75rem;text-decoration:none;transition:color 0.2s;line-height:1.2;" onmouseover="this.style.color='#e9d5ff'" onmouseout="this.style.color='#a855f7'">نسيت كلمة السر؟</a>
+                        </div>
                     </div>
                     <div id="auth-login-error" style="display:none;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:0.7rem 1rem;color:#f87171;font-size:0.82rem;margin-bottom:1rem;text-align:center;"></div>
                     <button onclick="doLogin()" style="width:100%;padding:0.9rem;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-size:1rem;font-weight:700;cursor:pointer;transition:all 0.2s;box-shadow:0 0 20px rgba(168,85,247,0.4);font-family:Tajawal,sans-serif;" onmouseover="this.style.boxShadow='0 0 35px rgba(168,85,247,0.7)'" onmouseout="this.style.boxShadow='0 0 20px rgba(168,85,247,0.4)'" id="auth-login-btn">
@@ -1612,6 +1610,109 @@ HTML_TEMPLATE = """
 
         <style>
             @keyframes orbFloat { 0%{transform:translate(0,0) scale(1);} 100%{transform:translate(3%,5%) scale(1.08);} }
+
+            .tab-nav-modern {
+                background: linear-gradient(145deg, rgba(15, 23, 42, 0.72), rgba(2, 6, 23, 0.8));
+                border: 1px solid rgba(148, 163, 184, 0.2);
+                box-shadow: inset 0 0 30px rgba(15, 23, 42, 0.35), 0 10px 35px rgba(2, 6, 23, 0.55);
+            }
+
+            .tab-nav-modern .tab-group-title {
+                color: #c4b5fd;
+                letter-spacing: 0.06em;
+                font-size: 0.72rem;
+                font-weight: 800;
+                display: flex;
+                align-items: center;
+                gap: 0.35rem;
+                margin-bottom: 0.55rem;
+                text-transform: uppercase;
+            }
+
+            .tab-nav-modern .tab-search-input {
+                width: 100%;
+                padding: 0.62rem 0.85rem;
+                border-radius: 0.75rem;
+                border: 1px solid rgba(148, 163, 184, 0.26);
+                background: rgba(15, 23, 42, 0.7);
+                color: #e2e8f0;
+                font-size: 0.78rem;
+                outline: none;
+                transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            }
+
+            .tab-nav-modern .tab-search-input:focus {
+                border-color: rgba(168, 85, 247, 0.55);
+                box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.28), 0 0 16px rgba(88, 28, 135, 0.28);
+            }
+
+            .tab-nav-modern .tab-search-input::placeholder {
+                color: #64748b;
+            }
+
+            .tab-nav-modern .tab-grid {
+                display: flex;
+                flex-wrap: nowrap;
+                gap: 0.45rem;
+                overflow-x: auto;
+                overflow-y: hidden;
+                scroll-behavior: smooth;
+                padding-bottom: 0.2rem;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(139, 92, 246, 0.45) rgba(15, 23, 42, 0.35);
+            }
+
+            .tab-nav-modern .tab-grid::-webkit-scrollbar {
+                height: 7px;
+            }
+
+            .tab-nav-modern .tab-grid::-webkit-scrollbar-track {
+                background: rgba(15, 23, 42, 0.35);
+                border-radius: 10px;
+            }
+
+            .tab-nav-modern .tab-grid::-webkit-scrollbar-thumb {
+                background: linear-gradient(90deg, rgba(167, 139, 250, 0.55), rgba(139, 92, 246, 0.55));
+                border-radius: 10px;
+            }
+
+            .tab-nav-modern .tab-grid button {
+                flex: 0 0 auto;
+                min-width: 9.8rem;
+                justify-content: center;
+                text-align: center;
+                min-height: 2.3rem;
+                border: 1px solid rgba(148, 163, 184, 0.18);
+                background: rgba(15, 23, 42, 0.55);
+                color: #cbd5e1;
+                transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+            }
+
+            @media (max-width: 640px) {
+                .tab-nav-modern .tab-grid button {
+                    min-width: 8.8rem;
+                }
+            }
+
+            .tab-nav-modern .tab-grid button:hover {
+                transform: translateY(-1px);
+                border-color: rgba(168, 85, 247, 0.45);
+                box-shadow: 0 8px 18px rgba(88, 28, 135, 0.28);
+            }
+
+            .tab-nav-modern .tab-grid button.tab-active {
+                background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(109, 40, 217, 0.95));
+                border-color: rgba(196, 181, 253, 0.7);
+                color: #ffffff;
+                box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.25), 0 0 18px rgba(139, 92, 246, 0.45);
+            }
+
+            .tab-nav-modern .tab-grid button.tab-active-vault {
+                background: linear-gradient(135deg, rgba(245, 158, 11, 0.95), rgba(217, 119, 6, 0.95));
+                border-color: rgba(253, 230, 138, 0.65);
+                color: #0f172a;
+                box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3), 0 0 18px rgba(234, 179, 8, 0.35);
+            }
         </style>
     </div>
     <!-- END AUTH OVERLAY -->
@@ -1658,26 +1759,51 @@ HTML_TEMPLATE = """
 
         <div class="glass p-8 rounded-2xl shadow-2xl">
             <!-- Navigation -->
-            <div class="mb-8 flex flex-wrap justify-center gap-2 p-2 bg-slate-900/40 rounded-xl border border-slate-700/50">
-                <button onclick="showTab('dash')" id="btn-dash" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>📊</span> الإحصائيات</button>
-                <button onclick="showTab('pass')" id="btn-pass" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🔑</span> كلمات السر</button>
-                <button onclick="showTab('vault'); checkVaultPasswordSetup();" id="btn-vault" class="px-3 py-1.5 rounded-lg hover:bg-yellow-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-yellow-500/30"><span>🗄️</span> القبو</button>
-                <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
-                <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🛠️</span> الأدوات الذكية</button>
-                <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
-                <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
-                <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> Incident</button>
-                <button onclick="showTab('maltego')" id="btn-maltego" class="px-3 py-1.5 rounded-lg hover:bg-fuchsia-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-fuchsia-500/30"><span>🕸️</span> Graph</button>
-                <button onclick="showTab('hunting')" id="btn-hunting" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎯</span> Hunting</button>
-                <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> Forensics</button>
-                <button onclick="showTab('brand')" id="btn-brand" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🛡️</span> Brand</button>
-                <button onclick="showTab('se')" id="btn-se" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🎭</span> Social</button>
-                <button onclick="showTab('advcrypto')" id="btn-advcrypto" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🧬</span> Advanced Crypto</button>
-                <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
-                <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
-                <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
-                <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
-                <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
+            <div class="tab-nav-modern mb-8 p-3 rounded-xl space-y-3">
+                <div class="px-1">
+                    <input id="tab-search-input" class="tab-search-input" type="text" placeholder="ابحث عن أداة... مثال: OSINT أو القبو" oninput="filterNavTabs(this.value)">
+                    <div id="tab-search-empty" class="hidden text-[11px] text-rose-300 mt-2 font-bold">لا يوجد تبويب مطابق للبحث.</div>
+                </div>
+
+                <div class="tab-group">
+                    <div class="tab-group-title px-1"><span>🧱</span> الحماية الأساسية</div>
+                    <div class="tab-grid">
+                    <button onclick="showTab('dash')" id="btn-dash" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>📊</span> الإحصائيات</button>
+                    <button onclick="showTab('pass')" id="btn-pass" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🔑</span> كلمات السر</button>
+                    <button onclick="showTab('vault'); checkVaultPasswordSetup();" id="btn-vault" class="px-3 py-1.5 rounded-lg hover:bg-yellow-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-yellow-500/30"><span>🗄️</span> القبو</button>
+                    <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
+                    <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🛠️</span> الأدوات الذكية</button>
+                </div>
+                </div>
+
+                <div class="tab-group">
+                    <div class="tab-group-title px-1"><span>🧭</span> التحليل والاستقصاء</div>
+                    <div class="tab-grid">
+                    <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
+                    <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span class="inline-block animate-pulse" style="animation-duration:1.3s;">🔥</span> قنوات الشبح</button>
+                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
+                    <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
+                    <button onclick="showTab('maltego')" id="btn-maltego" class="px-3 py-1.5 rounded-lg hover:bg-fuchsia-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-fuchsia-500/30"><span>🕸️</span> الرسم البياني</button>
+                    <button onclick="showTab('hunting')" id="btn-hunting" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎯</span> الصيد التهديدي</button>
+                    <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
+                    <button onclick="showTab('brand')" id="btn-brand" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🛡️</span> حماية العلامة</button>
+                    <button onclick="showTab('se')" id="btn-se" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🎭</span> الهندسة الاجتماعية</button>
+                </div>
+                </div>
+
+                <div class="tab-group">
+                    <div class="tab-group-title px-1"><span>🧪</span> المختبر المتقدم</div>
+                    <div class="tab-grid">
+                    <button onclick="showTab('advcrypto')" id="btn-advcrypto" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🧬</span> تشفير متقدم</button>
+                    <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
+                    <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
+                    <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
+                    <button onclick="showTab('extreme')" id="btn-extreme" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>💣</span> أوامر متطرفة</button>
+                    <button onclick="showTab('netintel')" id="btn-netintel" class="px-3 py-1.5 rounded-lg hover:bg-sky-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-sky-500/30"><span>🛰️</span> استخبارات الشبكة</button>
+                    <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
+                    <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
+                </div>
+                </div>
             </div>
 
 
@@ -2342,24 +2468,6 @@ HTML_TEMPLATE = """
                 <div id="vault-content" class="hidden space-y-4">
 
 
-                    <!-- 1. Burn Notes -->
-                    <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50 border-r-4 border-r-orange-500 relative overflow-hidden group">
-                        <div class="absolute inset-0 bg-gradient-to-l from-orange-500/5 to-transparent pointer-events-none"></div>
-                        <div class="flex items-center gap-3 mb-2 relative z-10">
-                            <span class="text-orange-500 text-2xl drop-shadow-[0_0_10px_rgba(249,115,22,0.6)] animate-pulse">💣</span>
-                            <h3 class="text-sm font-bold text-gray-200">الرسائل ذاتية التدمير (Burn Notes)</h3>
-                        </div>
-                        <p class="text-xs text-gray-400 mb-3 relative z-10">رسالة سرية لمرة واحدة — تُحذف فور قراءتها.</p>
-                        <textarea id="burnNoteText" rows="3" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-600 focus:ring-1 focus:ring-orange-500 outline-none text-sm mb-3 relative z-10" placeholder="اكتب رسالتك السرية هنا..."></textarea>
-                        <button onclick="createBurnNote()" class="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold px-4 py-2 rounded-xl transition-all text-sm shadow-[0_0_15px_rgba(234,88,12,0.35)] flex items-center justify-center gap-2 relative z-10">
-                            توليد رابط التدمير السري 🔥
-                        </button>
-                        <div id="burnNoteResult" class="hidden mt-3 p-3 bg-slate-900/80 border border-orange-800/30 rounded-xl flex flex-col md:flex-row items-center justify-between gap-2 relative z-10">
-                            <input type="text" id="burnNoteLink" readonly class="w-full bg-black/50 text-orange-400 font-mono text-xs p-2 rounded-lg border border-slate-700/50 focus:outline-none" dir="ltr">
-                            <button id="burnCopyBtn" onclick="copyBurnNoteLink()" class="w-full md:w-auto bg-slate-800 hover:bg-slate-700 text-xs px-4 py-2 rounded-lg text-gray-300 transition-colors whitespace-nowrap border border-slate-600 font-bold">نسخ الرابط</button>
-                        </div>
-                    </div>
-
                     <!-- 2. Action Bar -->
                     <div class="flex items-center justify-between gap-2 py-2 px-1 border-y border-slate-800">
                         <!-- Left: Lock -->
@@ -2588,13 +2696,37 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <!-- Phase 4 Secure Comms: Burn Chat -->
-                <div class="col-span-1 md:col-span-2">
+            </div>
+
+            <div id="ghost-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-pink-400 border-b border-slate-700 pb-2 flex items-center gap-2">
+                    <span>🔥</span> قنوات الشبح
+                </h2>
+                <p class="text-xs text-gray-400">دمج كامل بين رسائل لمرة واحدة وغرفة دردشة مشفرة ذات تدمير فوري للرسائل.</p>
+
+                <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50 border-r-4 border-r-orange-500 relative overflow-hidden group">
+                    <div class="absolute inset-0 bg-gradient-to-l from-orange-500/5 to-transparent pointer-events-none"></div>
+                    <div class="flex items-center gap-3 mb-2 relative z-10">
+                        <span class="text-orange-500 text-2xl drop-shadow-[0_0_10px_rgba(249,115,22,0.6)] animate-pulse">💣</span>
+                        <h3 class="text-sm font-bold text-gray-200">الرسائل ذاتية التدمير (Burn Notes)</h3>
+                    </div>
+                    <p class="text-xs text-gray-400 mb-3 relative z-10">رسالة سرية لمرة واحدة، تُحذف فور قراءتها.</p>
+                    <textarea id="burnNoteText" rows="3" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-600 focus:ring-1 focus:ring-orange-500 outline-none text-sm mb-3 relative z-10" placeholder="اكتب رسالتك السرية هنا..."></textarea>
+                    <button onclick="createBurnNote()" class="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold px-4 py-2 rounded-xl transition-all text-sm shadow-[0_0_15px_rgba(234,88,12,0.35)] flex items-center justify-center gap-2 relative z-10">
+                        توليد رابط التدمير السري 🔥
+                    </button>
+                    <div id="burnNoteResult" class="hidden mt-3 p-3 bg-slate-900/80 border border-orange-800/30 rounded-xl flex flex-col md:flex-row items-center justify-between gap-2 relative z-10">
+                        <input type="text" id="burnNoteLink" readonly class="w-full bg-black/50 text-orange-400 font-mono text-xs p-2 rounded-lg border border-slate-700/50 focus:outline-none" dir="ltr">
+                        <button id="burnCopyBtn" onclick="copyBurnNoteLink()" class="w-full md:w-auto bg-slate-800 hover:bg-slate-700 text-xs px-4 py-2 rounded-lg text-gray-300 transition-colors whitespace-nowrap border border-slate-600 font-bold">نسخ الرابط</button>
+                    </div>
+                </div>
+
+                <div>
                     <h2 class="text-xl font-bold text-pink-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
                         <span>🔥</span> غرفة الـ Burn Chat (P2P مشفر)
                     </h2>
                     <p class="text-xs text-gray-400 mb-3">اتصال مشفر آمن لا يحفظ السجلات. الرسالة تُدمّر حرفياً من ذاكرة الخادم في اللحظة التي تُقرأ فيها.</p>
-                    
+
                     <div class="bg-gray-900/80 rounded-xl border border-slate-700 p-4">
                         <div class="flex gap-2 mb-4 bg-black p-3 rounded-lg border border-slate-800 flex-col md:flex-row">
                             <input type="text" id="burnChatId" placeholder="كود الغرفة (Room ID)..." class="flex-1 p-2 rounded bg-slate-900 border border-slate-700 focus:border-pink-500 outline-none text-center font-mono">
@@ -2602,11 +2734,11 @@ HTML_TEMPLATE = """
                             <input type="text" id="burnChatUser" placeholder="اسمك الرمزي (Ghost)" class="w-full md:w-1/4 p-2 rounded bg-slate-900 border border-slate-700 focus:border-pink-500 outline-none text-center">
                             <button onclick="joinBurnChat()" class="bg-pink-900/40 hover:bg-pink-800 text-pink-300 px-6 py-2 rounded border border-pink-800/50 transition-all font-bold">انضمام</button>
                         </div>
-                        
+
                         <div id="burnChatDisplay" class="h-64 bg-black rounded-lg border border-pink-900/30 mb-4 p-4 overflow-y-auto flex flex-col gap-2 shadow-inner">
                             <div class="text-center text-gray-600 text-[10px] tracking-widest uppercase mt-auto">-- Secure RAM Storage Only --</div>
                         </div>
-                        
+
                         <div class="flex gap-2">
                             <input type="text" id="burnChatInput" placeholder="اكتب رسالتك السرية هنا..." class="flex-1 p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-pink-500 outline-none" disabled>
                             <button id="burnChatSendBtn" onclick="sendBurnChat()" class="bg-slate-800 text-gray-500 px-8 rounded-lg font-bold transition-all border border-slate-700" disabled>إرسال</button>
@@ -4139,7 +4271,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','osint','ir','maltego','hunting','forensics','brand','se','advcrypto','qr','identity','audio','extreme','netintel','admin'];
+        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','ghost','osint','ir','maltego','hunting','forensics','brand','se','advcrypto','audio','qr','identity','extreme','netintel','admin'];
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
 
@@ -4228,6 +4360,43 @@ HTML_TEMPLATE = """
             }
         }
 
+        function normalizeArabicSearchText(value) {
+            return (value || '')
+                .toLowerCase()
+                .replace(/[\u064B-\u065F\u0670]/g, '')   // remove Arabic diacritics
+                .replace(/\u0640/g, '')                    // remove tatweel
+                .replace(/[أإآٱ]/g, 'ا')
+                .replace(/ؤ/g, 'و')
+                .replace(/ئ/g, 'ي')
+                .replace(/ى/g, 'ي')
+                .replace(/ة/g, 'ه')
+                .replace(/\\s+/g, ' ')
+                .trim();
+        }
+
+        function filterNavTabs(rawValue) {
+            const query = normalizeArabicSearchText(rawValue);
+            const allButtons = document.querySelectorAll('.tab-nav-modern .tab-grid button');
+            let visibleCount = 0;
+
+            allButtons.forEach(btn => {
+                if (btn.classList.contains('hidden')) return;
+                const label = normalizeArabicSearchText(btn.innerText || btn.textContent || '');
+                const shouldShow = !query || label.includes(query);
+                btn.style.display = shouldShow ? '' : 'none';
+                if (shouldShow) visibleCount += 1;
+            });
+
+            document.querySelectorAll('.tab-nav-modern .tab-group').forEach(group => {
+                const groupButtons = group.querySelectorAll('.tab-grid button');
+                const hasVisible = Array.from(groupButtons).some(btn => btn.style.display !== 'none' && !btn.classList.contains('hidden'));
+                group.style.display = hasVisible ? '' : 'none';
+            });
+
+            const empty = document.getElementById('tab-search-empty');
+            if (empty) empty.classList.toggle('hidden', !(query && visibleCount === 0));
+        }
+
         function showTab(type) {
             // Auto-lock vault silently when leaving it
             if (_prevTab === 'vault' && type !== 'vault' && currentMasterKey) {
@@ -4240,10 +4409,11 @@ HTML_TEMPLATE = """
                 if(sec) sec.classList.toggle('hidden', t !== type);
                 if(btn) {
                     if(t === type) {
+                        btn.classList.add('tab-active');
                         btn.classList.remove('text-gray-400');
                         btn.classList.add('bg-purple-600/90', 'text-white');
                     } else {
-                        btn.classList.remove('bg-purple-600/90', 'text-white', 'bg-yellow-600/90', 'text-slate-900');
+                        btn.classList.remove('tab-active', 'tab-active-vault', 'bg-purple-600/90', 'text-white', 'bg-yellow-600/90', 'text-slate-900');
                         btn.classList.add('text-gray-400');
                     }
                 }
@@ -4252,6 +4422,8 @@ HTML_TEMPLATE = """
             const vBtn = document.getElementById('btn-vault');
             if(vBtn) {
                 if(type === 'vault') {
+                    vBtn.classList.remove('tab-active');
+                    vBtn.classList.add('tab-active-vault');
                     vBtn.classList.add('bg-yellow-600/90', 'text-slate-900');
                     vBtn.classList.remove('text-gray-400', 'bg-purple-600/90');
                 }
@@ -4267,6 +4439,11 @@ HTML_TEMPLATE = """
             if(type === 'ir' && typeof irLoadCases === 'function') irLoadCases();
             if(type === 'se' && typeof seLoadIntelBoard === 'function') seLoadIntelBoard();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
+
+            const activeBtn = document.getElementById('btn-' + type);
+            if (activeBtn && typeof activeBtn.scrollIntoView === 'function') {
+                activeBtn.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'nearest'});
+            }
         }
 
         const passInput = document.getElementById('passInput');
