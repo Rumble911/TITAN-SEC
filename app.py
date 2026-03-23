@@ -254,16 +254,6 @@ def init_db():
         )
     ''')
 
-    # --- جدول أكواد الطوارئ (Backup Codes) ---
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS backup_codes (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            code_hash TEXT NOT NULL,
-            used INTEGER DEFAULT 0
-        )
-    ''')
-
     # --- جدول الجلسات النشطة (Active Sessions) ---
     c.execute("SELECT column_name FROM information_schema.columns WHERE table_name='active_sessions' AND column_name='session_token'")
     if c.fetchone():
@@ -310,6 +300,114 @@ def init_db():
             file_path TEXT NOT NULL,
             hash TEXT NOT NULL,
             set_at TEXT NOT NULL
+        )
+    ''')
+
+    # --- Incident Response Cases ---
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS incident_cases (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            severity TEXT DEFAULT 'medium',
+            status TEXT DEFAULT 'open',
+            description TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS incident_iocs (
+            id SERIAL PRIMARY KEY,
+            case_id INTEGER NOT NULL,
+            ioc_type TEXT NOT NULL,
+            ioc_value TEXT NOT NULL,
+            risk_score INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS incident_evidence (
+            id SERIAL PRIMARY KEY,
+            case_id INTEGER NOT NULL,
+            filename TEXT NOT NULL,
+            file_hash TEXT NOT NULL,
+            note TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS entity_graph_cases (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            nodes_json TEXT NOT NULL,
+            edges_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS hunting_alerts (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            details TEXT DEFAULT '',
+            severity TEXT DEFAULT 'medium',
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS advanced_hidden_vaults (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            container_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS advanced_timelock_messages (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            enc_payload BYTEA NOT NULL,
+            unlock_at TEXT NOT NULL,
+            one_time_read INTEGER DEFAULT 1,
+            is_used INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS advanced_keyring (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            key_name TEXT NOT NULL,
+            key_material TEXT NOT NULL,
+            status TEXT DEFAULT 'active',
+            rotated_from INTEGER DEFAULT NULL,
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS support_tickets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            subject TEXT NOT NULL,
+            category TEXT DEFAULT 'technical',
+            priority TEXT DEFAULT 'normal',
+            details TEXT NOT NULL,
+            status TEXT DEFAULT 'open',
+            admin_note TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
         )
     ''')
 
@@ -479,6 +577,8 @@ def lsb_encode(img_bytes: bytes, secret_data: str) -> bytes:
         raise ValueError("البيانات كبيرة جداً بالنسبة لهذه الصورة!")
         
     pixels = img.load()
+    if pixels is None:
+        raise ValueError("تعذر الوصول إلى بيانات البكسلات في الصورة")
     data_idx = 0
     
     for y in range(height):
@@ -510,6 +610,8 @@ def lsb_decode(img_bytes: bytes) -> str:
     img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
     width, height = img.size
     pixels = img.load()
+    if pixels is None:
+        return "تعذر قراءة بكسلات الصورة."
     
     bits: list[int] = []
     for y in range(height):
@@ -630,20 +732,26 @@ def get_ipqs_requests_list(req_type: str, start_date: str) -> dict:
 
 # --- إخفاء البيانات في الصوت (Audio Steganography) ---
 def wave_lsb_encode(wav_bytes: bytes, secret_data: str, filename: str = "") -> bytes:
-    """إخفاء نص في ملف صوتي (WAV LSB أو MP3 EOF)"""
+    """إخفاء نص في ملف صوتي (WAV LSB أو EOF للأنواع المضغوطة)."""
     try:
         # Marker for extraction
         marker = b'##TITAN_SECURE##'
         full_secret = secret_data.encode('utf-8') + marker
-        
-        if filename.lower().endswith('.mp3'):
-            # Append at EOF for MP3 (Safe & Reliable)
+
+        lower_name = (filename or '').lower()
+        eof_exts = ('.mp3', '.webm', '.ogg', '.m4a', '.aac')
+        if lower_name.endswith(eof_exts):
+            # EOF append mode for compressed formats and browser recordings
             return wav_bytes + marker + secret_data.encode('utf-8')
-        
+
         # WAV Steganography: Modify frames
-        with wave.open(io.BytesIO(wav_bytes), 'rb') as wav:
-            params = wav.getparams()
-            frames = bytearray(wav.readframes(wav.getnframes()))
+        try:
+            with wave.open(io.BytesIO(wav_bytes), 'rb') as wav:
+                params = wav.getparams()
+                frames = bytearray(wav.readframes(wav.getnframes()))
+        except Exception:
+            # Fallback for unknown/unsupported container types
+            return wav_bytes + marker + secret_data.encode('utf-8')
 
         # Convert to bitstream
         bits = ''.join(format(b, '08b') for b in full_secret)
@@ -665,18 +773,26 @@ def wave_lsb_encode(wav_bytes: bytes, secret_data: str, filename: str = "") -> b
         raise ValueError(f"فشل تشفير الصوت: {str(e)}")
 
 def wave_lsb_decode(wav_bytes: bytes, filename: str = "") -> str:
-    """استخراج النص المخفي من ملف WAV أو MP3"""
+    """استخراج النص المخفي من ملف صوتي (WAV LSB أو EOF)."""
     try:
         marker = b'##TITAN_SECURE##'
-        
-        if filename.lower().endswith('.mp3'):
+
+        lower_name = (filename or '').lower()
+        eof_exts = ('.mp3', '.webm', '.ogg', '.m4a', '.aac')
+        if lower_name.endswith(eof_exts):
             if marker in wav_bytes:
                 return wav_bytes.split(marker)[-1].decode('utf-8', errors='ignore')
-            return "لم يتم العثور على بيانات مخفية في ملف MP3."
+            return "لم يتم العثور على بيانات مخفية في الملف الصوتي."
 
         # WAV LSB Decode
-        with wave.open(io.BytesIO(wav_bytes), 'rb') as wav:
-            frames = bytearray(wav.readframes(wav.getnframes()))
+        try:
+            with wave.open(io.BytesIO(wav_bytes), 'rb') as wav:
+                frames = bytearray(wav.readframes(wav.getnframes()))
+        except Exception:
+            # As a safe fallback, try EOF marker extraction
+            if marker in wav_bytes:
+                return wav_bytes.split(marker)[-1].decode('utf-8', errors='ignore')
+            return "تعذر تحليل تنسيق الصوت أو لا توجد بيانات مخفية."
 
         bits = [str(f & 1) for f in frames]
         byte_list = []
@@ -712,6 +828,44 @@ def clean_pdf_metadata(pdf_bytes: bytes) -> bytes:
     except Exception as e:
         raise ValueError(f"فشل تنظيف PDF: {str(e)}")
 
+
+def extract_image_ocr_text(image_bytes: bytes, max_chars: int = 5000) -> tuple[str, str | None]:
+    """Extract text from image using OCR. Returns (text, error)."""
+    try:
+        import pytesseract  # type: ignore
+        import cv2  # type: ignore
+        import numpy as np  # type: ignore
+    except Exception:
+        return "", "OCR library missing"
+
+    try:
+        # Decode image safely then enhance contrast for better OCR quality.
+        arr = np.frombuffer(image_bytes, dtype=np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is None:
+            return "", "invalid image"
+
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.medianBlur(gray, 3)
+        thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 35, 11)
+
+        text = ""
+        # Try Arabic+English first, then fallback to English.
+        for lang in ("ara+eng", "eng"):
+            try:
+                candidate = pytesseract.image_to_string(thr, lang=lang, config='--psm 6').strip()
+                if candidate:
+                    text = candidate
+                    break
+            except Exception:
+                continue
+
+        if not text:
+            return "", "no text detected"
+        return text[:max_chars], None
+    except Exception as e:
+        return "", str(e)
+
 # --- ميزات استخباراتية إضافية ---
 def get_dns_leak_info() -> dict:
     """محاكاة فحص تسريب DNS"""
@@ -733,12 +887,14 @@ def get_shodan_intel(ip: str) -> dict:
     }
 
 # --- فحص البرمجيات الخبيثة (Malware) عبر IPQualityScore API ---
-def handle_malware_result(data):
+def handle_malware_result(data) -> dict:
     if data.status_code != 200:
         return {"success": False, "message": f"Error: {data.status_code}", "error": f"Error: {data.status_code}"}
     
     try:
         res_json = data.json()
+        if not isinstance(res_json, dict):
+            return {"success": False, "message": "استجابة غير صالحة من الخدمة"}
         if res_json.get("status") != "pending":
             # إرجاع بيانات الفحص
             return res_json
@@ -751,6 +907,7 @@ def handle_malware_result(data):
                 break
             data = requests.post(update_url)
             return handle_malware_result(data)
+        return {"success": False, "message": "انتهت مهلة انتظار نتيجة الفحص"}
     except Exception as e:
         return {"success": False, "message": "فشل تحليل استجابة الموقع", "error": str(e)}
 
@@ -798,6 +955,297 @@ def scan_local_network():
     except Exception as e:
         devices = [{"error": f"فشل الفحص: {str(e)}"}]
     return devices
+
+
+def analyze_hash_indicator(hash_value: str) -> dict:
+    clean = (hash_value or '').strip().lower()
+    if not re.fullmatch(r'[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64}', clean):
+        return {
+            "success": False,
+            "error": "Hash format غير صالح. استخدم MD5/SHA1/SHA256 بصيغة hex."
+        }
+
+    hash_type = 'MD5' if len(clean) == 32 else ('SHA1' if len(clean) == 40 else 'SHA256')
+    known_bad = {
+        '44d88612fea8a8f36de82e1278abb02f': 'EICAR test malware (MD5)',
+        '3395856ce81f2b7382dee72602f798b642f14140': 'EICAR test malware (SHA1)'
+    }
+
+    unique_chars = len(set(clean))
+    entropy_hint = round(unique_chars / 16 * 8, 2)
+    reputation = known_bad.get(clean, 'unknown')
+    risk_score = 90 if clean in known_bad else 25
+
+    return {
+        "success": True,
+        "hash": clean,
+        "hash_type": hash_type,
+        "length": len(clean),
+        "entropy_hint": entropy_hint,
+        "reputation": reputation,
+        "risk_score": risk_score
+    }
+
+
+def check_username_presence(username: str) -> dict:
+    u = (username or '').strip()
+    if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', u):
+        return {
+            "success": False,
+            "error": "اسم المستخدم غير صالح. المسموح: أحرف/أرقام/._- وبطول 3-30."
+        }
+
+    platforms = {
+        "github": f"https://github.com/{u}",
+        "reddit": f"https://www.reddit.com/user/{u}",
+        "instagram": f"https://www.instagram.com/{u}/",
+        "x": f"https://x.com/{u}",
+        "tiktok": f"https://www.tiktok.com/@{u}",
+        "pinterest": f"https://www.pinterest.com/{u}/",
+        "youtube": f"https://www.youtube.com/@{u}",
+        "medium": f"https://medium.com/@{u}",
+    }
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+
+    not_found_markers = [
+        "page not found",
+        "sorry, this page isn't available",
+        "this account doesn't exist",
+        "couldn't find that page",
+        "doesn't exist"
+    ]
+
+    def _probe(item):
+        platform, url = item
+        try:
+            r = requests.get(url, headers=headers, timeout=8, allow_redirects=True)
+            status = r.status_code
+            body = (r.text or '').lower()
+            if status == 404:
+                exists = False
+            elif status in (200, 301, 302):
+                exists = not any(m in body for m in not_found_markers)
+            else:
+                exists = False
+            return {
+                "platform": platform,
+                "url": url,
+                "status_code": status,
+                "exists": exists
+            }
+        except Exception as e:
+            return {
+                "platform": platform,
+                "url": url,
+                "status_code": 0,
+                "exists": False,
+                "error": str(e)
+            }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        rows = list(ex.map(_probe, platforms.items()))
+
+    found = [r for r in rows if r.get("exists")]
+    missing = [r for r in rows if not r.get("exists") and not r.get("error")]
+    unknown = [r for r in rows if r.get("error")]
+
+    return {
+        "success": True,
+        "username": u,
+        "found_count": len(found),
+        "found": found,
+        "not_found": missing,
+        "unknown": unknown,
+        "checked_at": datetime.datetime.utcnow().isoformat() + 'Z'
+    }
+
+
+def build_link_analysis_graph(nodes: list[dict]) -> dict:
+    clean_nodes = []
+    for n in nodes:
+        val = (n.get('value') or '').strip()
+        typ = (n.get('type') or 'unknown').strip().lower()
+        nid = (n.get('id') or str(uuid.uuid4())).strip()
+        if val:
+            clean_nodes.append({"id": nid, "type": typ, "value": val})
+
+    edges = []
+    for i, a in enumerate(clean_nodes):
+        for b in clean_nodes[i+1:]:
+            rel = None
+            av = a['value'].lower()
+            bv = b['value'].lower()
+            if a['type'] == b['type'] and av == bv:
+                rel = 'same-indicator'
+            elif a['type'] == 'email' and b['type'] in ('domain', 'url') and av.split('@')[-1] in bv:
+                rel = 'email-domain-match'
+            elif b['type'] == 'email' and a['type'] in ('domain', 'url') and bv.split('@')[-1] in av:
+                rel = 'email-domain-match'
+            elif a['type'] == 'url' and b['type'] == 'domain' and b['value'].lower() in a['value'].lower():
+                rel = 'url-hosts-domain'
+            elif b['type'] == 'url' and a['type'] == 'domain' and a['value'].lower() in b['value'].lower():
+                rel = 'url-hosts-domain'
+            elif a['type'] == 'username' and b['type'] == 'email' and a['value'].lower() in b['value'].lower():
+                rel = 'username-appears-in-email'
+            elif b['type'] == 'username' and a['type'] == 'email' and b['value'].lower() in a['value'].lower():
+                rel = 'username-appears-in-email'
+
+            if rel:
+                edges.append({
+                    "source": a['id'],
+                    "target": b['id'],
+                    "source_value": a['value'],
+                    "target_value": b['value'],
+                    "relation": rel
+                })
+
+    return {"nodes": clean_nodes, "edges": edges}
+
+
+def generate_typosquatting_variants(domain: str) -> list[str]:
+    d = (domain or '').strip().lower()
+    if '.' not in d:
+        return []
+    name, ext = d.rsplit('.', 1)
+    variants = set()
+    if len(name) > 2:
+        variants.add(name[:-1] + '.' + ext)
+        variants.add(name[1:] + '.' + ext)
+        variants.add(name[0] + name[0] + name[1:] + '.' + ext)
+    variants.add(name.replace('o', '0') + '.' + ext)
+    variants.add(name.replace('l', '1') + '.' + ext)
+    variants.add(name.replace('e', '3') + '.' + ext)
+    variants.add(name + '-secure.' + ext)
+    variants.add(name + '-login.' + ext)
+    return sorted(v for v in variants if v != d)[:25]
+
+
+def create_social_defense_scenario(scenario_type: str) -> dict:
+    scenarios = {
+        'phishing_email': {
+            'scenario': 'تلقيت ايميل عاجل يطلب تحديث كلمة السر عبر رابط خارجي مع تهديد بتعطيل الحساب خلال ساعة.',
+            'red_flags': ['Urgency language', 'External lookalike domain', 'Mismatched sender display name'],
+            'defense_actions': ['Do not click link', 'Verify sender domain', 'Open service manually from trusted URL', 'Report to security team']
+        },
+        'vishing_call': {
+            'scenario': 'متصل يدعي انه من الدعم الفني ويطلب رمز OTP للتحقق من هويتك.',
+            'red_flags': ['Requesting OTP', 'Pressure tactics', 'Unverified caller ID'],
+            'defense_actions': ['Never share OTP', 'Hang up and call official support number', 'Document call details']
+        },
+        'pretexting': {
+            'scenario': 'شخص يرسل رسالة باسم المدير ويطلب تحويل بيانات حساسة فوراً بدون المرور بالاجراءات.',
+            'red_flags': ['Authority impersonation', 'Policy bypass request', 'Out-of-band urgency'],
+            'defense_actions': ['Enforce approval process', 'Verify request through second channel', 'Escalate to manager']
+        },
+        'baiting_usb': {
+            'scenario': 'تم العثور على USB مجهول قرب المكتب مكتوب عليه Payroll/Q4.',
+            'red_flags': ['Unknown removable media', 'Curiosity bait label', 'No chain-of-custody'],
+            'defense_actions': ['Do not plug in', 'Submit device to IT/SOC', 'Scan in isolated forensic environment only']
+        }
+    }
+    return scenarios.get(scenario_type, scenarios['phishing_email'])
+
+
+def split_secret_shares(secret_text: str, n: int = 5, k: int = 3) -> list[str]:
+    if k < 2 or n < k:
+        raise ValueError("Invalid n/k values")
+    data = secret_text.encode('utf-8')
+    prime = 257
+    shares: list[dict] = [{"x": i + 1, "ys": []} for i in range(n)]
+    for byte_val in data:
+        coeffs = [byte_val] + [secrets.randbelow(prime) for _ in range(k - 1)]
+        for s in shares:
+            x = s["x"]
+            y = 0
+            for power, coeff in enumerate(coeffs):
+                y = (y + coeff * pow(x, power, prime)) % prime
+            s["ys"].append(y)
+    encoded = []
+    for s in shares:
+        raw = json.dumps(s, separators=(',', ':')).encode('utf-8')
+        encoded.append(base64.urlsafe_b64encode(raw).decode('ascii'))
+    return encoded
+
+
+def recover_secret_shares(shares: list[str]) -> str:
+    if len(shares) < 3:
+        raise ValueError("At least 3 shares are required")
+    prime = 257
+    parsed = []
+    for sh in shares:
+        item = json.loads(base64.urlsafe_b64decode(sh.encode('ascii')).decode('utf-8'))
+        parsed.append(item)
+    ys_len = len(parsed[0]["ys"])
+    for p in parsed:
+        if len(p["ys"]) != ys_len:
+            raise ValueError("Share lengths mismatch")
+
+    def lagrange_at_zero(points: list[tuple[int, int]]) -> int:
+        total = 0
+        for i, (xi, yi) in enumerate(points):
+            num = 1
+            den = 1
+            for j, (xj, _yj) in enumerate(points):
+                if i == j:
+                    continue
+                num = (num * (-xj)) % prime
+                den = (den * (xi - xj)) % prime
+            inv_den = pow(den % prime, -1, prime)
+            total = (total + yi * num * inv_den) % prime
+        return total
+
+    out_bytes = bytearray()
+    points_base = parsed[:3]
+    for idx in range(ys_len):
+        pts = [(int(p["x"]), int(p["ys"][idx])) for p in points_base]
+        val = lagrange_at_zero(pts)
+        if val > 255:
+            raise ValueError("Recovered value out of byte range")
+        out_bytes.append(val)
+    return out_bytes.decode('utf-8')
+
+
+def evaluate_advanced_policy(policy: dict, context: dict) -> dict:
+    reasons = []
+    allowed = True
+
+    allowed_ips = policy.get('allowed_ips') or []
+    if allowed_ips and context.get('ip') not in allowed_ips:
+        allowed = False
+        reasons.append('IP not allowed')
+
+    allowed_countries = policy.get('allowed_countries') or []
+    if allowed_countries and context.get('country') not in allowed_countries:
+        allowed = False
+        reasons.append('Country not allowed')
+
+    if policy.get('require_otp'):
+        expected = str(policy.get('otp_code', ''))
+        provided = str(context.get('otp', ''))
+        if not expected or provided != expected:
+            allowed = False
+            reasons.append('OTP mismatch')
+
+    now_h = datetime.datetime.now().hour
+    min_h = int(policy.get('min_hour', 0))
+    max_h = int(policy.get('max_hour', 23))
+    if now_h < min_h or now_h > max_h:
+        allowed = False
+        reasons.append('Outside allowed time window')
+
+    return {"allowed": allowed, "reasons": reasons, "evaluated_at": datetime.datetime.now().isoformat()}
+
+
+def create_watermark_signature(file_bytes: bytes, label: str, user_id: int) -> dict:
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    raw_secret = app.secret_key or 'titan'
+    secret = raw_secret if isinstance(raw_secret, (bytes, bytearray)) else str(raw_secret).encode('utf-8')
+    payload = f"{user_id}|{label}|{file_hash}".encode('utf-8')
+    signature = hashlib.sha256(secret + payload).hexdigest()
+    return {"file_hash": file_hash, "signature": signature}
 
 # --- المنطق البرمجي: فحص قوة كلمة السر ---
 
@@ -1014,7 +1462,6 @@ HTML_TEMPLATE = """
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <label style="display:block;color:#9ca3af;font-size:0.78rem;letter-spacing:0.05em;">كلمة السر</label>
                             <div>
-                                <a href="#" onclick="switchAuthTab('backup'); return false;" style="color:#22c55e;font-size:0.75rem;text-decoration:none;transition:color 0.2s;margin-left:10px;" onmouseover="this.style.color='#4ade80'" onmouseout="this.style.color='#22c55e'">دخول بكود طوارئ</a>
                                 <a href="#" onclick="switchAuthTab('forgot'); return false;" style="color:#a855f7;font-size:0.75rem;text-decoration:none;transition:color 0.2s;" onmouseover="this.style.color='#e9d5ff'" onmouseout="this.style.color='#a855f7'">نسيت كلمة السر؟</a>
                             </div>
                         </div>
@@ -1044,9 +1491,40 @@ HTML_TEMPLATE = """
                         <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;letter-spacing:0.05em;">تأكيد كلمة السر</label>
                         <input id="auth-reg-pass2" type="password" placeholder="أعد كتابة كلمة السر..." autocomplete="new-password" style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;transition:border-color 0.2s;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(139,92,246,0.3)'">
                     </div>
+                    <div style="margin-bottom:1rem;">
+                        <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;letter-spacing:0.05em;">الشروط والأحكام (إلزامية)</label>
+                        <button id="auth-open-terms-btn" type="button" onclick="openTermsModal()" style="width:100%;padding:0.65rem;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);border-radius:10px;color:#e9d5ff;font-size:0.82rem;font-weight:700;cursor:pointer;font-family:Tajawal,sans-serif;">قراءة الشروط والأحكام</button>
+                        <div id="auth-terms-read-state" style="margin-top:0.45rem;color:#6b7280;font-size:0.72rem;">الحالة: لم يتم تأكيد القراءة بعد.</div>
+                        <label id="auth-reg-terms-label" style="margin-top:0.7rem;display:flex;align-items:center;gap:0.5rem;color:#6b7280;font-size:0.8rem;opacity:0.55;cursor:not-allowed;">
+                            <input id="auth-reg-terms" type="checkbox" disabled onchange="updateRegisterButtonState()" style="accent-color:#a855f7;cursor:not-allowed;">
+                            أوافق على الشروط والأحكام
+                        </label>
+                        <div style="color:#6b7280;font-size:0.72rem;margin-top:0.25rem;">لن تستطيع إنشاء الحساب قبل قراءة الأحكام والموافقة عليها.</div>
+                    </div>
+                    <div id="auth-terms-modal" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;padding:1rem;">
+                        <div style="width:100%;max-width:560px;background:rgba(9,12,30,0.98);border:1px solid rgba(168,85,247,0.35);border-radius:18px;box-shadow:0 0 60px rgba(168,85,247,0.25);overflow:hidden;">
+                            <div style="padding:1rem 1rem 0.6rem 1rem;border-bottom:1px solid rgba(148,163,184,0.2);">
+                                <h3 style="margin:0;color:#e9d5ff;font-size:1rem;font-weight:800;">الشروط والأحكام</h3>
+                                <div style="color:#94a3b8;font-size:0.75rem;margin-top:0.25rem;">قم بالتمرير حتى نهاية النص لتفعيل زر الموافقة.</div>
+                            </div>
+                            <div id="auth-terms-modal-content" onscroll="handleTermsModalScroll()" style="max-height:300px;overflow:auto;padding:1rem;line-height:1.75;color:#cbd5e1;font-size:0.82rem;">
+                                <p style="margin:0 0 0.7rem 0;">باستخدام منصة TITAN فأنت تقر بأنك مسؤول عن أي نشاط يتم عبر حسابك، وأنك لن تستخدم الأدوات لأي نشاط مخالف للقانون أو إساءة.</p>
+                                <p style="margin:0 0 0.7rem 0;">تقوم المنصة بمعالجة بيانات مثل البريد الإلكتروني، عنوان IP، نوع المتصفح، وسجلات الأمان لتحسين الحماية والتحقق من الدخولات المشبوهة.</p>
+                                <p style="margin:0 0 0.7rem 0;">المنصة قد ترسل إشعارات وكود تحقق عبر البريد الإلكتروني، وتقوم بحفظ سجلات أمنية تشغيلية لحماية الحساب والنظام.</p>
+                                <p style="margin:0 0 0.7rem 0;">أنت مسؤول بشكل كامل عن سرية كلمة المرور وأي استخدام يتم عبر حسابك. في حال الاشتباه بأي اختراق يجب تغيير كلمة المرور فوراً.</p>
+                                <p style="margin:0 0 0.7rem 0;">يُمنع منعاً باتاً استخدام النظام في أي نشاط هجومي أو غير قانوني مثل فحص أو جمع بيانات أو استهداف جهات دون تصريح.</p>
+                                <p style="margin:0 0 0.7rem 0;">يحق لإدارة النظام تعليق أو حذف الحساب في حال مخالفة هذه الشروط أو استخدام غير مشروع للخدمات.</p>
+                                <p style="margin:0;">بالضغط على زر الموافقة، أنت تؤكد أنك قرأت النص كاملاً وتقبل جميع الشروط والأحكام.</p>
+                            </div>
+                            <div style="padding:0.9rem;display:flex;gap:0.55rem;">
+                                <button type="button" onclick="closeTermsModal()" style="flex:1;padding:0.65rem;background:transparent;border:1px solid rgba(148,163,184,0.35);border-radius:10px;color:#94a3b8;cursor:pointer;font-family:Tajawal,sans-serif;">إغلاق</button>
+                                <button id="auth-terms-confirm-btn" type="button" onclick="confirmTermsRead()" disabled style="flex:1;padding:0.65rem;background:rgba(124,58,237,0.25);border:1px solid rgba(124,58,237,0.35);border-radius:10px;color:#c4b5fd;cursor:not-allowed;font-weight:700;font-family:Tajawal,sans-serif;opacity:0.65;">قرأت وأوافق</button>
+                            </div>
+                        </div>
+                    </div>
                     <div id="auth-reg-error" style="display:none;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:0.7rem 1rem;color:#f87171;font-size:0.82rem;margin-bottom:1rem;text-align:center;"></div>
                     <div id="auth-reg-success" style="display:none;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:10px;padding:0.7rem 1rem;color:#4ade80;font-size:0.82rem;margin-bottom:1rem;text-align:center;"></div>
-                    <button onclick="doRegister()" style="width:100%;padding:0.9rem;background:linear-gradient(135deg,#7c3aed,#5b21b6);border:none;border-radius:12px;color:white;font-size:1rem;font-weight:700;cursor:pointer;transition:all 0.2s;box-shadow:0 0 20px rgba(124,58,237,0.4);font-family:Tajawal,sans-serif;" onmouseover="this.style.boxShadow='0 0 35px rgba(124,58,237,0.7)'" onmouseout="this.style.boxShadow='0 0 20px rgba(124,58,237,0.4)'" id="auth-reg-btn">
+                    <button onclick="doRegister()" style="width:100%;padding:0.9rem;background:linear-gradient(135deg,#7c3aed,#5b21b6);border:none;border-radius:12px;color:white;font-size:1rem;font-weight:700;cursor:not-allowed;transition:all 0.2s;box-shadow:0 0 20px rgba(124,58,237,0.2);font-family:Tajawal,sans-serif;opacity:0.55;" onmouseover="if(!this.disabled){this.style.boxShadow='0 0 35px rgba(124,58,237,0.7)'}" onmouseout="if(!this.disabled){this.style.boxShadow='0 0 20px rgba(124,58,237,0.4)'}" id="auth-reg-btn" disabled>
                         إنشاء حساب جديد ✨
                     </button>
                 </div>
@@ -1125,28 +1603,6 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <!-- Backup Login Form -->
-                <div id="auth-backup-form" style="display:none;">
-                    <div style="text-align:center;margin-bottom:1.5rem;">
-                        <div style="font-size:2.5rem;margin-bottom:0.5rem;">🔑</div>
-                        <h3 style="color:#22c55e;font-weight:700;">الدخول بكود الطوارئ</h3>
-                        <p style="color:#9ca3af;font-size:0.8rem;margin-top:0.5rem;">أدخل اسم المستخدم وكود الطوارئ لمرة واحدة.</p>
-                    </div>
-                    <div style="margin-bottom:1rem;">
-                        <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;">اسم المستخدم</label>
-                        <input id="auth-backup-user" type="text" placeholder="اسم المستخدم..." style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(34,197,94,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='rgba(34,197,94,0.3)'">
-                    </div>
-                    <div style="margin-bottom:1.5rem;">
-                        <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;">كود الطوارئ</label>
-                        <input id="auth-backup-code" type="text" placeholder="XXXXXXXX" style="width:100%;box-sizing:border-box;padding:1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(34,197,94,0.3);border-radius:12px;color:white;font-size:1.8rem;outline:none;font-family:monospace;text-align:center;letter-spacing:0.5em;" onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='rgba(34,197,94,0.3)'">
-                    </div>
-                    <div id="auth-backup-error" style="display:none;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:0.7rem 1rem;color:#f87171;font-size:0.82rem;margin-bottom:1rem;text-align:center;"></div>
-                    <button onclick="doBackupLogin()" style="width:100%;padding:0.9rem;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;border-radius:12px;color:white;font-size:1rem;font-weight:700;cursor:pointer;font-family:Tajawal,sans-serif;box-shadow:0 0 20px rgba(34,197,94,0.4);">
-                        دخول بالكود 🛡️
-                    </button>
-                    <button onclick="switchAuthTab('login')" style="width:100%;margin-top:0.75rem;background:transparent;border:none;color:#9ca3af;font-size:0.85rem;cursor:pointer;text-decoration:underline;">إلغاء والعودة</button>
-                </div>
-
                 <!-- Footer -->
                 <div style="text-align:center;margin-top:1.5rem;color:#374151;font-size:0.72rem;letter-spacing:0.05em;">
                     🛡️ TITAN SECURITY PROTOCOL — ALL DATA ENCRYPTED
@@ -1209,36 +1665,64 @@ HTML_TEMPLATE = """
                 <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
                 <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🛠️</span> الأدوات الذكية</button>
                 <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
+                <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
+                <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> Incident</button>
+                <button onclick="showTab('maltego')" id="btn-maltego" class="px-3 py-1.5 rounded-lg hover:bg-fuchsia-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-fuchsia-500/30"><span>🕸️</span> Graph</button>
+                <button onclick="showTab('hunting')" id="btn-hunting" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎯</span> Hunting</button>
+                <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> Forensics</button>
+                <button onclick="showTab('brand')" id="btn-brand" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🛡️</span> Brand</button>
+                <button onclick="showTab('se')" id="btn-se" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🎭</span> Social</button>
+                <button onclick="showTab('advcrypto')" id="btn-advcrypto" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🧬</span> Advanced Crypto</button>
                 <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
                 <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
                 <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
-                <button onclick="showTab('ai')" id="btn-ai" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
+                <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
                 <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
             </div>
 
 
             <!-- ===== AI SECTION ===== -->
-            <div id="ai-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-green-400 border-b border-slate-700 pb-2">&#129302; الذكاء الاصطناعي (TITAN AI)</h2>
-                <div class="flex items-center gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700">
-                    <span class="text-xs text-gray-400 font-bold">النموذج:</span>
-                    <select id="ai-model-select" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
-                        <option value="llama3:latest">Llama 3 (8B)</option>
-                        <option value="llama3.2:latest">Llama 3.2 (3B)</option>
-                    </select>
+            <div id="ai-section" class="hidden fixed right-4 bottom-24 z-[9998] w-[min(92vw,34rem)] max-h-[78vh] overflow-y-auto rounded-2xl border border-green-900/40 bg-slate-950/96 shadow-[0_0_40px_rgba(16,185,129,0.2)] p-4 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+                    <h2 class="text-lg font-bold text-green-400">&#129302; TITAN AI</h2>
+                    <button type="button" onclick="closeAiBubble()" class="text-xs px-2 py-1 rounded-lg border border-slate-700 text-gray-300 hover:bg-slate-800">✕</button>
                 </div>
-                <div class="bg-slate-900/70 rounded-2xl border border-green-900/30 overflow-hidden">
+
+                <div class="flex flex-wrap items-center justify-start gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-400 font-bold">النموذج:</span>
+                        <select id="ai-model-select" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
+                            <option value="titan_ultimate">TITAN ULTIMATE</option>
+                            <option value="titan_sec">TITAN SEC</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-end gap-2 ml-auto">
+                        <button id="ai-subtab-support" onclick="showAiSubTab('support')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-green-600/20 hover:border-green-500/40">Support</button>
+                        <button id="ai-subtab-analysis" onclick="showAiSubTab('analysis')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-green-600/20 hover:border-green-500/40">Analysis</button>
+                        <button id="ai-subtab-chat" onclick="showAiSubTab('chat')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-emerald-700/50 bg-emerald-900/40 text-emerald-300">Chat</button>
+                    </div>
+                </div>
+
+                <div id="ai-sub-content-chat" class="space-y-4">
+                <div id="ai-chat-shell" class="bg-slate-900/70 rounded-2xl border border-green-900/30 overflow-hidden h-[34rem] flex flex-col">
                     <div class="p-3 border-b border-slate-700">
                         <span class="text-green-400 text-sm font-bold">&#128172; محادثة مع AI</span>
                     </div>
-                    <div id="ai-chat-messages" class="h-80 overflow-y-auto p-4 space-y-3">
-                        <div class="flex justify-start">
-                            <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl max-w-xs text-sm">
-                                مرحباً! أنا TITAN AI. كيف يمكنني مساعدتك؟
+                    <div id="ai-chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-slate-950/40 to-slate-900/20">
+                        <div class="min-h-full flex flex-col justify-end gap-3" id="ai-chat-flow">
+                            <div class="flex justify-start items-end gap-2">
+                                <div class="w-7 h-7 rounded-full bg-emerald-900/50 border border-emerald-700/40 flex items-center justify-center text-xs">🤖</div>
+                                <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm shadow-lg border border-slate-700/60">
+                                    مرحباً! أنا TITAN AI. كيف يمكنني مساعدتك اليوم؟
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="p-3 border-t border-slate-700 flex gap-2">
+                    <div class="p-3 border-t border-slate-700 bg-slate-950/70 sticky bottom-0 space-y-2">
+                        <div id="ai-attach-list" class="hidden flex flex-wrap gap-1.5"></div>
+                        <input id="ai-file-input" type="file" class="hidden" multiple accept="image/*,.pdf,.txt,.md,.csv,.json,.log,.doc,.docx,.zip,.rar,.7z">
+                        <div class="flex gap-2">
+                            <button type="button" onclick="document.getElementById('ai-file-input').click()" class="bg-slate-800 hover:bg-slate-700 text-gray-200 px-3 py-2 rounded-xl font-bold text-sm border border-slate-600/70">📎</button>
                         <input type="text" id="ai-chat-input" placeholder="اسأل عن الأمن السيبراني..."
                             class="flex-1 bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none">
                         <button onclick="sendAiMessage()" id="ai-send-btn"
@@ -1246,7 +1730,38 @@ HTML_TEMPLATE = """
                             إرسال
                         </button>
                     </div>
+                    </div>
                 </div>
+                </div>
+
+                <div id="ai-sub-content-support" class="hidden space-y-4">
+                <div class="bg-slate-900/70 rounded-2xl border border-cyan-900/30 overflow-hidden">
+                    <div class="p-3 border-b border-slate-700 flex items-center justify-between">
+                        <span class="text-cyan-400 text-sm font-bold">🎫 الدعم الفني - إنشاء تيكت</span>
+                        <button onclick="loadSupportTickets()" class="text-xs px-3 py-1 rounded-lg bg-cyan-900/30 border border-cyan-800/50 text-cyan-300">تحديث</button>
+                    </div>
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <input id="supportTicketSubject" type="text" placeholder="عنوان المشكلة" class="md:col-span-2 bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
+                        <select id="supportTicketCategory" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
+                            <option value="technical">Technical</option>
+                            <option value="billing">Billing</option>
+                            <option value="account">Account</option>
+                            <option value="security">Security</option>
+                        </select>
+                        <select id="supportTicketPriority" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
+                            <option value="low">Low</option>
+                            <option value="normal" selected>Normal</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                        <textarea id="supportTicketDetails" rows="3" placeholder="اشرح المشكلة بالتفصيل..." class="md:col-span-4 bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none resize-none"></textarea>
+                        <button onclick="createSupportTicket()" class="md:col-span-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg p-2 font-bold text-sm">إنشاء تيكت دعم</button>
+                    </div>
+                    <div id="supportTicketsList" class="px-4 pb-4 space-y-2 max-h-56 overflow-y-auto"></div>
+                </div>
+                </div>
+
+                <div id="ai-sub-content-analysis" class="hidden space-y-4">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="bg-slate-900/50 p-5 rounded-xl border border-purple-900/40">
                         <h3 class="font-bold text-purple-400 mb-3">&#128273; تحليل كلمة السر بالـ AI</h3>
@@ -1267,7 +1782,11 @@ HTML_TEMPLATE = """
                         <div id="ai-security-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700"></div>
                     </div>
                 </div>
+                </div>
+
             </div>
+
+            <button id="ai-float-launcher" type="button" onclick="toggleAiBubble()" class="hidden fixed left-5 bottom-6 z-[9999] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 text-white text-2xl font-black shadow-[0_0_25px_rgba(16,185,129,0.55)] border border-emerald-300/40 hover:scale-105 transition-all" title="TITAN AI">🤖</button>
 
             <!-- ===== ADMIN SECTION ===== -->
             <div id="admin-section" class="hidden space-y-6">
@@ -1291,26 +1810,26 @@ HTML_TEMPLATE = """
                     </button>
                     <div id="admin-reset-msg" class="mt-4 hidden p-3 rounded-lg text-center font-mono text-sm border"></div>
                 </div>
+
+                <div class="bg-slate-900/50 border border-slate-700 p-5 rounded-2xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <h3 class="text-lg font-bold text-cyan-300">🎫 إدارة تذاكر الدعم الفني</h3>
+                        <div class="flex items-center gap-2">
+                            <select id="adminTicketStatusFilter" onchange="loadAdminSupportTickets()" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg px-2 py-1.5 outline-none">
+                                <option value="all">All Statuses</option>
+                                <option value="open">Open</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="resolved">Resolved</option>
+                                <option value="closed">Closed</option>
+                            </select>
+                            <button onclick="loadAdminSupportTickets()" class="px-3 py-1.5 rounded-lg bg-cyan-900/30 border border-cyan-800/50 text-cyan-300 text-xs font-bold">تحديث</button>
+                        </div>
+                    </div>
+                    <div id="adminSupportTicketsList" class="space-y-3 max-h-[30rem] overflow-y-auto"></div>
+                </div>
             </div>
 
             <div id="security-section" class="hidden"></div> <!-- Security section completely removed per user request -->
-
-
-            <!-- Backup Codes Modal -->
-            <div id="backup-codes-modal" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;">
-                <div style="background:#0a0a1e;border:1px solid rgba(34,197,94,0.4);border-radius:20px;padding:2rem;max-width:420px;width:90%;box-shadow:0 0 60px rgba(34,197,94,0.2);">
-                    <div style="text-align:center;margin-bottom:1.5rem;">
-                        <div style="font-size:2rem">🔑</div>
-                        <h3 style="color:#4ade80;font-weight:700;margin:0.5rem 0;">أكواد الطوارئ الخاصة بك</h3>
-                        <p style="color:#6b7280;font-size:0.75rem;">احفظ هذه الأكواد في مكان آمن. كل كود يُستخدم مرة واحدة فقط.</p>
-                    </div>
-                    <div id="backup-codes-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:1.5rem;"></div>
-                    <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:0.75rem;margin-bottom:1rem;color:#f87171;font-size:0.75rem;text-align:center;">
-                        ⚠️ هذه الأكواد لن تظهر مرة أخرى! اكتبها الآن على ورقة.
-                    </div>
-                    <button onclick="closeBackupModal()" style="width:100%;padding:0.75rem;background:linear-gradient(135deg,#16a34a,#15803d);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;font-size:0.9rem;">فهمت، حفظتها ✅</button>
-                </div>
-            </div>
 
             <!-- ===== DASHBOARD SECTION ===== -->
 
@@ -1711,22 +2230,33 @@ HTML_TEMPLATE = """
                 <!-- ===== AUDIO STEGANOGRAPHY SECTION ===== -->
                 <div id="audio-section" class="hidden space-y-6">
                     <h2 class="text-xl font-bold text-blue-400 border-b border-slate-700 pb-2">🎵 إخفاء البيانات في الصوت (Audio Stegano)</h2>
+                    <div class="bg-slate-900/50 p-4 rounded-2xl border border-cyan-500/20 space-y-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button onclick="startAudioRecording()" id="audioRecStartBtn" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-xs font-bold">🎙️ بدء التسجيل</button>
+                            <button onclick="stopAudioRecording()" id="audioRecStopBtn" class="px-4 py-2 bg-red-700 hover:bg-red-600 rounded-lg text-xs font-bold" disabled>⏹️ إيقاف التسجيل</button>
+                            <span id="audioRecStatus" class="text-xs text-cyan-300">جاهز للتسجيل من الميكروفون</span>
+                        </div>
+                        <audio id="audioRecordedPreview" controls class="w-full hidden"></audio>
+                        <div class="text-[11px] text-gray-500">يمكنك التسجيل مباشرة ثم إخفاء النص المشفر داخل التسجيل بدون رفع ملف يدوي.</div>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="bg-slate-900/50 p-6 rounded-2xl border border-blue-500/20">
                             <label class="block text-sm text-blue-400 mb-3 font-bold">🛠️ تشفير (إخفاء):</label>
-                            <input type="file" id="audioFileEncrypt" accept=".wav, .mp3" class="hidden" onchange="document.getElementById('audioEncryptName').innerText = this.files[0].name">
+                            <input type="file" id="audioFileEncrypt" accept=".wav, .mp3, .ogg, .webm, .m4a, .aac" class="hidden" onchange="document.getElementById('audioEncryptName').innerText = this.files[0].name">
                             <label for="audioFileEncrypt" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-600/10 file:text-blue-400 hover:file:bg-blue-600/20 mb-4 cursor-pointer flex items-center justify-center p-2 rounded-xl border border-blue-600/30">
-                                <span id="audioEncryptName" class="truncate">اختر ملف صوتي (.wav, .mp3)</span>
+                                <span id="audioEncryptName" class="truncate">اختر ملف صوتي أو استخدم التسجيل المباشر</span>
                             </label>
                             <textarea id="audioSecretText" placeholder="أدخل النص السري هنا..." class="w-full h-24 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-blue-500 outline-none mb-4"></textarea>
+                            <input type="password" id="audioSecretPass" placeholder="كلمة سر لتشفير النص قبل الإخفاء (اختياري لكن موصى به)" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-blue-500 outline-none mb-4">
                             <button onclick="processAudio('encode')" class="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20">حفظ النص في الملف 💾</button>
                         </div>
                         <div class="bg-slate-900/50 p-6 rounded-2xl border border-purple-500/20">
                             <label class="block text-sm text-purple-400 mb-3 font-bold">🔍 فك التشفير (استخراج):</label>
-                            <input type="file" id="audioFileDecrypt" accept=".wav, .mp3" class="hidden" onchange="document.getElementById('audioDecryptName').innerText = this.files[0].name">
+                            <input type="file" id="audioFileDecrypt" accept=".wav, .mp3, .ogg, .webm, .m4a, .aac" class="hidden" onchange="document.getElementById('audioDecryptName').innerText = this.files[0].name">
                             <label for="audioFileDecrypt" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-600/10 file:text-purple-400 hover:file:bg-purple-600/20 mb-4 cursor-pointer flex items-center justify-center p-2 rounded-xl border border-purple-600/30">
-                                <span id="audioDecryptName" class="truncate">اختر ملف صوتي (.wav, .mp3)</span>
+                                <span id="audioDecryptName" class="truncate">اختر ملف صوتي للتحليل</span>
                             </label>
+                            <input type="password" id="audioDecodePass" placeholder="كلمة سر فك النص (إذا كان مشفراً)" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-purple-500 outline-none mb-4">
                             <div id="audioDecodedResult" class="w-full h-24 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm overflow-y-auto mb-4 text-gray-400 font-mono italic">سيظهر النص المستخرج هنا...</div>
                             <button onclick="processAudio('decode')" class="w-full py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20">استخراج النص السري 🔑</button>
                         </div>
@@ -2081,6 +2611,357 @@ HTML_TEMPLATE = """
                             <input type="text" id="burnChatInput" placeholder="اكتب رسالتك السرية هنا..." class="flex-1 p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-pink-500 outline-none" disabled>
                             <button id="burnChatSendBtn" onclick="sendBurnChat()" class="bg-slate-800 text-gray-500 px-8 rounded-lg font-bold transition-all border border-slate-700" disabled>إرسال</button>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== OSINT SECTION ===== -->
+            <div id="osint-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🕵️ OSINT Workbench</h2>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
+                        <h3 class="text-sm font-bold text-indigo-300 mb-2">البحث الموحد (IP / Domain / URL / Email / Phone)</h3>
+                        <p class="text-[11px] text-gray-500 mb-3">اكتب أي هدف وسيتم تحليله تلقائياً حسب النوع مع درجة خطورة سريعة.</p>
+                        <div class="flex flex-col md:flex-row gap-2">
+                            <input id="osintTargetInput" type="text" placeholder="8.8.8.8 أو example.com أو user@mail.com أو +962..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-left" dir="ltr">
+                            <button onclick="runUnifiedOsint()" class="bg-indigo-900/50 hover:bg-indigo-800 px-5 py-3 rounded-xl font-bold border border-indigo-800/50 transition-all text-indigo-300">تحليل الهدف</button>
+                        </div>
+                        <div id="osintRiskScore" class="hidden mt-3 p-3 rounded-xl border text-sm font-bold"></div>
+                        <div id="osintUnifiedResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
+                        <h3 class="text-sm font-bold text-indigo-300 mb-2">Watchlist</h3>
+                        <p class="text-[11px] text-gray-500 mb-3">احفظ الأهداف لمراقبتها وتصدير تقرير سريع.</p>
+                        <div class="flex gap-2 mb-2">
+                            <button onclick="saveCurrentOsintTarget()" class="flex-1 py-2 bg-indigo-900/40 hover:bg-indigo-800 rounded-lg text-xs font-bold text-indigo-300 border border-indigo-800/40">إضافة الهدف الحالي</button>
+                            <button onclick="exportOsintReport()" class="flex-1 py-2 bg-emerald-900/40 hover:bg-emerald-800 rounded-lg text-xs font-bold text-emerald-300 border border-emerald-800/40">تصدير JSON</button>
+                        </div>
+                        <div id="osintWatchlist" class="bg-black/40 border border-slate-700 rounded-lg p-2 max-h-56 overflow-y-auto text-xs text-gray-300"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
+                        <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter</h3>
+                        <p class="text-[11px] text-gray-500 mb-3">البحث عن اليوزرنيم على منصات متعددة لمعرفة وين موجود.</p>
+                        <div class="flex gap-2">
+                            <input id="osintUsernameInput" type="text" placeholder="username" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none font-mono text-left" dir="ltr">
+                            <button onclick="huntUsername()" class="bg-cyan-900/50 hover:bg-cyan-800 px-5 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-300">ابحث</button>
+                        </div>
+                        <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
+                        <h3 class="text-sm font-bold text-amber-300 mb-2">Hash Analyzer</h3>
+                        <p class="text-[11px] text-gray-500 mb-3">تحليل مؤشرات الملفات (MD5 / SHA1 / SHA256) وتقدير السمعة.</p>
+                        <div class="flex gap-2">
+                            <input id="osintHashInput" type="text" placeholder="Paste hash..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-amber-500 outline-none font-mono text-left" dir="ltr">
+                            <button onclick="analyzeHashIndicator()" class="bg-amber-900/50 hover:bg-amber-800 px-5 py-3 rounded-xl font-bold border border-amber-800/50 transition-all text-amber-300">حلل</button>
+                        </div>
+                        <div id="osintHashResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-rose-900/40">
+                    <h3 class="text-sm font-bold text-rose-300 mb-2">Threat Intel Quick Actions</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="bg-black/30 border border-slate-700 rounded-lg p-3">
+                            <label class="text-[10px] text-gray-500 uppercase tracking-wider">DNS Leak</label>
+                            <button onclick="osintQuickDnsLeak()" class="w-full mt-2 py-2 bg-rose-900/40 hover:bg-rose-800 rounded-lg text-xs font-bold text-rose-300 border border-rose-800/40">فحص</button>
+                        </div>
+                        <div class="bg-black/30 border border-slate-700 rounded-lg p-3">
+                            <label class="text-[10px] text-gray-500 uppercase tracking-wider">Shodan Intel (IP)</label>
+                            <input id="osintShodanIp" type="text" placeholder="1.1.1.1" class="w-full mt-2 p-2 rounded bg-slate-900 border border-slate-700 outline-none text-xs font-mono text-left" dir="ltr">
+                            <button onclick="osintQuickShodan()" class="w-full mt-2 py-2 bg-rose-900/40 hover:bg-rose-800 rounded-lg text-xs font-bold text-rose-300 border border-rose-800/40">فحص</button>
+                        </div>
+                        <div class="bg-black/30 border border-slate-700 rounded-lg p-3">
+                            <label class="text-[10px] text-gray-500 uppercase tracking-wider">Malware URL</label>
+                            <input id="osintMalwareUrl" type="text" placeholder="https://target.tld" class="w-full mt-2 p-2 rounded bg-slate-900 border border-slate-700 outline-none text-xs font-mono text-left" dir="ltr">
+                            <button onclick="osintQuickMalwareUrl()" class="w-full mt-2 py-2 bg-rose-900/40 hover:bg-rose-800 rounded-lg text-xs font-bold text-rose-300 border border-rose-800/40">فحص</button>
+                        </div>
+                    </div>
+                    <div id="osintThreatResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-64 overflow-y-auto" dir="ltr"></div>
+                </div>
+            </div>
+
+            <div id="ir-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-red-400 border-b border-slate-700 pb-2">🚨 Incident Response</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-red-300">إنشاء قضية</h3>
+                        <input id="irCaseTitle" type="text" placeholder="عنوان القضية" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm">
+                        <select id="irCaseSeverity" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                        <textarea id="irCaseDesc" rows="3" placeholder="وصف سريع للحادث" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm"></textarea>
+                        <button onclick="irCreateCase()" class="w-full py-2 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 font-bold border border-red-800/40">إنشاء</button>
+                    </div>
+
+                    <div class="lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-red-900/40">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-red-300">القضايا</h3>
+                            <button onclick="irLoadCases()" class="text-xs px-3 py-1 rounded bg-slate-800 border border-slate-700">تحديث</button>
+                        </div>
+                        <div id="irCasesList" class="space-y-2 max-h-56 overflow-y-auto"></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-bold text-red-300">إدارة مؤشرات القضية</h3>
+                        <div id="irSelectedCase" class="text-xs text-gray-400">لم يتم اختيار قضية</div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <select id="irIocType" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="ip">IP</option>
+                            <option value="domain">Domain</option>
+                            <option value="url">URL</option>
+                            <option value="hash">Hash</option>
+                            <option value="username">Username</option>
+                            <option value="email">Email</option>
+                        </select>
+                        <input id="irIocValue" type="text" placeholder="IOC value" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
+                        <input id="irIocRisk" type="number" min="0" max="100" value="50" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                        <button onclick="irAddIoc()" class="p-2 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">إضافة IOC</button>
+                    </div>
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        <button onclick="irUpdateStatus('open')" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700">Open</button>
+                        <button onclick="irUpdateStatus('investigating')" class="px-3 py-1 text-xs rounded bg-blue-900/30 border border-blue-800/50">Investigating</button>
+                        <button onclick="irUpdateStatus('contained')" class="px-3 py-1 text-xs rounded bg-amber-900/30 border border-amber-800/50">Contained</button>
+                        <button onclick="irUpdateStatus('closed')" class="px-3 py-1 text-xs rounded bg-green-900/30 border border-green-800/50">Closed</button>
+                        <button onclick="irExportReport()" class="px-3 py-1 text-xs rounded bg-emerald-900/30 border border-emerald-800/50">تصدير تقرير</button>
+                    </div>
+                    <div id="irIocTimeline" class="mt-3 p-3 rounded-lg bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
+                </div>
+            </div>
+
+            <div id="maltego-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-fuchsia-400 border-b border-slate-700 pb-2">🕸️ Link Analysis (Maltego Style)</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-fuchsia-300">إضافة كيان</h3>
+                        <select id="graphEntityType" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="ip">IP</option>
+                            <option value="domain">Domain</option>
+                            <option value="url">URL</option>
+                            <option value="email">Email</option>
+                            <option value="username">Username</option>
+                            <option value="hash">Hash</option>
+                        </select>
+                        <input id="graphEntityValue" type="text" placeholder="قيمة الكيان" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
+                        <button onclick="graphAddEntity()" class="w-full py-2 rounded bg-fuchsia-900/40 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">إضافة</button>
+                        <button onclick="graphAutoLink()" class="w-full py-2 rounded bg-violet-900/40 border border-violet-800/50 text-violet-300 text-xs font-bold">تحليل الروابط</button>
+                    </div>
+                    <div class="lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40">
+                        <h3 class="text-sm font-bold text-fuchsia-300 mb-3">لوحة العقد والروابط</h3>
+                        <div id="graphCanvas" class="relative min-h-[260px] rounded-xl border border-slate-700 bg-black/40 p-2 overflow-hidden"></div>
+                        <div id="graphLinksList" class="mt-3 text-xs bg-black/40 border border-slate-700 rounded-lg p-2 max-h-40 overflow-y-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="hunting-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-orange-400 border-b border-slate-700 pb-2">🎯 Threat Hunting Lab</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-orange-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-orange-300">Query Builder</h3>
+                        <input id="huntQueryText" type="text" placeholder="ابحث عن مؤشر..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
+                        <select id="huntQueryType" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="all">All</option>
+                            <option value="ip">IP</option>
+                            <option value="domain">Domain</option>
+                            <option value="url">URL</option>
+                            <option value="email">Email</option>
+                            <option value="username">Username</option>
+                            <option value="hash">Hash</option>
+                        </select>
+                        <button onclick="huntRunQuery()" class="w-full py-2 rounded bg-orange-900/40 border border-orange-800/50 text-orange-300 text-xs font-bold">Run Hunt</button>
+                        <div id="huntQueryResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-48 overflow-y-auto text-xs"></div>
+                    </div>
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-orange-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-orange-300">Correlation Rule</h3>
+                        <p class="text-[11px] text-gray-500">قاعدة: إذا Risk Avg >= Threshold فأنشئ Alert.</p>
+                        <input id="huntRuleThreshold" type="number" min="0" max="100" value="70" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                        <button onclick="huntEvaluateRule()" class="w-full py-2 rounded bg-amber-900/40 border border-amber-800/50 text-amber-300 text-xs font-bold">Evaluate</button>
+                        <div id="huntRuleResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="forensics-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-teal-400 border-b border-slate-700 pb-2">🧪 Digital Forensics</h2>
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-teal-900/40 space-y-3">
+                    <h3 class="text-sm font-bold text-teal-300">File Triage</h3>
+                    <input id="forensicsFile" type="file" class="block w-full text-sm text-slate-400 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-slate-800 file:text-teal-300 border border-slate-700 p-2 rounded-xl">
+                    <button onclick="forensicsTriage()" class="w-full py-2 rounded bg-teal-900/40 border border-teal-800/50 text-teal-300 text-xs font-bold">تحليل الدليل</button>
+                    <div id="forensicsResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
+                </div>
+            </div>
+
+            <div id="brand-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-cyan-400 border-b border-slate-700 pb-2">🛡️ Brand & Social Protection</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-cyan-300">Typosquatting Checker</h3>
+                        <input id="brandDomainInput" type="text" placeholder="example.com" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
+                        <button onclick="brandCheckTypos()" class="w-full py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">فحص</button>
+                        <div id="brandTyposResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-44 overflow-y-auto text-xs"></div>
+                    </div>
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-cyan-300">Fake Account Detector</h3>
+                        <input id="brandUserInput" type="text" placeholder="brand_username" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
+                        <button onclick="brandCheckImpersonation()" class="w-full py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">تحليل</button>
+                        <div id="brandUserResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-44 overflow-y-auto text-xs"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="se-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-pink-400 border-b border-slate-700 pb-2">🎭 Social Engineering Defense</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-pink-300">Awareness Simulator</h3>
+                        <select id="seScenarioType" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="phishing_email">Phishing Email</option>
+                            <option value="vishing_call">Vishing Call</option>
+                            <option value="pretexting">Pretexting</option>
+                            <option value="baiting_usb">Baiting USB</option>
+                        </select>
+                        <button onclick="seGenerateScenario()" class="w-full py-2 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">Generate Scenario</button>
+                        <div id="seScenarioResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
+                    </div>
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-pink-300">Training Checklist</h3>
+                        <label class="flex items-center gap-2 text-xs"><input type="checkbox"> Verify sender domain before clicking links</label>
+                        <label class="flex items-center gap-2 text-xs"><input type="checkbox"> Never share OTP or passwords</label>
+                        <label class="flex items-center gap-2 text-xs"><input type="checkbox"> Confirm urgent requests via second channel</label>
+                        <label class="flex items-center gap-2 text-xs"><input type="checkbox"> Report suspicious message to SOC</label>
+                        <div class="text-[11px] text-gray-500">هذا القسم توعوي دفاعي فقط وليس للاستخدام الهجومي.</div>
+                    </div>
+                </div>
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-pink-300">Information Collection Board</h3>
+                        <div class="flex gap-2">
+                            <button onclick="seSortIntelBoard()" class="px-3 py-1 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">ترتيب تلقائي</button>
+                            <button onclick="seExportIntelBoard()" class="px-3 py-1 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تصدير JSON</button>
+                            <button onclick="seClearIntelBoard()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">تفريغ</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                        <input id="seIntelSubject" type="text" placeholder="Subject (person/domain)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2" dir="ltr">
+                        <input id="seIntelSource" type="text" placeholder="Source (email/chat/call)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
+                        <select id="seIntelCategory" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="identity">Identity</option>
+                            <option value="behavior">Behavior</option>
+                            <option value="infrastructure">Infrastructure</option>
+                            <option value="message">Message Pattern</option>
+                        </select>
+                        <select id="seIntelConfidence" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="high">High Confidence</option>
+                            <option value="medium" selected>Medium Confidence</option>
+                            <option value="low">Low Confidence</option>
+                        </select>
+                    </div>
+                    <textarea id="seIntelNote" rows="3" placeholder="اكتب المعلومة أو الملاحظة الأمنية هنا..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></textarea>
+                    <button onclick="seAddIntelItem()" class="w-full py-2 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">إضافة معلومة</button>
+                    <div id="seIntelBoardResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-60 overflow-y-auto text-xs"></div>
+                </div>
+            </div>
+
+            <div id="advcrypto-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-emerald-400 border-b border-slate-700 pb-2">🧬 Advanced Crypto Lab</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
+                        <h3 class="text-sm font-bold text-emerald-300">Hidden Vault (Decoy + Secret)</h3>
+                        <input id="advHvLabel" placeholder="Vault label" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                        <textarea id="advHvDecoy" rows="2" placeholder="Decoy text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
+                        <input id="advHvDecoyPass" type="password" placeholder="Decoy password" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                        <textarea id="advHvHidden" rows="2" placeholder="Hidden text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
+                        <input id="advHvHiddenPass" type="password" placeholder="Hidden password" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                        <div class="flex gap-2">
+                            <button onclick="advHiddenVaultCreate()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Create</button>
+                            <button onclick="advHiddenVaultList()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs">List</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input id="advHvOpenId" type="number" placeholder="Vault ID" class="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                            <input id="advHvOpenPass" type="password" placeholder="Password" class="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                            <button onclick="advHiddenVaultOpen()" class="px-3 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Open</button>
+                        </div>
+                        <div id="advHvOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
+                        <h3 class="text-sm font-bold text-emerald-300">Secret Sharing (3-of-5)</h3>
+                        <textarea id="advSsSecret" rows="3" placeholder="Secret text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
+                        <div class="flex gap-2">
+                            <button onclick="advSecretSplit()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Split</button>
+                            <button onclick="advSecretRecover()" class="flex-1 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Recover</button>
+                        </div>
+                        <textarea id="advSsShares" rows="5" placeholder="Shares (JSON array)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr"></textarea>
+                        <div id="advSsOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
+                        <h3 class="text-sm font-bold text-emerald-300">Time-Lock Message</h3>
+                        <textarea id="advTlMsg" rows="2" placeholder="Message" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
+                        <input id="advTlPass" type="password" placeholder="Password" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input id="advTlMinutes" type="number" min="1" value="10" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                            <label class="text-xs flex items-center gap-2"><input id="advTlOneTime" type="checkbox" checked> One-time read</label>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="advTimeLockCreate()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Create Token</button>
+                            <button onclick="advTimeLockOpen()" class="flex-1 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Open</button>
+                        </div>
+                        <input id="advTlToken" placeholder="Token" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr">
+                        <div id="advTlOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
+                        <h3 class="text-sm font-bold text-emerald-300">Policy Engine</h3>
+                        <textarea id="advPolicyJson" rows="5" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr">{"allowed_ips":[],"allowed_countries":[],"require_otp":false,"otp_code":"123456","min_hour":0,"max_hour":23}</textarea>
+                        <input id="advPolicyOtp" placeholder="OTP (if required)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                        <button onclick="advPolicyEvaluate()" class="w-full py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Evaluate</button>
+                        <div id="advPolicyOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
+                        <h3 class="text-sm font-bold text-emerald-300">Watermark Signature</h3>
+                        <input id="advWmFile" type="file" class="block w-full text-sm text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-full file:border-0 file:bg-slate-800 file:text-emerald-300 border border-slate-700 p-2 rounded-xl">
+                        <input id="advWmLabel" placeholder="Asset label" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                        <div class="flex gap-2">
+                            <button onclick="advWatermarkSign()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Sign</button>
+                            <button onclick="advWatermarkVerify()" class="flex-1 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Verify</button>
+                        </div>
+                        <input id="advWmSig" placeholder="Signature" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr">
+                        <div id="advWmOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
+                        <h3 class="text-sm font-bold text-emerald-300">Key Lifecycle (Create/Rotate/Revoke)</h3>
+                        <input id="advKeyName" placeholder="Key name" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                        <div class="flex gap-2">
+                            <button onclick="advKeyCreate()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Create</button>
+                            <button onclick="advKeyList()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs">List</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input id="advKeyId" type="number" placeholder="Key ID" class="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-xs">
+                            <button onclick="advKeyRotate()" class="px-3 py-2 rounded bg-amber-900/40 border border-amber-800/50 text-xs">Rotate</button>
+                            <button onclick="advKeyRevoke()" class="px-3 py-2 rounded bg-red-900/40 border border-red-800/50 text-xs">Revoke</button>
+                        </div>
+                        <textarea id="advKeyPlain" rows="2" placeholder="Plain text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
+                        <div class="flex gap-2">
+                            <button onclick="advKeyEncrypt()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-xs">Encrypt</button>
+                            <button onclick="advKeyDecrypt()" class="flex-1 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Decrypt</button>
+                        </div>
+                        <textarea id="advKeyCipher" rows="2" placeholder="Cipher text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr"></textarea>
+                        <div id="advKeyOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
                     </div>
                 </div>
             </div>
@@ -2499,7 +3380,6 @@ HTML_TEMPLATE = """
             const regForm = document.getElementById('auth-register-form');
             const verifyForm = document.getElementById('auth-verify-form');
             const forgotForm = document.getElementById('auth-forgot-form'); // NEW
-            const backupForm = document.getElementById('auth-backup-form'); // NEW
             
             if (tab === 'login') {
                 if(loginTab) {
@@ -2516,7 +3396,6 @@ HTML_TEMPLATE = """
                 if (regForm) regForm.style.display = 'none';
                 if (verifyForm) verifyForm.style.display = 'none';
                 if (forgotForm) forgotForm.style.display = 'none';
-                if (backupForm) backupForm.style.display = 'none';
             } else if (tab === 'register') {
                 if(regTab) {
                     regTab.style.background = 'linear-gradient(135deg, #7c3aed, #5b21b6)';
@@ -2532,13 +3411,12 @@ HTML_TEMPLATE = """
                 if (regForm) regForm.style.display = 'block';
                 if (verifyForm) verifyForm.style.display = 'none';
                 if (forgotForm) forgotForm.style.display = 'none';
-                if (backupForm) backupForm.style.display = 'none';
+                resetTermsAgreementGate();
             } else if (tab === 'verify') {
                 if (loginForm) loginForm.style.display = 'none';
                 if (regForm) regForm.style.display = 'none';
                 if (verifyForm) verifyForm.style.display = 'block';
                 if (forgotForm) forgotForm.style.display = 'none';
-                if (backupForm) backupForm.style.display = 'none';
                 if(loginTab) { loginTab.style.background = 'transparent'; loginTab.style.color = '#6b7280'; }
                 if(regTab) { regTab.style.background = 'transparent'; regTab.style.color = '#6b7280'; }
             } else if (tab === 'forgot') {
@@ -2546,18 +3424,121 @@ HTML_TEMPLATE = """
                 if (regForm) regForm.style.display = 'none';
                 if (verifyForm) verifyForm.style.display = 'none';
                 if (forgotForm) forgotForm.style.display = 'block';
-                if (backupForm) backupForm.style.display = 'none';
-                if(loginTab) { loginTab.style.background = 'transparent'; loginTab.style.color = '#6b7280'; }
-                if(regTab) { regTab.style.background = 'transparent'; regTab.style.color = '#6b7280'; }
-            } else if (tab === 'backup') {
-                if (loginForm) loginForm.style.display = 'none';
-                if (regForm) regForm.style.display = 'none';
-                if (verifyForm) verifyForm.style.display = 'none';
-                if (forgotForm) forgotForm.style.display = 'none';
-                if (backupForm) backupForm.style.display = 'block';
                 if(loginTab) { loginTab.style.background = 'transparent'; loginTab.style.color = '#6b7280'; }
                 if(regTab) { regTab.style.background = 'transparent'; regTab.style.color = '#6b7280'; }
             }
+        }
+
+        function updateRegisterButtonState() {
+            const btn = document.getElementById('auth-reg-btn');
+            const username = document.getElementById('auth-reg-user');
+            const email = document.getElementById('auth-reg-email');
+            const password = document.getElementById('auth-reg-pass');
+            const password2 = document.getElementById('auth-reg-pass2');
+            const terms = document.getElementById('auth-reg-terms');
+
+            if (!btn || !username || !email || !password || !password2 || !terms) return;
+
+            const hasCoreData = username.value.trim() && email.value.trim() && password.value && password2.value;
+            const accepted = terms.checked;
+            const canSubmit = !!hasCoreData && accepted;
+
+            btn.disabled = !canSubmit;
+            btn.style.opacity = canSubmit ? '1' : '0.55';
+            btn.style.cursor = canSubmit ? 'pointer' : 'not-allowed';
+            btn.style.boxShadow = canSubmit ? '0 0 20px rgba(124,58,237,0.4)' : '0 0 20px rgba(124,58,237,0.2)';
+        }
+
+        function openTermsModal() {
+            const modal = document.getElementById('auth-terms-modal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeTermsModal() {
+            const modal = document.getElementById('auth-terms-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function handleTermsModalScroll() {
+            const content = document.getElementById('auth-terms-modal-content');
+            const confirmBtn = document.getElementById('auth-terms-confirm-btn');
+            if (!content || !confirmBtn) return;
+
+            const reachedBottom = (content.scrollTop + content.clientHeight) >= (content.scrollHeight - 8);
+            if (reachedBottom) {
+                content.dataset.bottomReached = '1';
+                confirmBtn.disabled = false;
+                confirmBtn.style.opacity = '1';
+                confirmBtn.style.cursor = 'pointer';
+                confirmBtn.style.background = 'linear-gradient(135deg,#a855f7,#7c3aed)';
+                confirmBtn.style.border = '1px solid rgba(168,85,247,0.65)';
+                confirmBtn.style.color = 'white';
+            }
+        }
+
+        function confirmTermsRead() {
+            const content = document.getElementById('auth-terms-modal-content');
+            const terms = document.getElementById('auth-reg-terms');
+            const termsLabel = document.getElementById('auth-reg-terms-label');
+            const status = document.getElementById('auth-terms-read-state');
+            const errEl = document.getElementById('auth-reg-error');
+            if (!content || !terms || !termsLabel || !status) return;
+
+            const reachedBottom = content.dataset.bottomReached === '1';
+            if (!reachedBottom) {
+                if (errEl) {
+                    errEl.textContent = 'الرجاء قراءة الأحكام حتى آخر سطر قبل الموافقة.';
+                    errEl.style.display = 'block';
+                }
+                return;
+            }
+
+            terms.disabled = false;
+            termsLabel.style.opacity = '1';
+            termsLabel.style.cursor = 'pointer';
+            terms.style.cursor = 'pointer';
+            status.textContent = 'الحالة: تمت قراءة الأحكام ويمكنك الآن تحديد الموافقة.';
+            status.style.color = '#4ade80';
+            if (errEl) errEl.style.display = 'none';
+            closeTermsModal();
+            updateRegisterButtonState();
+        }
+
+        function resetTermsAgreementGate() {
+            const content = document.getElementById('auth-terms-modal-content');
+            const confirmBtn = document.getElementById('auth-terms-confirm-btn');
+            const terms = document.getElementById('auth-reg-terms');
+            const termsLabel = document.getElementById('auth-reg-terms-label');
+            const status = document.getElementById('auth-terms-read-state');
+            const modal = document.getElementById('auth-terms-modal');
+
+            if (content) {
+                content.scrollTop = 0;
+                content.dataset.bottomReached = '';
+            }
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = '0.65';
+                confirmBtn.style.cursor = 'not-allowed';
+                confirmBtn.style.background = 'rgba(124,58,237,0.25)';
+                confirmBtn.style.border = '1px solid rgba(124,58,237,0.35)';
+                confirmBtn.style.color = '#c4b5fd';
+            }
+            if (terms) {
+                terms.checked = false;
+                terms.disabled = true;
+                terms.style.cursor = 'not-allowed';
+            }
+            if (termsLabel) {
+                termsLabel.style.opacity = '0.55';
+                termsLabel.style.cursor = 'not-allowed';
+            }
+            if (status) {
+                status.textContent = 'الحالة: لم يتم تأكيد القراءة بعد.';
+                status.style.color = '#6b7280';
+            }
+            if (modal) modal.style.display = 'none';
+            updateRegisterButtonState();
         }
 
         async function doLogin() {
@@ -2580,6 +3561,8 @@ HTML_TEMPLATE = """
                     if (data.new_device || data.geo_alert) {
                         titanAlert('⚠️ تنبيه: تم رصد دخول من جهاز أو موقع جديد. تم إرسال تنبيه إلى بريدك الإلكتروني لضمان أمان حسابك.');
                     }
+                    setAdminUi(!!data.isAdmin);
+                    setAiBubbleVisibility(true);
                     btn.textContent = '✅ تم الدخول بنجاح!';
                     btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
                     const usernameEl = document.getElementById('header-username');
@@ -2620,6 +3603,7 @@ HTML_TEMPLATE = """
             const email     = document.getElementById('auth-reg-email').value.trim();
             const password  = document.getElementById('auth-reg-pass').value;
             const password2 = document.getElementById('auth-reg-pass2').value;
+            const acceptedTerms = document.getElementById('auth-reg-terms').checked;
             const errEl     = document.getElementById('auth-reg-error');
             const sucEl     = document.getElementById('auth-reg-success');
             const btn       = document.getElementById('auth-reg-btn');
@@ -2630,12 +3614,13 @@ HTML_TEMPLATE = """
             if (!username || !email || !password || !password2) { errEl.textContent = 'يرجى ملء جميع الحقول'; errEl.style.display = 'block'; return; }
             if (password !== password2) { errEl.textContent = 'كلمتا السر غير متطابقتين!'; errEl.style.display = 'block'; return; }
             if (password.length < 6) { errEl.textContent = 'كلمة السر يجب أن تكون 6 أحرف على الأقل'; errEl.style.display = 'block'; return; }
+            if (!acceptedTerms) { errEl.textContent = 'يجب الموافقة على الشروط والأحكام لإكمال إنشاء الحساب.'; errEl.style.display = 'block'; return; }
 
             btn.textContent = '⏳ جاري إنشاء الحساب...';
             btn.disabled = true;
 
             try {
-                const res  = await fetch('/api/auth/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username, password, email}) });
+                const res  = await fetch('/api/auth/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username, password, email, accepted_terms: acceptedTerms}) });
                 const data = await res.json();
 
                 if (data.success) {
@@ -2644,19 +3629,6 @@ HTML_TEMPLATE = """
                     btn.textContent = 'إنشاء حساب جديد ✨';
                     btn.disabled = false;
                     document.getElementById('auth-verify-username').value = username;
-                    
-                    // Show Backup Codes ONLY ONCE
-                    if (data.backup_codes && data.backup_codes.length > 0) {
-                        const grid = document.getElementById('backup-codes-grid');
-                        grid.innerHTML = '';
-                        data.backup_codes.forEach(code => {
-                            const d = document.createElement('div');
-                            d.className = 'bg-black/50 border border-green-800/40 p-2 rounded text-center text-sm font-mono text-green-300 tracking-wider font-bold';
-                            d.textContent = code;
-                            grid.appendChild(d);
-                        });
-                        document.getElementById('backup-codes-modal').style.display = 'flex';
-                    }
 
                     setTimeout(() => {
                         switchAuthTab('verify');
@@ -2673,10 +3645,6 @@ HTML_TEMPLATE = """
                 btn.textContent = 'إنشاء حساب جديد ✨';
                 btn.disabled = false;
             }
-        }
-        
-        function closeBackupModal() {
-            document.getElementById('backup-codes-modal').style.display = 'none';
         }
 
         async function doVerify() {
@@ -2752,6 +3720,7 @@ HTML_TEMPLATE = """
                         btn.addEventListener('click', soundManager.click);
                     });
                 }
+                setAiBubbleVisibility(true);
             }, 600);
         }
 
@@ -2772,6 +3741,20 @@ HTML_TEMPLATE = """
         }
 
         // تشغيل النبض تلقائياً عند التأكد من وجود جلسة
+        function setAdminUi(isAdmin) {
+            const adminBtn = document.getElementById('btn-admin');
+            if (!adminBtn) return;
+            if (isAdmin) {
+                adminBtn.classList.remove('hidden');
+                adminBtn.classList.add('flex');
+            } else {
+                adminBtn.classList.add('hidden');
+                adminBtn.classList.remove('flex');
+                const adminSection = document.getElementById('admin-section');
+                if (adminSection) adminSection.classList.add('hidden');
+            }
+        }
+
         async function checkAuth() {
             try {
                 const res = await fetch('/api/auth/status');
@@ -2797,13 +3780,8 @@ HTML_TEMPLATE = """
                         console.log('mainApp shown via checkAuth');
                     }
 
-                    if (data.isAdmin) {
-                        const adminBtn = document.getElementById('btn-admin');
-                        if (adminBtn) {
-                            adminBtn.classList.remove('hidden');
-                            adminBtn.classList.add('flex');
-                        }
-                    }
+                    setAdminUi(!!data.isAdmin);
+                    setAiBubbleVisibility(true);
 
                     // تهيئة التطبيق
                     if (typeof introMatrixAnimId !== 'undefined') {
@@ -2816,10 +3794,14 @@ HTML_TEMPLATE = """
                         btn.addEventListener('click', soundManager.click);
                     });
                 } else {
+                    setAdminUi(false);
+                    setAiBubbleVisibility(false);
                     document.getElementById('auth-overlay').style.display = 'block';
                     initMatrix('auth-matrix', true);
                 }
             } catch (e) {
+                setAdminUi(false);
+                setAiBubbleVisibility(false);
                 document.getElementById('auth-overlay').style.display = 'block';
                 initMatrix('auth-matrix', true);
             }
@@ -2837,7 +3819,20 @@ HTML_TEMPLATE = """
 
         // أداة لمعرفة متى المستخدم ضغط أي زر لتفعيل الصوت (لأن المتصفحات تمنع الصوت بدون تفاعل)
         window.addEventListener('click', () => { initAudio(); }, {once:true});
-        window.onload = () => { setTimeout(checkAuth, 100); };
+        function initRegisterTermsUi() {
+            ['auth-reg-user', 'auth-reg-email', 'auth-reg-pass', 'auth-reg-pass2'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', updateRegisterButtonState);
+            });
+            const terms = document.getElementById('auth-reg-terms');
+            if (terms) terms.addEventListener('change', updateRegisterButtonState);
+            resetTermsAgreementGate();
+            loadOsintWatchlist();
+        }
+        window.onload = () => {
+            initRegisterTermsUi();
+            setTimeout(checkAuth, 100);
+        };
 
         function startSystem() {
             soundManager.click();
@@ -2908,68 +3903,6 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 if(data.success) { titanAlert('✅ تم تحديث أساس الفحص للملفات الحالية وتوثيقها.'); checkIntegrity(); }
             } catch(e) {}
-        }
-
-        async function doBackupLogin() {
-            const username = document.getElementById('auth-backup-user').value.trim();
-            const code = document.getElementById('auth-backup-code').value.trim();
-            const msg = document.getElementById('auth-backup-error');
-            
-            if (!username || !code) { 
-                msg.innerText = "يرجى إدخال اسم المستخدم وكود الطوارئ"; 
-                msg.style.display = 'block'; 
-                return; 
-            }
-            if(code.length !== 8) { 
-                msg.innerText = "الكود يجب أن يكون 8 حروف تماماً"; 
-                msg.style.display = 'block'; 
-                return; 
-            }
-            
-            msg.style.display = 'none';
-
-            try {
-                const res = await fetch('/api/auth/backup-login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({code, username})});
-                const data = await res.json();
-                if (data.success) {
-                    msg.innerText = "✅ تم الدخول بالكود بنجاح! جاري توجيهك...";
-                    msg.className = "mt-4 p-2 rounded bg-green-900/40 text-green-300 border border-green-800/50 text-xs text-center";
-                    msg.style.display = 'block';
-                    setTimeout(() => window.location.reload(), 1000);
-                } else {
-                    msg.innerText = data.error || "❌ الكود غير صحيح أو مستخدم مسبقاً.";
-                    msg.className = "mt-4 p-2 rounded bg-red-900/40 text-red-300 border border-red-800/50 text-xs text-center";
-                    msg.style.display = 'block';
-                }
-            } catch(e) {
-                msg.innerText = "فشل الاتصال بالخادم";
-                msg.style.display = 'block';
-            }
-        }
-
-        async function regenerateBackupCodes() {
-            if(!await titanConfirm('هل أنت متأكد؟ سيؤدي ذلك إلى إلغاء جميع أكواد الطوارئ القديمة وتوليد 8 أكواد جديدة.')) return;
-            
-            try {
-                const res = await fetch('/api/auth/backup-codes/regenerate', {method:'POST'});
-                const data = await res.json();
-                if(data.success && data.backup_codes) {
-                    const grid = document.getElementById('backup-codes-grid');
-                    grid.innerHTML = '';
-                    data.backup_codes.forEach(code => {
-                        const d = document.createElement('div');
-                        d.className = 'bg-black/50 border border-green-800/40 p-2 rounded text-center text-sm font-mono text-green-300 tracking-wider font-bold';
-                        d.textContent = code;
-                        grid.appendChild(d);
-                    });
-                    document.getElementById('backup-codes-modal').style.display = 'flex';
-                    soundManager.success();
-                } else {
-                    titanAlert(data.error || 'فشل توليد الأكواد');
-                }
-            } catch(e) {
-                titanAlert('فشل الاتصال بالخادم');
-            }
         }
 
         async function loadActiveSessions() {
@@ -3206,8 +4139,95 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','qr','identity','audio','extreme','netintel','ai'];
+        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','osint','ir','maltego','hunting','forensics','brand','se','advcrypto','qr','identity','audio','extreme','netintel','admin'];
+        let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
+
+        function openAiSection() {
+            const sec = document.getElementById('ai-section');
+            if (sec) sec.classList.remove('hidden');
+            showAiSubTab(_aiActiveSubTab || 'chat');
+        }
+
+        function closeAiBubble() {
+            const sec = document.getElementById('ai-section');
+            if (sec) sec.classList.add('hidden');
+        }
+
+        function setAiBubbleVisibility(isVisible) {
+            const launcher = document.getElementById('ai-float-launcher');
+            if (!launcher) return;
+            if (isVisible) {
+                launcher.classList.remove('hidden');
+                launcher.style.display = 'flex';
+                launcher.style.alignItems = 'center';
+                launcher.style.justifyContent = 'center';
+                launcher.style.visibility = 'visible';
+                launcher.style.opacity = '1';
+                launcher.style.pointerEvents = 'auto';
+            } else {
+                launcher.classList.add('hidden');
+                launcher.style.display = 'none';
+                launcher.style.visibility = 'hidden';
+                launcher.style.opacity = '0';
+                launcher.style.pointerEvents = 'none';
+            }
+            if (!isVisible) closeAiBubble();
+        }
+
+        function toggleAiBubble() {
+            const sec = document.getElementById('ai-section');
+            if (!sec) return;
+            if (sec.classList.contains('hidden')) openAiSection();
+            else closeAiBubble();
+        }
+
+        function scrollAiChatToBottom() {
+            const box = document.getElementById('ai-chat-messages');
+            if (!box) return;
+            requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
+        }
+
+        function showAiSubTab(tab) {
+            const valid = ['chat', 'analysis', 'support'];
+            const t = valid.includes(tab) ? tab : 'chat';
+            _aiActiveSubTab = t;
+
+            const map = {
+                chat: document.getElementById('ai-sub-content-chat'),
+                analysis: document.getElementById('ai-sub-content-analysis'),
+                support: document.getElementById('ai-sub-content-support')
+            };
+            Object.keys(map).forEach(k => {
+                const el = map[k];
+                if (el) el.classList.toggle('hidden', k !== t);
+            });
+
+            const btnMap = {
+                chat: document.getElementById('ai-subtab-chat'),
+                analysis: document.getElementById('ai-subtab-analysis'),
+                support: document.getElementById('ai-subtab-support')
+            };
+            Object.keys(btnMap).forEach(k => {
+                const b = btnMap[k];
+                if (!b) return;
+                if (k === t) {
+                    b.classList.remove('border-slate-700', 'text-gray-300', 'bg-slate-800/60');
+                    b.classList.add('border-emerald-700/50', 'bg-emerald-900/40', 'text-emerald-300');
+                } else {
+                    b.classList.remove('border-emerald-700/50', 'bg-emerald-900/40', 'text-emerald-300');
+                    b.classList.add('border-slate-700', 'text-gray-300', 'bg-slate-800/60');
+                }
+            });
+
+            if (t === 'support' && typeof loadSupportTickets === 'function') {
+                loadSupportTickets();
+            }
+            if (t === 'chat') {
+                scrollAiChatToBottom();
+            }
+        }
+
         function showTab(type) {
             // Auto-lock vault silently when leaving it
             if (_prevTab === 'vault' && type !== 'vault' && currentMasterKey) {
@@ -3243,6 +4263,10 @@ HTML_TEMPLATE = """
                 if (window.dashInterval) { clearInterval(window.dashInterval); window.dashInterval = null; }
             }
             if(type === 'tools' && typeof fetchIpIntel === 'function') fetchIpIntel();
+            if(type === 'osint' && typeof loadOsintWatchlist === 'function') loadOsintWatchlist();
+            if(type === 'ir' && typeof irLoadCases === 'function') irLoadCases();
+            if(type === 'se' && typeof seLoadIntelBoard === 'function') seLoadIntelBoard();
+            if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
         }
 
         const passInput = document.getElementById('passInput');
@@ -3743,6 +4767,7 @@ HTML_TEMPLATE = """
         function showAdminTab() {
             showTab('admin');
             soundManager.swoosh();
+            if (typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
         }
 
         async function adminNukeSystem() {
@@ -3785,6 +4810,89 @@ HTML_TEMPLATE = """
                 btn.disabled = false;
                 btn.innerText = '🔥 تنفيذ المسح الشامل (FACTORY RESET)';
                 msgEl.innerText = 'CONNECTION LOST DURING WIPE';
+            }
+        }
+
+        function _adminTicketStatusClass(status) {
+            if (status === 'open') return 'bg-red-900/30 text-red-300 border border-red-800/50';
+            if (status === 'in_progress') return 'bg-amber-900/30 text-amber-300 border border-amber-800/50';
+            if (status === 'resolved') return 'bg-emerald-900/30 text-emerald-300 border border-emerald-800/50';
+            if (status === 'closed') return 'bg-slate-800 text-slate-300 border border-slate-700';
+            return 'bg-slate-800 text-slate-300 border border-slate-700';
+        }
+
+        async function loadAdminSupportTickets() {
+            const box = document.getElementById('adminSupportTicketsList');
+            const filter = document.getElementById('adminTicketStatusFilter');
+            if (!box) return;
+            const status = (filter?.value || 'all');
+            box.innerHTML = '<div class="text-xs text-gray-500">Loading admin tickets...</div>';
+
+            try {
+                const q = status && status !== 'all' ? ('?status=' + encodeURIComponent(status)) : '';
+                const res = await fetch('/api/admin/support/tickets' + q);
+                const data = await res.json();
+                if (!data.success) {
+                    box.innerHTML = '<div class="text-xs text-red-400">' + _osintEscape(data.error || 'Failed to load tickets') + '</div>';
+                    return;
+                }
+
+                const rows = data.tickets || [];
+                if (!rows.length) {
+                    box.innerHTML = '<div class="text-xs text-gray-500">لا توجد تذاكر مطابقة.</div>';
+                    return;
+                }
+
+                box.innerHTML = rows.map(t => {
+                    const st = String(t.status || 'open');
+                    const statusCls = _adminTicketStatusClass(st);
+                    return `
+                        <div class="p-3 rounded-xl bg-black/30 border border-slate-700">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <div class="text-sm font-bold text-cyan-300">#${t.id} ${_osintEscape(t.subject || '')}</div>
+                                <div class="text-[10px] px-2 py-0.5 rounded ${statusCls}">${_osintEscape(st)}</div>
+                            </div>
+                            <div class="text-[11px] text-gray-400 mb-2">User: ${_osintEscape(t.username || 'unknown')} | ${_osintEscape(t.category || '')} | ${_osintEscape(t.priority || '')} | ${_osintEscape(t.created_at || '')}</div>
+                            <div class="text-xs text-gray-300 whitespace-pre-wrap mb-3">${_osintEscape(t.details || '')}</div>
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                                <select id="adminTicketStatus_${t.id}" class="md:col-span-1 bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
+                                    <option value="open" ${st === 'open' ? 'selected' : ''}>Open</option>
+                                    <option value="in_progress" ${st === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                    <option value="resolved" ${st === 'resolved' ? 'selected' : ''}>Resolved</option>
+                                    <option value="closed" ${st === 'closed' ? 'selected' : ''}>Closed</option>
+                                </select>
+                                <input id="adminTicketNote_${t.id}" type="text" value="${_osintEscape(t.admin_note || '')}" placeholder="Admin note..." class="md:col-span-3 bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
+                                <button onclick="adminUpdateSupportTicket(${t.id})" class="md:col-span-1 bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold rounded-lg p-2">حفظ</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="text-xs text-red-400">Failed to load tickets</div>';
+            }
+        }
+
+        async function adminUpdateSupportTicket(ticketId) {
+            const stEl = document.getElementById('adminTicketStatus_' + ticketId);
+            const noteEl = document.getElementById('adminTicketNote_' + ticketId);
+            const status = stEl?.value || 'open';
+            const admin_note = (noteEl?.value || '').trim();
+
+            try {
+                const res = await fetch('/api/admin/support/tickets/' + ticketId, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ status, admin_note })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    titanAlert(data.error || 'فشل تحديث التيكت');
+                    return;
+                }
+                titanAlert('✅ تم تحديث التيكت بنجاح');
+                loadAdminSupportTickets();
+            } catch (e) {
+                titanAlert('فشل الاتصال بالخادم أثناء التحديث');
             }
         }
 
@@ -4253,6 +5361,826 @@ HTML_TEMPLATE = """
                 resBox.innerHTML = `<span class="text-red-400">فشل الاتصال بخادم الفحص.</span>`;
                  soundManager.error();
             }
+        }
+
+        function _osintEscape(value) {
+            const div = document.createElement('div');
+            div.textContent = String(value ?? '');
+            return div.innerHTML;
+        }
+
+        function _osintRenderKeyValueGrid(obj, keys) {
+            return `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${keys.map((k) => `
+                <div class="bg-slate-900/70 border border-slate-700 rounded-lg p-2">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider">${_osintEscape(k)}</div>
+                    <div class="text-xs font-mono text-indigo-200 break-all" dir="ltr">${_osintEscape(obj?.[k] ?? 'N/A')}</div>
+                </div>
+            `).join('')}</div>`;
+        }
+
+        function _osintRenderUnifiedResult(target, targetType, data) {
+            if (!data || data.error) {
+                return `<div class="text-red-400 text-sm">${_osintEscape(data?.error || 'فشل التحليل')}</div>`;
+            }
+
+            const wrappers = {
+                ip: ['query', 'country_code', 'ISP', 'proxy', 'vpn', 'fraud_score'],
+                email: ['valid', 'disposable', 'fraud_score', 'smtp_score', 'overall_score'],
+                phone: ['formatted', 'valid', 'active', 'line_type', 'carrier', 'fraud_score'],
+                url: ['domain', 'risk_score', 'phishing', 'malware', 'suspicious', 'server'],
+                domain: ['domain', 'risk_score', 'phishing', 'malware', 'suspicious', 'server'],
+            };
+            const keys = wrappers[targetType] || Object.keys(data).slice(0, 8);
+
+            return `
+                <div class="space-y-3">
+                    <div class="bg-indigo-950/20 border border-indigo-800/40 rounded-lg p-3">
+                        <div class="text-[10px] text-indigo-300 uppercase tracking-widest">Target</div>
+                        <div class="text-sm font-mono text-white break-all" dir="ltr">${_osintEscape(target)}</div>
+                        <div class="text-[11px] text-gray-400 mt-1">Type: <span class="text-indigo-300 font-bold">${_osintEscape(targetType.toUpperCase())}</span></div>
+                    </div>
+                    ${_osintRenderKeyValueGrid(data, keys)}
+                </div>
+            `;
+        }
+
+        function _osintRenderUsernameResult(data) {
+            if (!data || !data.success) {
+                return `<div class="text-red-400 text-sm">${_osintEscape(data?.error || 'فشل الفحص')}</div>`;
+            }
+            const found = data.found || [];
+            const notFound = data.not_found || [];
+
+            return `
+                <div class="space-y-3">
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="bg-green-900/20 border border-green-800/50 rounded-lg p-2 text-center">
+                            <div class="text-[10px] text-gray-400">FOUND</div>
+                            <div class="text-lg font-black text-green-400">${_osintEscape(found.length)}</div>
+                        </div>
+                        <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-2 text-center">
+                            <div class="text-[10px] text-gray-400">NOT FOUND</div>
+                            <div class="text-lg font-black text-gray-300">${_osintEscape(notFound.length)}</div>
+                        </div>
+                        <div class="bg-indigo-900/20 border border-indigo-800/50 rounded-lg p-2 text-center">
+                            <div class="text-[10px] text-gray-400">USERNAME</div>
+                            <div class="text-sm font-bold text-indigo-300 font-mono" dir="ltr">${_osintEscape(data.username)}</div>
+                        </div>
+                    </div>
+                    <div class="bg-black/40 border border-slate-700 rounded-lg p-2">
+                        <div class="text-[10px] text-gray-500 uppercase mb-2">Platforms Detected</div>
+                        ${found.length ? found.map((r) => `<a href="${_osintEscape(r.url)}" target="_blank" rel="noopener noreferrer" class="block mb-1 p-2 rounded bg-green-900/20 border border-green-800/40 hover:bg-green-900/35 transition-all">
+                            <span class="text-green-300 font-bold">${_osintEscape(r.platform)}</span>
+                            <span class="text-[11px] text-gray-300 ml-2 font-mono" dir="ltr">${_osintEscape(r.url)}</span>
+                        </a>`).join('') : '<div class="text-gray-500 text-xs">لا توجد حسابات مؤكدة حالياً.</div>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function _osintRenderHashResult(data) {
+            if (!data || !data.success) {
+                return `<div class="text-red-400 text-sm">${_osintEscape(data?.error || 'فشل التحليل')}</div>`;
+            }
+            return `
+                <div class="space-y-2">
+                    ${_osintRenderKeyValueGrid(data, ['hash_type', 'length', 'entropy_hint', 'reputation', 'risk_score'])}
+                    <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-2">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider">HASH</div>
+                        <div class="text-xs font-mono text-amber-300 break-all" dir="ltr">${_osintEscape(data.hash)}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function _osintRenderThreatResult(title, payload) {
+            return `
+                <div class="space-y-2">
+                    <div class="bg-rose-900/20 border border-rose-800/40 rounded-lg p-2 text-sm font-bold text-rose-300">${_osintEscape(title)}</div>
+                    <div class="bg-slate-900/70 border border-slate-700 rounded-lg p-2 text-xs font-mono whitespace-pre-wrap" dir="ltr">${_osintEscape(JSON.stringify(payload, null, 2))}</div>
+                </div>
+            `;
+        }
+
+        function _osintDetectTargetType(target) {
+            const t = (target || '').trim();
+            if (!t) return 'unknown';
+            const ipRegex = /^(?:\\d{1,3}\\.){3}\\d{1,3}$/;
+            const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+            const phoneRegex = /^\\+?[0-9\\-\\s]{7,20}$/;
+            const urlRegex = /^(https?:\\/\\/)/i;
+            const domainRegex = /^(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$/;
+
+            if (ipRegex.test(t)) return 'ip';
+            if (emailRegex.test(t)) return 'email';
+            if (urlRegex.test(t)) return 'url';
+            if (domainRegex.test(t)) return 'domain';
+            if (phoneRegex.test(t)) return 'phone';
+            return 'unknown';
+        }
+
+        function _osintRenderRisk(score, label) {
+            const box = document.getElementById('osintRiskScore');
+            if (!box) return;
+            const n = Math.max(0, Math.min(100, Number(score) || 0));
+            const color = n >= 70 ? 'text-red-400 border-red-800 bg-red-900/20' : (n >= 35 ? 'text-amber-300 border-amber-800 bg-amber-900/20' : 'text-green-400 border-green-800 bg-green-900/20');
+            box.className = `mt-3 p-3 rounded-xl border text-sm font-bold ${color}`;
+            box.innerText = `Risk Score: ${n}/100 - ${label}`;
+            box.classList.remove('hidden');
+        }
+
+        async function runUnifiedOsint() {
+            const input = document.getElementById('osintTargetInput');
+            const out = document.getElementById('osintUnifiedResult');
+            const target = (input?.value || '').trim();
+            if (!target) return titanAlert('ادخل هدف أولاً.');
+            if (!out) return;
+
+            out.classList.remove('hidden');
+            out.innerHTML = '<div class="text-indigo-300 animate-pulse text-sm">Running unified OSINT lookup...</div>';
+            const targetType = _osintDetectTargetType(target);
+            let data = null;
+            let risk = 0;
+            let label = 'Low';
+
+            try {
+                if (targetType === 'ip') {
+                    const res = await fetch('/api/ip', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ip: target}) });
+                    data = await res.json();
+                    risk = data.proxy ? 75 : 20;
+                    label = data.proxy ? 'Proxy/VPN Suspected' : 'Clean IP';
+                } else if (targetType === 'email') {
+                    const res = await fetch('/api/scan/email', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: target}) });
+                    data = await res.json();
+                    risk = Number(data.fraud_score || 0);
+                    label = risk >= 70 ? 'High Fraud Probability' : (risk >= 35 ? 'Suspicious' : 'Likely Safe');
+                } else if (targetType === 'phone') {
+                    const res = await fetch('/api/scan/phone', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({phone: target}) });
+                    data = await res.json();
+                    risk = Number(data.fraud_score || 0);
+                    label = risk >= 70 ? 'High Abuse Probability' : (risk >= 35 ? 'Suspicious' : 'Likely Safe');
+                } else if (targetType === 'domain' || targetType === 'url') {
+                    const finalUrl = targetType === 'domain' ? `https://${target}` : target;
+                    const res = await fetch('/api/scan/url', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: finalUrl}) });
+                    data = await res.json();
+                    risk = Number(data.risk_score || 0);
+                    label = risk >= 70 ? 'High Threat URL' : (risk >= 35 ? 'Potentially Suspicious' : 'Likely Safe URL');
+                } else {
+                    out.innerHTML = '<div class="text-amber-300 text-sm">نوع الهدف غير مدعوم. استخدم: IP, URL, Domain, Email, Phone</div>';
+                    return;
+                }
+
+                _osintRenderRisk(risk, label);
+                out.innerHTML = _osintRenderUnifiedResult(target, targetType, data);
+                soundManager.success();
+            } catch (e) {
+                out.innerHTML = `<div class="text-red-400 text-sm">Lookup failed: ${_osintEscape(e.message || e)}</div>`;
+                soundManager.error();
+            }
+        }
+
+        async function huntUsername() {
+            const username = (document.getElementById('osintUsernameInput')?.value || '').trim();
+            const out = document.getElementById('osintUsernameResult');
+            if (!username) return titanAlert('ادخل اسم مستخدم أولاً.');
+            if (!out) return;
+
+            out.classList.remove('hidden');
+            out.innerHTML = '<div class="text-cyan-300 animate-pulse text-sm">Hunting username across platforms...</div>';
+            try {
+                const res = await fetch('/api/osint/username', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username})
+                });
+                const data = await res.json();
+                out.innerHTML = _osintRenderUsernameResult(data);
+                if (data.found_count > 0) {
+                    _osintRenderRisk(60, 'Public Username Footprint Detected');
+                } else {
+                    _osintRenderRisk(15, 'No Immediate Public Presence');
+                }
+            } catch (e) {
+                out.innerHTML = `<div class="text-red-400 text-sm">Username scan failed: ${_osintEscape(e.message || e)}</div>`;
+            }
+        }
+
+        async function analyzeHashIndicator() {
+            const hashValue = (document.getElementById('osintHashInput')?.value || '').trim();
+            const out = document.getElementById('osintHashResult');
+            if (!hashValue) return titanAlert('الصق قيمة Hash أولاً.');
+            if (!out) return;
+
+            out.classList.remove('hidden');
+            out.innerHTML = '<div class="text-amber-300 animate-pulse text-sm">Analyzing hash indicator...</div>';
+            try {
+                const res = await fetch('/api/osint/hash', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({hash: hashValue})
+                });
+                const data = await res.json();
+                out.innerHTML = _osintRenderHashResult(data);
+                _osintRenderRisk(Number(data.risk_score || 0), data.reputation || 'Unknown');
+            } catch (e) {
+                out.innerHTML = `<div class="text-red-400 text-sm">Hash analyze failed: ${_osintEscape(e.message || e)}</div>`;
+            }
+        }
+
+        async function osintQuickDnsLeak() {
+            const out = document.getElementById('osintThreatResult');
+            if (!out) return;
+            out.classList.remove('hidden');
+            out.innerHTML = '<div class="text-rose-300 animate-pulse text-sm">Checking DNS leak...</div>';
+            try {
+                const res = await fetch('/api/intel/dns-leak');
+                const data = await res.json();
+                out.innerHTML = _osintRenderThreatResult('DNS Leak Result', data);
+                _osintRenderRisk(data.leaked ? 80 : 10, data.leaked ? 'DNS Leak Detected' : 'No DNS Leak');
+            } catch (e) {
+                out.innerHTML = `<div class="text-red-400 text-sm">DNS check failed: ${_osintEscape(e.message || e)}</div>`;
+            }
+        }
+
+        async function osintQuickShodan() {
+            const ip = (document.getElementById('osintShodanIp')?.value || '').trim();
+            const out = document.getElementById('osintThreatResult');
+            if (!ip) return titanAlert('ادخل IP لفحص Shodan.');
+            if (!out) return;
+            out.classList.remove('hidden');
+            out.innerHTML = '<div class="text-rose-300 animate-pulse text-sm">Running shodan intel...</div>';
+            try {
+                const res = await fetch('/api/intel/shodan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ip}) });
+                const data = await res.json();
+                out.innerHTML = _osintRenderThreatResult('Shodan Intel', data);
+                const risk = (data.vulnerabilities && data.vulnerabilities.length) ? 75 : 35;
+                _osintRenderRisk(risk, (data.vulnerabilities && data.vulnerabilities.length) ? 'Exposed Services / CVEs' : 'Open Ports Observed');
+            } catch (e) {
+                out.innerHTML = `<div class="text-red-400 text-sm">Shodan check failed: ${_osintEscape(e.message || e)}</div>`;
+            }
+        }
+
+        async function osintQuickMalwareUrl() {
+            const url = (document.getElementById('osintMalwareUrl')?.value || '').trim();
+            const out = document.getElementById('osintThreatResult');
+            if (!url) return titanAlert('ادخل URL للفحص.');
+            if (!out) return;
+            out.classList.remove('hidden');
+            out.innerHTML = '<div class="text-rose-300 animate-pulse text-sm">Scanning malware URL...</div>';
+            try {
+                const res = await fetch('/api/scan/malware_url', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({url}) });
+                const data = await res.json();
+                out.innerHTML = _osintRenderThreatResult('Malware URL Scan', data);
+                const rs = Number((data.result && data.result.risk_score) || data.risk_score || 0);
+                _osintRenderRisk(rs, rs >= 70 ? 'Malware/Phishing Risk' : 'No High Malware Signal');
+            } catch (e) {
+                out.innerHTML = `<div class="text-red-400 text-sm">Malware URL scan failed: ${_osintEscape(e.message || e)}</div>`;
+            }
+        }
+
+        function loadOsintWatchlist() {
+            const box = document.getElementById('osintWatchlist');
+            if (!box) return;
+            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
+            if (!list.length) {
+                box.innerHTML = '<div class="text-gray-500 text-[11px]">لا يوجد عناصر محفوظة بعد.</div>';
+                return;
+            }
+            box.innerHTML = list.map((x, i) => `<div class="mb-1 p-2 rounded bg-slate-900 border border-slate-700 flex items-center justify-between gap-2"><span class="font-mono text-[11px]" dir="ltr">${x}</span><button onclick="removeOsintWatchItem(${i})" class="text-red-400 text-[10px]">حذف</button></div>`).join('');
+        }
+
+        function saveCurrentOsintTarget() {
+            const target = (document.getElementById('osintTargetInput')?.value || '').trim();
+            if (!target) return titanAlert('لا يوجد هدف لحفظه.');
+            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
+            if (!list.includes(target)) list.unshift(target);
+            localStorage.setItem('titan_osint_watchlist', JSON.stringify(list.slice(0, 40)));
+            loadOsintWatchlist();
+            titanAlert('تمت إضافة الهدف إلى الـ Watchlist.');
+        }
+
+        function removeOsintWatchItem(idx) {
+            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
+            list.splice(idx, 1);
+            localStorage.setItem('titan_osint_watchlist', JSON.stringify(list));
+            loadOsintWatchlist();
+        }
+
+        function exportOsintReport() {
+            const watchlist = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
+            const latestUnified = document.getElementById('osintUnifiedResult')?.innerText || '';
+            const latestThreat = document.getElementById('osintThreatResult')?.innerText || '';
+            const latestUsername = document.getElementById('osintUsernameResult')?.innerText || '';
+            const latestHash = document.getElementById('osintHashResult')?.innerText || '';
+            const report = {
+                generated_at: new Date().toISOString(),
+                watchlist,
+                latest_unified_lookup: latestUnified,
+                latest_threat_intel: latestThreat,
+                latest_username_hunt: latestUsername,
+                latest_hash_analysis: latestHash
+            };
+            const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'titan-osint-report.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        let currentIncidentCaseId = null;
+        let graphState = { nodes: [], edges: [] };
+
+        async function irCreateCase() {
+            const title = (document.getElementById('irCaseTitle')?.value || '').trim();
+            const severity = document.getElementById('irCaseSeverity')?.value || 'medium';
+            const description = (document.getElementById('irCaseDesc')?.value || '').trim();
+            if (!title) return titanAlert('اكتب عنوان القضية أولاً.');
+            const res = await fetch('/api/incidents/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({title, severity, description}) });
+            const data = await res.json();
+            if (!data.success) return titanAlert(data.error || 'فشل إنشاء القضية');
+            document.getElementById('irCaseTitle').value = '';
+            document.getElementById('irCaseDesc').value = '';
+            irLoadCases();
+        }
+
+        async function irLoadCases() {
+            const box = document.getElementById('irCasesList');
+            if (!box) return;
+            box.innerHTML = '<div class="text-xs text-gray-500">Loading...</div>';
+            const res = await fetch('/api/incidents/list');
+            const data = await res.json();
+            if (!data.success) { box.innerHTML = '<div class="text-xs text-red-400">Load failed</div>'; return; }
+            const rows = data.cases || [];
+            if (!rows.length) { box.innerHTML = '<div class="text-xs text-gray-500">لا توجد قضايا حتى الآن.</div>'; return; }
+            box.innerHTML = rows.map(c => `
+                <div class="p-2 rounded-lg border ${currentIncidentCaseId===c.id ? 'border-red-500 bg-red-900/20' : 'border-slate-700 bg-black/30'}">
+                    <div class="flex items-center justify-between gap-2">
+                        <button onclick="irSelectCase(${c.id})" class="text-left flex-1">
+                            <div class="text-sm font-bold text-gray-200">${_osintEscape(c.title)}</div>
+                            <div class="text-[10px] text-gray-500">${_osintEscape(c.severity)} | ${_osintEscape(c.status)}</div>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function irSelectCase(caseId) {
+            currentIncidentCaseId = caseId;
+            const tag = document.getElementById('irSelectedCase');
+            if (tag) tag.innerText = `Case ID: ${caseId}`;
+            await irLoadCases();
+            await irLoadIocs();
+        }
+
+        async function irAddIoc() {
+            if (!currentIncidentCaseId) return titanAlert('اختر قضية أولاً.');
+            const ioc_type = document.getElementById('irIocType')?.value || 'ip';
+            const ioc_value = (document.getElementById('irIocValue')?.value || '').trim();
+            const risk_score = Number(document.getElementById('irIocRisk')?.value || 50);
+            if (!ioc_value) return titanAlert('اكتب قيمة IOC.');
+            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/ioc`, {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ioc_type, ioc_value, risk_score})
+            });
+            const data = await res.json();
+            if (!data.success) return titanAlert(data.error || 'فشل إضافة IOC');
+            document.getElementById('irIocValue').value = '';
+            irLoadIocs();
+        }
+
+        async function irLoadIocs() {
+            const box = document.getElementById('irIocTimeline');
+            if (!box || !currentIncidentCaseId) return;
+            box.innerHTML = 'Loading timeline...';
+            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/ioc`);
+            const data = await res.json();
+            if (!data.success) { box.innerHTML = '<span class="text-red-400">Failed</span>'; return; }
+            const rows = data.iocs || [];
+            if (!rows.length) { box.innerHTML = '<span class="text-gray-500">لا توجد IOCs بعد.</span>'; return; }
+            box.innerHTML = rows.map(r => `<div class="mb-1 p-2 rounded border border-slate-700 bg-slate-900/40"><span class="text-red-300 font-bold">${_osintEscape(r.ioc_type)}</span> <span class="font-mono" dir="ltr">${_osintEscape(r.ioc_value)}</span> <span class="text-[10px] text-gray-500">risk=${_osintEscape(r.risk_score)} | ${_osintEscape(r.created_at)}</span></div>`).join('');
+        }
+
+        async function irUpdateStatus(status) {
+            if (!currentIncidentCaseId) return titanAlert('اختر قضية أولاً.');
+            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/status`, {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status})
+            });
+            const data = await res.json();
+            if (!data.success) return titanAlert(data.error || 'فشل تحديث الحالة');
+            irLoadCases();
+        }
+
+        async function irExportReport() {
+            if (!currentIncidentCaseId) return titanAlert('اختر قضية أولاً.');
+            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/report`);
+            const data = await res.json();
+            if (!data.success) return titanAlert(data.error || 'فشل التصدير');
+            const blob = new Blob([JSON.stringify(data.report, null, 2)], {type:'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `incident-${currentIncidentCaseId}-report.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function graphAddEntity() {
+            const type = document.getElementById('graphEntityType')?.value || 'ip';
+            const value = (document.getElementById('graphEntityValue')?.value || '').trim();
+            if (!value) return titanAlert('أدخل قيمة الكيان.');
+            graphState.nodes.push({ id: `n${Date.now()}${Math.floor(Math.random()*999)}`, type, value });
+            document.getElementById('graphEntityValue').value = '';
+            graphRender();
+        }
+
+        async function graphAutoLink() {
+            if (!graphState.nodes.length) return titanAlert('أضف عقد أولاً.');
+            const res = await fetch('/api/link-analyzer/build', {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({nodes: graphState.nodes})
+            });
+            const data = await res.json();
+            if (!data.success) return titanAlert(data.error || 'فشل التحليل');
+            graphState = { nodes: data.nodes || [], edges: data.edges || [] };
+            graphRender();
+        }
+
+        function graphRender() {
+            const canvas = document.getElementById('graphCanvas');
+            const links = document.getElementById('graphLinksList');
+            if (!canvas || !links) return;
+
+            const width = canvas.clientWidth || 500;
+            const height = 260;
+            const nodes = graphState.nodes || [];
+            const edges = graphState.edges || [];
+
+            const placed = nodes.map((n, i) => {
+                const angle = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
+                const r = Math.min(width, height) * 0.32;
+                const x = width / 2 + Math.cos(angle) * r;
+                const y = height / 2 + Math.sin(angle) * r;
+                return { ...n, x, y };
+            });
+
+            const byId = Object.fromEntries(placed.map(n => [n.id, n]));
+            const edgeSvg = `<svg width="${width}" height="${height}" class="absolute inset-0 pointer-events-none">${edges.map(e => {
+                const a = byId[e.source];
+                const b = byId[e.target];
+                if (!a || !b) return '';
+                return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(217,70,239,0.6)" stroke-width="1.5"/>`;
+            }).join('')}</svg>`;
+
+            const nodeHtml = placed.map(n => `<div class="absolute px-2 py-1 rounded-lg border border-fuchsia-700/50 bg-fuchsia-900/20 text-[10px]" style="left:${n.x-50}px;top:${n.y-14}px;width:100px;text-align:center;"><div class="text-fuchsia-300 font-bold">${_osintEscape(n.type)}</div><div class="text-gray-200 font-mono truncate" dir="ltr">${_osintEscape(n.value)}</div></div>`).join('');
+            canvas.innerHTML = edgeSvg + nodeHtml;
+
+            links.innerHTML = edges.length ? edges.map(e => `<div class="mb-1 p-1 rounded bg-slate-900/40 border border-slate-700 text-[11px]"><span class="text-fuchsia-300">${_osintEscape(e.relation)}</span> | <span class="text-gray-300">${_osintEscape(e.source_value || e.source)} -> ${_osintEscape(e.target_value || e.target)}</span></div>`).join('') : '<div class="text-gray-500 text-xs">لا توجد روابط حتى الآن.</div>';
+        }
+
+        async function huntRunQuery() {
+            const q = (document.getElementById('huntQueryText')?.value || '').trim();
+            const ioc_type = document.getElementById('huntQueryType')?.value || 'all';
+            const out = document.getElementById('huntQueryResult');
+            if (!out) return;
+            out.innerHTML = 'Running hunt...';
+            const res = await fetch('/api/hunt/query', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({query: q, ioc_type}) });
+            const data = await res.json();
+            if (!data.success) { out.innerHTML = `<span class="text-red-400">${_osintEscape(data.error || 'Failed')}</span>`; return; }
+            const rows = data.rows || [];
+            out.innerHTML = rows.length ? rows.map(r => `<div class="mb-1 p-1 rounded bg-slate-900/40 border border-slate-700"><span class="text-orange-300">${_osintEscape(r.ioc_type)}</span> <span class="font-mono" dir="ltr">${_osintEscape(r.ioc_value)}</span> <span class="text-[10px] text-gray-500">case#${_osintEscape(r.case_id)} risk=${_osintEscape(r.risk_score)}</span></div>`).join('') : '<span class="text-gray-500">No hits.</span>';
+        }
+
+        async function huntEvaluateRule() {
+            const threshold = Number(document.getElementById('huntRuleThreshold')?.value || 70);
+            const out = document.getElementById('huntRuleResult');
+            if (!out) return;
+            const res = await fetch('/api/hunt/rule-evaluate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({threshold}) });
+            const data = await res.json();
+            if (!data.success) { out.innerHTML = `<span class="text-red-400">${_osintEscape(data.error || 'Failed')}</span>`; return; }
+            out.innerHTML = `<div class="text-xs">Average Risk: <b>${_osintEscape(data.avg_risk)}</b> | Threshold: <b>${_osintEscape(threshold)}</b></div><div class="mt-1 ${data.alert_created ? 'text-red-400' : 'text-green-400'}">${data.alert_created ? 'Alert created' : 'No alert'}</div>`;
+        }
+
+        async function forensicsTriage() {
+            const file = document.getElementById('forensicsFile')?.files?.[0];
+            const out = document.getElementById('forensicsResult');
+            if (!file || !out) return titanAlert('اختر ملفاً أولاً.');
+            out.innerText = 'Analyzing evidence...';
+            const form = new FormData();
+            form.append('file', file);
+            const res = await fetch('/api/forensics/triage', { method:'POST', body: form });
+            const data = await res.json();
+            out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function brandCheckTypos() {
+            const domain = (document.getElementById('brandDomainInput')?.value || '').trim();
+            const out = document.getElementById('brandTyposResult');
+            if (!domain || !out) return titanAlert('اكتب دومين أولاً.');
+            out.innerHTML = 'Checking similar domains...';
+            const res = await fetch('/api/brand/typosquatting', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({domain}) });
+            const data = await res.json();
+            if (!data.success) { out.innerHTML = `<span class="text-red-400">${_osintEscape(data.error || 'Failed')}</span>`; return; }
+            out.innerHTML = (data.similar_domains || []).map(d => `<div class="mb-1 p-1 rounded bg-slate-900/40 border border-slate-700 font-mono" dir="ltr">${_osintEscape(d)}</div>`).join('') || '<span class="text-gray-500">No variants</span>';
+        }
+
+        async function brandCheckImpersonation() {
+            const username = (document.getElementById('brandUserInput')?.value || '').trim();
+            const out = document.getElementById('brandUserResult');
+            if (!username || !out) return titanAlert('اكتب اسم المستخدم.');
+            out.innerHTML = 'Scanning impersonation footprint...';
+            const res = await fetch('/api/osint/username', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username}) });
+            const data = await res.json();
+            if (!data.success) { out.innerHTML = `<span class="text-red-400">${_osintEscape(data.error || 'Failed')}</span>`; return; }
+            const found = data.found || [];
+            out.innerHTML = `<div class="text-xs mb-1">Found profiles: <b class="text-cyan-300">${found.length}</b></div>` + (found.map(r => `<div class="mb-1 p-1 rounded bg-slate-900/40 border border-slate-700"><a href="${_osintEscape(r.url)}" target="_blank" class="text-cyan-300">${_osintEscape(r.platform)}</a></div>`).join('') || '<span class="text-gray-500">No public footprint detected.</span>');
+        }
+
+        async function seGenerateScenario() {
+            const scenario_type = document.getElementById('seScenarioType')?.value || 'phishing_email';
+            const out = document.getElementById('seScenarioResult');
+            if (!out) return;
+            out.innerText = 'Generating defensive scenario...';
+            const res = await fetch('/api/social/simulate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({scenario_type}) });
+            const data = await res.json();
+            if (!data.success) { out.innerText = data.error || 'Failed'; return; }
+            out.innerText = `${data.scenario}\n\nRed flags:\n- ${data.red_flags.join('\\n- ')}\n\nRecommended response:\n- ${data.defense_actions.join('\\n- ')}`;
+        }
+
+        function _seConfidenceScore(level) {
+            if (level === 'high') return 3;
+            if (level === 'medium') return 2;
+            return 1;
+        }
+
+        function seLoadIntelBoard() {
+            const box = document.getElementById('seIntelBoardResult');
+            if (!box) return;
+            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
+            if (!items.length) {
+                box.innerHTML = '<div class="text-gray-500">لا توجد معلومات بعد. أضف أول ملاحظة.</div>';
+                return;
+            }
+            box.innerHTML = items.map((it, idx) => `
+                <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/40">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="text-pink-300 font-bold">${_osintEscape(it.subject || 'unknown')}</div>
+                        <button onclick="seDeleteIntelItem(${idx})" class="text-red-400 text-[10px]">حذف</button>
+                    </div>
+                    <div class="text-[10px] text-gray-400 mt-1">${_osintEscape(it.category)} | ${_osintEscape(it.confidence)} | ${_osintEscape(it.source)} | ${_osintEscape(it.created_at)}</div>
+                    <div class="text-gray-200 mt-1 whitespace-pre-wrap">${_osintEscape(it.note || '')}</div>
+                </div>
+            `).join('');
+        }
+
+        function seAddIntelItem() {
+            const subject = (document.getElementById('seIntelSubject')?.value || '').trim();
+            const source = (document.getElementById('seIntelSource')?.value || '').trim();
+            const category = document.getElementById('seIntelCategory')?.value || 'message';
+            const confidence = document.getElementById('seIntelConfidence')?.value || 'medium';
+            const note = (document.getElementById('seIntelNote')?.value || '').trim();
+            if (!subject || !note) return titanAlert('اكتب Subject والملاحظة أولاً.');
+
+            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
+            items.unshift({
+                subject,
+                source: source || 'unknown',
+                category,
+                confidence,
+                note,
+                score: _seConfidenceScore(confidence),
+                created_at: new Date().toISOString()
+            });
+            localStorage.setItem('titan_se_intel_board', JSON.stringify(items.slice(0, 200)));
+
+            document.getElementById('seIntelSubject').value = '';
+            document.getElementById('seIntelSource').value = '';
+            document.getElementById('seIntelNote').value = '';
+            seLoadIntelBoard();
+        }
+
+        function seDeleteIntelItem(index) {
+            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
+            items.splice(index, 1);
+            localStorage.setItem('titan_se_intel_board', JSON.stringify(items));
+            seLoadIntelBoard();
+        }
+
+        function seSortIntelBoard() {
+            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
+            items.sort((a, b) => {
+                if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+                return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+            });
+            localStorage.setItem('titan_se_intel_board', JSON.stringify(items));
+            seLoadIntelBoard();
+            titanAlert('تم ترتيب المعلومات حسب الثقة ثم الزمن.');
+        }
+
+        function seExportIntelBoard() {
+            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
+            const payload = {
+                exported_at: new Date().toISOString(),
+                total_items: items.length,
+                items
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'social-intel-board.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function seClearIntelBoard() {
+            if (!confirm('هل تريد حذف كل عناصر لوحة المعلومات؟')) return;
+            localStorage.removeItem('titan_se_intel_board');
+            seLoadIntelBoard();
+        }
+
+        async function advHiddenVaultCreate() {
+            const payload = {
+                label: (document.getElementById('advHvLabel')?.value || '').trim(),
+                decoy_text: (document.getElementById('advHvDecoy')?.value || '').trim(),
+                hidden_text: (document.getElementById('advHvHidden')?.value || '').trim(),
+                decoy_pass: document.getElementById('advHvDecoyPass')?.value || '',
+                hidden_pass: document.getElementById('advHvHiddenPass')?.value || ''
+            };
+            const out = document.getElementById('advHvOut');
+            if (out) out.innerText = 'Creating...';
+            const res = await fetch('/api/adv/hidden-vault/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advHiddenVaultList() {
+            const out = document.getElementById('advHvOut');
+            if (out) out.innerText = 'Loading...';
+            const res = await fetch('/api/adv/hidden-vault/list');
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advHiddenVaultOpen() {
+            const payload = {
+                vault_id: Number(document.getElementById('advHvOpenId')?.value || 0),
+                password: document.getElementById('advHvOpenPass')?.value || ''
+            };
+            const out = document.getElementById('advHvOut');
+            if (out) out.innerText = 'Opening...';
+            const res = await fetch('/api/adv/hidden-vault/open', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advSecretSplit() {
+            const secret = (document.getElementById('advSsSecret')?.value || '').trim();
+            const out = document.getElementById('advSsOut');
+            if (out) out.innerText = 'Splitting...';
+            const res = await fetch('/api/adv/secret-sharing/split', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({secret, n:5, k:3}) });
+            const data = await res.json();
+            if (data.success && document.getElementById('advSsShares')) {
+                document.getElementById('advSsShares').value = JSON.stringify(data.shares, null, 2);
+            }
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advSecretRecover() {
+            const sharesRaw = document.getElementById('advSsShares')?.value || '[]';
+            let shares = [];
+            try { shares = JSON.parse(sharesRaw); } catch (e) {}
+            const out = document.getElementById('advSsOut');
+            if (out) out.innerText = 'Recovering...';
+            const res = await fetch('/api/adv/secret-sharing/recover', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({shares}) });
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advTimeLockCreate() {
+            const payload = {
+                message: (document.getElementById('advTlMsg')?.value || '').trim(),
+                password: document.getElementById('advTlPass')?.value || '',
+                unlock_minutes: Number(document.getElementById('advTlMinutes')?.value || 10),
+                one_time: !!document.getElementById('advTlOneTime')?.checked
+            };
+            const out = document.getElementById('advTlOut');
+            if (out) out.innerText = 'Creating token...';
+            const res = await fetch('/api/adv/timelock/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (data.success && document.getElementById('advTlToken')) {
+                document.getElementById('advTlToken').value = data.token || '';
+            }
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advTimeLockOpen() {
+            const payload = {
+                token: (document.getElementById('advTlToken')?.value || '').trim(),
+                password: document.getElementById('advTlPass')?.value || ''
+            };
+            const out = document.getElementById('advTlOut');
+            if (out) out.innerText = 'Opening...';
+            const res = await fetch('/api/adv/timelock/open', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advPolicyEvaluate() {
+            const out = document.getElementById('advPolicyOut');
+            let policy = {};
+            try {
+                policy = JSON.parse(document.getElementById('advPolicyJson')?.value || '{}');
+            } catch (e) {
+                if (out) out.innerText = 'Policy JSON غير صالح';
+                return;
+            }
+            const payload = { policy, otp: (document.getElementById('advPolicyOtp')?.value || '').trim() };
+            if (out) out.innerText = 'Evaluating...';
+            const res = await fetch('/api/adv/policy/evaluate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advWatermarkSign() {
+            const file = document.getElementById('advWmFile')?.files?.[0];
+            const out = document.getElementById('advWmOut');
+            if (!file) { if (out) out.innerText = 'اختر ملفاً'; return; }
+            const form = new FormData();
+            form.append('file', file);
+            form.append('label', (document.getElementById('advWmLabel')?.value || '').trim());
+            if (out) out.innerText = 'Signing...';
+            const res = await fetch('/api/adv/watermark/sign', { method: 'POST', body: form });
+            const data = await res.json();
+            if (data.success && document.getElementById('advWmSig')) {
+                document.getElementById('advWmSig').value = data.signature || '';
+            }
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advWatermarkVerify() {
+            const file = document.getElementById('advWmFile')?.files?.[0];
+            const out = document.getElementById('advWmOut');
+            if (!file) { if (out) out.innerText = 'اختر ملفاً'; return; }
+            const form = new FormData();
+            form.append('file', file);
+            form.append('signature', (document.getElementById('advWmSig')?.value || '').trim());
+            form.append('label', (document.getElementById('advWmLabel')?.value || '').trim());
+            if (out) out.innerText = 'Verifying...';
+            const res = await fetch('/api/adv/watermark/verify', { method: 'POST', body: form });
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advKeyCreate() {
+            const name = (document.getElementById('advKeyName')?.value || '').trim();
+            const out = document.getElementById('advKeyOut');
+            const res = await fetch('/api/adv/keyring/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name}) });
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advKeyList() {
+            const out = document.getElementById('advKeyOut');
+            const res = await fetch('/api/adv/keyring/list');
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advKeyRotate() {
+            const key_id = Number(document.getElementById('advKeyId')?.value || 0);
+            const out = document.getElementById('advKeyOut');
+            const res = await fetch('/api/adv/keyring/rotate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key_id}) });
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advKeyRevoke() {
+            const key_id = Number(document.getElementById('advKeyId')?.value || 0);
+            const out = document.getElementById('advKeyOut');
+            const res = await fetch('/api/adv/keyring/revoke', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key_id}) });
+            const data = await res.json();
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advKeyEncrypt() {
+            const key_id = Number(document.getElementById('advKeyId')?.value || 0);
+            const text = document.getElementById('advKeyPlain')?.value || '';
+            const out = document.getElementById('advKeyOut');
+            const res = await fetch('/api/adv/keyring/encrypt', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key_id, text}) });
+            const data = await res.json();
+            if (data.success && document.getElementById('advKeyCipher')) document.getElementById('advKeyCipher').value = data.cipher || '';
+            if (out) out.innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function advKeyDecrypt() {
+            const key_id = Number(document.getElementById('advKeyId')?.value || 0);
+            const cipher = document.getElementById('advKeyCipher')?.value || '';
+            const out = document.getElementById('advKeyOut');
+            const res = await fetch('/api/adv/keyring/decrypt', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key_id, cipher}) });
+            const data = await res.json();
+            if (data.success && document.getElementById('advKeyPlain')) document.getElementById('advKeyPlain').value = data.text || '';
+            if (out) out.innerText = JSON.stringify(data, null, 2);
         }
 
         function renderMalwareResult(data, targetName, isUrl = true) {
@@ -4993,48 +6921,155 @@ HTML_TEMPLATE = """
         // === AI Functions ===
         // =====================================================================
 
+        let aiPendingFiles = [];
+
+        function _aiFmtBytes(n) {
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+            return (n / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function renderAiPendingFiles() {
+            const list = document.getElementById('ai-attach-list');
+            if (!list) return;
+            if (!aiPendingFiles.length) {
+                list.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+            list.classList.remove('hidden');
+            list.innerHTML = aiPendingFiles.map((f, i) => `
+                <span class="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-gray-300">
+                    <span>📎 ${_osintEscape(f.name)} (${_aiFmtBytes(f.size)})</span>
+                    <button type="button" onclick="removeAiPendingFile(${i})" class="text-red-300 hover:text-red-200">✕</button>
+                </span>
+            `).join('');
+        }
+
+        function removeAiPendingFile(index) {
+            aiPendingFiles.splice(index, 1);
+            renderAiPendingFiles();
+        }
+
+        function onAiFilesSelected(ev) {
+            const input = ev.target;
+            const selected = Array.from(input.files || []);
+            const maxFiles = 5;
+            const maxPerFile = 8 * 1024 * 1024;
+            for (const f of selected) {
+                if (aiPendingFiles.length >= maxFiles) {
+                    titanAlert('الحد الأقصى للمرفقات هو 5 ملفات', 'warning');
+                    break;
+                }
+                if (f.size > maxPerFile) {
+                    titanAlert(`الملف كبير جداً: ${f.name} (الحد 8MB لكل ملف)`, 'warning');
+                    continue;
+                }
+                const exists = aiPendingFiles.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified);
+                if (!exists) aiPendingFiles.push(f);
+            }
+            input.value = '';
+            renderAiPendingFiles();
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
+            var aiLauncher = document.getElementById('ai-float-launcher');
+            var aiPanel = document.getElementById('ai-section');
+
+            if (aiPanel) {
+                if (aiPanel.parentElement !== document.body) {
+                    document.body.appendChild(aiPanel);
+                }
+                aiPanel.style.position = 'fixed';
+                aiPanel.style.left = '12px';
+                aiPanel.style.bottom = '84px';
+                aiPanel.style.right = 'auto';
+                aiPanel.style.zIndex = '2147483646';
+                aiPanel.style.width = 'min(92vw,34rem)';
+                aiPanel.style.maxHeight = '78vh';
+            }
+
+            if (aiLauncher) {
+                if (aiLauncher.parentElement !== document.body) {
+                    document.body.appendChild(aiLauncher);
+                }
+                aiLauncher.style.position = 'fixed';
+                aiLauncher.style.left = '12px';
+                aiLauncher.style.bottom = '12px';
+                aiLauncher.style.right = 'auto';
+                aiLauncher.style.zIndex = '2147483647';
+            }
+            setAiBubbleVisibility(false);
+
             var aiInput = document.getElementById('ai-chat-input');
             if (aiInput) {
                 aiInput.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter') sendAiMessage();
                 });
             }
+            var aiFileInput = document.getElementById('ai-file-input');
+            if (aiFileInput) {
+                aiFileInput.addEventListener('change', onAiFilesSelected);
+            }
         });
 
         async function sendAiMessage() {
             var input = document.getElementById('ai-chat-input');
             var messages = document.getElementById('ai-chat-messages');
+            var flow = document.getElementById('ai-chat-flow') || messages;
             var btn = document.getElementById('ai-send-btn');
             var modelEl = document.getElementById('ai-model-select');
-            var model = modelEl ? modelEl.value : 'llama3:latest';
+            var model = modelEl ? modelEl.value : 'titan_ultimate';
             var msg = input.value.trim();
-            if (!msg) return;
+            const hasFiles = aiPendingFiles.length > 0;
+            if (!msg && !hasFiles) return;
 
             var userDiv = document.createElement('div');
-            userDiv.className = 'flex justify-end';
-            userDiv.innerHTML = '<div class="bg-green-800/60 text-white px-4 py-3 rounded-2xl max-w-xs text-sm">' + msg + '</div>';
-            messages.appendChild(userDiv);
+            userDiv.className = 'flex justify-end items-end gap-2';
+            const attachPreview = hasFiles
+                ? `<div class="mt-2 flex flex-wrap gap-1">${aiPendingFiles.map(f => `<span class="text-[10px] px-2 py-0.5 rounded bg-emerald-900/30 border border-emerald-700/40">📎 ${_osintEscape(f.name)}</span>`).join('')}</div>`
+                : '';
+            userDiv.innerHTML = '<div class="bg-emerald-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] text-sm shadow-lg border border-emerald-600/40">' +
+                (msg ? _osintEscape(msg).replace(/\\n/g, '<br>') : '<span class="text-emerald-100/80">(مرفقات بدون نص)</span>') +
+                attachPreview +
+                '</div><div class="w-7 h-7 rounded-full bg-emerald-800/40 border border-emerald-700/50 flex items-center justify-center text-xs">👤</div>';
+            flow.appendChild(userDiv);
             input.value = '';
             btn.disabled = true;
             btn.textContent = '...';
             messages.scrollTop = messages.scrollHeight;
 
             var replyDiv = document.createElement('div');
-            replyDiv.className = 'flex justify-start';
+            replyDiv.className = 'flex justify-start items-end gap-2';
+            var botAvatar = document.createElement('div');
+            botAvatar.className = 'w-7 h-7 rounded-full bg-emerald-900/50 border border-emerald-700/40 flex items-center justify-center text-xs';
+            botAvatar.textContent = '🤖';
             var replyInner = document.createElement('div');
-            replyInner.className = 'bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl max-w-xs text-sm';
+            replyInner.className = 'bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm shadow-lg border border-slate-700/60';
             replyInner.textContent = '...';
+            replyDiv.appendChild(botAvatar);
             replyDiv.appendChild(replyInner);
-            messages.appendChild(replyDiv);
+            flow.appendChild(replyDiv);
             messages.scrollTop = messages.scrollHeight;
 
             try {
-                var res = await fetch('/api/ai/chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: msg, model: model})
-                });
+                let res;
+                if (hasFiles) {
+                    const fd = new FormData();
+                    fd.append('message', msg);
+                    fd.append('model', model);
+                    aiPendingFiles.forEach(f => fd.append('files', f, f.name));
+                    res = await fetch('/api/ai/chat', {
+                        method: 'POST',
+                        body: fd
+                    });
+                } else {
+                    res = await fetch('/api/ai/chat', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({message: msg, model: model})
+                    });
+                }
                 var data = await res.json();
                 if (data.reply) {
                     replyInner.textContent = data.reply;
@@ -5044,9 +7079,111 @@ HTML_TEMPLATE = """
             } catch(e) {
                 replyInner.textContent = 'فشل الاتصال';
             }
+            aiPendingFiles = [];
+            renderAiPendingFiles();
             btn.disabled = false;
             btn.textContent = 'إرسال';
             messages.scrollTop = messages.scrollHeight;
+        }
+
+        async function createSupportTicket() {
+            const subject = (document.getElementById('supportTicketSubject')?.value || '').trim();
+            const details = (document.getElementById('supportTicketDetails')?.value || '').trim();
+            const category = document.getElementById('supportTicketCategory')?.value || 'technical';
+            const priority = document.getElementById('supportTicketPriority')?.value || 'normal';
+            if (!subject || !details) {
+                return titanAlert('يرجى إدخال عنوان المشكلة والتفاصيل');
+            }
+            const res = await fetch('/api/support/tickets', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({subject, details, category, priority})
+            });
+            const data = await res.json();
+            if (!data.success) {
+                return titanAlert(data.error || 'فشل إنشاء التيكت');
+            }
+            document.getElementById('supportTicketSubject').value = '';
+            document.getElementById('supportTicketDetails').value = '';
+            titanAlert('✅ تم إنشاء تيكت الدعم بنجاح');
+            loadSupportTickets();
+        }
+
+        function _supportStatusBadgeClass(status) {
+            if (status === 'open') return 'bg-red-900/30 text-red-300 border border-red-800/50';
+            if (status === 'in_progress') return 'bg-amber-900/30 text-amber-300 border border-amber-800/50';
+            if (status === 'resolved') return 'bg-emerald-900/30 text-emerald-300 border border-emerald-800/50';
+            if (status === 'closed') return 'bg-slate-800 text-slate-300 border border-slate-700';
+            return 'bg-slate-800 text-slate-300 border border-slate-700';
+        }
+
+        function _supportPriorityBadgeClass(priority) {
+            if (priority === 'urgent') return 'bg-rose-900/30 text-rose-300 border border-rose-800/50';
+            if (priority === 'high') return 'bg-orange-900/30 text-orange-300 border border-orange-800/50';
+            if (priority === 'normal') return 'bg-cyan-900/30 text-cyan-300 border border-cyan-800/50';
+            if (priority === 'low') return 'bg-slate-800 text-slate-300 border border-slate-700';
+            return 'bg-slate-800 text-slate-300 border border-slate-700';
+        }
+
+        async function loadSupportTickets() {
+            const box = document.getElementById('supportTicketsList');
+            if (!box) return;
+            box.innerHTML = '<div class="text-xs text-gray-500">Loading tickets...</div>';
+            const res = await fetch('/api/support/tickets');
+            const data = await res.json();
+            if (!data.success) {
+                box.innerHTML = '<div class="text-xs text-red-400">Failed to load tickets</div>';
+                return;
+            }
+            const rows = data.tickets || [];
+            if (!rows.length) {
+                box.innerHTML = '<div class="text-xs text-gray-500">لا توجد تذاكر حالياً.</div>';
+                return;
+            }
+
+            const storageKey = 'titanSupportSeenStates';
+            let seenStates = {};
+            try {
+                seenStates = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+            } catch (e) {
+                seenStates = {};
+            }
+            const hadHistory = Object.keys(seenStates).length > 0;
+            let updatesCount = 0;
+            const nextSeenStates = {};
+
+            box.innerHTML = rows.map(t => {
+                const status = String(t.status || 'open');
+                const priority = String(t.priority || 'normal');
+                const signature = `${t.updated_at || ''}|${status}|${t.admin_note || ''}`;
+                const prevSig = seenStates[String(t.id)];
+                const hasUpdate = !!(prevSig && prevSig !== signature);
+                if (hasUpdate) updatesCount++;
+                nextSeenStates[String(t.id)] = signature;
+                return `
+                <div class="p-2 rounded-lg border ${status === 'open' ? 'border-cyan-800/50 bg-cyan-900/10' : 'border-slate-700 bg-black/30'} ${hasUpdate ? 'ring-1 ring-amber-500/50' : ''}">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <div class="text-xs font-bold text-cyan-300">#${t.id} ${_osintEscape(t.subject)}</div>
+                        <div class="flex items-center gap-1.5">
+                            ${hasUpdate ? '<span class="text-[10px] px-2 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-800/50">🔔 تحديث جديد</span>' : ''}
+                            <div class="text-[10px] px-2 py-0.5 rounded ${_supportStatusBadgeClass(status)}">${_osintEscape(status)}</div>
+                            <div class="text-[10px] px-2 py-0.5 rounded ${_supportPriorityBadgeClass(priority)}">${_osintEscape(priority)}</div>
+                        </div>
+                    </div>
+                    <div class="text-[10px] text-gray-400 mb-1">${_osintEscape(t.category)} | Created: ${_osintEscape(t.created_at)} | Updated: ${_osintEscape(t.updated_at || t.created_at)}</div>
+                    <div class="text-xs text-gray-300 whitespace-pre-wrap">${_osintEscape(t.details)}</div>
+                    ${t.admin_note ? `<div class="mt-1 text-[11px] text-emerald-300 border-t border-slate-700 pt-1">🛠️ Admin note: ${_osintEscape(t.admin_note)}</div>` : ''}
+                </div>
+            `;
+            }).join('');
+
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(nextSeenStates));
+            } catch (e) {}
+
+            if (hadHistory && updatesCount > 0) {
+                titanAlert(`🔔 لديك ${updatesCount} تحديث جديد على تذاكر الدعم`, 'success');
+            }
         }
 
         async function analyzePassword() {
@@ -5267,6 +7404,110 @@ UUID: ${getVal('idUuid')}
         }
 
         // --- وظائف الأدوات الجديدة المتقدمة ---
+        let _audioRecorder = null;
+        let _audioStream = null;
+        let _audioChunks = [];
+        let _recordedAudioBlob = null;
+
+        async function startAudioRecording() {
+            try {
+                _audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                _audioChunks = [];
+                _audioRecorder = new MediaRecorder(_audioStream);
+                _audioRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) _audioChunks.push(e.data);
+                };
+                _audioRecorder.onstop = () => {
+                    const mime = _audioRecorder.mimeType || 'audio/webm';
+                    _recordedAudioBlob = new Blob(_audioChunks, { type: mime });
+                    const preview = document.getElementById('audioRecordedPreview');
+                    const status = document.getElementById('audioRecStatus');
+                    preview.src = URL.createObjectURL(_recordedAudioBlob);
+                    preview.classList.remove('hidden');
+                    status.innerText = 'تم حفظ التسجيل محلياً وجاهز للإخفاء.';
+                };
+                _audioRecorder.start();
+                document.getElementById('audioRecStartBtn').disabled = true;
+                document.getElementById('audioRecStopBtn').disabled = false;
+                document.getElementById('audioRecStatus').innerText = 'جاري التسجيل... تحدث الآن.';
+            } catch (e) {
+                titanAlert('تعذر الوصول للميكروفون. تأكد من السماح بالصلاحية.');
+            }
+        }
+
+        function stopAudioRecording() {
+            if (_audioRecorder && _audioRecorder.state !== 'inactive') {
+                _audioRecorder.stop();
+            }
+            if (_audioStream) {
+                _audioStream.getTracks().forEach(t => t.stop());
+                _audioStream = null;
+            }
+            document.getElementById('audioRecStartBtn').disabled = false;
+            document.getElementById('audioRecStopBtn').disabled = true;
+        }
+
+        function _arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.subarray(i, i + chunkSize);
+                binary += String.fromCharCode.apply(null, chunk);
+            }
+            return btoa(binary);
+        }
+
+        async function _encryptAudioSecretInBrowser(text, passphrase) {
+            const encoder = new TextEncoder();
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(passphrase),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+            const key = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt']
+            );
+            const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(text));
+            return `ENC_AUDIO_V1:${_arrayBufferToBase64(salt)}:${_arrayBufferToBase64(iv)}:${_arrayBufferToBase64(cipherBuf)}`;
+        }
+
+        async function _decryptAudioSecretInBrowser(payload, passphrase) {
+            if (!payload.startsWith('ENC_AUDIO_V1:')) return payload;
+            const parts = payload.split(':');
+            if (parts.length !== 4) throw new Error('صيغة النص المشفر داخل الصوت غير صالحة.');
+            const [, saltB64, ivB64, cipherB64] = parts;
+            const toBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+            const salt = toBytes(saltB64);
+            const iv = toBytes(ivB64);
+            const cipherBytes = toBytes(cipherB64);
+
+            const encoder = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(passphrase),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+            const key = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['decrypt']
+            );
+            const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBytes);
+            return new TextDecoder().decode(plainBuf);
+        }
         
         async function processAudio(action) {
             const formData = new FormData();
@@ -5274,15 +7515,28 @@ UUID: ${getVal('idUuid')}
                 const fileEl = document.getElementById('audioFileEncrypt');
                 const file = fileEl.files[0];
                 const text = document.getElementById('audioSecretText').value.trim();
+                const passphrase = document.getElementById('audioSecretPass').value.trim();
                 
-                if (!file || !text) {
-                    return titanAlert('يرجى اختيار ملف صوتي وكتابة النص السري المراد إخفاؤه.');
+                if (!text) {
+                    return titanAlert('يرجى كتابة النص السري المراد إخفاؤه.');
+                }
+
+                const sourceBlob = file || _recordedAudioBlob;
+                if (!sourceBlob) {
+                    return titanAlert('اختر ملف صوتي أو سجّل صوتاً أولاً.');
+                }
+
+                let finalSecret = text;
+                if (passphrase) {
+                    finalSecret = await _encryptAudioSecretInBrowser(text, passphrase);
                 }
                 
                 console.log('جاري المعالجة...');
-                
-                formData.append('file', file);
-                formData.append('text', text);
+
+                const extGuess = file ? file.name.split('.').pop() : 'webm';
+                const uploadName = file ? file.name : `recorded_audio.${extGuess || 'webm'}`;
+                formData.append('file', sourceBlob, uploadName);
+                formData.append('text', finalSecret);
                 
                 try {
                     const response = await fetch('/api/audio/stego/encode', { method:'POST', body:formData });
@@ -5295,11 +7549,11 @@ UUID: ${getVal('idUuid')}
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const downloadAnchor = document.createElement('a');
                     downloadAnchor.href = downloadUrl;
-                    downloadAnchor.download = "TITAN_SECURE_" + file.name;
+                    downloadAnchor.download = "TITAN_SECURE_" + uploadName;
                     document.body.appendChild(downloadAnchor);
                     downloadAnchor.click();
                     
-                    titanAlert('تم التشفير والتحميل تلقائياً ✅');
+                    titanAlert(passphrase ? 'تم تشفير النص ثم إخفاؤه داخل الصوت ✅' : 'تم إخفاء النص داخل الصوت ✅');
                     
                     setTimeout(() => {
                         document.body.removeChild(downloadAnchor);
@@ -5310,6 +7564,7 @@ UUID: ${getVal('idUuid')}
                 }
             } else {
                 const file = document.getElementById('audioFileDecrypt').files[0];
+                const decodePass = document.getElementById('audioDecodePass').value.trim();
                 if (!file) return titanAlert('يرجى اختيار الملف المراد فحصه.');
                 
                 console.log('جاري التحليل...');
@@ -5322,7 +7577,19 @@ UUID: ${getVal('idUuid')}
                     if (data.error) {
                         titanAlert('تنبيه: ' + data.error);
                     } else if (data.success && data.hidden_data) {
-                        document.getElementById('audioDecodedResult').innerText = data.hidden_data;
+                        let shownText = data.hidden_data;
+                        if (shownText.startsWith('ENC_AUDIO_V1:')) {
+                            if (!decodePass) {
+                                shownText = 'تم العثور على نص مشفر. أدخل كلمة السر لفك التشفير.';
+                            } else {
+                                try {
+                                    shownText = await _decryptAudioSecretInBrowser(shownText, decodePass);
+                                } catch (e) {
+                                    shownText = 'فشل فك التشفير: كلمة السر غير صحيحة أو البيانات تالفة.';
+                                }
+                            }
+                        }
+                        document.getElementById('audioDecodedResult').innerText = shownText;
                         titanAlert('✅ تم العثور على نص مخفي!');
                     } else {
                         titanAlert('لم يتم العثور على بيانات مخفية.');
@@ -5415,14 +7682,15 @@ def generate():
 @app.route('/api/metadata/remove', methods=['POST'])
 def metadata_remove_route():
     file = request.files['file']
+    filename = file.filename or 'image.png'
     try:
         processed_data = remove_image_metadata(file.read())
-        add_audit_log("إزالة ميتابيانات", f"الملف: {file.filename}")
+        add_audit_log("إزالة ميتابيانات", f"الملف: {filename}")
         return send_file(
             io.BytesIO(processed_data),
             mimetype='image/png',
             as_attachment=True,
-            download_name="clean_" + file.filename
+            download_name="clean_" + filename
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -5430,15 +7698,16 @@ def metadata_remove_route():
 @app.route('/api/steganography/encode', methods=['POST'])
 def stego_encode_route():
     file = request.files['file']
+    filename = file.filename or 'image.png'
     text = request.form['text']
     try:
         processed_data = lsb_encode(file.read(), text)
-        add_audit_log("تشفير إخفاء (Stego)", f"إخفاء نص في {file.filename}")
+        add_audit_log("تشفير إخفاء (Stego)", f"إخفاء نص في {filename}")
         return send_file(
             io.BytesIO(processed_data),
             mimetype='image/png',
             as_attachment=True,
-            download_name="stego_" + file.filename
+            download_name="stego_" + filename
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -5446,9 +7715,10 @@ def stego_encode_route():
 @app.route('/api/steganography/decode', methods=['POST'])
 def stego_decode_route():
     file = request.files['file']
+    filename = file.filename or 'image.png'
     try:
         decoded_text = lsb_decode(file.read())
-        add_audit_log("فك إخفاء (Stego)", f"محاولة استخراج نص من {file.filename}")
+        add_audit_log("فك إخفاء (Stego)", f"محاولة استخراج نص من {filename}")
         return jsonify({"result": decoded_text})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -5458,16 +7728,17 @@ def audio_stego_encode_route():
     if 'file' not in request.files or 'text' not in request.form:
         return jsonify({"error": "الملف والنص مطلوبان"}), 400
     file = request.files['file']
+    filename = file.filename or 'audio.wav'
     text = request.form['text']
     try:
         file_bytes = file.read()
-        processed_data = wave_lsb_encode(file_bytes, text, file.filename)
-        add_audit_log("إخفاء صوتي (Audio Stego)", f"إخفاء نص في {file.filename}")
+        processed_data = wave_lsb_encode(file_bytes, text, filename)
+        add_audit_log("إخفاء صوتي (Audio Stego)", f"إخفاء نص في {filename}")
         return send_file(
             io.BytesIO(processed_data),
-            mimetype='audio/wav' if file.filename.lower().endswith('.wav') else 'audio/mpeg',
+            mimetype='audio/wav' if filename.lower().endswith('.wav') else 'audio/mpeg',
             as_attachment=True,
-            download_name="TITAN_SECURE_" + file.filename
+            download_name="TITAN_SECURE_" + filename
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -5477,10 +7748,11 @@ def audio_stego_decode_route():
     if 'file' not in request.files:
         return jsonify({"error": "يرجى اختيار ملف"}), 400
     file = request.files['file']
+    filename = file.filename or 'audio.wav'
     try:
         file_bytes = file.read()
-        hidden_data = wave_lsb_decode(file_bytes, file.filename)
-        add_audit_log("استخراج صوتي (Audio Stego)", f"محاولة استخراج من {file.filename}")
+        hidden_data = wave_lsb_decode(file_bytes, filename)
+        add_audit_log("استخراج صوتي (Audio Stego)", f"محاولة استخراج من {filename}")
         if "لم يتم العثور" in hidden_data or "خطأ" in hidden_data:
              return jsonify({"success": True, "hidden_data": None, "error": hidden_data})
         return jsonify({"success": True, "hidden_data": hidden_data})
@@ -5509,6 +7781,7 @@ def crypt_text_route():
 @app.route('/crypt-file', methods=['POST'])
 def crypt_file_route():
     file = request.files['file']
+    filename = file.filename or 'file.bin'
     key = request.form['key']
     action = request.form['action']
     try:
@@ -5522,7 +7795,7 @@ def crypt_file_route():
             io.BytesIO(processed_data),
             mimetype='application/octet-stream',
             as_attachment=True,
-            download_name=file.filename + ('.titan' if action == 'encrypt' else '')
+            download_name=filename + ('.titan' if action == 'encrypt' else '')
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -5530,12 +7803,12 @@ def crypt_file_route():
 @app.route('/api/ip', methods=['POST'])
 def ip_check():
     data = request.json or {}
-    ip = data.get('ip', "").strip()
+    ip = str(data.get('ip', "") or "").strip()
     if not ip:
         if request.headers.getlist("X-Forwarded-For"):
             ip = request.headers.getlist("X-Forwarded-For")[0]
         else:
-            ip = request.remote_addr
+            ip = str(request.remote_addr or "")
         if ip == "127.0.0.1": 
             ip = ""
             
@@ -5573,13 +7846,14 @@ def scan_malware_file_route():
     file = request.files['file']
     if file.filename == '':
         return jsonify({"success": False, "message": "لم يتم اختيار ملف"}), 400
-        
-    temp_path = os.path.join(tempfile.gettempdir(), secure_filename(file.filename))
+
+    filename = file.filename or 'uploaded.bin'
+    temp_path = os.path.join(tempfile.gettempdir(), secure_filename(filename))
     file.save(temp_path)
     
     try:
         res = scan_malware_file(temp_path)
-        add_audit_log("فحص ملف خبيث (Malware)", f"اسم الملف: {file.filename}")
+        add_audit_log("فحص ملف خبيث (Malware)", f"اسم الملف: {filename}")
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
@@ -5617,7 +7891,7 @@ def generate_2fa():
     
     img = qrcode.make(provisioning_uri)
     buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
+    img.save(buffered, "PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
     
     return jsonify({
@@ -5643,9 +7917,12 @@ def verify_2fa():
 def _get_logged_in_user_id():
     """Returns (user_id, None) if logged in, else (None, error_response)."""
     user_id = session.get('user_id')
-    if not user_id:
+    if user_id is None:
         return None, (jsonify({"error": "غير مصرح. يجب تسجيل الدخول أولاً."}), 401)
-    return user_id, None
+    try:
+        return int(user_id), None
+    except Exception:
+        return None, (jsonify({"error": "جلسة غير صالحة. يرجى تسجيل الدخول مجدداً."}), 401)
 
 @app.route('/api/vault/has-password', methods=['GET'])
 def vault_has_password():
@@ -5698,6 +7975,7 @@ def vault_set_password():
 def load_vault():
     user_id, err = _get_logged_in_user_id()
     if err: return err
+    assert user_id is not None
     data = request.json or {}
     key = data.get('key')
     if not key: return jsonify({"error": "Missing key"}), 400
@@ -5717,7 +7995,7 @@ def load_vault():
         add_audit_log("فشل فتح القبو 🚨", f"كلمة سر خاطئة للمستخدم #{user_id}")
         return jsonify({"error": "كلمة السر الرئيسية غير صحيحة."}), 401
 
-    vault_file = get_vault_file(user_id)
+    vault_file = get_vault_file(int(user_id))
     if not os.path.exists(vault_file):
         add_audit_log("فتح القبو ✅", f"قبو جديد للمستخدم #{user_id}")
         return jsonify({"vault": []})  # قبو جديد
@@ -5737,6 +8015,7 @@ def load_vault():
 def save_vault():
     user_id, err = _get_logged_in_user_id()
     if err: return err
+    assert user_id is not None
     data = request.json or {}
     key = data.get('key')
     vault_list = data.get('vault', [])
@@ -5757,7 +8036,7 @@ def save_vault():
     try:
         json_str = json.dumps(vault_list).encode('utf-8')
         encrypted_data = encrypt_data(json_str, key)
-        vault_file = get_vault_file(user_id)
+        vault_file = get_vault_file(int(user_id))
         with open(vault_file, 'wb') as f:
             f.write(encrypted_data)
         add_audit_log("حفظ القبو 💾", f"تم تحديث {len(vault_list)} عنصر للمستخدم #{user_id}")
@@ -5769,7 +8048,8 @@ def save_vault():
 def backup_vault():
     user_id, err = _get_logged_in_user_id()
     if err: return err
-    vault_file = get_vault_file(user_id)
+    assert user_id is not None
+    vault_file = get_vault_file(int(user_id))
     if not os.path.exists(vault_file):
         return jsonify({"error": "لا يوجد قبو لتصديره!"}), 400
     try:
@@ -5789,10 +8069,11 @@ def backup_vault():
 def restore_vault():
     user_id, err = _get_logged_in_user_id()
     if err: return err
+    assert user_id is not None
     file = request.files['file']
     try:
         data = file.read()
-        vault_file = get_vault_file(user_id)
+        vault_file = get_vault_file(int(user_id))
         with open(vault_file, 'wb') as f:
             f.write(data)
         add_audit_log("استعادة النسخة الاحتياطية 🔄", f"تم استعادة قبو المستخدم #{user_id}")
@@ -5804,6 +8085,7 @@ def restore_vault():
 def setup_recovery():
     user_id, err = _get_logged_in_user_id()
     if err: return err
+    assert user_id is not None
     data = request.json or {}
     key = data.get('key', '')
     q1 = data.get('q1', '')
@@ -5816,7 +8098,7 @@ def setup_recovery():
 
     recovery_pass = a1.strip().lower() + "|" + a2.strip().lower()
     encrypted_key = encrypt_data(key.encode('utf-8'), recovery_pass)
-    recovery_file = get_vault_recovery_file(user_id)
+    recovery_file = get_vault_recovery_file(int(user_id))
 
     with open(recovery_file, 'w', encoding='utf-8') as f:
         json.dump({
@@ -5832,7 +8114,8 @@ def setup_recovery():
 def get_recovery_questions():
     user_id, err = _get_logged_in_user_id()
     if err: return err
-    recovery_file = get_vault_recovery_file(user_id)
+    assert user_id is not None
+    recovery_file = get_vault_recovery_file(int(user_id))
     if not os.path.exists(recovery_file):
         return jsonify({"error": "لم تقم بإعداد أسئلة الأمان مسبقاً لاستعادة هذا القبو."}), 400
     with open(recovery_file, 'r', encoding='utf-8') as f:
@@ -5843,10 +8126,11 @@ def get_recovery_questions():
 def recover_vault_key():
     user_id, err = _get_logged_in_user_id()
     if err: return err
+    assert user_id is not None
     data = request.json or {}
     a1 = data.get('a1', '')
     a2 = data.get('a2', '')
-    recovery_file = get_vault_recovery_file(user_id)
+    recovery_file = get_vault_recovery_file(int(user_id))
     if not os.path.exists(recovery_file):
         return jsonify({"error": "لم يتم إعداد أسئلة الأمان"}), 400
 
@@ -5869,8 +8153,8 @@ def vault_forgot_password():
     if 'user_id' not in session:
         return jsonify({"error": "غير مصرح"}), 401
     
-    user_id = session['user_id']
-    username = session.get('username')
+    user_id = int(session['user_id'])
+    username = str(session.get('username', ''))
     
     conn = None
     try:
@@ -5959,11 +8243,9 @@ def admin_reset_system():
         c.execute("DELETE FROM active_sessions WHERE user_id != %s", (user_id,))
         # 2. حذف القبو الزمني
         c.execute("DELETE FROM vault_timelocked")
-        # 3. حذف أكواد الطوارئ
-        c.execute("DELETE FROM backup_codes")
-        # 4. حذف سجلات الأمان
+        # 3. حذف سجلات الأمان
         c.execute("DELETE FROM security_logs")
-        # 5. حذف جميع المستخدمين باستثناء الحالي (الأدمن)
+        # 4. حذف جميع المستخدمين باستثناء الحالي (الأدمن)
         c.execute("DELETE FROM users WHERE id != %s", (user_id,))
         
         conn.commit()
@@ -5986,6 +8268,103 @@ def admin_reset_system():
         if conn: conn.close()
 
 
+@app.route('/api/admin/support/tickets', methods=['GET'])
+def admin_support_tickets_list():
+    if 'user_id' not in session:
+        return jsonify({"error": "غير مصرح"}), 401
+
+    user_id = session['user_id']
+    status_filter = (request.args.get('status') or 'all').strip().lower()
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        row = c.fetchone()
+        if not row or not row[0]:
+            return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
+
+        base_query = (
+            "SELECT st.id, COALESCE(u.username, ''), st.subject, st.category, st.priority, st.details, "
+            "st.status, st.admin_note, st.created_at, st.updated_at "
+            "FROM support_tickets st LEFT JOIN users u ON u.id = st.user_id"
+        )
+        params = []
+        if status_filter in ('open', 'in_progress', 'resolved', 'closed'):
+            base_query += " WHERE st.status = %s"
+            params.append(status_filter)
+        base_query += " ORDER BY st.id DESC LIMIT 300"
+
+        c.execute(base_query, tuple(params))
+        rows = c.fetchall()
+        tickets = [
+            {
+                "id": r[0],
+                "username": r[1],
+                "subject": r[2],
+                "category": r[3],
+                "priority": r[4],
+                "details": r[5],
+                "status": r[6],
+                "admin_note": r[7],
+                "created_at": r[8],
+                "updated_at": r[9]
+            }
+            for r in rows
+        ]
+        return jsonify({"success": True, "tickets": tickets})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route('/api/admin/support/tickets/<int:ticket_id>', methods=['PATCH'])
+def admin_support_tickets_update(ticket_id):
+    if 'user_id' not in session:
+        return jsonify({"error": "غير مصرح"}), 401
+
+    user_id = session['user_id']
+    data = request.json or {}
+    status = (data.get('status') or '').strip().lower()
+    admin_note = (data.get('admin_note') or '').strip()
+    if status not in ('open', 'in_progress', 'resolved', 'closed'):
+        return jsonify({"success": False, "error": "status غير صالح"}), 400
+
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        row = c.fetchone()
+        if not row or not row[0]:
+            return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
+
+        now = datetime.datetime.now().isoformat()
+        c.execute(
+            "UPDATE support_tickets SET status=%s, admin_note=%s, updated_at=%s WHERE id=%s RETURNING id",
+            (status, admin_note, now, ticket_id)
+        )
+        updated = c.fetchone()
+        if not updated:
+            conn.rollback()
+            return jsonify({"success": False, "error": "التذكرة غير موجودة"}), 404
+
+        conn.commit()
+        add_audit_log("Support Ticket Admin", f"ticket#{ticket_id} => {status}", username=session.get('username', ''))
+        return jsonify({"success": True, "ticket_id": ticket_id, "status": status})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
 # --- مسارات الإضافات الجديدة المتقدمة ---
 
 
@@ -5997,7 +8376,7 @@ def pdf_process_route():
         password = request.form['password']
         action = request.form.get('action', 'lock')
         
-        reader = PdfReader(file)
+        reader = PdfReader(file.stream)
         writer = PdfWriter()
         
         if action == 'lock':
@@ -6202,16 +8581,17 @@ def view_burn_note(note_id):
 @app.route('/api/audio/stego/encode', methods=['POST'])
 def audio_stego_encode():
     file = request.files['file']
+    filename = file.filename or 'audio.wav'
     text = request.form['text']
     try:
-        processed_data = wave_lsb_encode(file.read(), text, file.filename)
-        add_audit_log("إخفاء في الصوت 🎵", f"تم إخفاء بيانات في {file.filename}")
-        mimetype = 'audio/mpeg' if file.filename.lower().endswith('.mp3') else 'audio/wav'
+        processed_data = wave_lsb_encode(file.read(), text, filename)
+        add_audit_log("إخفاء في الصوت 🎵", f"تم إخفاء بيانات في {filename}")
+        mimetype = 'audio/mpeg' if filename.lower().endswith('.mp3') else 'audio/wav'
         return send_file(
             io.BytesIO(processed_data),
             mimetype=mimetype,
             as_attachment=True,
-            download_name="stego_" + file.filename
+            download_name="stego_" + filename
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -6219,9 +8599,10 @@ def audio_stego_encode():
 @app.route('/api/audio/stego/decode', methods=['POST'])
 def audio_stego_decode():
     file = request.files['file']
+    filename = file.filename or 'audio.wav'
     try:
-        decoded_text = wave_lsb_decode(file.read(), file.filename)
-        add_audit_log("استخراج من الصوت 🎵", f"محاولة فك تشفير {file.filename}")
+        decoded_text = wave_lsb_decode(file.read(), filename)
+        add_audit_log("استخراج من الصوت 🎵", f"محاولة فك تشفير {filename}")
         return jsonify({"success": True, "hidden_data": decoded_text})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -6229,14 +8610,15 @@ def audio_stego_decode():
 @app.route('/api/pdf/clean', methods=['POST'])
 def pdf_clean_route():
     file = request.files['file']
+    filename = file.filename or 'file.pdf'
     try:
         processed_data = clean_pdf_metadata(file.read())
-        add_audit_log("تنظيف PDF 🧹", f"إزالة ميتابيانات {file.filename}")
+        add_audit_log("تنظيف PDF 🧹", f"إزالة ميتابيانات {filename}")
         return send_file(
             io.BytesIO(processed_data),
             mimetype='application/pdf',
             as_attachment=True,
-            download_name="clean_" + file.filename
+            download_name="clean_" + filename
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -6269,6 +8651,317 @@ def scan_email_route():
     res = check_email_intelligence(email)
     add_audit_log("فحص إيميل (IPQualityScore)", f"تم فحص البريد: {email}")
     return jsonify(res)
+
+
+@app.route('/api/osint/username', methods=['POST'])
+def osint_username_route():
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    result = check_username_presence(username)
+    if not result.get('success'):
+        return jsonify(result), 400
+    add_audit_log("Username Hunter (OSINT)", f"فحص اليوزرنيم: {username}")
+    return jsonify(result)
+
+
+@app.route('/api/osint/hash', methods=['POST'])
+def osint_hash_route():
+    data = request.json or {}
+    hash_value = data.get('hash', '').strip()
+    result = analyze_hash_indicator(hash_value)
+    if not result.get('success'):
+        return jsonify(result), 400
+    add_audit_log("Hash Analyzer (OSINT)", f"تحليل Hash بطول {len(hash_value)}")
+    return jsonify(result)
+
+
+@app.route('/api/incidents/create', methods=['POST'])
+def ir_create_case_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    data = request.json or {}
+    title = data.get('title', '').strip()
+    severity = (data.get('severity') or 'medium').strip().lower()
+    description = data.get('description', '').strip()
+    if not title:
+        return jsonify({"success": False, "error": "عنوان القضية مطلوب"}), 400
+    if severity not in ('low', 'medium', 'high', 'critical'):
+        severity = 'medium'
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO incident_cases (user_id, title, severity, status, description, created_at, updated_at)
+            VALUES (%s,%s,%s,'open',%s,%s,%s) RETURNING id
+        """, (user_id, title, severity, description, now, now))
+        row = c.fetchone()
+        if not row:
+            conn.rollback()
+            return jsonify({"success": False, "error": "فشل إنشاء القضية"}), 500
+        case_id = row[0]
+        conn.commit()
+        add_audit_log("Incident Created", f"case#{case_id} {title}", username=session.get('username', ''))
+        return jsonify({"success": True, "case_id": case_id})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/list', methods=['GET'])
+def ir_list_cases_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT id, title, severity, status, description, created_at, updated_at FROM incident_cases WHERE user_id=%s ORDER BY id DESC", (user_id,))
+        rows = c.fetchall()
+        cases = [
+            {
+                "id": r[0], "title": r[1], "severity": r[2], "status": r[3],
+                "description": r[4], "created_at": r[5], "updated_at": r[6]
+            }
+            for r in rows
+        ]
+        return jsonify({"success": True, "cases": cases})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/<int:case_id>/status', methods=['POST'])
+def ir_update_case_status_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    status = (request.json or {}).get('status', 'open').strip().lower()
+    if status not in ('open', 'investigating', 'contained', 'closed'):
+        return jsonify({"success": False, "error": "Status غير صالح"}), 400
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("UPDATE incident_cases SET status=%s, updated_at=%s WHERE id=%s AND user_id=%s", (status, now, case_id, user_id))
+        conn.commit()
+        add_audit_log("Incident Status", f"case#{case_id} -> {status}", username=session.get('username', ''))
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/<int:case_id>/ioc', methods=['POST'])
+def ir_add_ioc_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    data = request.json or {}
+    ioc_type = data.get('ioc_type', '').strip().lower()
+    ioc_value = data.get('ioc_value', '').strip()
+    risk_score = int(data.get('risk_score', 0) or 0)
+    if not ioc_type or not ioc_value:
+        return jsonify({"success": False, "error": "ioc_type و ioc_value مطلوبان"}), 400
+    risk_score = max(0, min(100, risk_score))
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT id FROM incident_cases WHERE id=%s AND user_id=%s", (case_id, user_id))
+        if not c.fetchone():
+            return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
+        c.execute("INSERT INTO incident_iocs (case_id, ioc_type, ioc_value, risk_score, created_at) VALUES (%s,%s,%s,%s,%s)",
+                  (case_id, ioc_type, ioc_value, risk_score, now))
+        conn.commit()
+        add_audit_log("IOC Added", f"case#{case_id} {ioc_type}:{ioc_value}", username=session.get('username', ''))
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/<int:case_id>/ioc', methods=['GET'])
+def ir_list_iocs_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT id FROM incident_cases WHERE id=%s AND user_id=%s", (case_id, user_id))
+        if not c.fetchone():
+            return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
+        c.execute("SELECT id, ioc_type, ioc_value, risk_score, created_at FROM incident_iocs WHERE case_id=%s ORDER BY id DESC", (case_id,))
+        rows = c.fetchall()
+        iocs = [{"id": r[0], "ioc_type": r[1], "ioc_value": r[2], "risk_score": r[3], "created_at": r[4]} for r in rows]
+        return jsonify({"success": True, "iocs": iocs})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/<int:case_id>/report', methods=['GET'])
+def ir_case_report_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT id, title, severity, status, description, created_at, updated_at FROM incident_cases WHERE id=%s AND user_id=%s", (case_id, user_id))
+        case_row = c.fetchone()
+        if not case_row:
+            return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
+        c.execute("SELECT ioc_type, ioc_value, risk_score, created_at FROM incident_iocs WHERE case_id=%s ORDER BY id DESC", (case_id,))
+        iocs = c.fetchall()
+        report = {
+            "case": {
+                "id": case_row[0], "title": case_row[1], "severity": case_row[2], "status": case_row[3],
+                "description": case_row[4], "created_at": case_row[5], "updated_at": case_row[6]
+            },
+            "iocs": [
+                {"ioc_type": r[0], "ioc_value": r[1], "risk_score": r[2], "created_at": r[3]} for r in iocs
+            ],
+            "generated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        return jsonify({"success": True, "report": report})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/link-analyzer/build', methods=['POST'])
+def link_analyzer_build_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    nodes = (request.json or {}).get('nodes', [])
+    graph = build_link_analysis_graph(nodes)
+    add_audit_log("Link Analysis", f"nodes={len(graph['nodes'])} edges={len(graph['edges'])}", username=session.get('username', ''))
+    return jsonify({"success": True, "nodes": graph['nodes'], "edges": graph['edges']})
+
+
+@app.route('/api/hunt/query', methods=['POST'])
+def hunt_query_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    data = request.json or {}
+    query = (data.get('query') or '').strip().lower()
+    ioc_type = (data.get('ioc_type') or 'all').strip().lower()
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        sql = """
+            SELECT ii.case_id, ii.ioc_type, ii.ioc_value, ii.risk_score, ii.created_at
+            FROM incident_iocs ii
+            JOIN incident_cases ic ON ic.id = ii.case_id
+            WHERE ic.user_id = %s
+        """
+        params: list[object] = [user_id]
+        if ioc_type != 'all':
+            sql += " AND ii.ioc_type = %s"
+            params.append(ioc_type)
+        if query:
+            sql += " AND LOWER(ii.ioc_value) LIKE %s"
+            params.append(f"%{query}%")
+        sql += " ORDER BY ii.id DESC LIMIT 200"
+        c.execute(sql, tuple(params))
+        rows = c.fetchall()
+        out = [{"case_id": r[0], "ioc_type": r[1], "ioc_value": r[2], "risk_score": r[3], "created_at": r[4]} for r in rows]
+        return jsonify({"success": True, "rows": out})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/hunt/rule-evaluate', methods=['POST'])
+def hunt_rule_evaluate_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    threshold = int((request.json or {}).get('threshold', 70) or 70)
+    threshold = max(0, min(100, threshold))
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("""
+            SELECT AVG(ii.risk_score)
+            FROM incident_iocs ii
+            JOIN incident_cases ic ON ic.id = ii.case_id
+            WHERE ic.user_id = %s
+        """, (user_id,))
+        row = c.fetchone()
+        avg_risk = float((row[0] if row else 0) or 0)
+        alert_created = avg_risk >= threshold
+        if alert_created:
+            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            c.execute("INSERT INTO hunting_alerts (user_id, title, details, severity, created_at) VALUES (%s,%s,%s,%s,%s)",
+                      (user_id, 'Hunting Rule Triggered', f'Avg risk {avg_risk:.2f} >= {threshold}', 'high', now))
+            conn.commit()
+        return jsonify({"success": True, "avg_risk": round(avg_risk, 2), "threshold": threshold, "alert_created": alert_created})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/forensics/triage', methods=['POST'])
+def forensics_triage_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "يرجى اختيار ملف"}), 400
+    file = request.files['file']
+    raw = file.read()
+    result = {
+        "success": True,
+        "filename": file.filename,
+        "size_bytes": len(raw),
+        "md5": hashlib.md5(raw).hexdigest(),
+        "sha1": hashlib.sha1(raw).hexdigest(),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "entropy_hint": round(len(set(raw)) / 256 * 8, 3) if raw else 0,
+        "triaged_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    add_audit_log("Forensics Triage", f"{file.filename} ({len(raw)} bytes)", username=session.get('username', ''))
+    return jsonify(result)
+
+
+@app.route('/api/brand/typosquatting', methods=['POST'])
+def brand_typosquatting_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    domain = (request.json or {}).get('domain', '').strip().lower()
+    if not domain or '.' not in domain:
+        return jsonify({"success": False, "error": "يرجى إدخال domain صالح"}), 400
+    variants = generate_typosquatting_variants(domain)
+    add_audit_log("Brand Typosquatting", f"{domain} -> {len(variants)} variants", username=session.get('username', ''))
+    return jsonify({"success": True, "domain": domain, "similar_domains": variants})
+
+
+@app.route('/api/social/simulate', methods=['POST'])
+def social_simulate_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    scenario_type = (request.json or {}).get('scenario_type', 'phishing_email')
+    payload = create_social_defense_scenario(scenario_type)
+    add_audit_log("Social Engineering Drill", f"scenario={scenario_type}", username=session.get('username', ''))
+    return jsonify({"success": True, **payload})
 
 @app.route('/api/network/scan', methods=['GET'])
 def scan_network_route():
@@ -6464,7 +9157,7 @@ def qr_generate():
         qr.make(fit=True)
         img = qr.make_image(fill_color='black', back_color='white')
         buf = io.BytesIO()
-        img.save(buf, format='PNG')
+        img.save(buf, 'PNG')
         img_b64 = base64.b64encode(buf.getvalue()).decode()
         add_audit_log("QR Code 🔳", f"تم توليد QR {'مشفر' if password else 'عادي'}")
         return jsonify({'qr': img_b64, 'encrypted': bool(password)})
@@ -6479,24 +9172,29 @@ def qr_decode():
         if not file: return jsonify({'error': 'الصورة مطلوبة'}), 400
 
         from PIL import Image as PILImage # type: ignore
+        _pyzbar = None
         try:
             from pyzbar import pyzbar as _pyzbar
             _use_pyzbar = True
         except ImportError:
             _use_pyzbar = False
-        img = PILImage.open(file)
-        if _use_pyzbar:
+        img = PILImage.open(file.stream)
+        if _use_pyzbar and _pyzbar is not None:
             decoded = _pyzbar.decode(img)
         else:
             # fallback: use qrcode detector via PIL color scan
-            import cv2, numpy as np
+            import importlib
+            cv2 = importlib.import_module('cv2')
+            np = importlib.import_module('numpy')
             img_np = np.array(img.convert('RGB'))
             detector = cv2.QRCodeDetector()
             val, _, _ = detector.detectAndDecode(img_np)
             decoded = [type('obj', (object,), {'data': val.encode()})() ] if val else []
         if not decoded: return jsonify({'error': 'لم يتم التعرف على QR في الصورة'}), 400
 
-        payload = decoded[0].data.decode('utf-8')
+        first_decoded = decoded[0]
+        raw_payload = getattr(first_decoded, 'data', b'')
+        payload = raw_payload.decode('utf-8') if isinstance(raw_payload, (bytes, bytearray)) else str(raw_payload)
         if payload.startswith('ENC:') and password:
             raw = base64.urlsafe_b64decode(payload[4:])
             salt = raw[:16] # type: ignore
@@ -6748,26 +9446,6 @@ def dashboard_stats():
 # === Authentication Routes ===
 # =====================================================================
 
-def _generate_backup_codes(user_id):
-    """ينشئ 8 أكواد طوارئ للمستخدم ويخزن هاشاتها"""
-    codes = [''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8)) for _ in range(8)]
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute("DELETE FROM backup_codes WHERE user_id = %s", (user_id,))
-        for code in codes:
-            c.execute("INSERT INTO backup_codes (user_id, code_hash, used) VALUES (%s, %s, 0)",
-                      (user_id, hashlib.sha256(code.encode()).hexdigest()))
-        conn.commit()
-    except Exception as e:
-        print(f"[TITAN] Backup codes error: {e}")
-    finally:
-        if conn:
-            conn.close()
-    return codes
-
-
 def _get_login_ip():
     return request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
 
@@ -6786,6 +9464,7 @@ def auth_register():
     username = data.get('username', '').strip()
     password = data.get('password', '').strip()
     email = data.get('email', '').strip()
+    accepted_terms = bool(data.get('accepted_terms', False))
 
     if not username or not password or not email:
         return jsonify({"error": "اسم المستخدم وكلمة السر والإيميل مطلوبان"}), 400
@@ -6795,6 +9474,8 @@ def auth_register():
         return jsonify({"error": "كلمة السر يجب أن تكون 6 أحرف على الأقل"}), 400
     if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
         return jsonify({"error": "البريد الإلكتروني غير صالح"}), 400
+    if not accepted_terms:
+        return jsonify({"error": "يجب الموافقة على الشروط والأحكام أولاً"}), 400
 
     pw_hash = hash_password(password)
     otp_code = "".join(random.choices(string.digits, k=6))
@@ -6817,13 +9498,7 @@ def auth_register():
             # Perform insertion
             c.execute("INSERT INTO users (username, password_hash, email, otp_code, is_verified, created_at) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
                       (username, pw_hash, email, otp_code, 0, created_at))
-            user_id = c.fetchone()[0]
-            
-            # Generate backup codes
-            codes = [''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8)) for _ in range(8)]
-            for code in codes:
-                c.execute("INSERT INTO backup_codes (user_id, code_hash, used) VALUES (%s, %s, 0)",
-                          (user_id, hashlib.sha256(code.encode()).hexdigest()))
+            c.fetchone()
             
             conn.commit()
             
@@ -6832,7 +9507,7 @@ def auth_register():
             send_otp_email(email, otp_code)
             
             return jsonify({"success": True, "message": "تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني.",
-                            "username": username, "backup_codes": codes})
+                            "username": username})
         except psycopg2.errors.UniqueViolation:
             if conn: conn.rollback()
             return jsonify({"error": "اسم المستخدم أو البريد الإلكتروني مسجل مسبقاً، اختر اسماً آخر"}), 409
@@ -6963,7 +9638,8 @@ def auth_login():
             send_geo_fence_alert(username, ip, last_country, current_country, email)
 
         c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
-        is_admin_flag = bool(c.fetchone()[0])
+        admin_row = c.fetchone()
+        is_admin_flag = bool(admin_row and admin_row[0])
 
         return jsonify({"success": True, "username": username,
                         "isAdmin": is_admin_flag,
@@ -7057,7 +9733,6 @@ def forgot_password_send():
 إذا لم تطلب ذلك، تجاهل هذا البريد.
 — فريق TITAN Security
 """, 'plain', 'utf-8')
-        body_text = msg.get_payload(decode=True).decode('utf-8') if hasattr(msg, 'get_payload') else str(msg)
         try:
             _resend_send(email, "TITAN - كود استعادة كلمة السر", f"""
 مرحباً {username}،
@@ -7135,76 +9810,6 @@ def forgot_password_reset():
         return jsonify({"error": str(e)}), 500
     finally:
         if conn: conn.close()
-
-
-
-@app.route('/api/auth/backup-login', methods=['POST'])
-def auth_backup_login():
-    """تسجيل دخول بكود الطوارئ (مرة واحدة فقط)"""
-    data = request.json or {}
-    username = data.get('username', '').strip()
-    code = data.get('code', '').strip().upper()
-    if not username or not code:
-        return jsonify({"error": "البيانات ناقصة"}), 400
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute("SELECT id FROM users WHERE username=%s AND is_verified=1", (username,))
-        user_row = c.fetchone()
-        if not user_row:
-            return jsonify({"error": "المستخدم غير موجود أو غير مفعّل"}), 404
-        user_id = user_row[0]
-        code_hash = hashlib.sha256(code.encode()).hexdigest()
-        c.execute("SELECT id FROM backup_codes WHERE user_id=%s AND code_hash=%s AND used=0", (user_id, code_hash))
-        code_row = c.fetchone()
-        if not code_row:
-            return jsonify({"error": "الكود غير صحيح أو مستخدم مسبقاً"}), 401
-        c.execute("UPDATE backup_codes SET used=1 WHERE id=%s", (code_row[0],))
-        conn.commit()
-        session['user_id'] = user_id
-        session['username'] = username
-        session.permanent = True
-        add_audit_log("دخول بكود طوارئ", f"استخدام كود طوارئ: {username}", ip=_get_login_ip(), username=username)
-        return jsonify({"success": True, "username": username})
-    except Exception as e:
-        print(f"[TITAN] Backup login error: {e}")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if conn:
-            conn.close()
-
-@app.route('/api/auth/backup-codes/regenerate', methods=['POST'])
-def auth_regenerate_backup_codes():
-    if 'user_id' not in session:
-        return jsonify({"error": "غير مصرح لك"}), 401
-    
-    user_id = session['user_id']
-    username = session['username']
-    
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        
-        # Delete old codes
-        c.execute("DELETE FROM backup_codes WHERE user_id=%s", (user_id,))
-        
-        # Generate new codes
-        codes = [''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8)) for _ in range(8)]
-        for code in codes:
-            c.execute("INSERT INTO backup_codes (user_id, code_hash, used) VALUES (%s, %s, 0)",
-                      (user_id, hashlib.sha256(code.encode()).hexdigest()))
-        
-        conn.commit()
-        add_audit_log("تجديد أكواد الطوارئ", f"تم إصدار أكواد جديدة للمستخدم: {username}", ip=_get_login_ip(), username=username)
-        return jsonify({"success": True, "backup_codes": codes})
-    except Exception as e:
-        print(f"[TITAN] Regenerate backup codes error: {e}")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/auth/sessions', methods=['GET'])
 def auth_sessions():
@@ -7520,6 +10125,348 @@ def vault_timelocked_download():
 
 
 # =====================================================================
+# === Advanced Crypto Lab Routes ===
+# =====================================================================
+
+@app.route('/api/adv/hidden-vault/create', methods=['POST'])
+def adv_hidden_vault_create():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    data = request.json or {}
+    label = (data.get('label') or '').strip() or 'vault'
+    decoy_text = (data.get('decoy_text') or '').strip()
+    hidden_text = (data.get('hidden_text') or '').strip()
+    decoy_pass = data.get('decoy_pass') or ''
+    hidden_pass = data.get('hidden_pass') or ''
+    if not decoy_text or not hidden_text or not decoy_pass or not hidden_pass:
+        return jsonify({"success": False, "error": "All fields are required"}), 400
+    try:
+        container = {
+            "version": 1,
+            "decoy": base64.b64encode(encrypt_data(decoy_text.encode('utf-8'), decoy_pass)).decode('ascii'),
+            "hidden": base64.b64encode(encrypt_data(hidden_text.encode('utf-8'), hidden_pass)).decode('ascii')
+        }
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO advanced_hidden_vaults (user_id, label, container_json, created_at) VALUES (%s, %s, %s, %s) RETURNING id",
+            (user_id, label, json.dumps(container), datetime.datetime.now().isoformat())
+        )
+        row = c.fetchone()
+        conn.commit()
+        conn.close()
+        add_audit_log("ADV Hidden Vault", f"created id={row[0] if row else '?'}", username=session.get('username', ''))
+        return jsonify({"success": True, "vault_id": row[0] if row else None})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/adv/hidden-vault/list', methods=['GET'])
+def adv_hidden_vault_list():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, label, created_at FROM advanced_hidden_vaults WHERE user_id=%s ORDER BY id DESC LIMIT 100", (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    return jsonify({"success": True, "vaults": [{"id": r[0], "label": r[1], "created_at": r[2]} for r in rows]})
+
+
+@app.route('/api/adv/hidden-vault/open', methods=['POST'])
+def adv_hidden_vault_open():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    data = request.json or {}
+    vault_id = int(data.get('vault_id') or 0)
+    password = data.get('password') or ''
+    if not vault_id or not password:
+        return jsonify({"success": False, "error": "vault_id/password required"}), 400
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT container_json FROM advanced_hidden_vaults WHERE id=%s AND user_id=%s", (vault_id, user_id))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"success": False, "error": "Vault not found"}), 404
+    container = json.loads(row[0])
+    for name in ('decoy', 'hidden'):
+        try:
+            encrypted = base64.b64decode(container[name])
+            plain = decrypt_data(encrypted, password).decode('utf-8')
+            return jsonify({"success": True, "compartment": name, "text": plain})
+        except Exception:
+            pass
+    return jsonify({"success": False, "error": "Wrong password"}), 401
+
+
+@app.route('/api/adv/secret-sharing/split', methods=['POST'])
+def adv_secret_split():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    data = request.json or {}
+    secret = (data.get('secret') or '').strip()
+    n = int(data.get('n') or 5)
+    k = int(data.get('k') or 3)
+    if not secret:
+        return jsonify({"success": False, "error": "secret required"}), 400
+    shares = split_secret_shares(secret, n=n, k=k)
+    add_audit_log("ADV Secret Sharing", f"split n={n} k={k}", username=session.get('username', ''))
+    return jsonify({"success": True, "shares": shares})
+
+
+@app.route('/api/adv/secret-sharing/recover', methods=['POST'])
+def adv_secret_recover():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    data = request.json or {}
+    shares = data.get('shares') or []
+    if not isinstance(shares, list):
+        return jsonify({"success": False, "error": "shares must be array"}), 400
+    try:
+        secret = recover_secret_shares(shares)
+        add_audit_log("ADV Secret Sharing", "recover", username=session.get('username', ''))
+        return jsonify({"success": True, "secret": secret})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
+@app.route('/api/adv/timelock/create', methods=['POST'])
+def adv_timelock_create():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    data = request.json or {}
+    message = (data.get('message') or '').strip()
+    password = data.get('password') or ''
+    unlock_minutes = max(1, int(data.get('unlock_minutes') or 10))
+    one_time = 1 if data.get('one_time', True) else 0
+    if not message or not password:
+        return jsonify({"success": False, "error": "message/password required"}), 400
+    token = secrets.token_urlsafe(24)
+    unlock_at = (datetime.datetime.now() + datetime.timedelta(minutes=unlock_minutes)).isoformat()
+    enc_payload = encrypt_data(message.encode('utf-8'), password)
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO advanced_timelock_messages (user_id, token, enc_payload, unlock_at, one_time_read, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+        (user_id, token, psycopg2.Binary(enc_payload), unlock_at, one_time, datetime.datetime.now().isoformat())
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "token": token, "unlock_at": unlock_at})
+
+
+@app.route('/api/adv/timelock/open', methods=['POST'])
+def adv_timelock_open():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    data = request.json or {}
+    token = (data.get('token') or '').strip()
+    password = data.get('password') or ''
+    if not token or not password:
+        return jsonify({"success": False, "error": "token/password required"}), 400
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, enc_payload, unlock_at, one_time_read, is_used FROM advanced_timelock_messages WHERE token=%s AND user_id=%s", (token, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"success": False, "error": "token not found"}), 404
+    msg_id, enc_payload, unlock_at, one_time_read, is_used = row
+    if int(is_used or 0) == 1:
+        conn.close()
+        return jsonify({"success": False, "error": "token already consumed"}), 410
+    if datetime.datetime.now() < datetime.datetime.fromisoformat(unlock_at):
+        conn.close()
+        return jsonify({"success": False, "error": "still locked", "unlock_at": unlock_at}), 403
+    try:
+        plain = decrypt_data(bytes(enc_payload), password).decode('utf-8')
+    except Exception:
+        conn.close()
+        return jsonify({"success": False, "error": "wrong password"}), 401
+    if int(one_time_read or 0) == 1:
+        c.execute("UPDATE advanced_timelock_messages SET is_used=1 WHERE id=%s", (msg_id,))
+        conn.commit()
+    conn.close()
+    return jsonify({"success": True, "message": plain, "one_time": bool(one_time_read)})
+
+
+@app.route('/api/adv/policy/evaluate', methods=['POST'])
+def adv_policy_evaluate():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    data = request.json or {}
+    policy = data.get('policy') or {}
+    otp = (data.get('otp') or '').strip()
+    context = {
+        "ip": request.remote_addr,
+        "country": _get_country(request.remote_addr or ''),
+        "otp": otp
+    }
+    result = evaluate_advanced_policy(policy, context)
+    return jsonify({"success": True, "context": context, **result})
+
+
+@app.route('/api/adv/watermark/sign', methods=['POST'])
+def adv_watermark_sign():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    file = request.files.get('file')
+    label = (request.form.get('label') or '').strip() or 'asset'
+    if not file:
+        return jsonify({"success": False, "error": "file required"}), 400
+    data = file.read()
+    wm = create_watermark_signature(data, label, user_id)
+    return jsonify({"success": True, "label": label, **wm})
+
+
+@app.route('/api/adv/watermark/verify', methods=['POST'])
+def adv_watermark_verify():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    file = request.files.get('file')
+    signature = (request.form.get('signature') or '').strip()
+    label = (request.form.get('label') or '').strip() or 'asset'
+    if not file or not signature:
+        return jsonify({"success": False, "error": "file/signature required"}), 400
+    data = file.read()
+    file_hash = hashlib.sha256(data).hexdigest()
+    raw_secret = app.secret_key or 'titan'
+    secret = raw_secret if isinstance(raw_secret, (bytes, bytearray)) else str(raw_secret).encode('utf-8')
+    expected = hashlib.sha256(secret + f"{user_id}|{label}|{file_hash}".encode('utf-8')).hexdigest()
+    valid = signature == expected
+    return jsonify({"success": True, "valid": valid, "file_hash": file_hash, "label": label})
+
+
+@app.route('/api/adv/keyring/create', methods=['POST'])
+def adv_keyring_create():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    data = request.json or {}
+    key_name = (data.get('name') or '').strip() or f"key-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+    key_material = Fernet.generate_key().decode('ascii')
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("INSERT INTO advanced_keyring (user_id, key_name, key_material, status, created_at) VALUES (%s,%s,%s,'active',%s) RETURNING id",
+              (user_id, key_name, key_material, datetime.datetime.now().isoformat()))
+    row = c.fetchone()
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "key_id": row[0] if row else None, "key_name": key_name})
+
+
+@app.route('/api/adv/keyring/list', methods=['GET'])
+def adv_keyring_list():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, key_name, status, rotated_from, created_at FROM advanced_keyring WHERE user_id=%s ORDER BY id DESC", (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    return jsonify({"success": True, "keys": [{"id": r[0], "name": r[1], "status": r[2], "rotated_from": r[3], "created_at": r[4]} for r in rows]})
+
+
+@app.route('/api/adv/keyring/rotate', methods=['POST'])
+def adv_keyring_rotate():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    key_id = int((request.json or {}).get('key_id') or 0)
+    if not key_id:
+        return jsonify({"success": False, "error": "key_id required"}), 400
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, key_name FROM advanced_keyring WHERE id=%s AND user_id=%s", (key_id, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"success": False, "error": "key not found"}), 404
+    c.execute("UPDATE advanced_keyring SET status='rotated' WHERE id=%s", (key_id,))
+    new_key = Fernet.generate_key().decode('ascii')
+    c.execute("INSERT INTO advanced_keyring (user_id, key_name, key_material, status, rotated_from, created_at) VALUES (%s,%s,%s,'active',%s,%s) RETURNING id",
+              (user_id, f"{row[1]}-rotated", new_key, key_id, datetime.datetime.now().isoformat()))
+    new_row = c.fetchone()
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "new_key_id": new_row[0] if new_row else None})
+
+
+@app.route('/api/adv/keyring/revoke', methods=['POST'])
+def adv_keyring_revoke():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    key_id = int((request.json or {}).get('key_id') or 0)
+    if not key_id:
+        return jsonify({"success": False, "error": "key_id required"}), 400
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("UPDATE advanced_keyring SET status='revoked' WHERE id=%s AND user_id=%s", (key_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+def _adv_get_key_material(user_id: int, key_id: int) -> str | None:
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT key_material, status FROM advanced_keyring WHERE id=%s AND user_id=%s", (key_id, user_id))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return None
+    if row[1] != 'active':
+        return None
+    return row[0]
+
+
+@app.route('/api/adv/keyring/encrypt', methods=['POST'])
+def adv_keyring_encrypt():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    data = request.json or {}
+    key_id = int(data.get('key_id') or 0)
+    text = data.get('text') or ''
+    if not key_id or text == '':
+        return jsonify({"success": False, "error": "key_id/text required"}), 400
+    key_material = _adv_get_key_material(user_id, key_id)
+    if not key_material:
+        return jsonify({"success": False, "error": "active key not found"}), 404
+    cipher = Fernet(key_material.encode('ascii')).encrypt(text.encode('utf-8')).decode('ascii')
+    return jsonify({"success": True, "cipher": cipher})
+
+
+@app.route('/api/adv/keyring/decrypt', methods=['POST'])
+def adv_keyring_decrypt():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    data = request.json or {}
+    key_id = int(data.get('key_id') or 0)
+    cipher = data.get('cipher') or ''
+    if not key_id or not cipher:
+        return jsonify({"success": False, "error": "key_id/cipher required"}), 400
+    key_material = _adv_get_key_material(user_id, key_id)
+    if not key_material:
+        return jsonify({"success": False, "error": "active key not found"}), 404
+    try:
+        text = Fernet(key_material.encode('ascii')).decrypt(cipher.encode('ascii')).decode('utf-8')
+        return jsonify({"success": True, "text": text})
+    except Exception:
+        return jsonify({"success": False, "error": "decrypt failed"}), 400
+
+
+# =====================================================================
 # === AI Routes (Ollama) ===
 # =====================================================================
 
@@ -7527,15 +10474,104 @@ def vault_timelocked_download():
 def ai_chat():
     if 'user_id' not in session:
         return jsonify({"error": "غير مصرح"}), 401
-    data = request.json or {}
-    message = data.get('message', '').strip()
-    if not message:
-        return jsonify({"error": "الرسالة مطلوبة"}), 400
+
+    is_multipart = (request.content_type or '').lower().startswith('multipart/form-data')
+    message = ''
+    model = 'titan_ultimate'
+    files = []
+    if is_multipart:
+        message = (request.form.get('message') or '').strip()
+        model = (request.form.get('model') or 'titan_ultimate').strip()
+        files = request.files.getlist('files')
+    else:
+        data = request.get_json(silent=True) or {}
+        message = (data.get('message') or '').strip()
+        model = (data.get('model') or 'titan_ultimate').strip()
+
+    if not message and not files:
+        return jsonify({"error": "الرسالة أو المرفقات مطلوبة"}), 400
     if not DO_AI_KEY:
         return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
+
     try:
-        reply = _call_do_ai(message)
-        add_audit_log("AI Chat 🤖", f"AI: {message[:50]}", username=session.get('username', ''))
+        attachment_chunks = []
+        skipped = []
+        max_files = 5
+        max_file_size = 8 * 1024 * 1024
+
+        if files:
+            for idx, f in enumerate(files[:max_files], start=1):
+                filename = secure_filename(f.filename or f"file_{idx}")
+                content_type = (f.mimetype or 'application/octet-stream').lower()
+                raw = f.read() or b''
+                if not raw:
+                    skipped.append(f"{filename}: empty")
+                    continue
+                if len(raw) > max_file_size:
+                    skipped.append(f"{filename}: too large")
+                    continue
+
+                lower_name = filename.lower()
+                try:
+                    if content_type.startswith('image/') or lower_name.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp')):
+                        w = h = None
+                        try:
+                            img = Image.open(io.BytesIO(raw))
+                            w, h = img.size
+                        except Exception:
+                            pass
+                        dims = f"{w}x{h}" if w and h else "unknown-size"
+                        ocr_text, ocr_err = extract_image_ocr_text(raw, max_chars=5000)
+                        if ocr_text:
+                            attachment_chunks.append(
+                                f"[Attachment {idx}] IMAGE: name={filename}, mime={content_type}, size={len(raw)} bytes, dimensions={dims}\n"
+                                f"OCR_TEXT:\n{ocr_text}"
+                            )
+                        else:
+                            attachment_chunks.append(
+                                f"[Attachment {idx}] IMAGE: name={filename}, mime={content_type}, size={len(raw)} bytes, dimensions={dims}, "
+                                f"ocr_status={ocr_err or 'unavailable'}"
+                            )
+                    elif content_type == 'application/pdf' or lower_name.endswith('.pdf'):
+                        reader = PdfReader(io.BytesIO(raw))
+                        pages = reader.pages[:5]
+                        extracted = []
+                        for p in pages:
+                            txt = (p.extract_text() or '').strip()
+                            if txt:
+                                extracted.append(txt[:1800])
+                        joined = "\n\n".join(extracted).strip()
+                        if not joined:
+                            joined = "(No extractable text found in PDF)"
+                        attachment_chunks.append(
+                            f"[Attachment {idx}] PDF: name={filename}, pages_read={len(pages)}\n{joined}"
+                        )
+                    elif content_type.startswith('text/') or lower_name.endswith(('.txt', '.md', '.csv', '.json', '.log', '.xml', '.html', '.css', '.js', '.py', '.yaml', '.yml', '.ini', '.conf')):
+                        text = raw.decode('utf-8', errors='ignore').strip()
+                        if not text:
+                            text = "(Empty text file)"
+                        attachment_chunks.append(
+                            f"[Attachment {idx}] TEXT: name={filename}\n{text[:6000]}"
+                        )
+                    else:
+                        attachment_chunks.append(
+                            f"[Attachment {idx}] FILE: name={filename}, mime={content_type}, size={len(raw)} bytes"
+                        )
+                except Exception as ex:
+                    skipped.append(f"{filename}: {str(ex)[:80]}")
+
+        prompt_parts = []
+        if message:
+            prompt_parts.append(message)
+        if attachment_chunks:
+            prompt_parts.append("\n\n=== ATTACHMENTS CONTEXT ===\n" + "\n\n".join(attachment_chunks))
+            prompt_parts.append("\nPlease analyze the attachments context and answer in Arabic with practical security guidance.")
+        if skipped:
+            prompt_parts.append("\n\nSkipped attachments: " + ", ".join(skipped))
+
+        final_prompt = "\n".join(prompt_parts).strip()
+        reply = _call_do_ai(final_prompt)
+        add_audit_log("AI Chat 🤖", f"AI: {message[:50]} | files={len(files)} | model={model}", username=session.get('username', ''))
         return jsonify({"success": True, "reply": reply})
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
@@ -7574,6 +10610,59 @@ def ai_analyze():
 @app.route('/api/ai/models', methods=['GET'])
 def ai_models():
     return jsonify({"models": ["TITAN-SEC AI (DigitalOcean)"], "success": True})
+
+
+@app.route('/api/support/tickets', methods=['GET', 'POST'])
+def support_tickets_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    assert user_id is not None
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        if request.method == 'POST':
+            data = request.json or {}
+            subject = (data.get('subject') or '').strip()
+            details = (data.get('details') or '').strip()
+            category = (data.get('category') or 'technical').strip().lower()
+            priority = (data.get('priority') or 'normal').strip().lower()
+            if not subject or not details:
+                return jsonify({"success": False, "error": "subject/details required"}), 400
+            if category not in ('technical', 'billing', 'account', 'security'):
+                category = 'technical'
+            if priority not in ('low', 'normal', 'high', 'urgent'):
+                priority = 'normal'
+            now = datetime.datetime.now().isoformat()
+            c.execute(
+                "INSERT INTO support_tickets (user_id, subject, category, priority, details, status, admin_note, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,'open','',%s,%s) RETURNING id",
+                (user_id, subject, category, priority, details, now, now)
+            )
+            row = c.fetchone()
+            conn.commit()
+            add_audit_log("Support Ticket", f"created ticket#{row[0] if row else '?'}", username=session.get('username', ''))
+            return jsonify({"success": True, "ticket_id": row[0] if row else None})
+
+        c.execute(
+            "SELECT id, subject, category, priority, details, status, admin_note, created_at, updated_at FROM support_tickets WHERE user_id=%s ORDER BY id DESC LIMIT 100",
+            (user_id,)
+        )
+        rows = c.fetchall()
+        tickets = [
+            {
+                "id": r[0], "subject": r[1], "category": r[2], "priority": r[3], "details": r[4],
+                "status": r[5], "admin_note": r[6], "created_at": r[7], "updated_at": r[8]
+            }
+            for r in rows
+        ]
+        return jsonify({"success": True, "tickets": tickets})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 # --- تهيئة قاعدة البيانات عند بدء التطبيق ---
