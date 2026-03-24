@@ -810,6 +810,181 @@ def wave_lsb_decode(wav_bytes: bytes, filename: str = "") -> str:
     except Exception as e:
         return f"خطأ في تحليل البيانات: {str(e)}"
 
+
+# --- إخفاء البيانات في الفيديو (Video Steganography) ---
+def _save_temp_bytes(data: bytes, suffix: str) -> str:
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        tmp.write(data)
+        return tmp.name
+    finally:
+        tmp.close()
+
+
+def video_lsb_encode(video_bytes: bytes, secret_data: str) -> bytes:
+    """إخفاء نص داخل فيديو عبر تعديل أقل بت مؤثر في قناة اللون الأزرق."""
+    try:
+        import cv2  # type: ignore
+        import numpy as np  # type: ignore
+    except Exception:
+        raise ValueError("مكتبات الفيديو غير متاحة في الخادم")
+
+    in_path = _save_temp_bytes(video_bytes, '.mp4')
+    out_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4').name
+    marker = b'##TITAN_VIDEO_END##'
+    payload_bits = ''.join(format(b, '08b') for b in (secret_data.encode('utf-8') + marker))
+
+    cap = cv2.VideoCapture(in_path)
+    if not cap.isOpened():
+        cap.release()
+        os.remove(in_path)
+        raise ValueError("تعذر قراءة ملف الفيديو")
+
+    fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+
+    if width <= 0 or height <= 0 or frame_count <= 0:
+        cap.release()
+        os.remove(in_path)
+        raise ValueError("تعذر تحليل خصائص الفيديو")
+
+    capacity_bits = frame_count * width * height
+    if len(payload_bits) > capacity_bits:
+        cap.release()
+        os.remove(in_path)
+        raise ValueError("النص كبير جداً بالنسبة لسعة الفيديو")
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
+
+    bit_index = 0
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+
+        if bit_index < len(payload_bits):
+            blue_flat = frame[:, :, 0].reshape(-1)
+            remaining = len(payload_bits) - bit_index
+            n = min(remaining, blue_flat.size)
+            bit_chunk = payload_bits[bit_index:bit_index + n]
+            bits_np = np.fromiter((1 if c == '1' else 0 for c in bit_chunk), dtype=np.uint8, count=n)
+            blue_flat[:n] = (blue_flat[:n] & 0xFE) | bits_np
+            bit_index += n
+
+        writer.write(frame)
+
+    cap.release()
+    writer.release()
+    os.remove(in_path)
+
+    if bit_index < len(payload_bits):
+        if os.path.exists(out_path):
+            os.remove(out_path)
+        raise ValueError("تعذر إكمال عملية الإخفاء داخل الفيديو")
+
+    try:
+        with open(out_path, 'rb') as f:
+            return f.read()
+    finally:
+        if os.path.exists(out_path):
+            os.remove(out_path)
+
+
+def video_lsb_decode(video_bytes: bytes) -> str:
+    """استخراج النص المخفي من الفيديو."""
+    try:
+        import cv2  # type: ignore
+    except Exception:
+        return "مكتبات الفيديو غير متاحة في الخادم"
+
+    in_path = _save_temp_bytes(video_bytes, '.mp4')
+    marker = b'##TITAN_VIDEO_END##'
+
+    cap = cv2.VideoCapture(in_path)
+    if not cap.isOpened():
+        cap.release()
+        os.remove(in_path)
+        return "تعذر قراءة ملف الفيديو"
+
+    decoded = bytearray()
+    current_byte = 0
+    bit_count = 0
+    max_bytes = 1024 * 1024
+
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        blue_flat = frame[:, :, 0].reshape(-1)
+        for val in blue_flat:
+            current_byte = (current_byte << 1) | int(val & 1)
+            bit_count += 1
+            if bit_count == 8:
+                decoded.append(current_byte)
+                if len(decoded) >= len(marker) and decoded[-len(marker):] == marker:
+                    cap.release()
+                    os.remove(in_path)
+                    payload = bytes(decoded[:-len(marker)])
+                    try:
+                        return payload.decode('utf-8')
+                    except UnicodeDecodeError:
+                        return payload.decode('latin-1', errors='ignore')
+
+                if len(decoded) > max_bytes:
+                    cap.release()
+                    os.remove(in_path)
+                    return "لم يتم العثور على بيانات مخفية داخل الفيديو"
+
+                bit_count = 0
+                current_byte = 0
+
+    cap.release()
+    os.remove(in_path)
+    return "لم يتم العثور على بيانات مخفية داخل الفيديو"
+
+
+def scan_video_clip(video_bytes: bytes, original_name: str = '') -> dict:
+    """فحص سريع لخصائص الفيديو وتقدير السعة وإشارة وجود نص مخفي."""
+    try:
+        import cv2  # type: ignore
+    except Exception:
+        return {"success": False, "error": "مكتبات الفيديو غير متاحة"}
+
+    in_path = _save_temp_bytes(video_bytes, '.mp4')
+    cap = cv2.VideoCapture(in_path)
+    if not cap.isOpened():
+        cap.release()
+        os.remove(in_path)
+        return {"success": False, "error": "تعذر فتح ملف الفيديو"}
+
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    duration = (frame_count / fps) if fps > 0 else 0.0
+    cap.release()
+    os.remove(in_path)
+
+    capacity_bits = max(frame_count, 0) * max(width, 0) * max(height, 0)
+    capacity_bytes = capacity_bits // 8
+    hidden_probe = video_lsb_decode(video_bytes)
+    has_hidden_payload = "لم يتم العثور" not in hidden_probe and "تعذر" not in hidden_probe
+
+    return {
+        "success": True,
+        "filename": original_name,
+        "fps": round(fps, 2),
+        "width": width,
+        "height": height,
+        "frame_count": frame_count,
+        "duration_seconds": round(duration, 2),
+        "estimated_capacity_bytes": capacity_bytes,
+        "has_hidden_payload": has_hidden_payload,
+    }
+
 # --- تنظيف ملفات PDF من الميتابيانات ---
 def clean_pdf_metadata(pdf_bytes: bytes) -> bytes:
     """إزالة الميتابيانات وكافة المعلومات الوصفية من ملف PDF"""
@@ -1796,6 +1971,7 @@ HTML_TEMPLATE = """
                     <div class="tab-grid">
                     <button onclick="showTab('advcrypto')" id="btn-advcrypto" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🧬</span> تشفير متقدم</button>
                     <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
+                    <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> فيديو مشفر</button>
                     <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
                     <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
                     <button onclick="showTab('extreme')" id="btn-extreme" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>💣</span> أوامر متطرفة</button>
@@ -2386,6 +2562,48 @@ HTML_TEMPLATE = """
                             <div id="audioDecodedResult" class="w-full h-24 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm overflow-y-auto mb-4 text-gray-400 font-mono italic">سيظهر النص المستخرج هنا...</div>
                             <button onclick="processAudio('decode')" class="w-full py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20">استخراج النص السري 🔑</button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- ===== VIDEO STEGANOGRAPHY SECTION ===== -->
+                <div id="video-section" class="hidden space-y-6">
+                    <h2 class="text-xl font-bold text-rose-400 border-b border-slate-700 pb-2">🎬 فحص وإخفاء البيانات داخل الفيديو</h2>
+                    <div class="bg-slate-900/50 p-4 rounded-2xl border border-rose-500/20 space-y-3">
+                        <label class="block text-sm text-rose-400 font-bold">🧪 فحص مقطع فيديو:</label>
+                        <input type="file" id="videoScanFile" accept="video/*" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-rose-600/10 file:text-rose-400 hover:file:bg-rose-600/20 border border-slate-700 p-2 rounded-xl">
+                        <button onclick="scanVideoClip()" class="w-full py-2 bg-rose-700/40 hover:bg-rose-700/60 rounded-lg text-sm font-bold border border-rose-700/40">فحص خصائص الفيديو 🔍</button>
+                        <pre id="videoScanResult" class="hidden p-3 bg-black/50 rounded-xl border border-slate-800 text-[11px] text-rose-200 whitespace-pre-wrap overflow-x-auto max-h-44"></pre>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-slate-900/50 p-6 rounded-2xl border border-cyan-500/20">
+                            <label class="block text-sm text-cyan-400 mb-3 font-bold">🛠️ إخفاء نص داخل الفيديو:</label>
+                            <input type="file" id="videoFileEncrypt" accept="video/*" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-cyan-600/10 file:text-cyan-400 hover:file:bg-cyan-600/20 border border-slate-700 p-2 rounded-xl mb-4">
+                            <textarea id="videoSecretText" placeholder="اكتب النص المراد إخفاؤه داخل الفيديو..." class="w-full h-24 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-cyan-500 outline-none mb-4"></textarea>
+                            <input type="password" id="videoSecretPass" placeholder="كلمة سر لتشفير النص قبل الإخفاء (اختياري)" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-cyan-500 outline-none mb-4">
+                            <button onclick="processVideo('encode')" class="w-full py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold transition-all shadow-lg shadow-cyan-900/20">تشفير وإخفاء النص 💾</button>
+                        </div>
+
+                        <div class="bg-slate-900/50 p-6 rounded-2xl border border-amber-500/20">
+                            <label class="block text-sm text-amber-400 mb-3 font-bold">🔓 استخراج وفك التشفير:</label>
+                            <input type="file" id="videoFileDecrypt" accept="video/*" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-600/10 file:text-amber-400 hover:file:bg-amber-600/20 border border-slate-700 p-2 rounded-xl mb-4">
+                            <input type="password" id="videoDecodePass" placeholder="كلمة سر فك النص (إذا كان مشفراً)" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-amber-500 outline-none mb-4">
+                            <div id="videoDecodedResult" class="w-full h-24 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm overflow-y-auto mb-4 text-gray-400 font-mono italic">سيظهر النص المستخرج هنا...</div>
+                            <button onclick="processVideo('decode')" class="w-full py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold transition-all shadow-lg shadow-amber-900/20">استخراج النص 🔑</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/50 p-6 rounded-2xl border border-emerald-500/20 space-y-4">
+                        <label class="block text-sm text-emerald-400 font-bold">🔐 تشفير ملف الفيديو بالكامل (وليس النص فقط):</label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="file" id="videoFileCrypt" accept="video/*,.titan" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-600/10 file:text-emerald-400 hover:file:bg-emerald-600/20 border border-slate-700 p-2 rounded-xl">
+                            <input type="password" id="videoFileCryptPass" placeholder="كلمة سر تشفير/فك ملف الفيديو" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-emerald-500 outline-none">
+                        </div>
+                        <div class="flex flex-col md:flex-row gap-3">
+                            <button onclick="processVideoFile('encrypt')" class="flex-1 py-3 bg-emerald-700/60 hover:bg-emerald-600 rounded-xl font-bold transition-all border border-emerald-700/40">تشفير الملف الكامل 📦</button>
+                            <button onclick="processVideoFile('decrypt')" class="flex-1 py-3 bg-lime-700/60 hover:bg-lime-600 rounded-xl font-bold transition-all border border-lime-700/40">فك تشفير الملف الكامل 📂</button>
+                        </div>
+                        <div class="text-[11px] text-gray-500">ينتج ملف مشفر بامتداد .titan ويمكن استعادته بنفس كلمة السر.</div>
                     </div>
                 </div>
             <!-- ===== VAULT SECTION ===== -->
@@ -4271,7 +4489,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','ghost','osint','ir','maltego','hunting','forensics','brand','se','advcrypto','audio','qr','identity','extreme','netintel','admin'];
+        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','ghost','osint','ir','maltego','hunting','forensics','brand','se','advcrypto','audio','video','qr','identity','extreme','netintel','admin'];
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
 
@@ -4363,7 +4581,7 @@ HTML_TEMPLATE = """
         function normalizeArabicSearchText(value) {
             return (value || '')
                 .toLowerCase()
-                .replace(/[\u064B-\u065F\u0670]/g, '')   // remove Arabic diacritics
+                .replace(/[\\u064B-\\u065F\\u0670]/g, '')   // remove Arabic diacritics
                 .replace(/\u0640/g, '')                    // remove tatweel
                 .replace(/[أإآٱ]/g, 'ا')
                 .replace(/ؤ/g, 'و')
@@ -7777,6 +7995,221 @@ UUID: ${getVal('idUuid')}
             }
         }
 
+        async function _encryptVideoSecretInBrowser(text, passphrase) {
+            const encoder = new TextEncoder();
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(passphrase),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+            const key = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt']
+            );
+            const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(text));
+            return `ENC_VIDEO_V1:${_arrayBufferToBase64(salt)}:${_arrayBufferToBase64(iv)}:${_arrayBufferToBase64(cipherBuf)}`;
+        }
+
+        async function _decryptVideoSecretInBrowser(payload, passphrase) {
+            if (!payload.startsWith('ENC_VIDEO_V1:')) return payload;
+            const parts = payload.split(':');
+            if (parts.length !== 4) throw new Error('صيغة النص المشفر داخل الفيديو غير صالحة.');
+            const [, saltB64, ivB64, cipherB64] = parts;
+            const toBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+            const salt = toBytes(saltB64);
+            const iv = toBytes(ivB64);
+            const cipherBytes = toBytes(cipherB64);
+            const encoder = new TextEncoder();
+
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(passphrase),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+            const key = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['decrypt']
+            );
+            const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBytes);
+            return new TextDecoder().decode(plainBuf);
+        }
+
+        async function scanVideoClip() {
+            const file = document.getElementById('videoScanFile').files[0];
+            if (!file) return titanAlert('اختر فيديو أولاً لفحصه.');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const box = document.getElementById('videoScanResult');
+            box.classList.remove('hidden');
+            box.innerText = 'جاري فحص الفيديو...';
+
+            try {
+                const res = await fetch('/api/video/scan', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (!res.ok || data.error) throw new Error(data.error || 'فشل فحص الفيديو');
+
+                const lines = [
+                    `الاسم: ${data.filename || file.name}`,
+                    `الدقة: ${data.width}x${data.height}`,
+                    `عدد الإطارات: ${data.frame_count}`,
+                    `FPS: ${data.fps}`,
+                    `المدة (ثانية): ${data.duration_seconds}`,
+                    `السعة التقريبية للنص (بايت): ${data.estimated_capacity_bytes}`,
+                    `تم رصد بيانات مخفية سابقاً: ${data.has_hidden_payload ? 'نعم' : 'لا'}`
+                ];
+                box.innerText = lines.join('\\n');
+                soundManager.success();
+            } catch (e) {
+                box.innerText = 'خطأ: ' + e.message;
+                soundManager.error();
+            }
+        }
+
+        async function processVideo(action) {
+            const formData = new FormData();
+            if (action === 'encode') {
+                const file = document.getElementById('videoFileEncrypt').files[0];
+                const text = document.getElementById('videoSecretText').value.trim();
+                const passphrase = document.getElementById('videoSecretPass').value.trim();
+
+                if (!file) return titanAlert('يرجى اختيار ملف فيديو.');
+                if (!text) return titanAlert('يرجى كتابة النص المراد إخفاؤه.');
+
+                let finalSecret = text;
+                if (passphrase) {
+                    finalSecret = await _encryptVideoSecretInBrowser(text, passphrase);
+                }
+
+                formData.append('file', file);
+                formData.append('text', finalSecret);
+
+                try {
+                    const response = await fetch('/api/video/stego/encode', { method: 'POST', body: formData });
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || 'فشلت عملية الإخفاء داخل الفيديو');
+                    }
+
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = 'TITAN_STEGO_' + file.name.replace(/\\.[^/.]+$/, '') + '.mp4';
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(downloadUrl);
+                    }, 500);
+
+                    titanAlert(passphrase ? 'تم تشفير النص ثم إخفاؤه داخل الفيديو ✅' : 'تم إخفاء النص داخل الفيديو ✅');
+                    soundManager.success();
+                    refreshLogs();
+                } catch (e) {
+                    titanAlert('خطأ: ' + e.message);
+                    soundManager.error();
+                }
+            } else {
+                const file = document.getElementById('videoFileDecrypt').files[0];
+                const decodePass = document.getElementById('videoDecodePass').value.trim();
+                if (!file) return titanAlert('يرجى اختيار ملف فيديو للتحليل.');
+
+                formData.append('file', file);
+
+                try {
+                    const res = await fetch('/api/video/stego/decode', { method: 'POST', body: formData });
+                    const data = await res.json();
+
+                    if (data.error) {
+                        titanAlert('تنبيه: ' + data.error);
+                        return;
+                    }
+
+                    if (data.success && data.hidden_data) {
+                        let shownText = data.hidden_data;
+                        if (shownText.startsWith('ENC_VIDEO_V1:')) {
+                            if (!decodePass) {
+                                shownText = 'تم العثور على نص مشفر. أدخل كلمة السر لفك التشفير.';
+                            } else {
+                                try {
+                                    shownText = await _decryptVideoSecretInBrowser(shownText, decodePass);
+                                } catch (e) {
+                                    shownText = 'فشل فك التشفير: كلمة السر غير صحيحة أو البيانات تالفة.';
+                                }
+                            }
+                        }
+
+                        document.getElementById('videoDecodedResult').innerText = shownText;
+                        titanAlert('✅ تم استخراج النص من الفيديو');
+                        soundManager.success();
+                        refreshLogs();
+                    } else {
+                        document.getElementById('videoDecodedResult').innerText = 'لا توجد بيانات مخفية.';
+                        titanAlert('لم يتم العثور على بيانات مخفية داخل الفيديو.');
+                    }
+                } catch (e) {
+                    titanAlert('خطأ في الاتصال بالخادم.');
+                    soundManager.error();
+                }
+            }
+        }
+
+        async function processVideoFile(action) {
+            const file = document.getElementById('videoFileCrypt').files[0];
+            const key = document.getElementById('videoFileCryptPass').value.trim();
+            if (!file) return titanAlert('يرجى اختيار ملف فيديو أو ملف مشفر.');
+            if (!key) return titanAlert('يرجى إدخال كلمة السر أولاً.');
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('key', key);
+
+            const endpoint = action === 'encrypt' ? '/api/video/file/encrypt' : '/api/video/file/decrypt';
+
+            try {
+                const res = await fetch(endpoint, { method: 'POST', body: formData });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'فشل عملية تشفير/فك الفيديو');
+                }
+
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const cleanBase = file.name.replace(/\\.titan$/i, '').replace(/\\.[^/.]+$/, '');
+                a.href = url;
+                a.download = action === 'encrypt' ? (cleanBase + '.mp4.titan') : (cleanBase + '_decrypted.mp4');
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }, 500);
+
+                titanAlert(action === 'encrypt' ? '✅ تم تشفير ملف الفيديو بالكامل' : '✅ تم فك تشفير ملف الفيديو بنجاح');
+                soundManager.success();
+                refreshLogs();
+            } catch (e) {
+                titanAlert('خطأ: ' + e.message);
+                soundManager.error();
+            }
+        }
+
         async function cleanPdf() {
             const file = document.getElementById('pdfCleanFile').files[0];
             if (!file) return Swal.fire({ icon:'error', title:'خطأ', text:'يرجى اختيار ملف PDF.' });
@@ -7933,6 +8366,107 @@ def audio_stego_decode_route():
         if "لم يتم العثور" in hidden_data or "خطأ" in hidden_data:
              return jsonify({"success": True, "hidden_data": None, "error": hidden_data})
         return jsonify({"success": True, "hidden_data": hidden_data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route('/api/video/scan', methods=['POST'])
+def video_scan_route():
+    if 'file' not in request.files:
+        return jsonify({"error": "يرجى اختيار ملف فيديو"}), 400
+    file = request.files['file']
+    filename = file.filename or 'video.mp4'
+    try:
+        result = scan_video_clip(file.read(), filename)
+        if not result.get('success'):
+            return jsonify({"error": result.get('error', 'فشل الفحص')}) , 400
+        add_audit_log("فحص فيديو", f"تحليل خصائص {filename}")
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route('/api/video/stego/encode', methods=['POST'])
+def video_stego_encode_route():
+    if 'file' not in request.files or 'text' not in request.form:
+        return jsonify({"error": "الملف والنص مطلوبان"}), 400
+    file = request.files['file']
+    filename = file.filename or 'video.mp4'
+    text = request.form['text']
+    try:
+        processed_data = video_lsb_encode(file.read(), text)
+        add_audit_log("إخفاء داخل فيديو", f"إخفاء نص في {filename}")
+        return send_file(
+            io.BytesIO(processed_data),
+            mimetype='video/mp4',
+            as_attachment=True,
+            download_name='TITAN_STEGO_' + filename.rsplit('.', 1)[0] + '.mp4'
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route('/api/video/stego/decode', methods=['POST'])
+def video_stego_decode_route():
+    if 'file' not in request.files:
+        return jsonify({"error": "يرجى اختيار ملف فيديو"}), 400
+    file = request.files['file']
+    filename = file.filename or 'video.mp4'
+    try:
+        hidden_data = video_lsb_decode(file.read())
+        add_audit_log("استخراج من فيديو", f"محاولة استخراج نص من {filename}")
+        if "لم يتم العثور" in hidden_data or "تعذر" in hidden_data:
+            return jsonify({"success": True, "hidden_data": None, "error": hidden_data})
+        return jsonify({"success": True, "hidden_data": hidden_data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route('/api/video/file/encrypt', methods=['POST'])
+def video_file_encrypt_route():
+    if 'file' not in request.files:
+        return jsonify({"error": "يرجى اختيار ملف فيديو"}), 400
+    key = (request.form.get('key') or '').strip()
+    if not key:
+        return jsonify({"error": "كلمة السر مطلوبة"}), 400
+
+    file = request.files['file']
+    filename = file.filename or 'video.mp4'
+
+    try:
+        encrypted = encrypt_data(file.read(), key)
+        add_audit_log("تشفير ملف فيديو", f"تشفير كامل للملف: {filename}")
+        return send_file(
+            io.BytesIO(encrypted),
+            mimetype='application/octet-stream',
+            as_attachment=True,
+            download_name=filename + '.titan'
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route('/api/video/file/decrypt', methods=['POST'])
+def video_file_decrypt_route():
+    if 'file' not in request.files:
+        return jsonify({"error": "يرجى اختيار ملف مشفر"}), 400
+    key = (request.form.get('key') or '').strip()
+    if not key:
+        return jsonify({"error": "كلمة السر مطلوبة"}), 400
+
+    file = request.files['file']
+    filename = file.filename or 'video.mp4.titan'
+
+    try:
+        decrypted = decrypt_data(file.read(), key)
+        out_name = filename[:-6] if filename.lower().endswith('.titan') else ('decrypted_' + filename)
+        add_audit_log("فك تشفير ملف فيديو", f"فك كامل للملف: {filename}")
+        return send_file(
+            io.BytesIO(decrypted),
+            mimetype='video/mp4',
+            as_attachment=True,
+            download_name=out_name
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
