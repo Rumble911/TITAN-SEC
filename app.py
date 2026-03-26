@@ -66,6 +66,48 @@ ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://y4l7lnqc5wj5frtdqugl6dqs.agents.do-ai.run')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 
+_dash_metrics_lock = threading.Lock()
+_dash_prev_net = None
+_dash_prev_ts = 0.0
+_dash_prev_disk_io = None
+_dash_prev_disk_io_ts = 0.0
+_dash_cpu_primed = False
+_dash_public_ip = 'غير متاح'
+_dash_public_ip_ts = 0.0
+
+
+def _dash_local_ip():
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(('8.8.8.8', 80))
+        return sock.getsockname()[0]
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return 'غير متاح'
+    finally:
+        try:
+            if sock:
+                sock.close()
+        except Exception:
+            pass
+
+
+def _dash_public_ip_cached():
+    global _dash_public_ip, _dash_public_ip_ts
+    now = time.time()
+    if _dash_public_ip != 'غير متاح' and (now - _dash_public_ip_ts) < 60:
+        return _dash_public_ip
+    try:
+        pub_ip_data = requests.get('https://api.ipify.org?format=json', timeout=2).json()
+        _dash_public_ip = pub_ip_data.get('ip', 'غير متاح')
+        _dash_public_ip_ts = now
+    except Exception:
+        pass
+    return _dash_public_ip
+
 def _call_do_ai(message: str) -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent"""
     headers = {
@@ -1976,7 +2018,7 @@ HTML_TEMPLATE = """
                     <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
                     <button onclick="showTab('extreme')" id="btn-extreme" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>💣</span> أوامر متطرفة</button>
                     <button onclick="showTab('netintel')" id="btn-netintel" class="px-3 py-1.5 rounded-lg hover:bg-sky-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-sky-500/30"><span>🛰️</span> استخبارات الشبكة</button>
-                    <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
+                    <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
                     <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
                 </div>
                 </div>
@@ -1984,9 +2026,9 @@ HTML_TEMPLATE = """
 
 
             <!-- ===== AI SECTION ===== -->
-            <div id="ai-section" class="hidden fixed right-4 bottom-24 z-[9998] w-[min(92vw,34rem)] max-h-[78vh] overflow-y-auto rounded-2xl border border-green-900/40 bg-slate-950/96 shadow-[0_0_40px_rgba(16,185,129,0.2)] p-4 space-y-4">
+            <div id="ai-section" class="hidden fixed right-4 bottom-24 z-[9998] w-[min(92vw,34rem)] max-h-[78vh] overflow-y-auto rounded-2xl border border-purple-900/40 bg-slate-950/96 shadow-[0_0_40px_rgba(139,92,246,0.24)] p-4 space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-700 pb-2">
-                    <h2 class="text-lg font-bold text-green-400">&#129302; TITAN AI</h2>
+                    <h2 class="text-lg font-bold text-purple-300">&#129302; TITAN AI</h2>
                     <button type="button" onclick="closeAiBubble()" class="text-xs px-2 py-1 rounded-lg border border-slate-700 text-gray-300 hover:bg-slate-800">✕</button>
                 </div>
 
@@ -1999,21 +2041,21 @@ HTML_TEMPLATE = """
                         </select>
                     </div>
                     <div class="flex items-center justify-end gap-2 ml-auto">
-                        <button id="ai-subtab-support" onclick="showAiSubTab('support')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-green-600/20 hover:border-green-500/40">Support</button>
-                        <button id="ai-subtab-analysis" onclick="showAiSubTab('analysis')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-green-600/20 hover:border-green-500/40">Analysis</button>
-                        <button id="ai-subtab-chat" onclick="showAiSubTab('chat')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-emerald-700/50 bg-emerald-900/40 text-emerald-300">Chat</button>
+                        <button id="ai-subtab-support" onclick="showAiSubTab('support')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Support</button>
+                        <button id="ai-subtab-analysis" onclick="showAiSubTab('analysis')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Analysis</button>
+                        <button id="ai-subtab-chat" onclick="showAiSubTab('chat')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-purple-700/50 bg-purple-900/40 text-purple-300">Chat</button>
                     </div>
                 </div>
 
                 <div id="ai-sub-content-chat" class="space-y-4">
-                <div id="ai-chat-shell" class="bg-slate-900/70 rounded-2xl border border-green-900/30 overflow-hidden h-[34rem] flex flex-col">
+                <div id="ai-chat-shell" class="bg-slate-900/70 rounded-2xl border border-purple-900/30 overflow-hidden h-[34rem] flex flex-col">
                     <div class="p-3 border-b border-slate-700">
-                        <span class="text-green-400 text-sm font-bold">&#128172; محادثة مع AI</span>
+                        <span class="text-purple-300 text-sm font-bold">&#128172; محادثة مع AI</span>
                     </div>
                     <div id="ai-chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-slate-950/40 to-slate-900/20">
                         <div class="min-h-full flex flex-col justify-end gap-3" id="ai-chat-flow">
                             <div class="flex justify-start items-end gap-2">
-                                <div class="w-7 h-7 rounded-full bg-emerald-900/50 border border-emerald-700/40 flex items-center justify-center text-xs">🤖</div>
+                                <div class="w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs">🤖</div>
                                 <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm shadow-lg border border-slate-700/60">
                                     مرحباً! أنا TITAN AI. كيف يمكنني مساعدتك اليوم؟
                                 </div>
@@ -2028,7 +2070,7 @@ HTML_TEMPLATE = """
                         <input type="text" id="ai-chat-input" placeholder="اسأل عن الأمن السيبراني..."
                             class="flex-1 bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none">
                         <button onclick="sendAiMessage()" id="ai-send-btn"
-                            class="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-xl font-bold text-sm">
+                            class="bg-purple-600 hover:bg-purple-500 text-white px-5 py-2 rounded-xl font-bold text-sm">
                             إرسال
                         </button>
                     </div>
@@ -2037,10 +2079,10 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div id="ai-sub-content-support" class="hidden space-y-4">
-                <div class="bg-slate-900/70 rounded-2xl border border-cyan-900/30 overflow-hidden">
+                <div class="bg-slate-900/70 rounded-2xl border border-purple-900/30 overflow-hidden">
                     <div class="p-3 border-b border-slate-700 flex items-center justify-between">
-                        <span class="text-cyan-400 text-sm font-bold">🎫 الدعم الفني - إنشاء تيكت</span>
-                        <button onclick="loadSupportTickets()" class="text-xs px-3 py-1 rounded-lg bg-cyan-900/30 border border-cyan-800/50 text-cyan-300">تحديث</button>
+                        <span class="text-purple-300 text-sm font-bold">🎫 الدعم الفني - إنشاء تيكت</span>
+                        <button onclick="loadSupportTickets()" class="text-xs px-3 py-1 rounded-lg bg-purple-900/30 border border-purple-800/50 text-purple-300">تحديث</button>
                     </div>
                     <div class="p-4 grid grid-cols-1 md:grid-cols-4 gap-2">
                         <input id="supportTicketSubject" type="text" placeholder="عنوان المشكلة" class="md:col-span-2 bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
@@ -2057,7 +2099,7 @@ HTML_TEMPLATE = """
                             <option value="urgent">Urgent</option>
                         </select>
                         <textarea id="supportTicketDetails" rows="3" placeholder="اشرح المشكلة بالتفصيل..." class="md:col-span-4 bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none resize-none"></textarea>
-                        <button onclick="createSupportTicket()" class="md:col-span-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg p-2 font-bold text-sm">إنشاء تيكت دعم</button>
+                        <button onclick="createSupportTicket()" class="md:col-span-4 bg-purple-600 hover:bg-purple-500 text-white rounded-lg p-2 font-bold text-sm">إنشاء تيكت دعم</button>
                     </div>
                     <div id="supportTicketsList" class="px-4 pb-4 space-y-2 max-h-56 overflow-y-auto"></div>
                 </div>
@@ -2074,11 +2116,11 @@ HTML_TEMPLATE = """
                         </button>
                         <div id="ai-pass-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700"></div>
                     </div>
-                    <div class="bg-slate-900/50 p-5 rounded-xl border border-blue-900/40">
-                        <h3 class="font-bold text-blue-400 mb-3">&#128269; تحليل أمني بالـ AI</h3>
+                    <div class="bg-slate-900/50 p-5 rounded-xl border border-violet-900/40">
+                        <h3 class="font-bold text-violet-300 mb-3">&#128269; تحليل أمني بالـ AI</h3>
                         <textarea id="ai-security-input" rows="3" placeholder="الصق نتائج فحص IP هنا..."
                             class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none mb-3 resize-none"></textarea>
-                        <button onclick="analyzeSecurity()" class="w-full bg-blue-900/50 hover:bg-blue-800 text-blue-300 font-bold p-2 rounded-xl border border-blue-800/50 text-sm">
+                        <button onclick="analyzeSecurity()" class="w-full bg-violet-900/50 hover:bg-violet-800 text-violet-300 font-bold p-2 rounded-xl border border-violet-800/50 text-sm">
                             تحليل بالذكاء الاصطناعي
                         </button>
                         <div id="ai-security-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700"></div>
@@ -2088,7 +2130,7 @@ HTML_TEMPLATE = """
 
             </div>
 
-            <button id="ai-float-launcher" type="button" onclick="toggleAiBubble()" class="hidden fixed left-5 bottom-6 z-[9999] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 text-white text-2xl font-black shadow-[0_0_25px_rgba(16,185,129,0.55)] border border-emerald-300/40 hover:scale-105 transition-all" title="TITAN AI">🤖</button>
+            <button id="ai-float-launcher" type="button" onclick="toggleAiBubble()" class="hidden fixed left-5 bottom-6 z-[9999] w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 text-white text-2xl font-black shadow-[0_0_25px_rgba(139,92,246,0.55)] border border-purple-300/40 hover:scale-105 transition-all" title="TITAN AI">🤖</button>
 
             <!-- ===== ADMIN SECTION ===== -->
             <div id="admin-section" class="hidden space-y-6">
@@ -2137,18 +2179,19 @@ HTML_TEMPLATE = """
 
             <div id="dash-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-purple-400 border-b border-slate-700 pb-2">📊 لوحة التحكم – معلومات النظام</h2>
+                <div class="text-[11px] text-gray-500 -mt-4 flex items-center gap-2">آخر تحديث: <span id="dashUpdatedAt" class="text-purple-300 font-mono">—</span><span id="dashPulse" class="inline-block w-2 h-2 rounded-full bg-gray-600 opacity-60"></span></div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="dashCards">
-                    <div class="bg-slate-900 rounded-xl p-4 border border-purple-800/40 text-center">
+                    <div id="dashCpuCard" class="bg-slate-900 rounded-xl p-4 border border-purple-800/40 text-center transition-all duration-300">
                         <div class="text-3xl font-black text-purple-400" id="dashCpu">—</div>
                         <div class="text-xs text-gray-500 mt-1">CPU %</div>
                     </div>
-                    <div class="bg-slate-900 rounded-xl p-4 border border-blue-800/40 text-center">
+                    <div id="dashRamCard" class="bg-slate-900 rounded-xl p-4 border border-blue-800/40 text-center transition-all duration-300">
                         <div class="text-3xl font-black text-blue-400" id="dashRam">—</div>
                         <div class="text-xs text-gray-500 mt-1">RAM %</div>
                     </div>
-                    <div class="bg-slate-900 rounded-xl p-4 border border-green-800/40 text-center">
+                    <div id="dashDiskCard" class="bg-slate-900 rounded-xl p-4 border border-green-800/40 text-center transition-all duration-300">
                         <div class="text-3xl font-black text-green-400" id="dashDisk">—</div>
-                        <div class="text-xs text-gray-500 mt-1">Disk %</div>
+                        <div class="text-xs text-gray-500 mt-1">Disk I/O (KB/s)</div>
                     </div>
                     <div class="bg-slate-900 rounded-xl p-4 border border-yellow-800/40 text-center">
                         <div class="text-3xl font-black text-yellow-400" id="dashBurn">—</div>
@@ -2161,8 +2204,10 @@ HTML_TEMPLATE = """
                         <div class="space-y-2 text-sm font-mono">
                             <div class="flex justify-between"><span class="text-gray-500">IP المحلي</span><span class="text-green-400" id="dashLocalIp">—</span></div>
                             <div class="flex justify-between"><span class="text-gray-500">IP العام</span><span class="text-blue-400" id="dashPubIp">—</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">صادر (MB)</span><span class="text-purple-400" id="dashSent">—</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">وارد (MB)</span><span class="text-purple-400" id="dashRecv">—</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">سرعة صادر (KB/s)</span><span class="text-purple-400" id="dashSent">—</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">سرعة وارد (KB/s)</span><span class="text-purple-400" id="dashRecv">—</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">إجمالي صادر (MB)</span><span class="text-violet-300" id="dashSentTotal">—</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">إجمالي وارد (MB)</span><span class="text-violet-300" id="dashRecvTotal">—</span></div>
                         </div>
                     </div>
                     <div class="bg-slate-900/70 rounded-xl p-4 border border-slate-700">
@@ -4563,9 +4608,9 @@ HTML_TEMPLATE = """
                 if (!b) return;
                 if (k === t) {
                     b.classList.remove('border-slate-700', 'text-gray-300', 'bg-slate-800/60');
-                    b.classList.add('border-emerald-700/50', 'bg-emerald-900/40', 'text-emerald-300');
+                    b.classList.add('border-purple-700/50', 'bg-purple-900/40', 'text-purple-300');
                 } else {
-                    b.classList.remove('border-emerald-700/50', 'bg-emerald-900/40', 'text-emerald-300');
+                    b.classList.remove('border-purple-700/50', 'bg-purple-900/40', 'text-purple-300');
                     b.classList.add('border-slate-700', 'text-gray-300', 'bg-slate-800/60');
                 }
             });
@@ -4648,7 +4693,7 @@ HTML_TEMPLATE = """
             }
             if(type === 'dash') {
                 loadDashboard();
-                if (!window.dashInterval) window.dashInterval = setInterval(loadDashboard, 3000);
+                if (!window.dashInterval) window.dashInterval = setInterval(loadDashboard, 1000);
             } else {
                 if (window.dashInterval) { clearInterval(window.dashInterval); window.dashInterval = null; }
             }
@@ -7226,26 +7271,94 @@ HTML_TEMPLATE = """
 
 
         // ===== Phase 6 JS =====
+        function updateDashMetricCard(cardId, valueElId, rawValue, warnThreshold, dangerThreshold) {
+            const card = document.getElementById(cardId);
+            const valueEl = document.getElementById(valueElId);
+            if (!card || !valueEl) return;
+
+            const val = Number(rawValue || 0);
+            const level = val >= dangerThreshold ? 'danger' : (val >= warnThreshold ? 'warn' : 'ok');
+
+            card.classList.remove('border-red-700/70', 'border-yellow-700/70', 'border-green-700/70', 'bg-red-950/25', 'bg-yellow-950/20', 'bg-green-950/20');
+            valueEl.classList.remove('text-red-400', 'text-yellow-400', 'text-green-400');
+
+            if (level === 'danger') {
+                card.classList.add('border-red-700/70', 'bg-red-950/25');
+                valueEl.classList.add('text-red-400');
+            } else if (level === 'warn') {
+                card.classList.add('border-yellow-700/70', 'bg-yellow-950/20');
+                valueEl.classList.add('text-yellow-400');
+            } else {
+                card.classList.add('border-green-700/70', 'bg-green-950/20');
+                valueEl.classList.add('text-green-400');
+            }
+        }
+
+        function pulseDashIndicator(ok = true) {
+            const pulse = document.getElementById('dashPulse');
+            if (!pulse) return;
+            pulse.classList.remove('bg-gray-600', 'bg-red-500', 'bg-emerald-400', 'animate-pulse', 'opacity-60');
+            if (ok) {
+                pulse.classList.add('bg-emerald-400', 'animate-pulse');
+                setTimeout(() => {
+                    pulse.classList.remove('animate-pulse');
+                    pulse.classList.add('opacity-60');
+                }, 450);
+            } else {
+                pulse.classList.add('bg-red-500', 'opacity-60');
+            }
+        }
+
         async function loadDashboard() {
+            if (window.__dashInFlight) return;
+            window.__dashInFlight = true;
             try {
-                const res = await fetch('/api/dashboard/stats');
+                const res = await fetch(`/api/dashboard/stats?_=${Date.now()}`, {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                if (!res.ok) throw new Error('dashboard request failed');
                 const d = await res.json();
-                if(d.error) return;
-                document.getElementById('dashCpu').innerText  = d.cpu_percent + '%';
-                document.getElementById('dashRam').innerText  = d.ram_percent + '%';
-                document.getElementById('dashDisk').innerText = d.disk_percent + '%';
+                if(d.error) throw new Error(d.error);
+                const cpu = Number(d.cpu_percent || 0);
+                const ram = Number(d.ram_percent || 0);
+                const diskIo = Number(d.disk_io_kbps || 0);
+
+                document.getElementById('dashCpu').innerText  = cpu.toFixed(1) + '%';
+                document.getElementById('dashRam').innerText  = ram.toFixed(1) + '%';
+                document.getElementById('dashDisk').innerText = diskIo.toFixed(2);
+
+                updateDashMetricCard('dashCpuCard', 'dashCpu', cpu, 60, 85);
+                updateDashMetricCard('dashRamCard', 'dashRam', ram, 65, 88);
+                updateDashMetricCard('dashDiskCard', 'dashDisk', diskIo, 512, 2048);
                 document.getElementById('dashBurn').innerText = d.burn_notes;
                 document.getElementById('dashLocalIp').innerText = d.local_ip;
                 document.getElementById('dashPubIp').innerText  = d.public_ip;
-                document.getElementById('dashSent').innerText   = d.net_sent_mb;
-                document.getElementById('dashRecv').innerText   = d.net_recv_mb;
+                document.getElementById('dashSent').innerText   = Number(d.net_up_kbps || 0).toFixed(2);
+                document.getElementById('dashRecv').innerText   = Number(d.net_down_kbps || 0).toFixed(2);
+                const sentTotalEl = document.getElementById('dashSentTotal');
+                const recvTotalEl = document.getElementById('dashRecvTotal');
+                if (sentTotalEl) sentTotalEl.innerText = Number(d.net_sent_mb || 0).toFixed(2);
+                if (recvTotalEl) recvTotalEl.innerText = Number(d.net_recv_mb || 0).toFixed(2);
+                const updatedAtEl = document.getElementById('dashUpdatedAt');
+                if (updatedAtEl) updatedAtEl.innerText = d.measured_at || new Date().toLocaleTimeString();
+                pulseDashIndicator(true);
                 const logsEl = document.getElementById('dashLogs');
                 if(d.recent_logs && d.recent_logs.length) {
                     logsEl.innerHTML = d.recent_logs.map(l =>
                         `<div class="text-purple-400">[${l.time.split(' ')[1]}] <span class="text-gray-300">${l.action}</span></div>`
                     ).join('');
                 } else { logsEl.innerHTML = '<div class="text-gray-600">لا يوجد نشاط</div>'; }
-            } catch(e) {}
+            } catch(e) {
+                const updatedAtEl = document.getElementById('dashUpdatedAt');
+                if (updatedAtEl) updatedAtEl.innerText = 'فشل الاتصال';
+                pulseDashIndicator(false);
+                console.error('Dashboard update failed:', e);
+            } finally {
+                window.__dashInFlight = false;
+            }
         }
 
 
@@ -7422,12 +7535,12 @@ HTML_TEMPLATE = """
             var userDiv = document.createElement('div');
             userDiv.className = 'flex justify-end items-end gap-2';
             const attachPreview = hasFiles
-                ? `<div class="mt-2 flex flex-wrap gap-1">${aiPendingFiles.map(f => `<span class="text-[10px] px-2 py-0.5 rounded bg-emerald-900/30 border border-emerald-700/40">📎 ${_osintEscape(f.name)}</span>`).join('')}</div>`
+                ? `<div class="mt-2 flex flex-wrap gap-1">${aiPendingFiles.map(f => `<span class="text-[10px] px-2 py-0.5 rounded bg-purple-900/30 border border-purple-700/40">📎 ${_osintEscape(f.name)}</span>`).join('')}</div>`
                 : '';
-            userDiv.innerHTML = '<div class="bg-emerald-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] text-sm shadow-lg border border-emerald-600/40">' +
-                (msg ? _osintEscape(msg).replace(/\\n/g, '<br>') : '<span class="text-emerald-100/80">(مرفقات بدون نص)</span>') +
+            userDiv.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] text-sm shadow-lg border border-purple-600/40">' +
+                (msg ? _osintEscape(msg).replace(/\\n/g, '<br>') : '<span class="text-purple-100/80">(مرفقات بدون نص)</span>') +
                 attachPreview +
-                '</div><div class="w-7 h-7 rounded-full bg-emerald-800/40 border border-emerald-700/50 flex items-center justify-center text-xs">👤</div>';
+                '</div><div class="w-7 h-7 rounded-full bg-purple-800/40 border border-purple-700/50 flex items-center justify-center text-xs">👤</div>';
             flow.appendChild(userDiv);
             input.value = '';
             btn.disabled = true;
@@ -7437,7 +7550,7 @@ HTML_TEMPLATE = """
             var replyDiv = document.createElement('div');
             replyDiv.className = 'flex justify-start items-end gap-2';
             var botAvatar = document.createElement('div');
-            botAvatar.className = 'w-7 h-7 rounded-full bg-emerald-900/50 border border-emerald-700/40 flex items-center justify-center text-xs';
+            botAvatar.className = 'w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs';
             botAvatar.textContent = '🤖';
             var replyInner = document.createElement('div');
             replyInner.className = 'bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm shadow-lg border border-slate-700/60';
@@ -10120,18 +10233,44 @@ def fake_identity_route():
 # --- Dashboard / System Stats ---
 @app.route('/api/dashboard/stats', methods=['GET'])
 def dashboard_stats():
+    global _dash_prev_net, _dash_prev_ts, _dash_prev_disk_io, _dash_prev_disk_io_ts, _dash_cpu_primed
     try:
-        cpu = psutil.cpu_percent(interval=0.5)
+        if not _dash_cpu_primed:
+            psutil.cpu_percent(interval=None)
+            _dash_cpu_primed = True
+        cpu = psutil.cpu_percent(interval=0.2)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage('/')
         net = psutil.net_io_counters()
-        local_ip = socket.gethostbyname(socket.gethostname())
-        try:
-            pub_ip_data = requests.get('https://api.ipify.org?format=json', timeout=3).json()
-            public_ip = pub_ip_data.get('ip', 'غير متاح')
-        except Exception:
-            public_ip = 'غير متاح'
-        return jsonify({
+        disk_io = psutil.disk_io_counters()
+        local_ip = _dash_local_ip()
+        public_ip = _dash_public_ip_cached()
+
+        now_ts = time.time()
+        up_kbps = 0.0
+        down_kbps = 0.0
+        disk_io_kbps = 0.0
+        with _dash_metrics_lock:
+            if _dash_prev_net is not None and _dash_prev_ts > 0:
+                dt = max(now_ts - _dash_prev_ts, 1e-6)
+                up_kbps = ((net.bytes_sent - _dash_prev_net.bytes_sent) / 1024.0) / dt
+                down_kbps = ((net.bytes_recv - _dash_prev_net.bytes_recv) / 1024.0) / dt
+            _dash_prev_net = net
+            _dash_prev_ts = now_ts
+
+            if disk_io is not None and _dash_prev_disk_io is not None and _dash_prev_disk_io_ts > 0:
+                dt_disk = max(now_ts - _dash_prev_disk_io_ts, 1e-6)
+                total_delta = (disk_io.read_bytes - _dash_prev_disk_io.read_bytes) + (disk_io.write_bytes - _dash_prev_disk_io.write_bytes)
+                disk_io_kbps = (total_delta / 1024.0) / dt_disk
+            if disk_io is not None:
+                _dash_prev_disk_io = disk_io
+                _dash_prev_disk_io_ts = now_ts
+
+        up_kbps = max(up_kbps, 0.0)
+        down_kbps = max(down_kbps, 0.0)
+        disk_io_kbps = max(disk_io_kbps, 0.0)
+
+        response = jsonify({
             'cpu_percent': cpu,
             'ram_used_gb': round(mem.used / 1024**3, 2),
             'ram_total_gb': round(mem.total / 1024**3, 2),
@@ -10139,17 +10278,29 @@ def dashboard_stats():
             'disk_used_gb': round(disk.used / 1024**3, 2),
             'disk_total_gb': round(disk.total / 1024**3, 2),
             'disk_percent': disk.percent,
+            'disk_io_kbps': round(disk_io_kbps, 2),
             'net_sent_mb': round(net.bytes_sent / 1024**2, 2),
             'net_recv_mb': round(net.bytes_recv / 1024**2, 2),
+            'net_up_kbps': round(up_kbps, 2),
+            'net_down_kbps': round(down_kbps, 2),
             'local_ip': local_ip,
             'public_ip': public_ip,
             'vault_items': 0,
             'burn_notes': len(BURN_NOTES),
             'audit_count': len(AUDIT_LOGS),
             'recent_logs': AUDIT_LOGS[:5], # type: ignore
+            'measured_at': datetime.datetime.now().strftime('%H:%M:%S'),
         })
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        err = jsonify({'error': str(e)})
+        err.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        err.headers['Pragma'] = 'no-cache'
+        err.headers['Expires'] = '0'
+        return err, 500
 
 
 
