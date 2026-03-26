@@ -1148,30 +1148,107 @@ def scan_malware_file(file_path: str) -> dict:
 # --- فحص الأجهزة المتصلة بالشبكة المحلية (Network LAN Scanner) ---
 def scan_local_network():
     devices = []
+    seen_keys = set()
+    local_ip = _dash_local_ip()
+
+    def _safe_decode(raw: bytes) -> str:
+        for enc in ('utf-8', 'cp1256', 'cp1252', 'latin1'):
+            try:
+                return raw.decode(enc)
+            except Exception:
+                continue
+        return raw.decode('latin1', errors='ignore')
+
+    def _classify_device(ip: str):
+        icon = "💻"
+        label = "جهاز مستخدم"
+        if ip.endswith('.1'):
+            icon = "🌐"
+            label = "جهاز التوجيه"
+        elif ip.endswith('.10') or ip.endswith('.20'):
+            icon = "📱"
+            label = "هاتف محمول"
+        return icon, label
+
+    def _reverse_dns(ip: str) -> str:
+        try:
+            name = socket.gethostbyaddr(ip)[0]
+            return (name or '').strip()
+        except Exception:
+            return ''
+
+    def _push_device(ip: str, mac: str, type_: str):
+        if not ip:
+            return
+        if ip.startswith('224.') or ip.startswith('239.') or ip == '255.255.255.255':
+            return
+
+        norm_mac = (mac or '').replace('-', ':').upper()
+        key = (ip, norm_mac)
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+
+        icon, label = _classify_device(ip)
+        is_self = ip == local_ip
+        if is_self:
+            icon = "🛡️"
+            label = "هذا جهازك"
+        devices.append({
+            "ip": ip,
+            "mac": norm_mac or "غير متاح",
+            "type": (type_ or 'dynamic').strip(),
+            "icon": icon,
+            "label": label,
+            "hostname": _reverse_dns(ip),
+            "is_self": is_self
+        })
+
     try:
-        # ويندوز (استخراج جدول ARP) لأنه أسرع ولا يتطلب صلاحيات Scapy المعقدة للمستخدم العادي
-        output = subprocess.check_output("arp -a", shell=True).decode('cp1252', errors='ignore')
-        for line in output.splitlines():
-            # البحث عن IPs
-            match = re.search(r'((?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\s+([0-9a-fA-F-]+)\s+(\w+)', line)
-            if match:
-                ip, mac, type_ = match.groups()
-                if not ip.startswith('224.') and not ip.startswith('239.') and ip != '255.255.255.255':
-                    device_icon = "💻"; device_label = "جهاز مستخدم"
-                    if ip.endswith('.1'): 
-                        device_icon = "🌐"; device_label = "جهاز التوجيه"
-                    elif '.10' in ip or '.20' in ip:
-                        device_icon = "📱"; device_label = "هاتف محمول"
-                    devices.append({
-                        "ip": ip, 
-                        "mac": mac.replace('-', ':').upper(), 
-                        "type": type_,
-                        "icon": device_icon,
-                        "label": device_label
-                    })
+        cmd = "arp -a"
+        output = _safe_decode(subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT))
+
+        ip_re = re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
+        mac_re = re.compile(r'\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b')
+
+        for raw_line in output.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            ip_m = ip_re.search(line)
+            mac_m = mac_re.search(line)
+            if ip_m and mac_m:
+                type_guess = 'dynamic' if 'dynamic' in line.lower() else ('static' if 'static' in line.lower() else 'unknown')
+                _push_device(ip_m.group(0), mac_m.group(0), type_guess)
+
+        # Fallback for Linux/macOS-like environments where arp format differs.
+        if not devices:
+            try:
+                neigh_out = _safe_decode(subprocess.check_output("ip neigh", shell=True, stderr=subprocess.STDOUT))
+                for raw_line in neigh_out.splitlines():
+                    line = raw_line.strip()
+                    ip_m = ip_re.search(line)
+                    mac_m = mac_re.search(line)
+                    if ip_m and mac_m:
+                        type_guess = 'reachable' if 'REACHABLE' in line.upper() else 'neighbor'
+                        _push_device(ip_m.group(0), mac_m.group(0), type_guess)
+            except Exception:
+                pass
+
+        devices.sort(key=lambda d: list(map(int, d["ip"].split('.'))))
+        return {
+            "success": True,
+            "devices": devices,
+            "count": len(devices),
+            "local_ip": local_ip
+        }
     except Exception as e:
-        devices = [{"error": f"فشل الفحص: {str(e)}"}]
-    return devices
+        return {
+            "success": False,
+            "error": f"فشل الفحص: {str(e)}",
+            "devices": [],
+            "count": 0
+        }
 
 
 def analyze_hash_indicator(hash_value: str) -> dict:
@@ -1563,7 +1640,7 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TITAN | التشفير والأمن السيبراني</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjE4IiBmaWxsPSIjMGQwZDFhIi8+PHRleHQgeD0iNTAiIHk9IjY4IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSI1NCIgZm9udC13ZWlnaHQ9IjkwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0idXJsKCNnKSI+VEFOPC90ZXh0PjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2MwODRmYyIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzdjM2FlZCIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/tailwind.css?v=1">
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Tajawal', sans-serif; background: #070b19; color: white; margin: 0; overflow-x: hidden; cursor: crosshair; }
@@ -1929,6 +2006,173 @@ HTML_TEMPLATE = """
                 border-color: rgba(253, 230, 138, 0.65);
                 color: #0f172a;
                 box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3), 0 0 18px rgba(234, 179, 8, 0.35);
+            }
+
+            .result-panel {
+                background: linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(2, 6, 23, 0.88));
+                border: 1px solid rgba(148, 163, 184, 0.26);
+                border-radius: 0.95rem;
+                box-shadow: 0 14px 30px rgba(2, 6, 23, 0.45), inset 0 1px 0 rgba(148, 163, 184, 0.06);
+                padding: 0.95rem;
+                animation: resultSlideIn 0.35s ease;
+                position: relative;
+            }
+
+            .result-panel::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                border-radius: inherit;
+                pointer-events: none;
+                border: 1px solid transparent;
+            }
+
+            .result-panel.risk-safe::before {
+                border-color: rgba(34, 197, 94, 0.35);
+                box-shadow: 0 0 18px rgba(34, 197, 94, 0.18);
+            }
+
+            .result-panel.risk-warn::before {
+                border-color: rgba(245, 158, 11, 0.42);
+                box-shadow: 0 0 18px rgba(245, 158, 11, 0.16);
+            }
+
+            .result-panel.risk-danger::before {
+                border-color: rgba(239, 68, 68, 0.45);
+                box-shadow: 0 0 18px rgba(239, 68, 68, 0.2);
+            }
+
+            .result-panel--loading {
+                border-color: rgba(129, 140, 248, 0.45);
+            }
+
+            .result-head {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: space-between;
+                align-items: center;
+                gap: 0.6rem;
+                margin-bottom: 0.75rem;
+            }
+
+            .result-title {
+                font-size: 0.74rem;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: #a5b4fc;
+                font-weight: 800;
+            }
+
+            .result-badge {
+                font-size: 0.68rem;
+                font-weight: 700;
+                border-radius: 999px;
+                border: 1px solid rgba(148, 163, 184, 0.28);
+                background: rgba(15, 23, 42, 0.7);
+                color: #cbd5e1;
+                padding: 0.2rem 0.55rem;
+            }
+
+            .result-kv-grid {
+                display: grid;
+                grid-template-columns: repeat(1, minmax(0, 1fr));
+                gap: 0.6rem;
+            }
+
+            @media (min-width: 768px) {
+                .result-kv-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                .result-kv-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            }
+
+            .result-kv-item {
+                border: 1px solid rgba(71, 85, 105, 0.55);
+                background: rgba(2, 6, 23, 0.58);
+                border-radius: 0.8rem;
+                padding: 0.72rem;
+                transition: border-color 0.2s ease, transform 0.2s ease;
+            }
+
+            .result-kv-item:hover {
+                border-color: rgba(129, 140, 248, 0.55);
+                transform: translateY(-1px);
+            }
+
+            .result-kv-label {
+                font-size: 0.64rem;
+                color: #94a3b8;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                margin-bottom: 0.35rem;
+            }
+
+            .result-kv-value {
+                font-size: 0.9rem;
+                color: #e2e8f0;
+                font-weight: 700;
+                line-height: 1.45;
+                word-break: break-word;
+            }
+
+            .result-tone-danger .result-kv-value { color: #f87171; }
+            .result-tone-safe .result-kv-value { color: #4ade80; }
+            .result-tone-warn .result-kv-value { color: #fbbf24; }
+            .result-tone-info .result-kv-value { color: #93c5fd; }
+
+            .result-list {
+                display: grid;
+                gap: 0.5rem;
+            }
+
+            .result-list-item {
+                border: 1px solid rgba(71, 85, 105, 0.45);
+                background: rgba(15, 23, 42, 0.58);
+                border-radius: 0.7rem;
+                padding: 0.6rem 0.7rem;
+                font-size: 0.78rem;
+            }
+
+            .result-skeleton {
+                position: relative;
+                overflow: hidden;
+                border: 1px solid rgba(71, 85, 105, 0.45);
+                background: rgba(15, 23, 42, 0.6);
+                border-radius: 0.7rem;
+                height: 40px;
+            }
+
+            .result-skeleton::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                transform: translateX(-100%);
+                background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.18), transparent);
+                animation: resultShimmer 1.4s linear infinite;
+            }
+
+            @keyframes resultSlideIn {
+                from { opacity: 0; transform: translateY(6px) scale(0.99); }
+                to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+
+            @keyframes resultShimmer {
+                100% { transform: translateX(100%); }
+            }
+
+            .tab-section-enter {
+                animation: tabSectionIn 0.32s cubic-bezier(0.2, 0.9, 0.2, 1);
+            }
+
+            @keyframes tabSectionIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(8px) scale(0.995);
+                    filter: blur(3px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                    filter: blur(0);
+                }
             }
         </style>
     </div>
@@ -2933,6 +3177,9 @@ HTML_TEMPLATE = """
                     <button id="btnLanScan" onclick="scanLanNetwork()" class="w-full bg-cyan-900/30 hover:bg-cyan-800 px-6 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-400 flex items-center justify-center gap-2 mb-4">
                         <span>مسح الشبكة للبحث عن دخلاء</span>
                         <div id="lanLoader" class="hidden w-4 h-4 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                    </button>
+                    <button id="btnLanExport" onclick="exportLanCsv()" class="w-full bg-slate-900/60 hover:bg-slate-800 px-5 py-2.5 rounded-xl font-bold border border-slate-700 transition-all text-slate-300 flex items-center justify-center gap-2 mb-3 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <span>تصدير النتائج CSV</span>
                     </button>
                     <div id="lanResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 max-h-60 overflow-y-auto custom-scrollbar"></div>
                 </div>
@@ -4669,7 +4916,10 @@ HTML_TEMPLATE = """
             ALL_TABS.forEach(t => {
                 const sec = document.getElementById(t + '-section');
                 const btn = document.getElementById('btn-' + t);
-                if(sec) sec.classList.toggle('hidden', t !== type);
+                if(sec) {
+                    sec.classList.toggle('hidden', t !== type);
+                    if (t === type) _animateTabSection(sec);
+                }
                 if(btn) {
                     if(t === type) {
                         btn.classList.add('tab-active');
@@ -4707,6 +4957,178 @@ HTML_TEMPLATE = """
             if (activeBtn && typeof activeBtn.scrollIntoView === 'function') {
                 activeBtn.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'nearest'});
             }
+        }
+
+        function _resultGetElement(target) {
+            if (!target) return null;
+            return typeof target === 'string' ? document.getElementById(target) : target;
+        }
+
+        function _resultEscape(value) {
+            const div = document.createElement('div');
+            div.textContent = String(value ?? '');
+            return div.innerHTML;
+        }
+
+        function _resultToneByScore(score) {
+            const n = Number(score || 0);
+            if (n >= 70) return 'danger';
+            if (n >= 35) return 'warn';
+            return 'safe';
+        }
+
+        function _resultRiskClass(score) {
+            const tone = _resultToneByScore(score);
+            if (tone === 'danger') return 'risk-danger';
+            if (tone === 'warn') return 'risk-warn';
+            return 'risk-safe';
+        }
+
+        function _resultApplyRiskTheme(el, riskScore) {
+            if (!el || riskScore === undefined || riskScore === null) return;
+            el.classList.remove('risk-safe', 'risk-warn', 'risk-danger');
+            el.classList.add(_resultRiskClass(riskScore));
+        }
+
+        function _animateTabSection(sec) {
+            if (!sec) return;
+            sec.classList.remove('tab-section-enter');
+            void sec.offsetWidth;
+            sec.classList.add('tab-section-enter');
+        }
+
+        function setResultLoading(target, title, hint) {
+            const el = _resultGetElement(target);
+            if (!el) return;
+            el.classList.remove('hidden');
+            el.classList.add('result-panel', 'result-panel--loading');
+            el.classList.remove('risk-safe', 'risk-warn', 'risk-danger');
+            el.innerHTML = `
+                <div class="result-head">
+                    <div class="result-title">${_resultEscape(title || 'جاري التحليل')}</div>
+                    <div class="result-badge">Live</div>
+                </div>
+                <div class="result-list">
+                    <div class="result-skeleton"></div>
+                    <div class="result-skeleton"></div>
+                </div>
+                ${hint ? `<div class="text-[11px] text-indigo-300 mt-2">${_resultEscape(hint)}</div>` : ''}
+            `;
+        }
+
+        function setResultError(target, message) {
+            const el = _resultGetElement(target);
+            if (!el) return;
+            el.classList.remove('hidden');
+            el.classList.add('result-panel');
+            el.classList.remove('result-panel--loading');
+            el.classList.remove('risk-safe', 'risk-warn');
+            el.classList.add('risk-danger');
+            el.innerHTML = `
+                <div class="result-head">
+                    <div class="result-title text-red-300">Error</div>
+                    <div class="result-badge" style="border-color:rgba(239,68,68,0.35);color:#fca5a5;">Failed</div>
+                </div>
+                <div class="result-list-item text-red-300 bg-red-900/20 border-red-800/50">${_resultEscape(message || 'حدث خطأ غير متوقع')}</div>
+            `;
+        }
+
+        function setResultInfo(target, title, entries, options = {}) {
+            const el = _resultGetElement(target);
+            if (!el) return;
+            const cols = options.cols || 2;
+            const badge = options.badge || 'Updated';
+            const rows = Array.isArray(entries) ? entries : [];
+            el.classList.remove('hidden');
+            el.classList.add('result-panel');
+            el.classList.remove('result-panel--loading');
+            el.classList.remove('risk-safe', 'risk-warn', 'risk-danger');
+            _resultApplyRiskTheme(el, options.riskScore);
+            el.innerHTML = `
+                <div class="result-head">
+                    <div class="result-title">${_resultEscape(title || 'النتيجة')}</div>
+                    <div class="result-badge">${_resultEscape(badge)}</div>
+                </div>
+                <div class="result-kv-grid cols-${cols}">
+                    ${rows.map((item) => `
+                        <div class="result-kv-item result-tone-${_resultEscape(item.tone || 'info')}">
+                            <div class="result-kv-label">${_resultEscape(item.label || 'Field')}</div>
+                            <div class="result-kv-value" ${item.dir ? `dir="${_resultEscape(item.dir)}"` : ''}>${_resultEscape(item.value ?? 'N/A')}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function setResultList(target, title, rows, options = {}) {
+            const el = _resultGetElement(target);
+            if (!el) return;
+            const badge = options.badge || 'Records';
+            const emptyText = options.emptyText || 'لا توجد نتائج';
+            const safeRows = Array.isArray(rows) ? rows : [];
+            el.classList.remove('hidden');
+            el.classList.add('result-panel');
+            el.classList.remove('result-panel--loading');
+            el.classList.remove('risk-safe', 'risk-warn', 'risk-danger');
+            _resultApplyRiskTheme(el, options.riskScore);
+            el.innerHTML = `
+                <div class="result-head">
+                    <div class="result-title">${_resultEscape(title || 'النتائج')}</div>
+                    <div class="result-badge">${_resultEscape(badge)}</div>
+                </div>
+                <div class="result-list">
+                    ${safeRows.length ? safeRows.map((row) => `<div class="result-list-item">${row}</div>`).join('') : `<div class="result-list-item text-gray-400">${_resultEscape(emptyText)}</div>`}
+                </div>
+            `;
+        }
+
+        function setResultMarkup(target, title, html, options = {}) {
+            const el = _resultGetElement(target);
+            if (!el) return;
+            const badge = options.badge || 'Updated';
+            el.classList.remove('hidden');
+            el.classList.add('result-panel');
+            el.classList.remove('result-panel--loading');
+            el.classList.remove('risk-safe', 'risk-warn', 'risk-danger');
+            _resultApplyRiskTheme(el, options.riskScore);
+            el.innerHTML = `
+                <div class="result-head">
+                    <div class="result-title">${_resultEscape(title || 'النتيجة')}</div>
+                    <div class="result-badge">${_resultEscape(badge)}</div>
+                </div>
+                ${html || '<div class="result-list-item text-gray-400">لا توجد نتائج.</div>'}
+            `;
+        }
+
+        function enhanceResultPanels() {
+            const selectors = [
+                '[id$="Result"]',
+                '[id$="result"]',
+                '#ipDataBox',
+                '#openPortsContainer',
+                '#osintResult',
+                '#phoneResult',
+                '#urlResult',
+                '#phishResult',
+                '#leakEmailPassResult',
+                '#ipqsLogsResult'
+            ];
+
+            document.querySelectorAll(selectors.join(',')).forEach((el) => {
+                if (!el.classList.contains('result-panel') && (el.textContent || '').trim()) {
+                    el.classList.add('result-panel');
+                }
+            });
+
+            if (window.__titanResultObserver) return;
+            window.__titanResultObserver = new MutationObserver(() => {
+                document.querySelectorAll(selectors.join(',')).forEach((el) => {
+                    if (!el.classList.contains('hidden') && (el.textContent || '').trim()) {
+                        el.classList.add('result-panel');
+                    }
+                });
+            });
+            window.__titanResultObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
         }
 
         const passInput = document.getElementById('passInput');
@@ -4783,7 +5205,7 @@ HTML_TEMPLATE = """
             const dataBox = document.getElementById('ipDataBox');
             
             resultDiv.classList.remove('hidden');
-            dataBox.innerHTML = '<div class="p-4 text-center"><span class="text-purple-400 animate-pulse text-sm font-mono tracking-wider">جاري التقاط الحزم وتحليل مسار الاتصال...</span></div>';
+            setResultLoading(dataBox, 'IP Intelligence', 'جاري التقاط الحزم وتحليل مسار الاتصال...');
             soundManager.terminalType();
 
             // فحص الـ IP من جهة العميل لضمان مرور الطلب عبر أي متصفح VPN نشط
@@ -4802,21 +5224,17 @@ HTML_TEMPLATE = """
             
             if (data.success) {
                 soundManager.success();
-                dataBox.innerHTML = `
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
-                        <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/50 hover:border-purple-500/50 transition-colors">
-                            <div class="text-slate-400 text-[10px] uppercase mb-1 flex items-center gap-2 tracking-wider"><span class="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_5px_#a855f7]"></span>العنوان (IP)</div> 
-                            <div class="font-mono text-xl text-purple-400 font-bold text-shadow-sm">${ip || data.query || 'غير معروف'}</div>
-                        </div>
-                        <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/50 hover:border-purple-500/50 transition-colors">
-                            <div class="text-slate-400 text-[10px] uppercase mb-1 flex items-center gap-2 tracking-wider"><span class="w-1.5 h-1.5 rounded-full bg-yellow-500 shadow-[0_0_5px_#eab308]"></span>مزود الخدمة (ISP) - البلد</div> 
-                            <div class="font-semibold text-gray-200">${data.ISP} <span class="text-gray-500 text-xs">(${data.country_code})</span></div>
-                        </div>
-                    </div>
-                `;
+                const proxyFlag = String(data.proxy || data.vpn || '').toLowerCase();
+                const proxyDetected = proxyFlag === 'true' || proxyFlag === '1' || data.proxy === true || data.vpn === true;
+                setResultInfo(dataBox, 'IP Intelligence', [
+                    { label: 'IP', value: ip || data.query || 'غير معروف', tone: 'info', dir: 'ltr' },
+                    { label: 'ISP', value: data.ISP || 'غير متاح', tone: 'info' },
+                    { label: 'Country', value: data.country_code || 'N/A', tone: 'info' },
+                    { label: 'Privacy Risk', value: proxyDetected ? 'Proxy/VPN محتمل' : 'لا يوجد Proxy واضح', tone: proxyDetected ? 'warn' : 'safe' }
+                ], { badge: proxyDetected ? 'Suspicious' : 'Clean', cols: 2, riskScore: proxyDetected ? 70 : 15 });
             } else {
                 soundManager.error();
-                dataBox.innerHTML = `<div class="text-red-400 font-bold bg-red-900/20 p-4 rounded-lg">خطأ: ${data.message || 'فشل جلب البيانات'}</div>`;
+                setResultError(dataBox, data.message || 'فشل جلب البيانات');
             }
         }
 
@@ -5266,24 +5684,27 @@ HTML_TEMPLATE = """
             const filter = document.getElementById('adminTicketStatusFilter');
             if (!box) return;
             const status = (filter?.value || 'all');
-            box.innerHTML = '<div class="text-xs text-gray-500">Loading admin tickets...</div>';
+            setResultLoading(box, 'Admin Tickets', 'Loading admin tickets...');
 
             try {
                 const q = status && status !== 'all' ? ('?status=' + encodeURIComponent(status)) : '';
                 const res = await fetch('/api/admin/support/tickets' + q);
                 const data = await res.json();
                 if (!data.success) {
-                    box.innerHTML = '<div class="text-xs text-red-400">' + _osintEscape(data.error || 'Failed to load tickets') + '</div>';
+                    setResultError(box, data.error || 'Failed to load tickets');
                     return;
                 }
 
                 const rows = data.tickets || [];
                 if (!rows.length) {
-                    box.innerHTML = '<div class="text-xs text-gray-500">لا توجد تذاكر مطابقة.</div>';
+                    setResultList(box, 'Admin Tickets', [], { badge: '0', emptyText: 'لا توجد تذاكر مطابقة.' });
                     return;
                 }
 
-                box.innerHTML = rows.map(t => {
+                setResultMarkup(
+                    box,
+                    'Admin Tickets',
+                    rows.map(t => {
                     const st = String(t.status || 'open');
                     const statusCls = _adminTicketStatusClass(st);
                     return `
@@ -5306,9 +5727,11 @@ HTML_TEMPLATE = """
                             </div>
                         </div>
                     `;
-                }).join('');
+                }).join(''),
+                    { badge: `${rows.length} Tickets` }
+                );
             } catch (e) {
-                box.innerHTML = '<div class="text-xs text-red-400">Failed to load tickets</div>';
+                setResultError(box, 'Failed to load tickets');
             }
         }
 
@@ -5447,7 +5870,7 @@ HTML_TEMPLATE = """
             label.classList.add('hidden');
             loader.classList.remove('hidden');
             resultBox.classList.remove('hidden');
-            container.innerHTML = '<span class="text-gray-500 font-mono animate-pulse text-xs">جاري التشخيص وفحص المنافذ الحساسة...</span>';
+            setResultLoading(container, 'Port Scan', 'جاري التشخيص وفحص المنافذ الحساسة...');
             document.getElementById('portScanTarget').innerText = ip;
             soundManager.terminalType();
             
@@ -5456,21 +5879,25 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 
                 if (data.error) {
-                    container.innerHTML = `<span class="text-red-400 bg-red-900/20 px-3 py-2 rounded">خطأ: ${data.error}</span>`;
+                    setResultError(container, data.error);
                     soundManager.error();
                 } else if (data.open_ports && data.open_ports.length > 0) {
                     soundManager.alarm();
-                    container.innerHTML = data.open_ports.map(p => `
-                        <div class="px-4 py-2 bg-red-900/40 border border-red-500/50 rounded-xl text-red-400 font-mono shadow-[0_0_10px_rgba(239,68,68,0.2)] flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444] animate-pulse"></span> منفذ ${p} مفتوح
-                        </div>
-                    `).join('');
+                    setResultList(
+                        container,
+                        'Open Ports',
+                        data.open_ports.map((p) => `<span class="text-red-300 font-mono">🚨 منفذ ${_resultEscape(p)} مفتوح</span>`),
+                        { badge: `${data.open_ports.length} Open`, riskScore: 90 }
+                    );
                 } else {
                     soundManager.success();
-                    container.innerHTML = `<div class="bg-green-900/20 text-green-400 font-bold px-4 py-3 rounded-xl border border-green-800/50 w-full text-center flex items-center justify-center gap-2">✅ جميع المنافذ المفحوصة مغلقة (آمن)</div>`;
+                    setResultInfo(container, 'Port Scan', [
+                        { label: 'Status', value: 'جميع المنافذ المفحوصة مغلقة (آمن)', tone: 'safe' },
+                        { label: 'Target', value: ip, tone: 'info', dir: 'ltr' }
+                    ], { badge: 'Secure', cols: 2, riskScore: 8 });
                 }
             } catch (e) {
-                container.innerHTML = `<span class="text-red-400">فشل الاتصال بالخادم.</span>`;
+                setResultError(container, 'فشل الاتصال بالخادم.');
                 soundManager.error();
             }
             
@@ -5488,7 +5915,7 @@ HTML_TEMPLATE = """
             
             const resBox = document.getElementById('osintResult');
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-blue-500 animate-pulse">جاري التحليل واستخراج البيانات العميقة...</span>';
+            setResultLoading(resBox, 'EXIF Intelligence', 'جاري التحليل واستخراج البيانات العميقة...');
             soundManager.terminalType();
             
             try {
@@ -5496,15 +5923,20 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 
                 if(data.error) throw new Error(data.error);
-                
-                let html = '';
-                for(let key in data) {
-                    html += `<span class="text-purple-400">${key}:</span> <span class="text-gray-300">${data[key]}</span>\n`;
+
+                const entries = Object.keys(data || {}).slice(0, 12).map((key) => ({
+                    label: key,
+                    value: data[key],
+                    tone: 'info'
+                }));
+                if (!entries.length) {
+                    setResultList(resBox, 'EXIF Intelligence', [], { badge: 'No Data', emptyText: 'لا توجد بيانات حساسة.' });
+                } else {
+                    setResultInfo(resBox, 'EXIF Intelligence', entries, { badge: `${entries.length} Fields`, cols: 2 });
                 }
-                resBox.innerHTML = html || 'لا توجد بيانات حساسة.';
                 soundManager.success();
             } catch (e) {
-                resBox.innerHTML = `<span class="text-red-400">خطأ: ${e.message}</span>`;
+                setResultError(resBox, e.message);
                 soundManager.error();
             }
         }
@@ -5515,7 +5947,7 @@ HTML_TEMPLATE = """
             if(!email || !email.includes('@')) return titanAlert("الرجاء إدخال بريد إلكتروني صحيح");
             const resBox = document.getElementById('phishResult');
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-orange-400 animate-pulse text-xs font-mono">جاري فحص سمعة البريد الإلكتروني عبر IPQualityScore...</span>';
+            setResultLoading(resBox, 'Email Reputation', 'جاري فحص سمعة البريد الإلكتروني عبر IPQualityScore...');
             soundManager.terminalType();
             
             try {
@@ -5526,41 +5958,26 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 
                 if (data.error) {
-                    resBox.innerHTML = `<span class="text-red-400">خطأ: ${data.error}</span>`;
+                    setResultError(resBox, data.error);
                     return;
                 }
                 
                 if (data.success) {
-                    const riskColor = data.fraud_score > 70 ? 'text-red-500' : (data.fraud_score > 30 ? 'text-orange-400' : 'text-green-500');
-                    resBox.innerHTML = `
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
-                            <span class="font-bold text-gray-300 font-mono tracking-wider">${email}</span>
-                            <span class="font-black ${riskColor} bg-slate-900 px-2 py-1 rounded">Fraud Score: ${data.fraud_score}</span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3 mb-2">
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Valid Email</span>
-                                <span class="font-bold font-mono ${data.valid ? 'text-green-400' : 'text-red-400'}">${data.valid ? 'YES' : 'NO'}</span>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Disposable</span>
-                                <span class="font-bold font-mono ${data.disposable ? 'text-red-400' : 'text-green-400'}">${data.disposable ? 'YES (وهمي)' : 'NO'}</span>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Spam Trap Score</span>
-                                <span class="font-bold text-gray-200">${data.spam_trap_score}</span>
-                            </div>
-                        </div>
-                    `;
+                    const scoreTone = _resultToneByScore(data.fraud_score);
+                    setResultInfo(resBox, 'Email Reputation', [
+                        { label: 'Email', value: email, tone: 'info', dir: 'ltr' },
+                        { label: 'Fraud Score', value: data.fraud_score ?? 0, tone: scoreTone },
+                        { label: 'Valid Email', value: data.valid ? 'YES' : 'NO', tone: data.valid ? 'safe' : 'danger' },
+                        { label: 'Disposable', value: data.disposable ? 'YES (وهمي)' : 'NO', tone: data.disposable ? 'warn' : 'safe' },
+                        { label: 'Spam Trap', value: data.spam_trap_score ?? 'N/A', tone: 'info' }
+                    ], { badge: scoreTone === 'danger' ? 'High Risk' : (scoreTone === 'warn' ? 'Medium Risk' : 'Low Risk'), cols: 2, riskScore: Number(data.fraud_score || 0) });
                     if(data.fraud_score > 70 || data.disposable || !data.valid) soundManager.alarm(); else soundManager.success();
                 } else {
-                    resBox.innerHTML = `<span class="text-red-400">خطأ من الخدمة: ${data.message}</span>`;
+                    setResultError(resBox, `خطأ من الخدمة: ${data.message}`);
                     soundManager.error();
                 }
             } catch (e) {
-                resBox.innerHTML = `<span class="text-red-400">فشل الاتصال بخادم الفحص.</span>`;
+                setResultError(resBox, 'فشل الاتصال بخادم الفحص.');
                 soundManager.error();
             }
         }
@@ -5572,7 +5989,7 @@ HTML_TEMPLATE = """
             
             const resBox = document.getElementById('leakEmailPassResult');
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-orange-400 animate-pulse text-xs font-mono">جاري فحص التسريبات عبر IPQualityScore...</span>';
+            setResultLoading(resBox, 'Credential Leak Check', 'جاري فحص التسريبات عبر IPQualityScore...');
             soundManager.terminalType();
             
             try {
@@ -5583,30 +6000,23 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 
                 if (data.error) {
-                    resBox.innerHTML = `<span class="text-red-400">خطأ: ${data.error}</span>`;
+                    setResultError(resBox, data.error);
                     return;
                 }
                 
                 if (data.success) {
                     const isLeaked = data.leaked === true || data.leaked === "true";
-                    resBox.innerHTML = `
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
-                            <span class="font-bold text-gray-300 font-mono tracking-wider">${email}</span>
-                        </div>
-                        <div class="bg-slate-950 p-4 rounded-lg border ${isLeaked ? 'border-red-500/50' : 'border-green-500/50'} text-center">
-                            <span class="text-xs text-gray-400 block mb-2 font-bold uppercase tracking-widest">حالة التسريب لهذه البيانات معاً</span>
-                            <div class="text-lg font-bold font-mono ${isLeaked ? 'text-red-500' : 'text-green-400'}">
-                                ${isLeaked ? '🚨 تم تسريب هذه البيانات معاً مسبقاً! (خطر)' : '✅ لم يثبت تسريب الإيميل مع كلمة السر (آمن نسبياً)'}
-                            </div>
-                        </div>
-                    `;
+                    setResultInfo(resBox, 'Credential Leak Check', [
+                        { label: 'Email', value: email, tone: 'info', dir: 'ltr' },
+                        { label: 'Status', value: isLeaked ? 'تم تسريب هذه البيانات معاً مسبقاً' : 'لم يثبت تسريب الإيميل مع كلمة السر', tone: isLeaked ? 'danger' : 'safe' }
+                    ], { badge: isLeaked ? 'Breached' : 'Clean', cols: 2, riskScore: isLeaked ? 95 : 10 });
                     if(isLeaked) soundManager.alarm(); else soundManager.success();
                 } else {
-                    resBox.innerHTML = `<span class="text-red-400">خطأ من الخدمة: ${data.message}</span>`;
+                    setResultError(resBox, `خطأ من الخدمة: ${data.message}`);
                     soundManager.error();
                 }
             } catch (e) {
-                resBox.innerHTML = `<span class="text-red-400">فشل الاتصال بخادم الفحص.</span>`;
+                setResultError(resBox, 'فشل الاتصال بخادم الفحص.');
                 soundManager.error();
             }
         }
@@ -5617,7 +6027,7 @@ HTML_TEMPLATE = """
             const resBox = document.getElementById('ipqsLogsResult');
             
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-teal-400 animate-pulse">جاري جلب السجلات من الخادم...</span>';
+            setResultLoading(resBox, 'IPQS Logs', 'جاري جلب السجلات من الخادم...');
             soundManager.terminalType();
             
             try {
@@ -5628,47 +6038,36 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 
                 if (data.success === false) {
-                    resBox.innerHTML = `<span class="text-red-400">خطأ: ${data.message || 'فشل جلب السجلات'}</span>`;
+                    setResultError(resBox, data.message || 'فشل جلب السجلات');
                     soundManager.error();
                     return;
                 }
                 
                 const requests = data.requests || [];
                 if (requests.length === 0) {
-                    resBox.innerHTML = '<span class="text-gray-400 italic">لا توجد سجلات مطابقة في هذه الفترة.</span>';
+                    setResultList(resBox, 'IPQS Logs', [], { badge: '0', emptyText: 'لا توجد سجلات مطابقة في هذه الفترة.' });
                     soundManager.success();
                     return;
                 }
                 
-                let html = '<div class="space-y-2">';
-                requests.forEach(req => {
-                    const statusStr = req.status ? '<span class="text-green-400">Success</span>' : '<span class="text-red-400">Failed</span>';
-                    const fraudStr = req.fraud_score !== undefined ? `Fraud: <span class="text-yellow-400">${req.fraud_score}</span>` : '';
+                const rows = requests.map((req) => {
+                    const ok = !!req.status;
                     const dateStr = new Date(req.request_date).toLocaleString('ar-EG');
-                    
-                    // target represents what was scanned (ip, email, query, etc)
-                    const targetStr = req.query || req.email || req.ip || req.phone || 'Unknown Target';
-                    
-                    html += `
-                        <div class="bg-slate-900 p-2 rounded border border-slate-700/50 hover:border-teal-500/30 transition-colors flex flex-col gap-1">
-                            <div class="flex justify-between items-start">
-                                <span class="text-teal-300 font-bold">${targetStr}</span>
-                                <span class="text-[10px] text-gray-500">${dateStr}</span>
-                            </div>
-                            <div class="flex justify-between items-center text-xs text-gray-400 mt-1">
-                                <span>Status: ${statusStr}</span>
-                                <span>${fraudStr}</span>
-                            </div>
+                    const targetStr = _resultEscape(req.query || req.email || req.ip || req.phone || 'Unknown Target');
+                    const fraud = req.fraud_score !== undefined ? _resultEscape(req.fraud_score) : 'N/A';
+                    return `
+                        <div class="flex flex-wrap justify-between items-start gap-2">
+                            <span class="text-teal-200 font-bold font-mono" dir="ltr">${targetStr}</span>
+                            <span class="text-[10px] text-slate-400">${_resultEscape(dateStr)}</span>
                         </div>
+                        <div class="text-[11px] text-slate-300 mt-1">Status: <span class="${ok ? 'text-green-400' : 'text-red-400'}">${ok ? 'Success' : 'Failed'}</span> | Fraud: <span class="text-amber-300">${fraud}</span></div>
                     `;
                 });
-                html += '</div>';
-                
-                resBox.innerHTML = html;
+                setResultList(resBox, 'IPQS Logs', rows, { badge: `${requests.length} Records` });
                 soundManager.success();
                 
             } catch (e) {
-                resBox.innerHTML = `<span class="text-red-400">فشل الاتصال بخادم السجلات.</span>`;
+                setResultError(resBox, 'فشل الاتصال بخادم السجلات.');
                 soundManager.error();
             }
         }
@@ -5678,7 +6077,7 @@ HTML_TEMPLATE = """
             if(!phone) return titanAlert("الرجاء إدخال رقم الهاتف");
             const resBox = document.getElementById('phoneResult');
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-yellow-400 animate-pulse text-xs font-mono">جاري فحص الرقم عبر IPQualityScore...</span>';
+            setResultLoading(resBox, 'Phone Intelligence', 'جاري فحص الرقم عبر IPQualityScore...');
             soundManager.terminalType();
             
             try {
@@ -5689,49 +6088,28 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 
                 if (data.error) {
-                    resBox.innerHTML = `<span class="text-red-400">خطأ: ${data.error}</span>`;
+                    setResultError(resBox, data.error);
                     return;
                 }
                 
                 if (data.success) {
-                    const riskColor = data.fraud_score > 70 ? 'text-red-500' : (data.fraud_score > 30 ? 'text-orange-400' : 'text-green-500');
-                    resBox.innerHTML = `
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
-                            <span class="font-bold text-gray-300 font-mono tracking-wider" dir="ltr">${data.formatted || phone}</span>
-                            <span class="font-black ${riskColor} bg-slate-900 px-2 py-1 rounded">Fraud Score: ${data.fraud_score}</span>
-                        </div>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Valid</span>
-                                <span class="font-bold font-mono ${data.valid ? 'text-green-400' : 'text-red-400'}">${data.valid ? 'YES' : 'NO'}</span>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Active</span>
-                                <span class="font-bold font-mono ${data.active ? 'text-green-400' : 'text-orange-400'}">${data.active ? 'YES' : 'Unknown'}</span>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Line Type</span>
-                                <span class="font-bold font-mono text-gray-200">${data.line_type || 'N/A'}</span>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Recent Abuse</span>
-                                <span class="font-bold font-mono ${data.recent_abuse ? 'text-red-400' : 'text-green-400'}">${data.recent_abuse ? 'YES' : 'NO'}</span>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 gap-3">
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Carrier</span>
-                                <span class="font-bold text-gray-200">${data.carrier || 'N/A'}</span>
-                            </div>
-                        </div>
-                    `;
+                    const scoreTone = _resultToneByScore(data.fraud_score);
+                    setResultInfo(resBox, 'Phone Intelligence', [
+                        { label: 'Phone', value: data.formatted || phone, tone: 'info', dir: 'ltr' },
+                        { label: 'Fraud Score', value: data.fraud_score ?? 0, tone: scoreTone },
+                        { label: 'Valid', value: data.valid ? 'YES' : 'NO', tone: data.valid ? 'safe' : 'danger' },
+                        { label: 'Active', value: data.active ? 'YES' : 'Unknown', tone: data.active ? 'safe' : 'warn' },
+                        { label: 'Line Type', value: data.line_type || 'N/A', tone: 'info' },
+                        { label: 'Recent Abuse', value: data.recent_abuse ? 'YES' : 'NO', tone: data.recent_abuse ? 'danger' : 'safe' },
+                        { label: 'Carrier', value: data.carrier || 'N/A', tone: 'info' }
+                    ], { badge: scoreTone === 'danger' ? 'High Risk' : (scoreTone === 'warn' ? 'Medium Risk' : 'Low Risk'), cols: 2, riskScore: Number(data.fraud_score || 0) });
                     if(data.fraud_score > 70 || data.recent_abuse || !data.valid) soundManager.alarm(); else soundManager.success();
                 } else {
-                    resBox.innerHTML = `<span class="text-red-400">خطأ من الخدمة: ${data.message} <br> <span class="text-xs text-gray-500 mt-2 block">(ملاحظة النظام: إذا كان الخطأ يتكرر لجميع الأرقام، فهذا يعني أن رصيد حسابك المجاني في IPQualityScore قد انتهى لليوم)</span></span>`;
+                    setResultError(resBox, `${data.message} (ملاحظة: إذا تكرر الخطأ فغالبًا الرصيد المجاني في IPQualityScore انتهى لليوم)`);
                     soundManager.error();
                 }
             } catch (e) {
-                resBox.innerHTML = `<span class="text-red-400">فشل الاتصال بخادم الفحص.</span>`;
+                setResultError(resBox, 'فشل الاتصال بخادم الفحص.');
                 soundManager.error();
             }
         }
@@ -5741,7 +6119,7 @@ HTML_TEMPLATE = """
             if(!url || (!url.startsWith('http://') && !url.startsWith('https://'))) return titanAlert("الرجاء إدخال رابط صحيح يبدأ بـ http:// أو https://");
             const resBox = document.getElementById('urlResult');
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-blue-400 animate-pulse text-xs font-mono">جاري فحص الرابط عبر IPQualityScore...</span>';
+            setResultLoading(resBox, 'URL Intelligence', 'جاري فحص الرابط عبر IPQualityScore...');
              soundManager.terminalType();
             
             try {
@@ -5752,53 +6130,29 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 
                 if (data.error) {
-                    resBox.innerHTML = `<span class="text-red-400">خطأ: ${data.error}</span>`;
+                    setResultError(resBox, data.error);
                     return;
                 }
                 
                 if (data.success) {
-                    const riskColor = data.risk_score > 70 ? 'text-red-500' : (data.risk_score > 30 ? 'text-orange-400' : 'text-green-500');
-                    resBox.innerHTML = `
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2 flex-wrap gap-2">
-                            <span class="font-bold text-gray-300 font-mono tracking-wider break-all text-xs" dir="ltr">${url}</span>
-                            <span class="font-black ${riskColor} bg-slate-900 px-2 py-1 rounded">Risk Score: ${data.risk_score || 0}</span>
-                        </div>
-                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-2">
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Phishing</span>
-                                <span class="font-bold font-mono ${data.phishing ? 'text-red-400' : 'text-green-400'}">${data.phishing ? 'YES (تصيد)' : 'NO'}</span>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Malware</span>
-                                <span class="font-bold font-mono ${data.malware ? 'text-red-400' : 'text-green-400'}">${data.malware ? 'YES (خبيث)' : 'NO'}</span>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Suspicious</span>
-                                <span class="font-bold font-mono ${data.suspicious ? 'text-orange-400' : 'text-green-400'}">${data.suspicious ? 'YES (مشبوه)' : 'NO'}</span>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Parking</span>
-                                <span class="font-bold font-mono text-gray-200">${data.parking ? 'YES' : 'NO'}</span>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Domain Name</span>
-                                <span class="font-bold text-gray-200 text-xs">${data.domain || 'N/A'}</span>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50">
-                                <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Category / Server</span>
-                                <span class="font-bold text-gray-200 text-xs">${data.category || 'N/A'} / ${data.server || 'N/A'}</span>
-                            </div>
-                        </div>
-                    `;
+                    const scoreTone = _resultToneByScore(data.risk_score);
+                    setResultInfo(resBox, 'URL Intelligence', [
+                        { label: 'URL', value: url, tone: 'info', dir: 'ltr' },
+                        { label: 'Risk Score', value: data.risk_score || 0, tone: scoreTone },
+                        { label: 'Phishing', value: data.phishing ? 'YES (تصيد)' : 'NO', tone: data.phishing ? 'danger' : 'safe' },
+                        { label: 'Malware', value: data.malware ? 'YES (خبيث)' : 'NO', tone: data.malware ? 'danger' : 'safe' },
+                        { label: 'Suspicious', value: data.suspicious ? 'YES (مشبوه)' : 'NO', tone: data.suspicious ? 'warn' : 'safe' },
+                        { label: 'Parking', value: data.parking ? 'YES' : 'NO', tone: 'info' },
+                        { label: 'Domain', value: data.domain || 'N/A', tone: 'info', dir: 'ltr' },
+                        { label: 'Category / Server', value: `${data.category || 'N/A'} / ${data.server || 'N/A'}`, tone: 'info' }
+                    ], { badge: scoreTone === 'danger' ? 'High Risk' : (scoreTone === 'warn' ? 'Medium Risk' : 'Low Risk'), cols: 2, riskScore: Number(data.risk_score || 0) });
                     if(data.risk_score > 70 || data.phishing || data.malware || data.suspicious) soundManager.alarm(); else soundManager.success();
                 } else {
-                    resBox.innerHTML = `<span class="text-red-400">خطأ من الخدمة: ${data.message}</span>`;
+                    setResultError(resBox, `خطأ من الخدمة: ${data.message}`);
                      soundManager.error();
                 }
             } catch (e) {
-                resBox.innerHTML = `<span class="text-red-400">فشل الاتصال بخادم الفحص.</span>`;
+                setResultError(resBox, 'فشل الاتصال بخادم الفحص.');
                  soundManager.error();
             }
         }
@@ -5905,11 +6259,11 @@ HTML_TEMPLATE = """
         function _osintDetectTargetType(target) {
             const t = (target || '').trim();
             if (!t) return 'unknown';
-            const ipRegex = /^(?:\\d{1,3}\\.){3}\\d{1,3}$/;
-            const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-            const phoneRegex = /^\\+?[0-9\\-\\s]{7,20}$/;
-            const urlRegex = /^(https?:\\/\\/)/i;
-            const domainRegex = /^(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$/;
+            const ipRegex = /^(?:[0-9]{1,3}[.]){3}[0-9]{1,3}$/;
+            const emailRegex = /^[^@ ]+@[^@ ]+[.][^@ ]+$/;
+            const phoneRegex = /^[+]?[0-9 -]{7,20}$/;
+            const urlRegex = /^(https?:[/][/])/i;
+            const domainRegex = /^(?:[a-zA-Z0-9-]+[.])+[a-zA-Z]{2,}$/;
 
             if (ipRegex.test(t)) return 'ip';
             if (emailRegex.test(t)) return 'email';
@@ -5936,8 +6290,7 @@ HTML_TEMPLATE = """
             if (!target) return titanAlert('ادخل هدف أولاً.');
             if (!out) return;
 
-            out.classList.remove('hidden');
-            out.innerHTML = '<div class="text-indigo-300 animate-pulse text-sm">Running unified OSINT lookup...</div>';
+            setResultLoading(out, 'Unified OSINT', 'Running unified OSINT lookup...');
             const targetType = _osintDetectTargetType(target);
             let data = null;
             let risk = 0;
@@ -5966,15 +6319,15 @@ HTML_TEMPLATE = """
                     risk = Number(data.risk_score || 0);
                     label = risk >= 70 ? 'High Threat URL' : (risk >= 35 ? 'Potentially Suspicious' : 'Likely Safe URL');
                 } else {
-                    out.innerHTML = '<div class="text-amber-300 text-sm">نوع الهدف غير مدعوم. استخدم: IP, URL, Domain, Email, Phone</div>';
+                    setResultError(out, 'نوع الهدف غير مدعوم. استخدم: IP, URL, Domain, Email, Phone');
                     return;
                 }
 
                 _osintRenderRisk(risk, label);
-                out.innerHTML = _osintRenderUnifiedResult(target, targetType, data);
+                setResultMarkup(out, 'Unified OSINT', _osintRenderUnifiedResult(target, targetType, data), { badge: targetType.toUpperCase() });
                 soundManager.success();
             } catch (e) {
-                out.innerHTML = `<div class="text-red-400 text-sm">Lookup failed: ${_osintEscape(e.message || e)}</div>`;
+                setResultError(out, `Lookup failed: ${e.message || e}`);
                 soundManager.error();
             }
         }
@@ -5985,8 +6338,7 @@ HTML_TEMPLATE = """
             if (!username) return titanAlert('ادخل اسم مستخدم أولاً.');
             if (!out) return;
 
-            out.classList.remove('hidden');
-            out.innerHTML = '<div class="text-cyan-300 animate-pulse text-sm">Hunting username across platforms...</div>';
+            setResultLoading(out, 'Username Hunt', 'Hunting username across platforms...');
             try {
                 const res = await fetch('/api/osint/username', {
                     method: 'POST',
@@ -5994,14 +6346,14 @@ HTML_TEMPLATE = """
                     body: JSON.stringify({username})
                 });
                 const data = await res.json();
-                out.innerHTML = _osintRenderUsernameResult(data);
+                setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge: data.success ? 'Completed' : 'Failed' });
                 if (data.found_count > 0) {
                     _osintRenderRisk(60, 'Public Username Footprint Detected');
                 } else {
                     _osintRenderRisk(15, 'No Immediate Public Presence');
                 }
             } catch (e) {
-                out.innerHTML = `<div class="text-red-400 text-sm">Username scan failed: ${_osintEscape(e.message || e)}</div>`;
+                setResultError(out, `Username scan failed: ${e.message || e}`);
             }
         }
 
@@ -6011,8 +6363,7 @@ HTML_TEMPLATE = """
             if (!hashValue) return titanAlert('الصق قيمة Hash أولاً.');
             if (!out) return;
 
-            out.classList.remove('hidden');
-            out.innerHTML = '<div class="text-amber-300 animate-pulse text-sm">Analyzing hash indicator...</div>';
+            setResultLoading(out, 'Hash Indicator', 'Analyzing hash indicator...');
             try {
                 const res = await fetch('/api/osint/hash', {
                     method: 'POST',
@@ -6020,25 +6371,24 @@ HTML_TEMPLATE = """
                     body: JSON.stringify({hash: hashValue})
                 });
                 const data = await res.json();
-                out.innerHTML = _osintRenderHashResult(data);
+                setResultMarkup(out, 'Hash Indicator', _osintRenderHashResult(data), { badge: data.success ? 'Analyzed' : 'Failed' });
                 _osintRenderRisk(Number(data.risk_score || 0), data.reputation || 'Unknown');
             } catch (e) {
-                out.innerHTML = `<div class="text-red-400 text-sm">Hash analyze failed: ${_osintEscape(e.message || e)}</div>`;
+                setResultError(out, `Hash analyze failed: ${e.message || e}`);
             }
         }
 
         async function osintQuickDnsLeak() {
             const out = document.getElementById('osintThreatResult');
             if (!out) return;
-            out.classList.remove('hidden');
-            out.innerHTML = '<div class="text-rose-300 animate-pulse text-sm">Checking DNS leak...</div>';
+            setResultLoading(out, 'Threat Intel', 'Checking DNS leak...');
             try {
                 const res = await fetch('/api/intel/dns-leak');
                 const data = await res.json();
-                out.innerHTML = _osintRenderThreatResult('DNS Leak Result', data);
+                setResultMarkup(out, 'Threat Intel', _osintRenderThreatResult('DNS Leak Result', data), { badge: 'DNS' });
                 _osintRenderRisk(data.leaked ? 80 : 10, data.leaked ? 'DNS Leak Detected' : 'No DNS Leak');
             } catch (e) {
-                out.innerHTML = `<div class="text-red-400 text-sm">DNS check failed: ${_osintEscape(e.message || e)}</div>`;
+                setResultError(out, `DNS check failed: ${e.message || e}`);
             }
         }
 
@@ -6047,16 +6397,15 @@ HTML_TEMPLATE = """
             const out = document.getElementById('osintThreatResult');
             if (!ip) return titanAlert('ادخل IP لفحص Shodan.');
             if (!out) return;
-            out.classList.remove('hidden');
-            out.innerHTML = '<div class="text-rose-300 animate-pulse text-sm">Running shodan intel...</div>';
+            setResultLoading(out, 'Threat Intel', 'Running shodan intel...');
             try {
                 const res = await fetch('/api/intel/shodan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ip}) });
                 const data = await res.json();
-                out.innerHTML = _osintRenderThreatResult('Shodan Intel', data);
+                setResultMarkup(out, 'Threat Intel', _osintRenderThreatResult('Shodan Intel', data), { badge: 'Shodan' });
                 const risk = (data.vulnerabilities && data.vulnerabilities.length) ? 75 : 35;
                 _osintRenderRisk(risk, (data.vulnerabilities && data.vulnerabilities.length) ? 'Exposed Services / CVEs' : 'Open Ports Observed');
             } catch (e) {
-                out.innerHTML = `<div class="text-red-400 text-sm">Shodan check failed: ${_osintEscape(e.message || e)}</div>`;
+                setResultError(out, `Shodan check failed: ${e.message || e}`);
             }
         }
 
@@ -6065,16 +6414,15 @@ HTML_TEMPLATE = """
             const out = document.getElementById('osintThreatResult');
             if (!url) return titanAlert('ادخل URL للفحص.');
             if (!out) return;
-            out.classList.remove('hidden');
-            out.innerHTML = '<div class="text-rose-300 animate-pulse text-sm">Scanning malware URL...</div>';
+            setResultLoading(out, 'Threat Intel', 'Scanning malware URL...');
             try {
                 const res = await fetch('/api/scan/malware_url', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({url}) });
                 const data = await res.json();
-                out.innerHTML = _osintRenderThreatResult('Malware URL Scan', data);
+                setResultMarkup(out, 'Threat Intel', _osintRenderThreatResult('Malware URL Scan', data), { badge: 'Malware URL' });
                 const rs = Number((data.result && data.result.risk_score) || data.risk_score || 0);
                 _osintRenderRisk(rs, rs >= 70 ? 'Malware/Phishing Risk' : 'No High Malware Signal');
             } catch (e) {
-                out.innerHTML = `<div class="text-red-400 text-sm">Malware URL scan failed: ${_osintEscape(e.message || e)}</div>`;
+                setResultError(out, `Malware URL scan failed: ${e.message || e}`);
             }
         }
 
@@ -6083,10 +6431,15 @@ HTML_TEMPLATE = """
             if (!box) return;
             const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
             if (!list.length) {
-                box.innerHTML = '<div class="text-gray-500 text-[11px]">لا يوجد عناصر محفوظة بعد.</div>';
+                setResultList(box, 'OSINT Watchlist', [], { badge: '0', emptyText: 'لا يوجد عناصر محفوظة بعد.' });
                 return;
             }
-            box.innerHTML = list.map((x, i) => `<div class="mb-1 p-2 rounded bg-slate-900 border border-slate-700 flex items-center justify-between gap-2"><span class="font-mono text-[11px]" dir="ltr">${x}</span><button onclick="removeOsintWatchItem(${i})" class="text-red-400 text-[10px]">حذف</button></div>`).join('');
+            setResultList(
+                box,
+                'OSINT Watchlist',
+                list.map((x, i) => `<div class="flex items-center justify-between gap-2"><span class="font-mono text-[11px] text-indigo-200" dir="ltr">${_resultEscape(x)}</span><button onclick="removeOsintWatchItem(${i})" class="text-red-400 text-[10px]">حذف</button></div>`),
+                { badge: `${list.length} Targets` }
+            );
         }
 
         function saveCurrentOsintTarget() {
@@ -6148,13 +6501,16 @@ HTML_TEMPLATE = """
         async function irLoadCases() {
             const box = document.getElementById('irCasesList');
             if (!box) return;
-            box.innerHTML = '<div class="text-xs text-gray-500">Loading...</div>';
+            setResultLoading(box, 'Incident Cases', 'Loading cases...');
             const res = await fetch('/api/incidents/list');
             const data = await res.json();
-            if (!data.success) { box.innerHTML = '<div class="text-xs text-red-400">Load failed</div>'; return; }
+            if (!data.success) { setResultError(box, 'Load failed'); return; }
             const rows = data.cases || [];
-            if (!rows.length) { box.innerHTML = '<div class="text-xs text-gray-500">لا توجد قضايا حتى الآن.</div>'; return; }
-            box.innerHTML = rows.map(c => `
+            if (!rows.length) { setResultList(box, 'Incident Cases', [], { badge: '0', emptyText: 'لا توجد قضايا حتى الآن.' }); return; }
+            setResultMarkup(
+                box,
+                'Incident Cases',
+                rows.map(c => `
                 <div class="p-2 rounded-lg border ${currentIncidentCaseId===c.id ? 'border-red-500 bg-red-900/20' : 'border-slate-700 bg-black/30'}">
                     <div class="flex items-center justify-between gap-2">
                         <button onclick="irSelectCase(${c.id})" class="text-left flex-1">
@@ -6163,7 +6519,9 @@ HTML_TEMPLATE = """
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `).join(''),
+                { badge: `${rows.length} Cases` }
+            );
         }
 
         async function irSelectCase(caseId) {
@@ -6193,13 +6551,21 @@ HTML_TEMPLATE = """
         async function irLoadIocs() {
             const box = document.getElementById('irIocTimeline');
             if (!box || !currentIncidentCaseId) return;
-            box.innerHTML = 'Loading timeline...';
+            setResultLoading(box, 'IOC Timeline', 'Loading timeline...');
             const res = await fetch(`/api/incidents/${currentIncidentCaseId}/ioc`);
             const data = await res.json();
-            if (!data.success) { box.innerHTML = '<span class="text-red-400">Failed</span>'; return; }
+            if (!data.success) { setResultError(box, 'Failed'); return; }
             const rows = data.iocs || [];
-            if (!rows.length) { box.innerHTML = '<span class="text-gray-500">لا توجد IOCs بعد.</span>'; return; }
-            box.innerHTML = rows.map(r => `<div class="mb-1 p-2 rounded border border-slate-700 bg-slate-900/40"><span class="text-red-300 font-bold">${_osintEscape(r.ioc_type)}</span> <span class="font-mono" dir="ltr">${_osintEscape(r.ioc_value)}</span> <span class="text-[10px] text-gray-500">risk=${_osintEscape(r.risk_score)} | ${_osintEscape(r.created_at)}</span></div>`).join('');
+            if (!rows.length) {
+                setResultList(box, 'IOC Timeline', [], { badge: '0', emptyText: 'لا توجد IOCs بعد.' });
+                return;
+            }
+            setResultList(
+                box,
+                'IOC Timeline',
+                rows.map(r => `<span class="text-red-300 font-bold">${_osintEscape(r.ioc_type)}</span> <span class="font-mono" dir="ltr">${_osintEscape(r.ioc_value)}</span> <span class="text-[10px] text-gray-500">risk=${_osintEscape(r.risk_score)} | ${_osintEscape(r.created_at)}</span>`),
+                { badge: `${rows.length} IOCs` }
+            );
         }
 
         async function irUpdateStatus(status) {
@@ -6283,12 +6649,13 @@ HTML_TEMPLATE = """
             const ioc_type = document.getElementById('huntQueryType')?.value || 'all';
             const out = document.getElementById('huntQueryResult');
             if (!out) return;
-            out.innerHTML = 'Running hunt...';
+            setResultLoading(out, 'Threat Hunting', 'Running hunt...');
             const res = await fetch('/api/hunt/query', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({query: q, ioc_type}) });
             const data = await res.json();
-            if (!data.success) { out.innerHTML = `<span class="text-red-400">${_osintEscape(data.error || 'Failed')}</span>`; return; }
+            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
             const rows = data.rows || [];
-            out.innerHTML = rows.length ? rows.map(r => `<div class="mb-1 p-1 rounded bg-slate-900/40 border border-slate-700"><span class="text-orange-300">${_osintEscape(r.ioc_type)}</span> <span class="font-mono" dir="ltr">${_osintEscape(r.ioc_value)}</span> <span class="text-[10px] text-gray-500">case#${_osintEscape(r.case_id)} risk=${_osintEscape(r.risk_score)}</span></div>`).join('') : '<span class="text-gray-500">No hits.</span>';
+            const viewRows = rows.map(r => `<span class="text-orange-300">${_osintEscape(r.ioc_type)}</span> <span class="font-mono" dir="ltr">${_osintEscape(r.ioc_value)}</span> <span class="text-[10px] text-gray-500">case#${_osintEscape(r.case_id)} risk=${_osintEscape(r.risk_score)}</span>`);
+            setResultList(out, 'Threat Hunting', viewRows, { badge: `${rows.length} Hits`, emptyText: 'No hits.' });
         }
 
         async function huntEvaluateRule() {
@@ -6297,54 +6664,75 @@ HTML_TEMPLATE = """
             if (!out) return;
             const res = await fetch('/api/hunt/rule-evaluate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({threshold}) });
             const data = await res.json();
-            if (!data.success) { out.innerHTML = `<span class="text-red-400">${_osintEscape(data.error || 'Failed')}</span>`; return; }
-            out.innerHTML = `<div class="text-xs">Average Risk: <b>${_osintEscape(data.avg_risk)}</b> | Threshold: <b>${_osintEscape(threshold)}</b></div><div class="mt-1 ${data.alert_created ? 'text-red-400' : 'text-green-400'}">${data.alert_created ? 'Alert created' : 'No alert'}</div>`;
+            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
+            setResultInfo(out, 'Rule Evaluation', [
+                { label: 'Average Risk', value: data.avg_risk ?? 'N/A', tone: _resultToneByScore(data.avg_risk) },
+                { label: 'Threshold', value: threshold, tone: 'info' },
+                { label: 'Alert', value: data.alert_created ? 'Created' : 'No Alert', tone: data.alert_created ? 'danger' : 'safe' }
+            ], { badge: data.alert_created ? 'Alert' : 'Normal', cols: 3 });
         }
 
         async function forensicsTriage() {
             const file = document.getElementById('forensicsFile')?.files?.[0];
             const out = document.getElementById('forensicsResult');
             if (!file || !out) return titanAlert('اختر ملفاً أولاً.');
-            out.innerText = 'Analyzing evidence...';
+            setResultLoading(out, 'Forensics Triage', 'Analyzing evidence...');
             const form = new FormData();
             form.append('file', file);
             const res = await fetch('/api/forensics/triage', { method:'POST', body: form });
             const data = await res.json();
-            out.innerText = JSON.stringify(data, null, 2);
+            setResultMarkup(out, 'Forensics Triage', `<div class="bg-slate-900/70 border border-slate-700 rounded-lg p-2 text-xs font-mono whitespace-pre-wrap" dir="ltr">${_resultEscape(JSON.stringify(data, null, 2))}</div>`, { badge: 'JSON' });
         }
 
         async function brandCheckTypos() {
             const domain = (document.getElementById('brandDomainInput')?.value || '').trim();
             const out = document.getElementById('brandTyposResult');
             if (!domain || !out) return titanAlert('اكتب دومين أولاً.');
-            out.innerHTML = 'Checking similar domains...';
+            setResultLoading(out, 'Brand Protection', 'Checking similar domains...');
             const res = await fetch('/api/brand/typosquatting', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({domain}) });
             const data = await res.json();
-            if (!data.success) { out.innerHTML = `<span class="text-red-400">${_osintEscape(data.error || 'Failed')}</span>`; return; }
-            out.innerHTML = (data.similar_domains || []).map(d => `<div class="mb-1 p-1 rounded bg-slate-900/40 border border-slate-700 font-mono" dir="ltr">${_osintEscape(d)}</div>`).join('') || '<span class="text-gray-500">No variants</span>';
+            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
+            const variants = data.similar_domains || [];
+            setResultList(out, 'Brand Protection', variants.map((d) => `<span class="font-mono" dir="ltr">${_osintEscape(d)}</span>`), { badge: `${variants.length} Variants`, emptyText: 'No variants' });
         }
 
         async function brandCheckImpersonation() {
             const username = (document.getElementById('brandUserInput')?.value || '').trim();
             const out = document.getElementById('brandUserResult');
             if (!username || !out) return titanAlert('اكتب اسم المستخدم.');
-            out.innerHTML = 'Scanning impersonation footprint...';
+            setResultLoading(out, 'Impersonation Check', 'Scanning impersonation footprint...');
             const res = await fetch('/api/osint/username', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username}) });
             const data = await res.json();
-            if (!data.success) { out.innerHTML = `<span class="text-red-400">${_osintEscape(data.error || 'Failed')}</span>`; return; }
+            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
             const found = data.found || [];
-            out.innerHTML = `<div class="text-xs mb-1">Found profiles: <b class="text-cyan-300">${found.length}</b></div>` + (found.map(r => `<div class="mb-1 p-1 rounded bg-slate-900/40 border border-slate-700"><a href="${_osintEscape(r.url)}" target="_blank" class="text-cyan-300">${_osintEscape(r.platform)}</a></div>`).join('') || '<span class="text-gray-500">No public footprint detected.</span>');
+            const rows = found.map((r) => `<a href="${_osintEscape(r.url)}" target="_blank" rel="noopener noreferrer" class="text-cyan-300">${_osintEscape(r.platform)}</a>`);
+            setResultList(out, 'Impersonation Check', rows, { badge: `${found.length} Profiles`, emptyText: 'No public footprint detected.' });
         }
 
         async function seGenerateScenario() {
             const scenario_type = document.getElementById('seScenarioType')?.value || 'phishing_email';
             const out = document.getElementById('seScenarioResult');
             if (!out) return;
-            out.innerText = 'Generating defensive scenario...';
+            setResultLoading(out, 'SE Simulation', 'Generating defensive scenario...');
             const res = await fetch('/api/social/simulate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({scenario_type}) });
             const data = await res.json();
-            if (!data.success) { out.innerText = data.error || 'Failed'; return; }
-            out.innerText = `${data.scenario}\n\nRed flags:\n- ${data.red_flags.join('\\n- ')}\n\nRecommended response:\n- ${data.defense_actions.join('\\n- ')}`;
+            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
+            const nl = String.fromCharCode(10);
+            const scenarioText = [
+                data.scenario || '',
+                '',
+                'Red flags:',
+                ...((data.red_flags || []).map((x) => `- ${x}`)),
+                '',
+                'Recommended response:',
+                ...((data.defense_actions || []).map((x) => `- ${x}`))
+            ].join(nl);
+            setResultMarkup(
+                out,
+                'SE Simulation',
+                `<div class="result-list-item text-gray-100 whitespace-pre-wrap">${_resultEscape(scenarioText)}</div>`,
+                { badge: 'Generated' }
+            );
         }
 
         function _seConfidenceScore(level) {
@@ -6627,12 +7015,12 @@ HTML_TEMPLATE = """
             const resBox = document.getElementById('malwareResult');
             
             if (data.error) {
-                resBox.innerHTML = `<span class="text-red-400">خطأ: ${data.error}</span>`;
+                setResultError(resBox, data.error);
                 return;
             }
             
             if (data.status === "pending") {
-                 resBox.innerHTML = `<span class="text-yellow-400 animate-pulse font-mono tracking-widest whitespace-pre-wrap"><br/>⚠️ جاري تحليل الهدف أمنياً في الخادم... الرجاء الانتظار بضع ثوانٍ.</span>`;
+                 setResultLoading(resBox, 'Malware Scan', 'جاري تحليل الهدف أمنياً في الخادم... الرجاء الانتظار بضع ثوانٍ.');
                  return;
             }
              
@@ -6640,35 +7028,18 @@ HTML_TEMPLATE = """
                 const scan = data.result;
                  // Some risk score keys for malware scan could differ slightly, safely extracting
                 let riskScore = scan.risk_score || 0;
-                let riskColor = riskScore > 70 ? 'text-red-500' : (riskScore > 30 ? 'text-orange-400' : 'text-green-500');
-                
-               resBox.innerHTML = `
-                    <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2 flex-wrap gap-2">
-                        <span class="font-bold text-gray-300 font-mono tracking-wider break-all text-xs" dir="ltr">${targetName}</span>
-                         <span class="font-black ${riskColor} bg-slate-900 px-2 py-1 rounded">Risk Score: ${riskScore}</span>
-                    </div>
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-2">
-                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                            <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Malicious</span>
-                             <span class="font-bold font-mono ${scan.malicious ? 'text-red-400' : 'text-green-400'}">${scan.malicious ? 'YES (خبيث)' : 'NO'}</span>
-                        </div>
-                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                            <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Phishing</span>
-                            <span class="font-bold font-mono ${scan.phishing ? 'text-red-400' : 'text-green-400'}">${scan.phishing ? 'YES (تصيد)' : 'NO'}</span>
-                        </div>
-                         <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                            <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Suspicious</span>
-                            <span class="font-bold font-mono ${scan.suspicious ? 'text-orange-400' : 'text-green-400'}">${scan.suspicious ? 'YES (مشبوه)' : 'NO'}</span>
-                        </div>
-                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-700/50 text-center">
-                            <span class="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest">Spam</span>
-                            <span class="font-bold font-mono ${scan.spam ? 'text-red-400' : 'text-green-400'}">${scan.spam ? 'YES (مزعج)' : 'NO'}</span>
-                        </div>
-                    </div>
-                `;
+                    const scoreTone = _resultToneByScore(riskScore);
+                    setResultInfo(resBox, isUrl ? 'Malware URL Scan' : 'Malware File Scan', [
+                        { label: isUrl ? 'URL' : 'File', value: targetName, tone: 'info', dir: 'ltr' },
+                        { label: 'Risk Score', value: riskScore, tone: scoreTone },
+                        { label: 'Malicious', value: scan.malicious ? 'YES (خبيث)' : 'NO', tone: scan.malicious ? 'danger' : 'safe' },
+                        { label: 'Phishing', value: scan.phishing ? 'YES (تصيد)' : 'NO', tone: scan.phishing ? 'danger' : 'safe' },
+                        { label: 'Suspicious', value: scan.suspicious ? 'YES (مشبوه)' : 'NO', tone: scan.suspicious ? 'warn' : 'safe' },
+                        { label: 'Spam', value: scan.spam ? 'YES (مزعج)' : 'NO', tone: scan.spam ? 'danger' : 'safe' }
+                    ], { badge: scoreTone === 'danger' ? 'High Risk' : (scoreTone === 'warn' ? 'Medium Risk' : 'Low Risk'), cols: 2, riskScore: Number(riskScore || 0) });
                  if(riskScore > 70 || scan.malicious || scan.phishing || scan.suspicious) soundManager.alarm(); else soundManager.success();
              } else {
-                 resBox.innerHTML = `<span class="text-red-400">خطأ من الخدمة: ${data.message || 'فشل عملية الفحص العميق.'}</span>`;
+                     setResultError(resBox, data.message || 'فشل عملية الفحص العميق.');
                   soundManager.error();
              }
         }
@@ -6678,7 +7049,7 @@ HTML_TEMPLATE = """
             if(!url || (!url.startsWith('http://') && !url.startsWith('https://'))) return titanAlert("الرجاء إدخال رابط صحيح يبدأ بـ http:// أو https://");
             const resBox = document.getElementById('malwareResult');
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-rose-400 animate-pulse text-xs font-mono">جاري فحص الرابط للبرمجيات الخبيثة عبر IPQualityScore...</span>';
+            setResultLoading(resBox, 'Malware Scan', 'جاري فحص الرابط للبرمجيات الخبيثة عبر IPQualityScore...');
             soundManager.terminalType();
             
             try {
@@ -6689,7 +7060,7 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 renderMalwareResult(data, url, true);
             } catch (e) {
-                 resBox.innerHTML = `<span class="text-red-400">فشل الاتصال بخادم الفحص.</span>`;
+                 setResultError(resBox, 'فشل الاتصال بخادم الفحص.');
                  soundManager.error();
             }
         }
@@ -6704,7 +7075,7 @@ HTML_TEMPLATE = """
              
             const resBox = document.getElementById('malwareResult');
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-rose-400 animate-pulse text-xs font-mono">جاري رفع وفحص الملف للبرمجيات الخبيثة...</span>';
+            setResultLoading(resBox, 'Malware Scan', 'جاري رفع وفحص الملف للبرمجيات الخبيثة...');
             soundManager.terminalType();
             
             const formData = new FormData();
@@ -6717,7 +7088,7 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 renderMalwareResult(data, file.name, false);
             } catch (e) {
-                 resBox.innerHTML = `<span class="text-red-400">فشل رفع الملف أو الاتصال بالخادم.</span>`;
+                 setResultError(resBox, 'فشل رفع الملف أو الاتصال بالخادم.');
                  soundManager.error();
             }
         }
@@ -6726,45 +7097,88 @@ HTML_TEMPLATE = """
             const loader = document.getElementById('lanLoader');
             const resBox = document.getElementById('lanResult');
             const btn = document.getElementById('btnLanScan');
+            const exportBtn = document.getElementById('btnLanExport');
             
             btn.disabled = true;
             loader.classList.remove('hidden');
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-cyan-500 animate-pulse text-xs font-mono">جاري إرسال حزم استكشافية للشبكة (ARP Sweep)...</span>';
+            if(exportBtn) exportBtn.disabled = true;
+            setResultLoading(resBox, 'LAN Discovery', 'جاري إرسال حزم استكشافية للشبكة (ARP Sweep)...');
             soundManager.terminalType();
             
             try {
                 const res = await fetch('/api/network/scan');
                 const data = await res.json();
-                
-                if(data.length === 0) {
-                    resBox.innerHTML = '<span class="text-gray-400">لم يتم العثور على أجهزة (أو الشبكة تمنع الفحص).</span>';
-                } else if(data[0].error) {
-                    resBox.innerHTML = `<span class="text-red-400">${data[0].error}</span>`;
+
+                if(!res.ok || !data.success) {
+                    const errMsg = data && data.error ? data.error : 'تعذر تنفيذ فحص الشبكة حالياً.';
+                    setResultError(resBox, errMsg);
+                    soundManager.error();
+                    return;
+                }
+
+                const devices = Array.isArray(data.devices) ? data.devices : [];
+                window.__lanLastDevices = devices;
+                const routerCount = devices.filter(d => (d.label || '').includes('التوجيه')).length;
+                const unknownCount = devices.filter(d => !d.hostname || d.hostname === '').length;
+                const selfCount = devices.filter(d => d.is_self).length;
+                const selfIp = data.local_ip || (devices.find(d => d.is_self) || {}).ip || 'غير متاح';
+
+                if(exportBtn && devices.length > 0) exportBtn.disabled = false;
+
+                if(devices.length === 0) {
+                    setResultList(resBox, 'LAN Discovery', [], { badge: '0 Devices', emptyText: 'لم يتم العثور على أجهزة (أو الشبكة تمنع الفحص).' });
                 } else {
-                    resBox.innerHTML = data.map(d => `
-                        <div class="flex justify-between items-center p-3 border-b border-slate-800 hover:bg-slate-800/60 transition-colors rounded-lg mb-1">
-                            <div class="flex items-center gap-3">
-                                <span class="text-xl bg-slate-950 p-2 rounded-lg border border-slate-700">${d.icon || '💻'}</span>
-                                <div class="flex flex-col">
-                                    <span class="text-cyan-400 font-bold font-mono text-sm tracking-wider">${d.ip}</span>
-                                    <span class="text-gray-500 text-[10px] uppercase font-bold">${d.label || d.type || 'Unknown'}</span>
-                                </div>
-                            </div>
-                            <div class="text-right flex flex-col items-end">
-                                <span class="text-gray-400 font-mono text-[10px] tracking-widest">${d.mac}</span>
-                                <span class="text-[9px] text-teal-600 bg-teal-900/20 px-1 rounded mt-1">ACTIVE</span>
-                            </div>
-                        </div>
-                    `).join('');
+                    const rows = devices.map((d) => `${_resultEscape(d.icon || '💻')} <span class="font-mono text-cyan-300" dir="ltr">${_resultEscape(d.ip)}</span> | ${_resultEscape(d.label || d.type || 'Unknown')} | ${_resultEscape(d.hostname || 'Hostname غير متاح')} | MAC: <span class="font-mono" dir="ltr">${_resultEscape(d.mac || 'N/A')}</span> ${d.is_self ? '<span class="text-emerald-300">(THIS DEVICE)</span>' : ''}`);
+                    setResultList(resBox, 'LAN Discovery', rows, { badge: `${devices.length} Devices`, riskScore: unknownCount > 0 ? 35 : 10 });
                 }
                 soundManager.success();
             } catch(e) {
-                resBox.innerHTML = `<span class="text-red-400">فشل في جلب أجهزة الشبكة.</span>`;
+                setResultError(resBox, 'فشل في جلب أجهزة الشبكة.');
                 soundManager.error();
+            } finally {
+                loader.classList.add('hidden');
+                btn.disabled = false;
             }
-            loader.classList.add('hidden');
-            btn.disabled = false;
+        }
+
+        function exportLanCsv() {
+            const devices = Array.isArray(window.__lanLastDevices) ? window.__lanLastDevices : [];
+            if(!devices.length) {
+                titanAlert('لا توجد نتائج متاحة للتصدير. نفّذ فحص الشبكة أولاً.');
+                return;
+            }
+
+            const header = ['ip', 'mac', 'hostname', 'label', 'type', 'is_self'];
+            const rows = devices.map(d => [
+                d.ip || '',
+                d.mac || '',
+                d.hostname || '',
+                d.label || '',
+                d.type || '',
+                d.is_self ? 'yes' : 'no'
+            ]);
+
+            const escapeCsv = (value) => {
+                const text = String(value ?? '');
+                if(/[",\\n\\r]/.test(text)) {
+                    return `"${text.replace(/"/g, '""')}"`;
+                }
+                return text;
+            };
+
+            const csv = [header, ...rows].map(row => row.map(escapeCsv).join(',')).join('\\r\\n');
+            const bom = '\uFEFF';
+            const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const ts = new Date().toISOString().replace(/[:.]/g, '-');
+            link.href = URL.createObjectURL(blob);
+            link.download = `titan-lan-scan-${ts}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            soundManager.success();
         }
 
         async function createBurnNote() {
@@ -7125,6 +7539,7 @@ HTML_TEMPLATE = """
         }
         
         // Initial setup
+        enhanceResultPanels();
         showTab('pass');
         refreshLogs();
 
@@ -7636,16 +8051,16 @@ HTML_TEMPLATE = """
         async function loadSupportTickets() {
             const box = document.getElementById('supportTicketsList');
             if (!box) return;
-            box.innerHTML = '<div class="text-xs text-gray-500">Loading tickets...</div>';
+            setResultLoading(box, 'My Support Tickets', 'Loading tickets...');
             const res = await fetch('/api/support/tickets');
             const data = await res.json();
             if (!data.success) {
-                box.innerHTML = '<div class="text-xs text-red-400">Failed to load tickets</div>';
+                setResultError(box, 'Failed to load tickets');
                 return;
             }
             const rows = data.tickets || [];
             if (!rows.length) {
-                box.innerHTML = '<div class="text-xs text-gray-500">لا توجد تذاكر حالياً.</div>';
+                setResultList(box, 'My Support Tickets', [], { badge: '0', emptyText: 'لا توجد تذاكر حالياً.' });
                 return;
             }
 
@@ -7660,7 +8075,10 @@ HTML_TEMPLATE = """
             let updatesCount = 0;
             const nextSeenStates = {};
 
-            box.innerHTML = rows.map(t => {
+            setResultMarkup(
+                box,
+                'My Support Tickets',
+                rows.map(t => {
                 const status = String(t.status || 'open');
                 const priority = String(t.priority || 'normal');
                 const signature = `${t.updated_at || ''}|${status}|${t.admin_note || ''}`;
@@ -7683,7 +8101,9 @@ HTML_TEMPLATE = """
                     ${t.admin_note ? `<div class="mt-1 text-[11px] text-emerald-300 border-t border-slate-700 pt-1">🛠️ Admin note: ${_osintEscape(t.admin_note)}</div>` : ''}
                 </div>
             `;
-            }).join('');
+            }).join(''),
+                { badge: `${rows.length} Tickets` }
+            );
 
             try {
                 localStorage.setItem(storageKey, JSON.stringify(nextSeenStates));
@@ -9789,9 +10209,9 @@ def social_simulate_route():
 
 @app.route('/api/network/scan', methods=['GET'])
 def scan_network_route():
-    devices = scan_local_network()
-    add_audit_log("رادار الشبكة المحلية", f"تم العثور على {len(devices)} جهاز متصل")
-    return jsonify(devices)
+    result = scan_local_network()
+    add_audit_log("رادار الشبكة المحلية", f"تم العثور على {result.get('count', 0)} جهاز متصل")
+    return jsonify(result)
 
 # --- مسارات الإضافات للحزمة الرابعة المتقدمة (Phase 4: Defense & Comms) ---
 
