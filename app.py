@@ -81,6 +81,8 @@ AI_SYSTEM_PROMPT = """
 - لا تختلق معلومات. إذا غير متأكد، قل بوضوح أنك غير متأكد.
 - اعتمد على سياق المرفقات المستخلصة (OCR/نص/بيانات) عند وجودها.
 - عند تحليل صور: صف ما يمكن استنتاجه من النص الظاهر، الأبعاد، النوع، والبيانات المتاحة.
+- إذا كانت الصورة مرفقة لك بصيغة Vision input، حلّلها بصرياً مباشرة ولا تقل "أحتاج OCR" أو "لا أستطيع بدون OCR".
+- إذا تعذر قراءة كل النص داخل الصورة، أعطِ أفضل استخراج تقريبي ممكن + مستوى ثقة + الخطوة العملية التالية.
 
 قواعد الأمان:
 - ارفض أي طلب ضار، غير قانوني، أو ينتهك الخصوصية.
@@ -12096,9 +12098,10 @@ def ai_chat():
                                 f"OCR_TEXT:\n{ocr_text}"
                             )
                         else:
+                            ocr_state = 'local_ocr_unavailable' if ocr_err == 'OCR library missing' else (ocr_err or 'unavailable')
                             attachment_chunks.append(
                                 f"{image_header}, "
-                                f"ocr_status={ocr_err or 'unavailable'}"
+                                f"ocr_status={ocr_state}"
                             )
                     elif content_type == 'application/pdf' or lower_name.endswith('.pdf'):
                         reader = PdfReader(io.BytesIO(raw))
@@ -12133,7 +12136,7 @@ def ai_chat():
             prompt_parts.append(message)
         if attachment_chunks:
             prompt_parts.append("\n\n=== ATTACHMENTS CONTEXT ===\n" + "\n\n".join(attachment_chunks))
-            prompt_parts.append("\nAnalyze all attachments carefully and answer in Arabic. Include concise practical guidance, a friendly tone, and light emoji usage.")
+            prompt_parts.append("\nAnalyze all attachments carefully and answer in Arabic. If images are attached, perform direct visual analysis even when local OCR is unavailable. Include concise practical guidance, confidence notes, and light emoji usage.")
         if skipped:
             prompt_parts.append("\n\nSkipped attachments: " + ", ".join(skipped))
 
