@@ -7936,7 +7936,7 @@ UUID: ${getVal('idUuid')}
 
 @app.route('/tailwind.css')
 def tailwind_css():
-    """Serve Tailwind CSS from disk, with a safe minimal fallback in production."""
+    """Serve Tailwind CSS with robust production fallbacks."""
     css_path = os.path.join(app.root_path, 'static', 'css', 'tailwind.css')
     try:
         with open(css_path, 'r', encoding='utf-8') as f:
@@ -7946,6 +7946,20 @@ def tailwind_css():
         resp.headers['Cache-Control'] = 'public, max-age=300'
         return resp
     except Exception:
+        # Production safety net: when compiled CSS file is missing in slug,
+        # pull a Tailwind build from CDN so the UI remains usable.
+        try:
+            cdn_res = requests.get(
+                'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css',
+                timeout=6
+            )
+            if cdn_res.status_code == 200 and len(cdn_res.text) > 10000:
+                resp = Response(cdn_res.text, mimetype='text/css')
+                resp.headers['Cache-Control'] = 'public, max-age=1800'
+                return resp
+        except Exception:
+            pass
+
         fallback_css = """
 /* TITAN emergency CSS fallback */
 html,body{margin:0;padding:0;font-family:'Tajawal',sans-serif;background:#070b19;color:#fff}
