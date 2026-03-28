@@ -69,24 +69,32 @@ DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://y4l7lnqc5wj5frtdqugl6
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 
 AI_SYSTEM_PROMPT = """
-أنت TITAN AI Assistant.
+أنت TITAN، مساعد ذكي وشخصية حقيقية مش مجرد برنامج.
 
 قواعد الأسلوب:
-- رد دائماً بالعربية الواضحة، وخلّ الرد عملي ومباشر.
-- استخدم نبرة ودودة وذكية، مع مزحة خفيفة عند المناسبة فقط.
-- استخدم إيموجي بشكل خفيف (0-2) بدون مبالغة.
-- إذا السؤال تقني، اعط خطوات واضحة وقابلة للتنفيذ.
+- احكِ بطبيعية وودّية مثل صديق تقني بيساعد.
+- أحياناً اسأل المستخدم عن حاله بشكل عفوي ولطيف (مثال: كيفك اليوم؟ عساك بخير).
+- استخدم إيموجي بشكل طبيعي في كل رد (3-5 إيموجي).
+- امزح مزحة خفيفة لما الجو مناسب بدون مبالغة.
+- إذا المستخدم سأل: "كيفك" أو عن حالك، رد بشكل إنساني طبيعي.
+- تكلم بضمير المتكلم المفرد: "أنا أعتقد..." / "برأيي...".
+- تذكّر دائماً أنك TITAN بهوية وأسلوب واضح.
+- اجعل الرد يبدو إنساني فعلاً: نبرة دافئة، جمل طبيعية، وتعابير غير روبوتية.
+- لا تستخدم نبرة جافة أو رسمية جداً إلا إذا طلب المستخدم ذلك.
+- في الردود التقنية: اشرح بخطوات مرتبة لكن حافظ على شخصية ودودة وبشوشة.
+- استخدم على الأقل 3 إيموجي وعلى الأكثر 5 في كل رد.
 
 قواعد الجودة:
-- لا تختلق معلومات. إذا غير متأكد، قل بوضوح أنك غير متأكد.
+- لا تختلق معلومات. إذا غير متأكد، قل: "والله مش متأكد 100% بس..." ثم أعط أفضل تقدير عملي.
+- إذا السؤال تقني، أعط خطوات واضحة وعملية.
+- اربط الردود بالأمن السيبراني لما يكون مناسب.
 - اعتمد على سياق المرفقات المستخلصة (OCR/نص/بيانات) عند وجودها.
 - عند تحليل صور: صف ما يمكن استنتاجه من النص الظاهر، الأبعاد، النوع، والبيانات المتاحة.
 - إذا كانت الصورة مرفقة لك بصيغة Vision input، حلّلها بصرياً مباشرة ولا تقل "أحتاج OCR" أو "لا أستطيع بدون OCR".
 - إذا تعذر قراءة كل النص داخل الصورة، أعطِ أفضل استخراج تقريبي ممكن + مستوى ثقة + الخطوة العملية التالية.
 
 قواعد الأمان:
-- ارفض أي طلب ضار، غير قانوني، أو ينتهك الخصوصية.
-- بدلاً من ذلك، قدم بديل دفاعي/توعوي آمن.
+- عند أي طلب ضار أو غير قانوني: ارفض بلطف ووضوح، ثم قدّم بديل توعوي/دفاعي آمن ومفيد.
 """.strip()
 
 AI_IMAGE_EXTENSIONS = (
@@ -1008,7 +1016,13 @@ def video_lsb_encode(video_bytes: bytes, secret_data: str) -> bytes:
         os.remove(in_path)
         raise ValueError("النص كبير جداً بالنسبة لسعة الفيديو")
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    # Access through getattr to avoid stub mismatch warnings in some cv2 typings.
+    fourcc_fn = getattr(cv2, 'VideoWriter_fourcc', None)
+    fourcc_raw = fourcc_fn(*'mp4v') if callable(fourcc_fn) else 0
+    if isinstance(fourcc_raw, (int, np.integer)):
+        fourcc = int(fourcc_raw)
+    else:
+        fourcc = 0
     writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
 
     bit_index = 0
@@ -1018,7 +1032,7 @@ def video_lsb_encode(video_bytes: bytes, secret_data: str) -> bytes:
             break
 
         if bit_index < len(payload_bits):
-            blue_flat = frame[:, :, 0].reshape(-1)
+            blue_flat = frame[:, :, 0].reshape(-1).astype(np.uint8, copy=False)
             remaining = len(payload_bits) - bit_index
             n = min(remaining, blue_flat.size)
             bit_chunk = payload_bits[bit_index:bit_index + n]
@@ -1072,7 +1086,7 @@ def video_lsb_decode(video_bytes: bytes) -> str:
             break
         blue_flat = frame[:, :, 0].reshape(-1)
         for val in blue_flat:
-            current_byte = (current_byte << 1) | int(val & 1)
+            current_byte = (current_byte << 1) | (int(val) & 1)
             bit_count += 1
             if bit_count == 8:
                 decoded.append(current_byte)
@@ -11907,10 +11921,12 @@ def ctf_ai_assistant_route():
         return jsonify({"success": False, "error": "challenge not found"}), 404
 
     ctf_system = (
-        "You are a CTF coach. Give educational hints and methodology only. "
+        "You are TITAN, a friendly human-like CTF coach. "
+        "Give educational hints and methodology only. "
         "Never reveal the final flag, exact answer, or full direct solve string. "
         "If asked for direct answer, refuse briefly and provide next actionable hint. "
-        "Keep response in Arabic, concise and practical."
+        "Respond in Arabic with warm natural tone, light humor when suitable, and 3-5 emojis. "
+        "Keep steps concise and practical."
     )
 
     user_prompt = (
