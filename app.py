@@ -1473,6 +1473,7 @@ HTML_TEMPLATE = """
     <title>TITAN | التشفير والأمن السيبراني</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjE4IiBmaWxsPSIjMGQwZDFhIi8+PHRleHQgeD0iNTAiIHk9IjY4IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSI1NCIgZm9udC13ZWlnaHQ9IjkwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0idXJsKCNnKSI+VEFOPC90ZXh0PjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2MwODRmYyIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzdjM2FlZCIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==">
     <link rel="stylesheet" href="/tailwind.css?v=__TAILWIND_V__">
+    __TAILWIND_PLAY_CDN__
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Tajawal', sans-serif; background: #070b19; color: white; margin: 0; overflow-x: hidden; cursor: crosshair; }
@@ -8000,9 +8001,23 @@ def _tailwind_version_token() -> str:
     except Exception:
         return str(int(time.time()))
 
+
+def _has_local_tailwind_css() -> bool:
+    css_path = os.path.join(app.root_path, 'static', 'css', 'tailwind.css')
+    return os.path.exists(css_path)
+
 @app.route('/')
 def index():
     html = HTML_TEMPLATE.replace('__TAILWIND_V__', _tailwind_version_token())
+    # If compiled Tailwind is missing on production slug, use Play CDN to generate
+    # required utility classes (including arbitrary values used by this UI).
+    if _has_local_tailwind_css():
+        html = html.replace('__TAILWIND_PLAY_CDN__', '')
+    else:
+        html = html.replace(
+            '__TAILWIND_PLAY_CDN__',
+            '<script src="https://cdn.tailwindcss.com"></script>'
+        )
     resp = Response(render_template_string(html), mimetype='text/html')
     # Prevent stale HTML from pinning an old CSS version on custom domains/CDNs.
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
