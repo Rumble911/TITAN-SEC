@@ -68,6 +68,57 @@ ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://y4l7lnqc5wj5frtdqugl6dqs.agents.do-ai.run')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 
+AI_SYSTEM_PROMPT = """
+أنت TITAN AI Assistant.
+
+قواعد الأسلوب:
+- رد دائماً بالعربية الواضحة، وخلّ الرد عملي ومباشر.
+- استخدم نبرة ودودة وذكية، مع مزحة خفيفة عند المناسبة فقط.
+- استخدم إيموجي بشكل خفيف (0-2) بدون مبالغة.
+- إذا السؤال تقني، اعط خطوات واضحة وقابلة للتنفيذ.
+
+قواعد الجودة:
+- لا تختلق معلومات. إذا غير متأكد، قل بوضوح أنك غير متأكد.
+- اعتمد على سياق المرفقات المستخلصة (OCR/نص/بيانات) عند وجودها.
+- عند تحليل صور: صف ما يمكن استنتاجه من النص الظاهر، الأبعاد، النوع، والبيانات المتاحة.
+
+قواعد الأمان:
+- ارفض أي طلب ضار، غير قانوني، أو ينتهك الخصوصية.
+- بدلاً من ذلك، قدم بديل دفاعي/توعوي آمن.
+""".strip()
+
+AI_IMAGE_EXTENSIONS = (
+    '.png', '.jpg', '.jpeg', '.jpe', '.jfif', '.pjpeg', '.pjp',
+    '.webp', '.gif', '.bmp', '.dib', '.tif', '.tiff',
+    '.heic', '.heif', '.avif', '.jp2', '.j2k', '.jpf', '.jpx',
+    '.jxl', '.ico', '.svg', '.raw', '.dng', '.cr2', '.nef', '.arw', '.orf', '.rw2'
+)
+
+
+def _looks_like_image_bytes(raw: bytes) -> bool:
+    if not raw or len(raw) < 12:
+        return False
+    head12 = raw[:12]
+    if head12.startswith(b'\x89PNG\r\n\x1a\n'):
+        return True
+    if head12.startswith(b'\xff\xd8\xff'):
+        return True
+    if head12.startswith((b'GIF87a', b'GIF89a')):
+        return True
+    if head12.startswith(b'BM'):
+        return True
+    if head12[:4] in (b'II*\x00', b'MM\x00*'):
+        return True
+    if head12.startswith(b'RIFF') and raw[8:12] == b'WEBP':
+        return True
+    if head12.startswith(b'\x00\x00\x01\x00'):
+        return True
+    if b'ftyp' in raw[:32]:
+        ftyp = raw[8:16]
+        if any(x in ftyp for x in (b'heic', b'heix', b'hevc', b'hevx', b'mif1', b'msf1', b'avif')):
+            return True
+    return False
+
 _dash_metrics_lock = threading.Lock()
 _dash_prev_net = None
 _dash_prev_ts = 0.0
@@ -110,14 +161,18 @@ def _dash_public_ip_cached():
         pass
     return _dash_public_ip
 
-def _call_do_ai(message: str) -> str:
+def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent"""
     headers = {
         'Authorization': f'Bearer {DO_AI_KEY}',
         'Content-Type': 'application/json',
     }
+    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     payload = {
-        "messages": [{"role": "user", "content": message}]
+        "messages": [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": message}
+        ]
     }
     res = requests.post(
         f"{DO_AI_ENDPOINT}/api/v1/chat/completions",
@@ -10959,7 +11014,7 @@ def ai_chat():
     try:
         attachment_chunks = []
         skipped = []
-        max_files = 5
+        max_files = 8
         max_file_size = 8 * 1024 * 1024
 
         if files:
@@ -10976,23 +11031,45 @@ def ai_chat():
 
                 lower_name = filename.lower()
                 try:
-                    if content_type.startswith('image/') or lower_name.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp')):
+                    is_image = (
+                        content_type.startswith('image/')
+                        or lower_name.endswith(AI_IMAGE_EXTENSIONS)
+                        or _looks_like_image_bytes(raw)
+                    )
+                    if is_image:
                         w = h = None
+                        img_format = 'unknown'
+                        img_mode = 'unknown'
                         try:
                             img = Image.open(io.BytesIO(raw))
                             w, h = img.size
+                            img_format = (img.format or 'unknown')
+                            img_mode = (img.mode or 'unknown')
                         except Exception:
                             pass
                         dims = f"{w}x{h}" if w and h else "unknown-size"
                         ocr_text, ocr_err = extract_image_ocr_text(raw, max_chars=5000)
+                        image_header = (
+                            f"[Attachment {idx}] IMAGE: name={filename}, mime={content_type}, "
+                            f"size={len(raw)} bytes, dimensions={dims}, format={img_format}, mode={img_mode}"
+                        )
+
+                        if lower_name.endswith('.svg'):
+                            svg_excerpt = raw.decode('utf-8', errors='ignore').strip()[:2200]
+                            if svg_excerpt:
+                                attachment_chunks.append(
+                                    f"{image_header}\nSVG_SNIPPET:\n{svg_excerpt}"
+                                )
+                                continue
+
                         if ocr_text:
                             attachment_chunks.append(
-                                f"[Attachment {idx}] IMAGE: name={filename}, mime={content_type}, size={len(raw)} bytes, dimensions={dims}\n"
+                                f"{image_header}\n"
                                 f"OCR_TEXT:\n{ocr_text}"
                             )
                         else:
                             attachment_chunks.append(
-                                f"[Attachment {idx}] IMAGE: name={filename}, mime={content_type}, size={len(raw)} bytes, dimensions={dims}, "
+                                f"{image_header}, "
                                 f"ocr_status={ocr_err or 'unavailable'}"
                             )
                     elif content_type == 'application/pdf' or lower_name.endswith('.pdf'):
@@ -11028,12 +11105,12 @@ def ai_chat():
             prompt_parts.append(message)
         if attachment_chunks:
             prompt_parts.append("\n\n=== ATTACHMENTS CONTEXT ===\n" + "\n\n".join(attachment_chunks))
-            prompt_parts.append("\nPlease analyze the attachments context and answer in Arabic with practical security guidance.")
+            prompt_parts.append("\nAnalyze all attachments carefully and answer in Arabic. Include concise practical guidance, a friendly tone, and light emoji usage.")
         if skipped:
             prompt_parts.append("\n\nSkipped attachments: " + ", ".join(skipped))
 
         final_prompt = "\n".join(prompt_parts).strip()
-        reply = _call_do_ai(final_prompt)
+        reply = _call_do_ai(final_prompt, system_prompt=AI_SYSTEM_PROMPT)
         add_audit_log("AI Chat 🤖", f"AI: {message[:50]} | files={len(files)} | model={model}", username=session.get('username', ''))
         return jsonify({"success": True, "reply": reply})
     except Exception as e:
@@ -11062,7 +11139,7 @@ def ai_analyze():
     if not DO_AI_KEY:
         return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
     try:
-        analysis = _call_do_ai(prompt)
+        analysis = _call_do_ai(prompt, system_prompt=AI_SYSTEM_PROMPT)
         add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
         return jsonify({"success": True, "analysis": analysis})
     except Exception as e:
