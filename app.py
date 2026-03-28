@@ -185,6 +185,57 @@ def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
     return data['choices'][0]['message']['content']
 
 
+def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prompt: str | None = None) -> str:
+    """Call DigitalOcean AI with text + inline image data URLs (OpenAI-compatible format)."""
+    headers = {
+        'Authorization': f'Bearer {DO_AI_KEY}',
+        'Content-Type': 'application/json',
+    }
+    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
+
+    user_content: list[dict[str, object]] = [{"type": "text", "text": (message or "حلّل الصور المرفقة.").strip()}]
+    for url in (image_data_urls or [])[:3]:
+        if not url:
+            continue
+        user_content.append({
+            "type": "image_url",
+            "image_url": {"url": url}
+        })
+
+    payload = {
+        "messages": [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": user_content}
+        ]
+    }
+
+    res = requests.post(
+        f"{DO_AI_ENDPOINT}/api/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=45
+    )
+    res.raise_for_status()
+    data = res.json()
+    return data['choices'][0]['message']['content']
+
+
+def _ctf_normalize_newlines(value):
+    """Normalize escaped/newline-like tokens so challenge text renders correctly in UI."""
+    if isinstance(value, str):
+        return (
+            value
+            .replace('\\r\\n', '\n')
+            .replace('\\n', '\n')
+            .replace('/n', '\n')
+        )
+    if isinstance(value, list):
+        return [_ctf_normalize_newlines(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _ctf_normalize_newlines(v) for k, v in value.items()}
+    return value
+
+
 def _resend_send(to_email, subject, body):
     """إرسال إيميل عبر Brevo SMTP"""
     import smtplib
@@ -11798,7 +11849,7 @@ def _get_ctf_session_state(force_refresh: bool = False):
     solved_set = set(session.get('ctf_solved', []))
     public = []
     for c in challenges:
-        cc = {k: v for k, v in c.items() if k not in ('answer', 'file_payload')}
+        cc = {k: _ctf_normalize_newlines(v) for k, v in c.items() if k not in ('answer', 'file_payload')}
         cc['solved'] = c['id'] in solved_set
         public.append(cc)
 
@@ -11980,8 +12031,11 @@ def ai_chat():
     try:
         attachment_chunks = []
         skipped = []
+        ai_image_data_urls = []
         max_files = 8
         max_file_size = 8 * 1024 * 1024
+        max_ai_image_size = 2 * 1024 * 1024
+        max_ai_images = 3
 
         if files:
             for idx, f in enumerate(files[:max_files], start=1):
@@ -12019,6 +12073,14 @@ def ai_chat():
                             f"[Attachment {idx}] IMAGE: name={filename}, mime={content_type}, "
                             f"size={len(raw)} bytes, dimensions={dims}, format={img_format}, mode={img_mode}"
                         )
+
+                        # Fallback path: pass the actual image to the AI model when OCR is unavailable/weak.
+                        if len(ai_image_data_urls) < max_ai_images and len(raw) <= max_ai_image_size:
+                            mime_for_data_url = content_type if content_type.startswith('image/') else 'image/png'
+                            img_b64 = base64.b64encode(raw).decode('ascii')
+                            ai_image_data_urls.append(f"data:{mime_for_data_url};base64,{img_b64}")
+                        elif len(raw) > max_ai_image_size:
+                            skipped.append(f"{filename}: image too large for vision payload")
 
                         if lower_name.endswith('.svg'):
                             svg_excerpt = raw.decode('utf-8', errors='ignore').strip()[:2200]
@@ -12076,7 +12138,13 @@ def ai_chat():
             prompt_parts.append("\n\nSkipped attachments: " + ", ".join(skipped))
 
         final_prompt = "\n".join(prompt_parts).strip()
-        reply = _call_do_ai(final_prompt, system_prompt=AI_SYSTEM_PROMPT)
+        if ai_image_data_urls:
+            try:
+                reply = _call_do_ai_multimodal(final_prompt, ai_image_data_urls, system_prompt=AI_SYSTEM_PROMPT)
+            except Exception:
+                reply = _call_do_ai(final_prompt, system_prompt=AI_SYSTEM_PROMPT)
+        else:
+            reply = _call_do_ai(final_prompt, system_prompt=AI_SYSTEM_PROMPT)
         add_audit_log("AI Chat 🤖", f"AI: {message[:50]} | files={len(files)} | model={model}", username=session.get('username', ''))
         return jsonify({"success": True, "reply": reply})
     except Exception as e:
