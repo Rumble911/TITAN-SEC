@@ -1162,6 +1162,12 @@ def extract_image_ocr_text(image_bytes: bytes, max_chars: int = 5000) -> tuple[s
         import pytesseract  # type: ignore
         import cv2  # type: ignore
         import numpy as np  # type: ignore
+
+        # Windows fallback: use known install location if PATH is not refreshed yet.
+        if os.name == 'nt':
+            tesseract_exe = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+            if os.path.exists(tesseract_exe):
+                pytesseract.pytesseract.tesseract_cmd = tesseract_exe
     except Exception:
         return "", "OCR library missing"
 
