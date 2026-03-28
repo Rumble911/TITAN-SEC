@@ -15,6 +15,7 @@ import datetime
 import time
 import tempfile
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, jsonify, render_template_string, send_file, session, Response  # type: ignore
 from cryptography.fernet import Fernet  # type: ignore
 from cryptography.hazmat.primitives import hashes  # type: ignore
@@ -42,11 +43,12 @@ import urllib.request
 import json as _json
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # حد أقصى للملفات 16 ميجابايت
 app.secret_key = os.environ.get('SECRET_KEY', 'TITAN_ULTRA_SECRET_KEY_2025')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = True   # HTTPS only on Render
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', '1') == '1'
 app.config['SESSION_COOKIE_NAME'] = 'titan_session'
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=12)
 
@@ -1470,7 +1472,7 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TITAN | التشفير والأمن السيبراني</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjE4IiBmaWxsPSIjMGQwZDFhIi8+PHRleHQgeD0iNTAiIHk9IjY4IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSI1NCIgZm9udC13ZWlnaHQ9IjkwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0idXJsKCNnKSI+VEFOPC90ZXh0PjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2MwODRmYyIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzdjM2FlZCIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==">
-    <link rel="stylesheet" href="/tailwind.css?v=3">
+    <link rel="stylesheet" href="/tailwind.css?v=__TAILWIND_V__">
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Tajawal', sans-serif; background: #070b19; color: white; margin: 0; overflow-x: hidden; cursor: crosshair; }
@@ -7939,7 +7941,10 @@ def tailwind_css():
     try:
         with open(css_path, 'r', encoding='utf-8') as f:
             css = f.read()
-        return Response(css, mimetype='text/css')
+        resp = Response(css, mimetype='text/css')
+        # Keep CSS cache short so production updates propagate quickly.
+        resp.headers['Cache-Control'] = 'public, max-age=300'
+        return resp
     except Exception:
         fallback_css = """
 /* TITAN emergency CSS fallback */
@@ -7950,11 +7955,28 @@ html,body{margin:0;padding:0;font-family:'Tajawal',sans-serif;background:#070b19
 .tab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.45rem}
 button,input,textarea,select{font:inherit}
 """
-        return Response(fallback_css, mimetype='text/css')
+        resp = Response(fallback_css, mimetype='text/css')
+        resp.headers['Cache-Control'] = 'no-store, max-age=0'
+        return resp
+
+
+def _tailwind_version_token() -> str:
+    """Generate a stable cache-busting token from CSS file mtime."""
+    css_path = os.path.join(app.root_path, 'static', 'css', 'tailwind.css')
+    try:
+        mtime = int(os.path.getmtime(css_path))
+        return str(mtime)
+    except Exception:
+        return str(int(time.time()))
 
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE)
+    html = HTML_TEMPLATE.replace('__TAILWIND_V__', _tailwind_version_token())
+    resp = Response(render_template_string(html), mimetype='text/html')
+    # Prevent stale HTML from pinning an old CSS version on custom domains/CDNs.
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 @app.route('/scan', methods=['POST'])
 def scan():
