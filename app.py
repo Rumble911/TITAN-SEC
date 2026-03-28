@@ -2183,6 +2183,66 @@ HTML_TEMPLATE = """
 
             .result-tone-danger .result-kv-value { color: #f87171; }
             .result-tone-safe .result-kv-value { color: #4ade80; }
+
+            .ctf-ui {
+                font-family: "Cairo", "Tajawal", "Noto Sans Arabic", "Segoe UI", sans-serif;
+            }
+
+            .ctf-main-title {
+                font-size: 1.45rem;
+                letter-spacing: 0.02em;
+            }
+
+            .ctf-card {
+                border-width: 1px;
+                box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.12), 0 14px 30px rgba(2, 6, 23, 0.35);
+            }
+
+            .ctf-card-title {
+                font-size: 1.05rem;
+                font-weight: 800;
+                line-height: 1.7;
+                letter-spacing: 0.01em;
+                unicode-bidi: plaintext;
+            }
+
+            .ctf-bidi {
+                direction: rtl;
+                text-align: right;
+                unicode-bidi: plaintext;
+                line-height: 1.95;
+                font-size: 0.95rem;
+                word-break: break-word;
+            }
+
+            .ctf-ltr {
+                direction: ltr;
+                text-align: left;
+                unicode-bidi: plaintext;
+            }
+
+            .ctf-section-label {
+                font-size: 0.87rem;
+                font-weight: 800;
+                letter-spacing: 0.01em;
+            }
+
+            .ctf-meta-text {
+                font-size: 0.85rem;
+                line-height: 1.75;
+            }
+
+            @media (max-width: 640px) {
+                .ctf-main-title {
+                    font-size: 1.2rem;
+                }
+                .ctf-card-title {
+                    font-size: 1rem;
+                }
+                .ctf-bidi {
+                    font-size: 0.91rem;
+                }
+            }
             .result-tone-warn .result-kv-value { color: #fbbf24; }
             .result-tone-info .result-kv-value { color: #93c5fd; }
 
@@ -2321,6 +2381,7 @@ HTML_TEMPLATE = """
                     <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
                     <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
                     <button onclick="showTab('brand')" id="btn-brand" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🛡️</span> حماية العلامة</button>
+                    <button onclick="showTab('ctf')" id="btn-ctf" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span class="inline-block animate-pulse">🏁</span> CTF</button>
                     <button onclick="showTab('se')" id="btn-se" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🎭</span> الهندسة الاجتماعية</button>
                 </div>
                 </div>
@@ -3338,6 +3399,36 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
+            <div id="ctf-section" class="hidden space-y-6 ctf-ui">
+                <h2 class="ctf-main-title font-bold text-amber-400 border-b border-slate-700 pb-2 flex items-center gap-2"><span class="inline-block animate-pulse">🏁</span> CTF TRAINING</h2>
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2">
+                        <div>
+                            <div class="ctf-section-label text-amber-300">تحديات متجددة + مساعد AI</div>
+                            <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">التحديات تتجدد تلقائياً كل فترة. مساعد AI يشرح المنهجية ويعطي تلميحات خطوة بخطوة بدون كشف العلم النهائي.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="ctfLoadChallenges(true)" class="px-3 py-2 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تحديث التحديات</button>
+                        </div>
+                    </div>
+                    <div class="flex flex-col md:flex-row gap-2 mb-2">
+                        <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="all" selected>كل الصعوبات</option>
+                            <option value="easy">Easy</option>
+                            <option value="medium">Medium</option>
+                            <option value="hard">Hard</option>
+                        </select>
+                        <label class="flex items-center gap-2 text-xs px-3 rounded-lg border border-slate-700 bg-slate-900/60">
+                            <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
+                            <span class="text-gray-300">عرض غير المحلولة فقط</span>
+                        </label>
+                    </div>
+                    <div id="ctfMeta" class="ctf-meta-text text-gray-300 bg-black/40 border border-slate-700 rounded-lg p-2 ctf-bidi">جار تحميل بيانات CTF...</div>
+                </div>
+
+                <div id="ctfList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </div>
+
             <div id="ir-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-red-400 border-b border-slate-700 pb-2">🚨 Incident Response</h2>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -3895,6 +3986,48 @@ HTML_TEMPLATE = """
                 if (forgotForm) forgotForm.style.display = 'block';
                 if(loginTab) { loginTab.style.background = 'transparent'; loginTab.style.color = '#6b7280'; }
                 if(regTab) { regTab.style.background = 'transparent'; regTab.style.color = '#6b7280'; }
+                setupForgotFromLogin(true);
+            }
+        }
+
+        function setupForgotFromLogin(autoSend) {
+            const loginUser = document.getElementById('auth-login-user');
+            const forgotUser = document.getElementById('forgot-username');
+            const step1 = document.getElementById('forgot-step1');
+            const step2 = document.getElementById('forgot-step2');
+            const step3 = document.getElementById('forgot-step3');
+            const step1Err = document.getElementById('forgot-step1-error');
+            const step2Err = document.getElementById('forgot-step2-error');
+            const step3Err = document.getElementById('forgot-step3-error');
+            const otpEl = document.getElementById('forgot-otp');
+            const pass1El = document.getElementById('forgot-newpass');
+            const pass2El = document.getElementById('forgot-newpass2');
+
+            if (!forgotUser) return;
+
+            const username = (loginUser?.value || '').trim();
+            if (username) {
+                forgotUser.value = username;
+            }
+
+            if (step1) step1.style.display = 'block';
+            if (step2) step2.style.display = 'none';
+            if (step3) step3.style.display = 'none';
+            if (step1Err) step1Err.style.display = 'none';
+            if (step2Err) step2Err.style.display = 'none';
+            if (step3Err) step3Err.style.display = 'none';
+            if (otpEl) otpEl.value = '';
+            if (pass1El) pass1El.value = '';
+            if (pass2El) pass2El.value = '';
+
+            if (autoSend && username) {
+                doForgotSend();
+            } else if (!username) {
+                if (step1Err) {
+                    step1Err.textContent = 'اكتب اسم المستخدم أولاً ليتم إرسال كود الاستعادة تلقائياً.';
+                    step1Err.style.display = 'block';
+                }
+                forgotUser.focus();
             }
         }
 
@@ -4018,6 +4151,12 @@ HTML_TEMPLATE = """
 
             errEl.style.display = 'none';
             if (!username || !password) { errEl.textContent = 'يرجى إدخال اسم المستخدم وكلمة السر'; errEl.style.display = 'block'; return; }
+
+            const passHint = String(password || '').trim().toLowerCase();
+            if (passHint === 'forgot' || passHint === 'forget' || passHint === 'نسيت' || passHint === 'نسيت كلمة السر') {
+                switchAuthTab('forgot');
+                return;
+            }
 
             btn.textContent = '⏳ جاري التحقق...';
             btn.disabled = true;
@@ -4615,7 +4754,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','ir','forensics','brand','se','audio','video','qr','identity','admin'];
+        const ALL_TABS = ['dash','pass','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','ctf','ir','forensics','brand','se','audio','video','qr','identity','admin'];
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
 
@@ -5005,6 +5144,7 @@ HTML_TEMPLATE = """
             }
             if(type === 'tools' && typeof fetchIpIntel === 'function') fetchIpIntel();
             if(type === 'osint' && typeof loadOsintWatchlist === 'function') loadOsintWatchlist();
+            if(type === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if(type === 'ir' && typeof irLoadCases === 'function') irLoadCases();
             if(type === 'se' && typeof seLoadIntelBoard === 'function') seLoadIntelBoard();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
@@ -5598,6 +5738,7 @@ HTML_TEMPLATE = """
             document.getElementById('vf-step2').style.display = 'none';
             document.getElementById('vf-step3').style.display = 'none';
             document.getElementById('vf-error').style.display = 'none';
+            doVaultForgotSend();
         }
 
         function closeVaultForgot() {
@@ -6298,6 +6439,229 @@ HTML_TEMPLATE = """
             box.className = `mt-3 p-3 rounded-xl border text-sm font-bold ${color}`;
             box.innerText = `Risk Score: ${n}/100 - ${label}`;
             box.classList.remove('hidden');
+        }
+
+        let _ctfChallenges = [];
+
+        function _ctfDifficultyClass(level) {
+            const t = String(level || '').toLowerCase();
+            if (t === 'easy') return 'text-emerald-300 border-emerald-800/50 bg-emerald-900/20';
+            if (t === 'hard') return 'text-rose-300 border-rose-800/50 bg-rose-900/20';
+            return 'text-amber-300 border-amber-800/50 bg-amber-900/20';
+        }
+
+        function ctfApplyFilters() {
+            const diff = (document.getElementById('ctfFilterDifficulty')?.value || 'all').toLowerCase();
+            const unsolvedOnly = !!document.getElementById('ctfFilterUnsolved')?.checked;
+            const source = Array.isArray(_ctfChallenges) ? _ctfChallenges : [];
+            const filtered = source.filter((c) => {
+                if (diff !== 'all' && String(c.difficulty || '').toLowerCase() !== diff) return false;
+                if (unsolvedOnly && c.solved) return false;
+                return true;
+            });
+            _ctfRenderList(filtered);
+        }
+
+        function _ctfRenderList(items) {
+            const box = document.getElementById('ctfList');
+            if (!box) return;
+            if (!items || !items.length) {
+                box.innerHTML = '<div class="text-xs text-gray-500">لا توجد تحديات حالياً.</div>';
+                return;
+            }
+
+            box.innerHTML = items.map((c) => {
+                const solved = !!c.solved;
+                const hints = Array.isArray(c.hints) ? c.hints : [];
+                const hintsHtml = hints.length
+                    ? hints.map((h, i) => `<li class="text-sm text-gray-200 ctf-bidi"><span class="text-amber-300 font-mono ctf-ltr">${i + 1}.</span> ${_osintEscape(h)}</li>`).join('')
+                    : '<li class="text-sm text-gray-400 ctf-bidi">لا توجد تلميحات إضافية.</li>';
+                const fileBlock = c.download_required
+                    ? `<div class="space-y-2 rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
+                            <div class="text-sm font-bold text-amber-300 ctf-bidi">ملف التحدي الإجباري</div>
+                            <div class="text-sm text-gray-200 ctf-bidi">هذا التحدي يتطلب تنزيل ملف المعطيات أولاً ثم استخراج المطلوب منه.</div>
+                            <div class="flex flex-wrap items-center gap-2 text-sm">
+                                <span class="px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-cyan-300 font-mono ctf-ltr">${_osintEscape(c.download_name || 'challenge.txt')}</span>
+                                <button onclick="ctfDownloadAsset('${_osintEscape(c.id)}')" class="px-3 py-1.5 rounded-lg bg-amber-900/50 border border-amber-800/50 text-amber-200 text-xs font-bold hover:bg-amber-800/60">تنزيل الملف</button>
+                            </div>
+                        </div>`
+                    : '';
+                const solvedBadge = solved
+                    ? '<span class="text-[10px] px-2 py-1 rounded border border-emerald-800/50 bg-emerald-900/20 text-emerald-300">Solved</span>'
+                    : '<span class="text-[10px] px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">Unsolved</span>';
+                return `
+                    <div class="ctf-card bg-slate-900/60 p-4 rounded-xl border border-amber-900/35 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <h3 class="ctf-card-title text-amber-300 ctf-bidi">${_osintEscape(c.title || 'Challenge')}</h3>
+                            ${solvedBadge}
+                        </div>
+                        <div class="flex flex-wrap gap-2 text-[11px]">
+                            <span class="px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">${_osintEscape(c.category || 'misc')}</span>
+                            <span class="px-2 py-1 rounded border ${_ctfDifficultyClass(c.difficulty)}">${_osintEscape(String(c.difficulty || '').toUpperCase())}</span>
+                            <span class="px-2 py-1 rounded border border-violet-800/50 bg-violet-900/20 text-violet-300">${_osintEscape(c.points || 0)} pts</span>
+                        </div>
+
+                        <div class="space-y-2 rounded-lg border border-slate-700/70 bg-black/25 p-3">
+                            <div class="text-sm font-bold text-cyan-300 ctf-bidi">تفاصيل التحدي</div>
+                            <div class="ctf-bidi text-gray-200 whitespace-pre-wrap">${_osintEscape(c.description || '')}</div>
+                            <div class="text-sm text-gray-300 ctf-bidi">صيغة العلم: <span class="font-mono text-amber-300 ctf-ltr">${_osintEscape(c.flag_format || 'TITAN{...}')}</span></div>
+                        </div>
+
+                        <div class="space-y-2 rounded-lg border border-slate-700/70 bg-black/25 p-3">
+                            <div class="text-sm font-bold text-violet-300 ctf-bidi">كيف أفكر بالحل؟</div>
+                            <div class="ctf-bidi text-gray-200">${_osintEscape(c.method || 'ابدأ بتحليل المعطيات وتقسيم المشكلة لخطوات صغيرة.')}</div>
+                        </div>
+
+                        ${fileBlock}
+
+                        <div class="space-y-2 rounded-lg border border-slate-700/70 bg-black/25 p-3">
+                            <div class="text-sm font-bold text-amber-300 ctf-bidi">تلميحات سريعة</div>
+                            <ol class="space-y-1">${hintsHtml}</ol>
+                        </div>
+
+                        <div class="space-y-2">
+                            <input id="ctf-flag-${_osintEscape(c.id)}" type="text" placeholder="أدخل العلم هنا..." class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm font-mono ctf-ltr" dir="ltr">
+                            <div class="flex gap-2">
+                                <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-amber-900/40 border border-amber-800/50 text-amber-300 text-xs font-bold">تحقق من الحل</button>
+                                <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-violet-900/40 border border-violet-800/50 text-violet-300 text-xs font-bold">مساعد AI</button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <textarea id="ctf-q-${_osintEscape(c.id)}" rows="2" placeholder="اسأل مساعد AI: مثال ما أول خطوة؟" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm ctf-bidi"></textarea>
+                            <div id="ctf-ai-${_osintEscape(c.id)}" class="hidden p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi"></div>
+                            <div id="ctf-res-${_osintEscape(c.id)}" class="hidden p-2 rounded-lg bg-black/40 border border-slate-700 text-sm ctf-bidi"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function ctfLoadChallenges(forceRefresh) {
+            const meta = document.getElementById('ctfMeta');
+            if (meta) meta.innerText = 'جار تحميل تحديات CTF...';
+            try {
+                const suffix = forceRefresh ? '?refresh=1' : '';
+                const res = await fetch('/api/ctf/challenges' + suffix);
+                const data = await res.json();
+                if (!data.success) {
+                    if (meta) meta.innerText = data.error || 'فشل تحميل التحديات.';
+                    return;
+                }
+                _ctfChallenges = data.challenges || [];
+                ctfApplyFilters();
+                if (meta) {
+                    const solved = Number(data.solved_count || 0);
+                    const total = Number((_ctfChallenges || []).length);
+                    const totalSolved = Number(data.total_solved || solved);
+                    meta.innerText = `الدورة: ${data.rotation_key || '-'} | محلول في الدفعة: ${solved}/${total} | إجمالي المحلول: ${totalSolved} | آخر تحديث: ${new Date().toLocaleTimeString()}`;
+                }
+            } catch (e) {
+                if (meta) meta.innerText = `تعذر تحميل التحديات: ${e.message || e}`;
+            }
+        }
+
+        function ctfDownloadAsset(challengeId) {
+            if (!challengeId) return;
+            const url = '/api/ctf/challenge-file/' + encodeURIComponent(challengeId) + '?t=' + Date.now();
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+
+        async function ctfSubmit(challengeId) {
+            const input = document.getElementById('ctf-flag-' + challengeId);
+            const out = document.getElementById('ctf-res-' + challengeId);
+            if (!input || !out) return;
+            const answer = (input.value || '').trim();
+            if (!answer) return titanAlert('ادخل العلم أولاً.');
+
+            const card = out.closest('.ctf-card') || out.closest('div');
+            const actionButtons = card ? Array.from(card.querySelectorAll('button')) : [];
+            let keepLocked = false;
+
+            out.classList.remove('hidden');
+            out.innerText = 'جار التحقق...';
+            input.disabled = true;
+            actionButtons.forEach((b) => b.disabled = true);
+            try {
+                const res = await fetch('/api/ctf/submit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ challenge_id: challengeId, answer })
+                });
+                const data = await res.json();
+                if (data.correct) {
+                    keepLocked = true;
+                    out.className = 'p-2 rounded-lg bg-emerald-900/20 border border-emerald-800/50 text-sm text-emerald-300 ctf-bidi';
+                    let secondsLeft = 5;
+                    out.innerText = `✅ الحل صحيح! +${data.points || 0} نقطة. سيتم عرض تحدٍ جديد مختلف خلال ${secondsLeft} ثوانٍ...`;
+
+                    if (!window.__ctfSwapTimers) window.__ctfSwapTimers = {};
+                    if (window.__ctfSwapTimers[challengeId]) {
+                        clearInterval(window.__ctfSwapTimers[challengeId]);
+                    }
+
+                    window.__ctfSwapTimers[challengeId] = setInterval(() => {
+                        secondsLeft -= 1;
+                        if (secondsLeft <= 0) {
+                            clearInterval(window.__ctfSwapTimers[challengeId]);
+                            delete window.__ctfSwapTimers[challengeId];
+                            ctfLoadChallenges(true);
+                            return;
+                        }
+                        out.innerText = `✅ الحل صحيح! +${data.points || 0} نقطة. سيتم عرض تحدٍ جديد مختلف خلال ${secondsLeft} ثوانٍ...`;
+                    }, 1000);
+                    return;
+                } else {
+                    out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 ctf-bidi';
+                    out.innerText = `❌ غير صحيح. ${data.message || 'حاول مرة ثانية.'}`;
+                }
+            } catch (e) {
+                out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 ctf-bidi';
+                out.innerText = `تعذر التحقق: ${e.message || e}`;
+            } finally {
+                if (!keepLocked) {
+                    input.disabled = false;
+                    actionButtons.forEach((b) => b.disabled = false);
+                }
+            }
+        }
+
+        async function ctfAskAi(challengeId) {
+            const qEl = document.getElementById('ctf-q-' + challengeId);
+            const out = document.getElementById('ctf-ai-' + challengeId);
+            const aEl = document.getElementById('ctf-flag-' + challengeId);
+            if (!qEl || !out) return;
+
+            const question = (qEl.value || '').trim() || 'اشرح لي أول 3 خطوات للحل بدون كشف الإجابة النهائية.';
+            const attempt = (aEl?.value || '').trim();
+
+            out.classList.remove('hidden');
+            out.className = 'p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi';
+            out.innerText = 'AI يفكر...';
+            try {
+                const res = await fetch('/api/ctf/assistant', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ challenge_id: challengeId, question, attempt })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 whitespace-pre-wrap ctf-bidi';
+                    out.innerText = data.error || 'فشل مساعد AI.';
+                    return;
+                }
+                out.className = 'p-2 rounded-lg bg-violet-900/20 border border-violet-800/50 text-sm text-violet-200 whitespace-pre-wrap ctf-bidi';
+                out.innerText = data.reply || 'لا يوجد رد.';
+            } catch (e) {
+                out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 whitespace-pre-wrap ctf-bidi';
+                out.innerText = `فشل الاتصال: ${e.message || e}`;
+            }
         }
 
         async function runUnifiedOsint() {
@@ -10982,6 +11346,608 @@ def vault_timelocked_download():
 
 
 
+
+
+# =====================================================================
+# === CTF Arena Routes ===
+# =====================================================================
+
+def _ctf_rotation_key() -> str:
+    now = datetime.datetime.utcnow()
+    slot = now.hour // 4
+    return f"{now.strftime('%Y%m%d')}-slot{slot}"
+
+
+def _ctf_seed_for_user(user_id, rotation_key: str, extra_nonce: str = '') -> int:
+    base = f"{user_id}|{rotation_key}|{extra_nonce}"
+    digest = hashlib.sha256(base.encode('utf-8')).hexdigest()
+    return int(digest[:16], 16)
+
+
+def _ctf_caesar_encrypt(text: str, shift: int) -> str:
+    out = []
+    for ch in text:
+        if 'a' <= ch <= 'z':
+            out.append(chr((ord(ch) - 97 + shift) % 26 + 97))
+        elif 'A' <= ch <= 'Z':
+            out.append(chr((ord(ch) - 65 + shift) % 26 + 65))
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
+def _ctf_xor_hex(text: str, key_char: str) -> str:
+    kb = ord(key_char)
+    return ''.join(f"{(ord(c) ^ kb):02x}" for c in text)
+
+
+def _build_ctf_challenges(user_id, force_nonce: str = ''):
+    rotation_key = _ctf_rotation_key()
+    rng = random.Random(_ctf_seed_for_user(user_id, rotation_key, force_nonce))
+
+    # Challenge 1: Base64
+    b64_token = f"B64_{rng.randint(1000, 9999)}_{rng.choice(['FOX', 'NOVA', 'BYTE'])}"
+    b64_flag = f"TITAN{{{b64_token}}}"
+    b64_payload = base64.b64encode(b64_flag.encode('utf-8')).decode('ascii')
+
+    # Challenge 2: Caesar
+    caesar_word = rng.choice(['ciphertrail', 'shadowpacket', 'matrixroute', 'neonvector'])
+    caesar_shift = rng.randint(2, 9)
+    caesar_cipher = _ctf_caesar_encrypt(caesar_word, caesar_shift)
+    caesar_flag = f"TITAN{{{caesar_word}}}"
+
+    # Challenge 3: SHA1 + mini wordlist logic
+    leak_word = rng.choice(['falcon', 'phantom', 'quantum', 'stalker', 'vortex'])
+    leak_num = rng.randint(10, 99)
+    leak_plain = f"{leak_word}{leak_num}"
+    leak_sha1 = hashlib.sha1(leak_plain.encode('utf-8')).hexdigest()
+    leak_flag = f"TITAN{{{leak_plain}}}"
+
+    # Challenge 4: Epoch time conversion
+    base_dt = datetime.datetime(2026, rng.randint(1, 12), rng.randint(1, 25), rng.randint(0, 23), rng.randint(0, 59), 0)
+    epoch_val = int(base_dt.timestamp())
+    epoch_answer = base_dt.strftime('%Y%m%d_%H%M')
+    epoch_flag = f"TITAN{{{epoch_answer}}}"
+
+    # Challenge 5: XOR
+    xor_plain = rng.choice(['ctf_is_fun', 'learn_by_breaking', 'logic_over_luck', 'trace_the_bits'])
+    xor_key = rng.choice(['K', 'Q', 'Z', 'M', 'R'])
+    xor_hex = _ctf_xor_hex(xor_plain, xor_key)
+    xor_flag = f"TITAN{{{xor_plain}}}"
+
+    # Challenge 6: ROT13
+    rot13_word = rng.choice(['packetstorm', 'cybermatrix', 'threatmodel', 'securevector'])
+    rot13_map = str.maketrans(
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        'NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm'
+    )
+    rot13_cipher = rot13_word.translate(rot13_map)
+    rot13_flag = f"TITAN{{{rot13_word}}}"
+
+    # Challenge 7: Hex to ASCII
+    hex_plain = rng.choice(['redteamblue', 'trace_route', 'signal_chain', 'rapid_forensics'])
+    hex_payload = hex_plain.encode('utf-8').hex()
+    hex_flag = f"TITAN{{{hex_plain}}}"
+
+    # Challenge 8: Binary to text
+    bin_plain = rng.choice(['node_sync', 'intel_probe', 'darktrace', 'vault_unlock'])
+    bin_payload = ' '.join(format(ord(c), '08b') for c in bin_plain)
+    bin_flag = f"TITAN{{{bin_plain}}}"
+
+    # Hard downloadable challenge A: Forensic log hunt
+    log_token = f"LOG-{rng.randint(100,999)}-{rng.choice(['ALPHA','DELTA','NOVA'])}-{rng.randint(10,99)}"
+    log_flag = f"TITAN{{{log_token}}}"
+    log_lines = [
+        '2026-03-28T10:21:11Z INFO auth login user=svc_monitor status=ok',
+        '2026-03-28T10:22:44Z WARN api unusual endpoint=/internal/metrics source=10.0.2.18',
+        f'2026-03-28T10:23:39Z ALERT secret_leak indicator={log_token} channel=debug_dump',
+        '2026-03-28T10:24:08Z INFO mitigation enabled rule=R-71',
+        '2026-03-28T10:25:02Z INFO trace session closed'
+    ]
+    log_file_content = '\n'.join(log_lines) + '\n'
+
+    # Hard downloadable challenge B: Incident JSON
+    json_code = f"INC-{rng.randint(1000,9999)}-{rng.choice(['QX','ZT','MK'])}"
+    json_flag = f"TITAN{{{json_code}}}"
+    json_file_obj = {
+        "case_id": f"CASE-{rng.randint(10000,99999)}",
+        "severity": rng.choice(["high", "critical"]),
+        "timeline": [
+            {"t": "10:31:09", "event": "suspicious dns burst"},
+            {"t": "10:31:55", "event": "lateral movement candidate"},
+            {"t": "10:32:10", "event": "containment started"}
+        ],
+        "artifact": {
+            "key": json_code,
+            "note": "Use this artifact key in final flag format"
+        }
+    }
+    incident_json_content = json.dumps(json_file_obj, ensure_ascii=False, indent=2)
+
+    # Kali-focused challenge C: Nmap analysis
+    nmap_target = f"10.{rng.randint(10, 200)}.{rng.randint(1, 254)}.{rng.randint(1, 254)}"
+    nmap_secret_port = rng.choice([2121, 8081, 8888, 9090])
+    nmap_flag = f"TITAN{{{nmap_secret_port}}}"
+    nmap_output = (
+        f"Nmap scan report for {nmap_target}\n"
+        "PORT     STATE SERVICE VERSION\n"
+        "22/tcp   open  ssh     OpenSSH 8.4p1\n"
+        "80/tcp   open  http    nginx 1.22\n"
+        f"{nmap_secret_port}/tcp open  http    Node.js Express debug panel\n"
+        "MAC Address: 08:00:27:AA:BB:CC (Oracle VirtualBox virtual NIC)"
+    )
+
+    # Kali-focused challenge D: Gobuster directory discovery
+    gobuster_dir = rng.choice(['/admin-portal', '/backup-2026', '/dev-internal', '/hidden-dashboard'])
+    gobuster_flag = f"TITAN{{{gobuster_dir.strip('/')}}}"
+    gobuster_output = (
+        "===============================================================\n"
+        "Gobuster v3.6\n"
+        "===============================================================\n"
+        f"/assets               (Status: 301) [Size: 312]\n"
+        f"/api                  (Status: 200) [Size: 845]\n"
+        f"{gobuster_dir:<22} (Status: 200) [Size: 1932]\n"
+        "/server-status        (Status: 403) [Size: 277]"
+    )
+
+    # Kali-focused challenge E: John/hash cracking
+    john_plain = rng.choice(['shadowfox22', 'kali_master7', 'blue_team99', 'red_ops42'])
+    john_hash = hashlib.md5(john_plain.encode('utf-8')).hexdigest()
+    john_flag = f"TITAN{{{john_plain}}}"
+
+    # Kali-focused challenge F: Binwalk firmware analysis
+    fw_offset = rng.choice([24576, 32768, 40960, 49152])
+    fw_artifact = rng.choice(['flag.db', 'creds.txt', 'vault.key', 'secret.env'])
+    binwalk_flag = f"TITAN{{{fw_artifact}}}"
+    binwalk_output = (
+        "DECIMAL       HEXADECIMAL     DESCRIPTION\n"
+        "--------------------------------------------------------------------------------\n"
+        "0             0x0             uImage header, header size: 64 bytes\n"
+        "1024          0x400           LZMA compressed data\n"
+        f"{fw_offset:<13} 0x{fw_offset:04X}          Squashfs filesystem, little endian\n"
+        f"{fw_offset + 2048:<13} 0x{fw_offset + 2048:04X}          ASCII text, contains: {fw_artifact}\n"
+    )
+
+    challenges = [
+        {
+            'id': 'ctf_b64',
+            'title': 'Base64 Warmup',
+            'category': 'crypto',
+            'difficulty': 'easy',
+            'points': 100,
+            'flag_format': 'TITAN{...}',
+            'description': (
+                "المطلوب: فك ترميز النص التالي من Base64 ثم إرسال العلم الناتج كما هو.\n"
+                f"Base64 Payload:\n{b64_payload}"
+            ),
+            'hints': [
+                'استخدم أي أداة Base64 decode.',
+                'الناتج نفسه هو العلم النهائي.'
+            ],
+            'method': 'تحويل النص من Base64 إلى نص عادي ثم التحقق من شكل العلم.',
+            'answer': b64_flag
+        },
+        {
+            'id': 'ctf_caesar',
+            'title': 'Caesar Tunnel',
+            'category': 'crypto',
+            'difficulty': 'medium',
+            'points': 150,
+            'flag_format': 'TITAN{word}',
+            'description': (
+                f"النص المشفّر: {caesar_cipher}\\n"
+                f"نوع التشفير: Caesar Cipher بإزاحة = {caesar_shift}.\\n"
+                "استخرج الكلمة الأصلية lowercase ثم لفّها بصيغة العلم TITAN{word}."
+            ),
+            'hints': [
+                'فك قيصر يعني إرجاع الحروف للخلف بنفس قيمة الإزاحة.',
+                'الناتج كلمة إنجليزية lowercase.'
+            ],
+            'method': 'فك Caesar بإرجاع كل حرف للخلف بمقدار shift ثم تغليفه داخل العلم.',
+            'answer': caesar_flag
+        },
+        {
+            'id': 'ctf_hash',
+            'title': 'Hash Peek',
+            'category': 'forensics',
+            'difficulty': 'medium',
+            'points': 170,
+            'flag_format': 'TITAN{wordNN}',
+            'description': (
+                f"لدينا SHA1 Hash: {leak_sha1}\\n"
+                "الـ plaintext يتكوّن من كلمة واحدة من القائمة [falcon, phantom, quantum, stalker, vortex] ثم رقمين."
+            ),
+            'hints': [
+                'جرب brute force صغير على 5 كلمات × 90 احتمال رقم.',
+                'قارن SHA1 لكل مرشح مع الهاش المعطى.'
+            ],
+            'method': 'توليد كل المرشحين المحتملين وحساب SHA1 حتى تجد التطابق.',
+            'answer': leak_flag
+        },
+        {
+            'id': 'ctf_epoch',
+            'title': 'Time Decoder',
+            'category': 'osint',
+            'difficulty': 'easy',
+            'points': 120,
+            'flag_format': 'TITAN{YYYYMMDD_HHMM}',
+            'description': (
+                f"قيمة الـ UNIX epoch المعطاة: {epoch_val}\\n"
+                "حوّلها إلى UTC ثم اكتبها بالتنسيق YYYYMMDD_HHMM وبعدها ضعها داخل العلم."
+            ),
+            'hints': [
+                'epoch -> UTC datetime conversion.',
+                'انتبه لتنسيق الدقائق بدون ثواني.'
+            ],
+            'method': 'تحويل epoch إلى UTC ثم تنسيق التاريخ بالشكل المطلوب.',
+            'answer': epoch_flag
+        },
+        {
+            'id': 'ctf_xor',
+            'title': 'XOR Trace',
+            'category': 'reverse',
+            'difficulty': 'hard',
+            'points': 220,
+            'flag_format': 'TITAN{plaintext}',
+            'description': (
+                f"Hex stream: {xor_hex}\\n"
+                f"هذا النص تم XOR عليه بايت-بايت باستخدام حرف مفتاح واحد: '{xor_key}'.\\n"
+                "استخرج النص الأصلي plaintext ثم أرسله بصيغة العلم."
+            ),
+            'hints': [
+                'قسّم الـ hex إلى بايتات.',
+                'لكل بايت: original = cipher ^ key.'
+            ],
+            'method': 'فك XOR على كل بايت باستخدام المفتاح الأحادي ثم تحويل الناتج لنص.',
+            'answer': xor_flag
+        },
+        {
+            'id': 'ctf_rot13',
+            'title': 'ROT13 Relay',
+            'category': 'crypto',
+            'difficulty': 'easy',
+            'points': 110,
+            'flag_format': 'TITAN{word}',
+            'description': (
+                f"النص الحالي مشفّر بـ ROT13: {rot13_cipher}\\n"
+                "فك النص ثم أرسله بصيغة TITAN{word}."
+            ),
+            'hints': [
+                'ROT13 يستبدل كل حرف بالحرف الذي يبعد 13 مكان.',
+                'تطبيق ROT13 مرة ثانية يعيد النص الأصلي.'
+            ],
+            'method': 'طبّق ROT13 على النص المعطى ثم لف الناتج بصيغة العلم.',
+            'answer': rot13_flag
+        },
+        {
+            'id': 'ctf_hex',
+            'title': 'Hex Signal',
+            'category': 'reverse',
+            'difficulty': 'medium',
+            'points': 160,
+            'flag_format': 'TITAN{plaintext}',
+            'description': (
+                f"Hex data: {hex_payload}\\n"
+                "حوّل hex إلى ASCII ثم أرسل الناتج بصيغة العلم."
+            ),
+            'hints': [
+                'كل بايت في hex = رقمين.',
+                'بعد التحويل ستظهر كلمة/عبارة واضحة.'
+            ],
+            'method': 'قسّم hex إلى بايتات ثم حوّل كل بايت إلى محرف ASCII.',
+            'answer': hex_flag
+        },
+        {
+            'id': 'ctf_binary',
+            'title': 'Binary Trail',
+            'category': 'forensics',
+            'difficulty': 'medium',
+            'points': 175,
+            'flag_format': 'TITAN{plaintext}',
+            'description': (
+                f"Binary stream: {bin_payload}\\n"
+                "حوّل القيم الثنائية إلى نص ASCII ثم أرسل العلم."
+            ),
+            'hints': [
+                'كل 8 بت تمثل حرفاً واحداً.',
+                'حوّل من binary -> decimal -> char.'
+            ],
+            'method': 'ترجمة كل 8-bit إلى محرف ASCII ثم دمج النص.',
+            'answer': bin_flag
+        },
+        {
+            'id': 'ctf_logfile',
+            'title': 'Logfile Breach Hunt',
+            'category': 'forensics',
+            'difficulty': 'hard',
+            'points': 260,
+            'flag_format': 'TITAN{LOG-...}',
+            'description': (
+                "هذا تحدي صعب مع ملف إلزامي.\\n"
+                "نزل ملف السجلات، استخرج مؤشر التسريب indicator من سطر ALERT، ثم أرسله داخل العلم."
+            ),
+            'hints': [
+                'ابحث عن السطر الذي يحتوي ALERT.',
+                'القيمة المطلوبة تظهر بعد indicator= مباشرة.'
+            ],
+            'method': 'تحليل ملف السجلات واستخراج قيمة indicator المطلوبة.',
+            'download_required': True,
+            'download_name': 'ctf_log_hunt.txt',
+            'file_payload': log_file_content,
+            'answer': log_flag
+        },
+        {
+            'id': 'ctf_incident_json',
+            'title': 'Incident Artifact',
+            'category': 'osint',
+            'difficulty': 'hard',
+            'points': 280,
+            'flag_format': 'TITAN{INC-...}',
+            'description': (
+                "هذا تحدي صعب مع ملف JSON إلزامي.\\n"
+                "نزل الملف، ادخل إلى artifact.key، وخذ القيمة كما هي داخل العلم."
+            ),
+            'hints': [
+                'افتح الملف كـ JSON وابحث عن الكائن artifact.',
+                'المطلوب هو قيمة الحقل key فقط.'
+            ],
+            'method': 'تحليل بنية JSON واستخراج artifact.key بشكل دقيق.',
+            'download_required': True,
+            'download_name': 'incident_artifact.json',
+            'file_payload': incident_json_content,
+            'answer': json_flag
+        },
+        {
+            'id': 'ctf_kali_nmap',
+            'title': 'Kali Tool Drill: Nmap Service Hunt',
+            'category': 'kali-tools',
+            'difficulty': 'medium',
+            'points': 190,
+            'flag_format': 'TITAN{PORT}',
+            'description': (
+                "تدريب Kali (nmap): حلّل نتيجة الفحص وحدد البورت الخاص بلوحة debug المكشوفة.\n"
+                "أدخل رقم البورت داخل العلم بصيغة TITAN{PORT}.\n\n"
+                f"Nmap Output:\n{nmap_output}"
+            ),
+            'hints': [
+                'ابحث عن السطر الذي يحتوي debug panel.',
+                'المطلوب هو رقم البورت فقط داخل العلم.'
+            ],
+            'method': 'قراءة مخرجات nmap واستخراج البورت الأكثر حساسية (لوحة debug).',
+            'answer': nmap_flag
+        },
+        {
+            'id': 'ctf_kali_gobuster',
+            'title': 'Kali Tool Drill: Gobuster Discovery',
+            'category': 'kali-tools',
+            'difficulty': 'easy',
+            'points': 160,
+            'flag_format': 'TITAN{dirname}',
+            'description': (
+                "تدريب Kali (gobuster): من مخرجات اكتشاف المسارات، حدّد المسار الحساس الذي رجع Status 200.\n"
+                "اكتب اسم المجلد بدون / داخل العلم.\n\n"
+                f"Gobuster Output:\n{gobuster_output}"
+            ),
+            'hints': [
+                'ابحث عن المسار غير المعتاد مع Status 200.',
+                'احذف الشرطة / من بداية المسار قبل وضعه داخل العلم.'
+            ],
+            'method': 'تحليل مخرجات gobuster والتركيز على المسار غير الطبيعي القابل للوصول.',
+            'answer': gobuster_flag
+        },
+        {
+            'id': 'ctf_kali_john',
+            'title': 'Kali Tool Drill: John The Ripper',
+            'category': 'kali-tools',
+            'difficulty': 'medium',
+            'points': 210,
+            'flag_format': 'TITAN{password}',
+            'description': (
+                "تدريب Kali (john): لديك MD5 hash لكلمة مرور. اكسر الهاش باستخدام wordlist بسيطة.\n"
+                "عند معرفة كلمة المرور، ضعها داخل العلم.\n\n"
+                f"MD5 Hash: {john_hash}"
+            ),
+            'hints': [
+                'استخدم john أو hashcat بوضع md5.',
+                'الناتج كلمة مرور lowercase مع أرقام في النهاية.'
+            ],
+            'method': 'تشغيل john/hashcat على hash md5 ثم أخذ plaintext كما هو.',
+            'answer': john_flag
+        },
+        {
+            'id': 'ctf_kali_binwalk',
+            'title': 'Kali Tool Drill: Binwalk Firmware Peek',
+            'category': 'kali-tools',
+            'difficulty': 'hard',
+            'points': 260,
+            'flag_format': 'TITAN{artifact_name}',
+            'description': (
+                "تدريب Kali (binwalk): راجع مخرجات firmware analysis وحدد اسم الـ artifact المكتوب داخل النص.\n"
+                "أدخل الاسم كما هو داخل العلم.\n\n"
+                f"Binwalk Output:\n{binwalk_output}"
+            ),
+            'hints': [
+                'السطر الأخير يحتوي اسم الملف المطلوب مباشرة.',
+                'المطلوب اسم الملف فقط وليس الإزاحة.'
+            ],
+            'method': 'قراءة مخرجات binwalk واستخراج اسم الملف المضمّن داخل النص.',
+            'answer': binwalk_flag
+        },
+    ]
+
+    return challenges, rotation_key
+
+
+def _get_ctf_session_state(force_refresh: bool = False):
+    if 'user_id' not in session:
+        return None, None
+
+    if force_refresh:
+        session['ctf_force_nonce'] = uuid.uuid4().hex[:8]
+
+    nonce = session.get('ctf_force_nonce', '')
+    challenges, rotation_key = _build_ctf_challenges(session['user_id'], nonce)
+    answers = {c['id']: c['answer'] for c in challenges}
+
+    session['ctf_rotation_key'] = rotation_key
+    session['ctf_answers'] = answers
+    session.setdefault('ctf_solved', [])
+    session.setdefault('ctf_total_solved', 0)
+    session.setdefault('ctf_total_points', 0)
+
+    solved_set = set(session.get('ctf_solved', []))
+    public = []
+    for c in challenges:
+        cc = {k: v for k, v in c.items() if k not in ('answer', 'file_payload')}
+        cc['solved'] = c['id'] in solved_set
+        public.append(cc)
+
+    return public, rotation_key
+
+
+@app.route('/api/ctf/challenges', methods=['GET'])
+def ctf_challenges_route():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+
+    refresh = request.args.get('refresh', '0') == '1'
+    challenges, rotation_key = _get_ctf_session_state(force_refresh=refresh)
+    if challenges is None:
+        return jsonify({"success": False, "error": "failed to build ctf state"}), 500
+
+    solved = session.get('ctf_solved', []) or []
+    total_solved = int(session.get('ctf_total_solved', 0) or 0)
+    total_points = int(session.get('ctf_total_points', 0) or 0)
+    return jsonify({
+        "success": True,
+        "rotation_key": rotation_key,
+        "solved_count": len(solved),
+        "total_solved": total_solved,
+        "total_points": total_points,
+        "challenges": challenges
+    })
+
+
+@app.route('/api/ctf/submit', methods=['POST'])
+def ctf_submit_route():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+
+    data = request.json or {}
+    challenge_id = (data.get('challenge_id') or '').strip()
+    answer = (data.get('answer') or '').strip()
+    if not challenge_id or not answer:
+        return jsonify({"success": False, "error": "challenge_id and answer required"}), 400
+
+    _get_ctf_session_state(force_refresh=False)
+    answers = session.get('ctf_answers', {}) or {}
+    expected = answers.get(challenge_id)
+    if not expected:
+        return jsonify({"success": False, "error": "challenge not found"}), 404
+
+    if answer.strip() == expected.strip():
+        solved = set(session.get('ctf_solved', []) or [])
+        newly_solved = challenge_id not in solved
+        solved.add(challenge_id)
+        session['ctf_solved'] = list(solved)
+
+        pts = 0
+        current, _ = _get_ctf_session_state(force_refresh=False)
+        for c in (current or []):
+            if c.get('id') == challenge_id:
+                pts = int(c.get('points') or 0)
+                break
+
+        if newly_solved:
+            session['ctf_total_solved'] = int(session.get('ctf_total_solved', 0) or 0) + 1
+            session['ctf_total_points'] = int(session.get('ctf_total_points', 0) or 0) + pts
+
+        # فور حل التحدي: أنشئ مجموعة تحديات جديدة ليظهر بديل مباشر.
+        session['ctf_force_nonce'] = uuid.uuid4().hex[:8]
+        session['ctf_solved'] = []
+        _get_ctf_session_state(force_refresh=False)
+
+        add_audit_log("CTF Solved", f"challenge={challenge_id} +{pts}pts", username=session.get('username', ''))
+        return jsonify({
+            "success": True,
+            "correct": True,
+            "points": pts,
+            "total_solved": int(session.get('ctf_total_solved', 0) or 0),
+            "total_points": int(session.get('ctf_total_points', 0) or 0),
+            "next_batch": True
+        })
+
+    return jsonify({"success": True, "correct": False, "message": "حل قريب؟ جرّب منهجية مختلفة أو اطلب تلميح AI."})
+
+
+@app.route('/api/ctf/challenge-file/<challenge_id>', methods=['GET'])
+def ctf_challenge_file_route(challenge_id):
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+
+    nonce = session.get('ctf_force_nonce', '')
+    challenges, _ = _build_ctf_challenges(session['user_id'], nonce)
+    target = next((c for c in challenges if c.get('id') == challenge_id), None)
+    if not target:
+        return jsonify({"success": False, "error": "challenge not found"}), 404
+
+    payload = target.get('file_payload')
+    if not payload:
+        return jsonify({"success": False, "error": "this challenge has no downloadable file"}), 404
+
+    filename = secure_filename(target.get('download_name') or f"{challenge_id}.txt")
+    mimetype = 'application/json' if filename.lower().endswith('.json') else 'text/plain'
+    buf = io.BytesIO(str(payload).encode('utf-8'))
+    buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
+
+
+@app.route('/api/ctf/assistant', methods=['POST'])
+def ctf_ai_assistant_route():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+    if not DO_AI_KEY:
+        return jsonify({"success": False, "error": "DO_AI_KEY غير مضبوط"}), 500
+
+    data = request.json or {}
+    challenge_id = (data.get('challenge_id') or '').strip()
+    question = (data.get('question') or '').strip()
+    attempt = (data.get('attempt') or '').strip()
+    if not challenge_id:
+        return jsonify({"success": False, "error": "challenge_id required"}), 400
+
+    challenges, _ = _get_ctf_session_state(force_refresh=False)
+    if not challenges:
+        return jsonify({"success": False, "error": "no challenges loaded"}), 500
+
+    target = next((c for c in challenges if c.get('id') == challenge_id), None)
+    if not target:
+        return jsonify({"success": False, "error": "challenge not found"}), 404
+
+    ctf_system = (
+        "You are a CTF coach. Give educational hints and methodology only. "
+        "Never reveal the final flag, exact answer, or full direct solve string. "
+        "If asked for direct answer, refuse briefly and provide next actionable hint. "
+        "Keep response in Arabic, concise and practical."
+    )
+
+    user_prompt = (
+        f"Challenge title: {target.get('title')}\\n"
+        f"Category: {target.get('category')} | Difficulty: {target.get('difficulty')}\\n"
+        f"Description: {target.get('description')}\\n"
+        f"Hints available: {target.get('hints')}\\n"
+        f"Expected flag format: {target.get('flag_format')}\\n"
+        f"Student question: {question or 'اشرح أول خطوة'}\\n"
+        f"Student attempt: {attempt or '(none)'}\\n"
+        "Give step-by-step guidance, common mistakes, and one concrete next step. Do not reveal final flag."
+    )
+
+    try:
+        reply = _call_do_ai(user_prompt, system_prompt=ctf_system)
+        add_audit_log("CTF AI Hint", f"challenge={challenge_id}", username=session.get('username', ''))
+        return jsonify({"success": True, "reply": reply})
+    except Exception as e:
+        return jsonify({"success": False, "error": f"AI hint failed: {str(e)}"}), 500
 
 
 # =====================================================================
