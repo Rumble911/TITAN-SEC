@@ -2354,7 +2354,7 @@ HTML_TEMPLATE = """
 
             </div>
 
-            <button id="ai-float-launcher" type="button" onclick="toggleAiBubble()" class="hidden fixed left-5 bottom-6 z-[9999] w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 text-white text-2xl font-black shadow-[0_0_25px_rgba(139,92,246,0.55)] border border-purple-300/40 hover:scale-105 transition-all" title="TITAN AI">🤖</button>
+            <button id="ai-float-launcher" type="button" onclick="toggleAiBubble()" class="hidden fixed right-5 bottom-6 z-[9999] w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 text-white text-2xl font-black shadow-[0_0_25px_rgba(139,92,246,0.55)] border border-purple-300/40 hover:scale-105 transition-all" title="TITAN AI">🤖</button>
 
             <!-- ===== ADMIN SECTION ===== -->
             <div id="admin-section" class="hidden space-y-6">
@@ -4346,6 +4346,8 @@ HTML_TEMPLATE = """
                     if (typeof introMatrixAnimId !== 'undefined') {
                         cancelAnimationFrame(introMatrixAnimId);
                     }
+                    const matrixBg = document.getElementById('matrix-bg');
+                    if (matrixBg) matrixBg.style.display = 'block';
                     initMatrix('matrix-bg', false);
                     startHUDTicker();
                     document.querySelectorAll('button').forEach(btn => {
@@ -4392,49 +4394,41 @@ HTML_TEMPLATE = """
             try {
                 const res = await fetch('/api/auth/status');
                 const data = await res.json();
+                // المستخدم طلب أن شاشة الدخول تظهر كل مرة عند فتح الموقع.
+                // إذا كانت هناك جلسة فعّالة، نعمل logout صامت ثم نظهر شاشة الدخول.
                 if (data.loggedIn) {
-                    console.log('User is logged in:', data.username);
-                    // إخفاء auth overlay
-                    document.getElementById('auth-overlay').style.display = 'none';
-                    document.getElementById('header-username').innerText = '👤 ' + data.username;
-
-                    // إخفاء intro-overlay فوراً حتى لا يضطر المستخدم للضغط على زر البصمة
-                    const introOverlay = document.getElementById('intro-overlay');
-                    if (introOverlay) {
-                        introOverlay.style.display = 'none';
-                    }
-
-                    // إظهار التطبيق الرئيسي مباشرة
-                    const mainApp = document.getElementById('main-app');
-                    if (mainApp) {
-                        mainApp.classList.remove('opacity-0', 'pointer-events-none');
-                        mainApp.style.opacity = '1';
-                        mainApp.style.pointerEvents = 'auto';
-                        console.log('mainApp shown via checkAuth');
-                    }
-
-                    setAdminUi(!!data.isAdmin);
-                    setAiBubbleVisibility(true);
-
-                    // تهيئة التطبيق
-                    if (typeof introMatrixAnimId !== 'undefined') {
-                        cancelAnimationFrame(introMatrixAnimId);
-                    }
-                    initMatrix('matrix-bg', false);
-                    startHUDTicker();
-                    document.querySelectorAll('button').forEach(btn => {
-                        btn.addEventListener('mouseenter', soundManager.hover);
-                        btn.addEventListener('click', soundManager.click);
-                    });
-                } else {
-                    setAdminUi(false);
-                    setAiBubbleVisibility(false);
-                    document.getElementById('auth-overlay').style.display = 'block';
-                    initMatrix('auth-matrix', true);
+                    try {
+                        await fetch('/api/auth/logout', { method: 'POST' });
+                    } catch (e) {}
                 }
+
+                setAdminUi(false);
+                setAiBubbleVisibility(false);
+                const mainApp = document.getElementById('main-app');
+                if (mainApp) {
+                    mainApp.classList.add('opacity-0', 'pointer-events-none');
+                    mainApp.style.opacity = '0';
+                    mainApp.style.pointerEvents = 'none';
+                }
+                const introOverlay = document.getElementById('intro-overlay');
+                if (introOverlay) introOverlay.style.display = 'none';
+                const matrixBg = document.getElementById('matrix-bg');
+                if (matrixBg) matrixBg.style.display = 'block';
+                document.getElementById('auth-overlay').style.display = 'block';
+                initMatrix('auth-matrix', true);
             } catch (e) {
                 setAdminUi(false);
                 setAiBubbleVisibility(false);
+                const mainApp = document.getElementById('main-app');
+                if (mainApp) {
+                    mainApp.classList.add('opacity-0', 'pointer-events-none');
+                    mainApp.style.opacity = '0';
+                    mainApp.style.pointerEvents = 'none';
+                }
+                const introOverlay = document.getElementById('intro-overlay');
+                if (introOverlay) introOverlay.style.display = 'none';
+                const matrixBg = document.getElementById('matrix-bg');
+                if (matrixBg) matrixBg.style.display = 'block';
                 document.getElementById('auth-overlay').style.display = 'block';
                 initMatrix('auth-matrix', true);
             }
@@ -4780,6 +4774,9 @@ HTML_TEMPLATE = """
             const sec = document.getElementById('ai-section');
             if (sec) {
                 sec.classList.remove('hidden');
+                sec.style.left = 'auto';
+                sec.style.right = '16px';
+                sec.style.bottom = '84px';
                 sec.style.display = 'block';
                 sec.style.pointerEvents = 'auto';
             }
@@ -4800,6 +4797,10 @@ HTML_TEMPLATE = """
             if (!launcher) return;
             if (isVisible) {
                 launcher.classList.remove('hidden');
+                launcher.style.position = 'fixed';
+                launcher.style.left = 'auto';
+                launcher.style.right = '16px';
+                launcher.style.bottom = '12px';
                 launcher.style.display = 'flex';
                 launcher.style.alignItems = 'center';
                 launcher.style.justifyContent = 'center';
