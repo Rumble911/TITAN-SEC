@@ -1481,6 +1481,20 @@ HTML_TEMPLATE = """
         #intro-matrix { z-index: 0; opacity: 0.6; }
         .glass { background: rgba(10, 15, 30, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(168, 85, 247, 0.2); box-shadow: 0 0 30px rgba(0,0,0,0.5); }
         button, a, input { cursor: pointer; }
+        /* Keep all form controls dark in production even if Tailwind utilities fail to load. */
+        input, textarea, select {
+            background: rgba(2, 6, 23, 0.88) !important;
+            color: #e2e8f0 !important;
+            border: 1px solid rgba(71, 85, 105, 0.75) !important;
+        }
+        input::placeholder, textarea::placeholder {
+            color: #64748b !important;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: rgba(168, 85, 247, 0.8) !important;
+            box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.22);
+        }
         .titan-gradient { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); }
         
         /* Scanlines & CRT Effect */
