@@ -1945,34 +1945,13 @@ HTML_TEMPLATE = """
             }
 
             .tab-nav-modern .tab-grid {
-                display: flex;
-                flex-wrap: nowrap;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
                 gap: 0.45rem;
-                overflow-x: auto;
-                overflow-y: hidden;
-                scroll-behavior: smooth;
-                padding-bottom: 0.2rem;
-                scrollbar-width: thin;
-                scrollbar-color: rgba(139, 92, 246, 0.45) rgba(15, 23, 42, 0.35);
-            }
-
-            .tab-nav-modern .tab-grid::-webkit-scrollbar {
-                height: 7px;
-            }
-
-            .tab-nav-modern .tab-grid::-webkit-scrollbar-track {
-                background: rgba(15, 23, 42, 0.35);
-                border-radius: 10px;
-            }
-
-            .tab-nav-modern .tab-grid::-webkit-scrollbar-thumb {
-                background: linear-gradient(90deg, rgba(167, 139, 250, 0.55), rgba(139, 92, 246, 0.55));
-                border-radius: 10px;
             }
 
             .tab-nav-modern .tab-grid button {
-                flex: 0 0 auto;
-                min-width: 9.8rem;
+                width: 100%;
                 justify-content: center;
                 text-align: center;
                 min-height: 2.3rem;
@@ -1984,7 +1963,7 @@ HTML_TEMPLATE = """
 
             @media (max-width: 640px) {
                 .tab-nav-modern .tab-grid button {
-                    min-width: 8.8rem;
+                    min-height: 2.15rem;
                 }
             }
 
@@ -2204,7 +2183,7 @@ HTML_TEMPLATE = """
 
     <div id="main-app" class="opacity-0 transition-opacity duration-1000 ease-in-out pointer-events-none">
         <canvas id="matrix-bg"></canvas>
-        <div class="container mx-auto px-4 py-12 max-w-3xl relative z-10">
+        <div class="container mx-auto px-4 py-12 max-w-4xl relative z-10">
         <header class="text-center mb-12 relative">
             <div style="display:inline-flex;flex-direction:column;align-items:center;margin-bottom:0.5rem;">
                 <div style="font-size:4.5rem;font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,#c084fc,#a855f7,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;text-shadow:none;filter:drop-shadow(0 0 20px rgba(168,85,247,0.5));">TITAN</div>
