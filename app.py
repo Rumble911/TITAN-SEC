@@ -1251,36 +1251,6 @@ def scan_local_network():
         }
 
 
-def analyze_hash_indicator(hash_value: str) -> dict:
-    clean = (hash_value or '').strip().lower()
-    if not re.fullmatch(r'[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64}', clean):
-        return {
-            "success": False,
-            "error": "Hash format غير صالح. استخدم MD5/SHA1/SHA256 بصيغة hex."
-        }
-
-    hash_type = 'MD5' if len(clean) == 32 else ('SHA1' if len(clean) == 40 else 'SHA256')
-    known_bad = {
-        '44d88612fea8a8f36de82e1278abb02f': 'EICAR test malware (MD5)',
-        '3395856ce81f2b7382dee72602f798b642f14140': 'EICAR test malware (SHA1)'
-    }
-
-    unique_chars = len(set(clean))
-    entropy_hint = round(unique_chars / 16 * 8, 2)
-    reputation = known_bad.get(clean, 'unknown')
-    risk_score = 90 if clean in known_bad else 25
-
-    return {
-        "success": True,
-        "hash": clean,
-        "hash_type": hash_type,
-        "length": len(clean),
-        "entropy_hint": entropy_hint,
-        "reputation": reputation,
-        "risk_score": risk_score
-    }
-
-
 def check_username_presence(username: str) -> dict:
     u = (username or '').strip()
     if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', u):
@@ -1357,48 +1327,6 @@ def check_username_presence(username: str) -> dict:
     }
 
 
-def build_link_analysis_graph(nodes: list[dict]) -> dict:
-    clean_nodes = []
-    for n in nodes:
-        val = (n.get('value') or '').strip()
-        typ = (n.get('type') or 'unknown').strip().lower()
-        nid = (n.get('id') or str(uuid.uuid4())).strip()
-        if val:
-            clean_nodes.append({"id": nid, "type": typ, "value": val})
-
-    edges = []
-    for i, a in enumerate(clean_nodes):
-        for b in clean_nodes[i+1:]:
-            rel = None
-            av = a['value'].lower()
-            bv = b['value'].lower()
-            if a['type'] == b['type'] and av == bv:
-                rel = 'same-indicator'
-            elif a['type'] == 'email' and b['type'] in ('domain', 'url') and av.split('@')[-1] in bv:
-                rel = 'email-domain-match'
-            elif b['type'] == 'email' and a['type'] in ('domain', 'url') and bv.split('@')[-1] in av:
-                rel = 'email-domain-match'
-            elif a['type'] == 'url' and b['type'] == 'domain' and b['value'].lower() in a['value'].lower():
-                rel = 'url-hosts-domain'
-            elif b['type'] == 'url' and a['type'] == 'domain' and a['value'].lower() in b['value'].lower():
-                rel = 'url-hosts-domain'
-            elif a['type'] == 'username' and b['type'] == 'email' and a['value'].lower() in b['value'].lower():
-                rel = 'username-appears-in-email'
-            elif b['type'] == 'username' and a['type'] == 'email' and b['value'].lower() in a['value'].lower():
-                rel = 'username-appears-in-email'
-
-            if rel:
-                edges.append({
-                    "source": a['id'],
-                    "target": b['id'],
-                    "source_value": a['value'],
-                    "target_value": b['value'],
-                    "relation": rel
-                })
-
-    return {"nodes": clean_nodes, "edges": edges}
-
-
 def generate_typosquatting_variants(domain: str) -> list[str]:
     d = (domain or '').strip().lower()
     if '.' not in d:
@@ -1442,104 +1370,6 @@ def create_social_defense_scenario(scenario_type: str) -> dict:
     }
     return scenarios.get(scenario_type, scenarios['phishing_email'])
 
-
-def split_secret_shares(secret_text: str, n: int = 5, k: int = 3) -> list[str]:
-    if k < 2 or n < k:
-        raise ValueError("Invalid n/k values")
-    data = secret_text.encode('utf-8')
-    prime = 257
-    shares: list[dict] = [{"x": i + 1, "ys": []} for i in range(n)]
-    for byte_val in data:
-        coeffs = [byte_val] + [secrets.randbelow(prime) for _ in range(k - 1)]
-        for s in shares:
-            x = s["x"]
-            y = 0
-            for power, coeff in enumerate(coeffs):
-                y = (y + coeff * pow(x, power, prime)) % prime
-            s["ys"].append(y)
-    encoded = []
-    for s in shares:
-        raw = json.dumps(s, separators=(',', ':')).encode('utf-8')
-        encoded.append(base64.urlsafe_b64encode(raw).decode('ascii'))
-    return encoded
-
-
-def recover_secret_shares(shares: list[str]) -> str:
-    if len(shares) < 3:
-        raise ValueError("At least 3 shares are required")
-    prime = 257
-    parsed = []
-    for sh in shares:
-        item = json.loads(base64.urlsafe_b64decode(sh.encode('ascii')).decode('utf-8'))
-        parsed.append(item)
-    ys_len = len(parsed[0]["ys"])
-    for p in parsed:
-        if len(p["ys"]) != ys_len:
-            raise ValueError("Share lengths mismatch")
-
-    def lagrange_at_zero(points: list[tuple[int, int]]) -> int:
-        total = 0
-        for i, (xi, yi) in enumerate(points):
-            num = 1
-            den = 1
-            for j, (xj, _yj) in enumerate(points):
-                if i == j:
-                    continue
-                num = (num * (-xj)) % prime
-                den = (den * (xi - xj)) % prime
-            inv_den = pow(den % prime, -1, prime)
-            total = (total + yi * num * inv_den) % prime
-        return total
-
-    out_bytes = bytearray()
-    points_base = parsed[:3]
-    for idx in range(ys_len):
-        pts = [(int(p["x"]), int(p["ys"][idx])) for p in points_base]
-        val = lagrange_at_zero(pts)
-        if val > 255:
-            raise ValueError("Recovered value out of byte range")
-        out_bytes.append(val)
-    return out_bytes.decode('utf-8')
-
-
-def evaluate_advanced_policy(policy: dict, context: dict) -> dict:
-    reasons = []
-    allowed = True
-
-    allowed_ips = policy.get('allowed_ips') or []
-    if allowed_ips and context.get('ip') not in allowed_ips:
-        allowed = False
-        reasons.append('IP not allowed')
-
-    allowed_countries = policy.get('allowed_countries') or []
-    if allowed_countries and context.get('country') not in allowed_countries:
-        allowed = False
-        reasons.append('Country not allowed')
-
-    if policy.get('require_otp'):
-        expected = str(policy.get('otp_code', ''))
-        provided = str(context.get('otp', ''))
-        if not expected or provided != expected:
-            allowed = False
-            reasons.append('OTP mismatch')
-
-    now_h = datetime.datetime.now().hour
-    min_h = int(policy.get('min_hour', 0))
-    max_h = int(policy.get('max_hour', 23))
-    if now_h < min_h or now_h > max_h:
-        allowed = False
-        reasons.append('Outside allowed time window')
-
-    return {"allowed": allowed, "reasons": reasons, "evaluated_at": datetime.datetime.now().isoformat()}
-
-
-def create_watermark_signature(file_bytes: bytes, label: str, user_id: int) -> dict:
-    file_hash = hashlib.sha256(file_bytes).hexdigest()
-    raw_secret = app.secret_key or 'titan'
-    secret = raw_secret if isinstance(raw_secret, (bytes, bytearray)) else str(raw_secret).encode('utf-8')
-    payload = f"{user_id}|{label}|{file_hash}".encode('utf-8')
-    signature = hashlib.sha256(secret + payload).hexdigest()
-    return {"file_hash": file_hash, "signature": signature}
 
 # --- المنطق البرمجي: فحص قوة كلمة السر ---
 
@@ -1641,7 +1471,6 @@ HTML_TEMPLATE = """
     <title>TITAN | التشفير والأمن السيبراني</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjE4IiBmaWxsPSIjMGQwZDFhIi8+PHRleHQgeD0iNTAiIHk9IjY4IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSI1NCIgZm9udC13ZWlnaHQ9IjkwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0idXJsKCNnKSI+VEFOPC90ZXh0PjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2MwODRmYyIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzdjM2FlZCIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==">
     <link rel="stylesheet" href="/tailwind.css?v=3">
-    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Tajawal', sans-serif; background: #070b19; color: white; margin: 0; overflow-x: hidden; cursor: crosshair; }
@@ -1962,6 +1791,17 @@ HTML_TEMPLATE = """
                 transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
             }
 
+            @keyframes tabIconPulse {
+                0%, 100% { transform: scale(1); opacity: 0.95; }
+                50% { transform: scale(1.14); opacity: 1; }
+            }
+
+            .tab-nav-modern .tab-grid button > span:first-child {
+                display: inline-block;
+                transform-origin: center;
+                animation: tabIconPulse 1.35s ease-in-out infinite;
+            }
+
             @media (max-width: 640px) {
                 .tab-nav-modern .tab-grid button {
                     min-height: 2.15rem;
@@ -2207,13 +2047,13 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="tab-group">
-                    <div class="tab-group-title px-1"><span>🧱</span> الحماية الأساسية</div>
+                    <div class="tab-group-title px-1"><span>🧱</span> الأدوات الأساسية</div>
                     <div class="tab-grid">
                     <button onclick="showTab('dash')" id="btn-dash" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>📊</span> الإحصائيات</button>
                     <button onclick="showTab('pass')" id="btn-pass" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🔑</span> كلمات السر</button>
                     <button onclick="showTab('vault'); checkVaultPasswordSetup();" id="btn-vault" class="px-3 py-1.5 rounded-lg hover:bg-yellow-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-yellow-500/30"><span>🗄️</span> القبو</button>
-                    <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
-                    <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🛠️</span> الأدوات الذكية</button>
+                    <button onclick="showTab('fileprotect')" id="btn-fileprotect" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🛡️</span> حماية الملفات</button>
+                    <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
                 </div>
                 </div>
 
@@ -2221,11 +2061,9 @@ HTML_TEMPLATE = """
                     <div class="tab-group-title px-1"><span>🧭</span> التحليل والاستقصاء</div>
                     <div class="tab-grid">
                     <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
-                    <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span class="inline-block animate-pulse" style="animation-duration:1.3s;">🔥</span> قنوات الشبح</button>
+                    <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> غرفة الدردشة</button>
                     <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
                     <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
-                    <button onclick="showTab('maltego')" id="btn-maltego" class="px-3 py-1.5 rounded-lg hover:bg-fuchsia-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-fuchsia-500/30"><span>🕸️</span> الرسم البياني</button>
-                    <button onclick="showTab('hunting')" id="btn-hunting" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎯</span> الصيد التهديدي</button>
                     <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
                     <button onclick="showTab('brand')" id="btn-brand" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🛡️</span> حماية العلامة</button>
                     <button onclick="showTab('se')" id="btn-se" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🎭</span> الهندسة الاجتماعية</button>
@@ -2233,15 +2071,13 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="tab-group">
-                    <div class="tab-group-title px-1"><span>🧪</span> المختبر المتقدم</div>
+                    <div class="tab-group-title px-1"><span>🧪</span> مختبر التشفير</div>
                     <div class="tab-grid">
-                    <button onclick="showTab('advcrypto')" id="btn-advcrypto" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🧬</span> تشفير متقدم</button>
+                    <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
+                    <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> تشفير الصور</button>
                     <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
                     <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> فيديو مشفر</button>
                     <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
-                    <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
-                    <button onclick="showTab('extreme')" id="btn-extreme" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>💣</span> أوامر متطرفة</button>
-                    <button onclick="showTab('netintel')" id="btn-netintel" class="px-3 py-1.5 rounded-lg hover:bg-sky-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-sky-500/30"><span>🛰️</span> استخبارات الشبكة</button>
                     <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
                     <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
                 </div>
@@ -2354,7 +2190,7 @@ HTML_TEMPLATE = """
 
             </div>
 
-            <button id="ai-float-launcher" type="button" onclick="toggleAiBubble()" class="hidden fixed right-5 bottom-6 z-[9999] w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 text-white text-2xl font-black shadow-[0_0_25px_rgba(139,92,246,0.55)] border border-purple-300/40 hover:scale-105 transition-all" title="TITAN AI">🤖</button>
+            <button id="ai-float-launcher" type="button" onclick="toggleAiBubble()" class="hidden fixed right-6 bottom-7 z-[9999] w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 text-white text-3xl font-black shadow-[0_0_30px_rgba(139,92,246,0.62)] border border-purple-300/50 hover:scale-105 transition-all" title="TITAN AI">🤖</button>
 
             <!-- ===== ADMIN SECTION ===== -->
             <div id="admin-section" class="hidden space-y-6">
@@ -2688,73 +2524,6 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <!-- Phase 4 System Defense Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                    <!-- USB Guardian -->
-                    <div class="bg-teal-900/10 p-5 rounded-xl border border-teal-900/40 hover:border-teal-500/50 transition-all group relative overflow-hidden">
-                        <div class="absolute top-0 right-0 w-16 h-16 bg-teal-600/10 rounded-bl-full z-0 pointer-events-none"></div>
-                        <div class="flex items-center gap-3 mb-3 relative z-10">
-                            <div class="w-10 h-10 rounded-lg bg-teal-900/30 flex items-center justify-center text-teal-500 text-lg">🛡️</div>
-                            <div>
-                                <h4 class="font-bold text-teal-400">حارس USB (USB Guardian)</h4>
-                                <span id="usbStatusBadge" class="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-gray-400 border border-slate-700">متوقف</span>
-                            </div>
-                        </div>
-                        <p class="text-[11px] text-gray-400 mb-4 h-10 relative z-10">مراقبة المنافذ والتدخل التلقائي لفحص أي فلاش ميموري (USB) بمجرد تركيبه للكشف عن فيروسات التشغيل التلقائي.</p>
-                        
-                        <div class="flex gap-2 relative z-10">
-                            <button onclick="toggleUsbGuardian('start')" class="flex-1 py-2 bg-teal-900/40 hover:bg-teal-800 text-teal-300 rounded-lg text-sm transition-all border border-teal-800/50">تفعيل الحارس</button>
-                            <button onclick="toggleUsbGuardian('stop')" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-gray-400 rounded-lg text-sm transition-all border border-slate-700">إيقاف</button>
-                        </div>
-                    </div>
-                    
-                    <!-- File Integrity Monitor (FIM) -->
-                    <div class="bg-orange-900/10 p-5 rounded-xl border border-orange-900/40 hover:border-orange-500/50 transition-all group relative overflow-hidden">
-                        <div class="absolute top-0 right-0 w-16 h-16 bg-orange-600/10 rounded-bl-full z-0 pointer-events-none"></div>
-                        <div class="flex items-center gap-3 mb-3 relative z-10">
-                            <div class="w-10 h-10 rounded-lg bg-orange-900/30 flex items-center justify-center text-orange-500 text-lg">⚖️</div>
-                            <div>
-                                <h4 class="font-bold text-orange-400">مراقب تكامل الملفات (FIM)</h4>
-                                <span id="fimStatusBadge" class="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-gray-400 border border-slate-700">متوقف</span>
-                            </div>
-                        </div>
-                        <p class="text-[11px] text-gray-400 mb-3 h-8 relative z-10">رصد التغييرات الطفيفة في ملفاتك الحساسة لمنع حقن الأكواد الخبيثة.</p>
-                        
-                        <div class="flex gap-2 relative z-10 flex-col">
-                            <div class="flex gap-2">
-                                <input type="text" id="fimTargetPath" class="flex-1 p-2 text-left text-[10px] font-mono rounded-lg bg-black border border-orange-900/50 text-orange-300 outline-none" placeholder="C:\\Windows\\System32\\drivers\\etc\\hosts" value="C:\\Windows\\System32\\drivers\\etc\\hosts">
-                            </div>
-                            <div class="flex gap-2 mt-1">
-                                <button onclick="toggleFim('start')" class="flex-1 py-2 bg-orange-900/40 hover:bg-orange-800 text-orange-300 rounded-lg text-sm transition-all border border-orange-800/50">بدء المراقبة</button>
-                                <button onclick="toggleFim('stop')" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-gray-400 rounded-lg text-sm transition-all border border-slate-700">إيقاف</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 2FA Tool -->
-                <div class="bg-black/40 rounded-xl border border-slate-800 p-6 mb-6">
-                    <h2 class="text-xl font-bold text-purple-400 mb-4 border-b border-slate-700 pb-2">🔐 المصادقة الثنائية (2FA)</h2>
-                    <button onclick="generate2FA()" class="titan-gradient px-4 py-2 rounded-lg font-bold mb-4">إنشاء مفتاح 2FA جديد</button>
-                    
-                    <div id="tfaResult" class="hidden bg-slate-900/80 p-6 rounded-xl border border-slate-700 flex flex-col items-center">
-                        <p class="text-gray-400 mb-4 text-center">امسح رمز الاستجابة السريعة (QR Code) باستخدام تطبيق مثل Google Authenticator</p>
-                        <img id="qrCodeImg" src="" alt="QR Code" class="w-48 h-48 bg-white p-2 rounded-lg mb-4">
-                        <div class="bg-slate-800 p-3 rounded-xl w-full text-center mb-6 border border-slate-700">
-                            <span class="text-xs text-gray-500 block mb-1">المفتاح السري (لإدخاله يدوياً):</span>
-                            <code id="tfaSecret" class="text-purple-400 font-mono text-xl tracking-widest"></code>
-                        </div>
-                        
-                        <div class="w-full border-t border-slate-700 pt-4">
-                            <label class="block text-sm text-gray-400 mb-2">التحقق من الرمز:</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="tfaCodeInput" placeholder="مكون من 6 أرقام..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none text-center tracking-widest text-lg font-mono">
-                                <button onclick="verify2FA()" class="bg-green-600 hover:bg-green-700 px-6 py-3 rounded-xl font-bold transition-all">تحقق</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
             </div>
 
                 </div>
@@ -2775,25 +2544,25 @@ HTML_TEMPLATE = """
                                 <button onclick="processText('decrypt')" class="flex-1 bg-slate-700 p-2 rounded-lg font-bold">فك التشفير</button>
                             </div>
                         </div>
-                        <hr class="border-slate-700">
-                        <div>
-                            <label class="block text-sm text-gray-400 mb-2 text-purple-400 font-bold italic">تشفير ملفات:</label>
-                            <input type="file" id="fileInput" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700">
-                            <div class="flex gap-2 mt-3">
-                                <button onclick="processFile('encrypt')" class="flex-1 titan-gradient p-2 rounded-lg font-bold">تشفير الملف</button>
-                                <button onclick="processFile('decrypt')" class="flex-1 bg-slate-700 p-2 rounded-lg font-bold">فك تشفير الملف</button>
-                            </div>
-                        </div>
+                    </div>
+                </div>
 
-                        <hr class="border-slate-700 mt-5 mb-5">
-                        <div>
-                            <label class="block text-sm text-gray-400 mb-2 text-purple-400 font-bold italic">حماية ملفات PDF بكلمة سر:</label>
-                            <input type="password" id="pdfPass" placeholder="أدخل كلمة السر..." class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none mb-3 text-center tracking-widest">
-                            <input type="file" id="pdfFileInput" accept="application/pdf" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-900/40 file:text-red-400 hover:file:bg-red-800/60 border border-slate-700 p-2 rounded-xl">
-                            <div class="flex gap-2 mt-4">
-                                <button onclick="processPdf('lock')" class="flex-1 bg-red-900/50 hover:bg-red-800 text-red-400 font-bold p-3 rounded-xl transition-all border border-red-900/30 shadow-[0_0_15px_rgba(239,68,68,0.15)] flex justify-center items-center gap-2">قفل الملف 🔒</button>
-                                <button onclick="processPdf('unlock')" class="flex-1 bg-green-900/50 hover:bg-green-800 text-green-400 font-bold p-3 rounded-xl transition-all border border-green-900/30 shadow-[0_0_15px_rgba(34,197,94,0.15)] flex justify-center items-center gap-2">فك الحماية 🔓</button>
-                            </div>
+                <!-- ===== FILE PROTECTION SECTION ===== -->
+                <div id="fileprotect-section" class="hidden space-y-6">
+                    <h2 class="text-xl font-bold text-emerald-400 border-b border-slate-700 pb-2">🛡️ حماية الملفات</h2>
+
+                    <div class="bg-slate-900/60 p-5 rounded-2xl border border-emerald-900/40 space-y-3">
+                        <label class="block text-sm text-gray-300 font-bold">حماية كل أنواع الملفات بكلمة سر</label>
+                        <p class="text-xs text-gray-500">يشمل الصور، الفيديو، الصوت، المستندات، والأرشيفات. اختر أي ملف ثم قفله أو فكّه بنفس كلمة السر.</p>
+                        <input type="password" id="fileProtectKey" placeholder="كلمة سر حماية الملف..." class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none mb-1 text-center tracking-widest">
+                        <input type="file" id="fileInput" class="hidden" onchange="updateFileProtectName(this)">
+                        <div class="flex items-center gap-3 border border-slate-700 p-2 rounded-xl bg-slate-900/50">
+                            <label for="fileInput" class="px-4 py-2 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-800/40 text-sm font-bold cursor-pointer transition-all">اختيار ملف</label>
+                            <span id="fileProtectName" class="text-xs text-gray-400 truncate">لم يتم اختيار ملف</span>
+                        </div>
+                        <div class="flex gap-2 mt-2">
+                            <button onclick="processFile('encrypt')" class="flex-1 bg-emerald-700/60 hover:bg-emerald-600 rounded-xl font-bold p-3 border border-emerald-700/40">قفل/تشفير الملف 🔒</button>
+                            <button onclick="processFile('decrypt')" class="flex-1 bg-emerald-900/40 hover:bg-emerald-800 rounded-xl font-bold p-3 border border-emerald-800/40 text-emerald-300">فك/استرجاع الملف 🔓</button>
                         </div>
                     </div>
                 </div>
@@ -3264,7 +3033,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4">
                     <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
                         <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter</h3>
                         <p class="text-[11px] text-gray-500 mb-3">البحث عن اليوزرنيم على منصات متعددة لمعرفة وين موجود.</p>
@@ -3274,37 +3043,6 @@ HTML_TEMPLATE = """
                         </div>
                         <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
                     </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
-                        <h3 class="text-sm font-bold text-amber-300 mb-2">Hash Analyzer</h3>
-                        <p class="text-[11px] text-gray-500 mb-3">تحليل مؤشرات الملفات (MD5 / SHA1 / SHA256) وتقدير السمعة.</p>
-                        <div class="flex gap-2">
-                            <input id="osintHashInput" type="text" placeholder="Paste hash..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-amber-500 outline-none font-mono text-left" dir="ltr">
-                            <button onclick="analyzeHashIndicator()" class="bg-amber-900/50 hover:bg-amber-800 px-5 py-3 rounded-xl font-bold border border-amber-800/50 transition-all text-amber-300">حلل</button>
-                        </div>
-                        <div id="osintHashResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
-                    </div>
-                </div>
-
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-rose-900/40">
-                    <h3 class="text-sm font-bold text-rose-300 mb-2">Threat Intel Quick Actions</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div class="bg-black/30 border border-slate-700 rounded-lg p-3">
-                            <label class="text-[10px] text-gray-500 uppercase tracking-wider">DNS Leak</label>
-                            <button onclick="osintQuickDnsLeak()" class="w-full mt-2 py-2 bg-rose-900/40 hover:bg-rose-800 rounded-lg text-xs font-bold text-rose-300 border border-rose-800/40">فحص</button>
-                        </div>
-                        <div class="bg-black/30 border border-slate-700 rounded-lg p-3">
-                            <label class="text-[10px] text-gray-500 uppercase tracking-wider">Shodan Intel (IP)</label>
-                            <input id="osintShodanIp" type="text" placeholder="1.1.1.1" class="w-full mt-2 p-2 rounded bg-slate-900 border border-slate-700 outline-none text-xs font-mono text-left" dir="ltr">
-                            <button onclick="osintQuickShodan()" class="w-full mt-2 py-2 bg-rose-900/40 hover:bg-rose-800 rounded-lg text-xs font-bold text-rose-300 border border-rose-800/40">فحص</button>
-                        </div>
-                        <div class="bg-black/30 border border-slate-700 rounded-lg p-3">
-                            <label class="text-[10px] text-gray-500 uppercase tracking-wider">Malware URL</label>
-                            <input id="osintMalwareUrl" type="text" placeholder="https://target.tld" class="w-full mt-2 p-2 rounded bg-slate-900 border border-slate-700 outline-none text-xs font-mono text-left" dir="ltr">
-                            <button onclick="osintQuickMalwareUrl()" class="w-full mt-2 py-2 bg-rose-900/40 hover:bg-rose-800 rounded-lg text-xs font-bold text-rose-300 border border-rose-800/40">فحص</button>
-                        </div>
-                    </div>
-                    <div id="osintThreatResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-64 overflow-y-auto" dir="ltr"></div>
                 </div>
             </div>
 
@@ -3359,59 +3097,6 @@ HTML_TEMPLATE = """
                         <button onclick="irExportReport()" class="px-3 py-1 text-xs rounded bg-emerald-900/30 border border-emerald-800/50">تصدير تقرير</button>
                     </div>
                     <div id="irIocTimeline" class="mt-3 p-3 rounded-lg bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
-                </div>
-            </div>
-
-            <div id="maltego-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-fuchsia-400 border-b border-slate-700 pb-2">🕸️ Link Analysis (Maltego Style)</h2>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-fuchsia-300">إضافة كيان</h3>
-                        <select id="graphEntityType" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="ip">IP</option>
-                            <option value="domain">Domain</option>
-                            <option value="url">URL</option>
-                            <option value="email">Email</option>
-                            <option value="username">Username</option>
-                            <option value="hash">Hash</option>
-                        </select>
-                        <input id="graphEntityValue" type="text" placeholder="قيمة الكيان" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
-                        <button onclick="graphAddEntity()" class="w-full py-2 rounded bg-fuchsia-900/40 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">إضافة</button>
-                        <button onclick="graphAutoLink()" class="w-full py-2 rounded bg-violet-900/40 border border-violet-800/50 text-violet-300 text-xs font-bold">تحليل الروابط</button>
-                    </div>
-                    <div class="lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40">
-                        <h3 class="text-sm font-bold text-fuchsia-300 mb-3">لوحة العقد والروابط</h3>
-                        <div id="graphCanvas" class="relative min-h-[260px] rounded-xl border border-slate-700 bg-black/40 p-2 overflow-hidden"></div>
-                        <div id="graphLinksList" class="mt-3 text-xs bg-black/40 border border-slate-700 rounded-lg p-2 max-h-40 overflow-y-auto"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="hunting-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-orange-400 border-b border-slate-700 pb-2">🎯 Threat Hunting Lab</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-orange-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-orange-300">Query Builder</h3>
-                        <input id="huntQueryText" type="text" placeholder="ابحث عن مؤشر..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
-                        <select id="huntQueryType" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="all">All</option>
-                            <option value="ip">IP</option>
-                            <option value="domain">Domain</option>
-                            <option value="url">URL</option>
-                            <option value="email">Email</option>
-                            <option value="username">Username</option>
-                            <option value="hash">Hash</option>
-                        </select>
-                        <button onclick="huntRunQuery()" class="w-full py-2 rounded bg-orange-900/40 border border-orange-800/50 text-orange-300 text-xs font-bold">Run Hunt</button>
-                        <div id="huntQueryResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-48 overflow-y-auto text-xs"></div>
-                    </div>
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-orange-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-orange-300">Correlation Rule</h3>
-                        <p class="text-[11px] text-gray-500">قاعدة: إذا Risk Avg >= Threshold فأنشئ Alert.</p>
-                        <input id="huntRuleThreshold" type="number" min="0" max="100" value="70" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                        <button onclick="huntEvaluateRule()" class="w-full py-2 rounded bg-amber-900/40 border border-amber-800/50 text-amber-300 text-xs font-bold">Evaluate</button>
-                        <div id="huntRuleResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs"></div>
-                    </div>
                 </div>
             </div>
 
@@ -3493,98 +3178,6 @@ HTML_TEMPLATE = """
                     <textarea id="seIntelNote" rows="3" placeholder="اكتب المعلومة أو الملاحظة الأمنية هنا..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></textarea>
                     <button onclick="seAddIntelItem()" class="w-full py-2 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">إضافة معلومة</button>
                     <div id="seIntelBoardResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-60 overflow-y-auto text-xs"></div>
-                </div>
-            </div>
-
-            <div id="advcrypto-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-emerald-400 border-b border-slate-700 pb-2">🧬 Advanced Crypto Lab</h2>
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
-                        <h3 class="text-sm font-bold text-emerald-300">Hidden Vault (Decoy + Secret)</h3>
-                        <input id="advHvLabel" placeholder="Vault label" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                        <textarea id="advHvDecoy" rows="2" placeholder="Decoy text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
-                        <input id="advHvDecoyPass" type="password" placeholder="Decoy password" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                        <textarea id="advHvHidden" rows="2" placeholder="Hidden text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
-                        <input id="advHvHiddenPass" type="password" placeholder="Hidden password" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                        <div class="flex gap-2">
-                            <button onclick="advHiddenVaultCreate()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Create</button>
-                            <button onclick="advHiddenVaultList()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs">List</button>
-                        </div>
-                        <div class="flex gap-2">
-                            <input id="advHvOpenId" type="number" placeholder="Vault ID" class="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                            <input id="advHvOpenPass" type="password" placeholder="Password" class="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                            <button onclick="advHiddenVaultOpen()" class="px-3 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Open</button>
-                        </div>
-                        <div id="advHvOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
-                        <h3 class="text-sm font-bold text-emerald-300">Secret Sharing (3-of-5)</h3>
-                        <textarea id="advSsSecret" rows="3" placeholder="Secret text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
-                        <div class="flex gap-2">
-                            <button onclick="advSecretSplit()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Split</button>
-                            <button onclick="advSecretRecover()" class="flex-1 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Recover</button>
-                        </div>
-                        <textarea id="advSsShares" rows="5" placeholder="Shares (JSON array)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr"></textarea>
-                        <div id="advSsOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
-                        <h3 class="text-sm font-bold text-emerald-300">Time-Lock Message</h3>
-                        <textarea id="advTlMsg" rows="2" placeholder="Message" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
-                        <input id="advTlPass" type="password" placeholder="Password" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                        <div class="grid grid-cols-2 gap-2">
-                            <input id="advTlMinutes" type="number" min="1" value="10" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                            <label class="text-xs flex items-center gap-2"><input id="advTlOneTime" type="checkbox" checked> One-time read</label>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="advTimeLockCreate()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Create Token</button>
-                            <button onclick="advTimeLockOpen()" class="flex-1 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Open</button>
-                        </div>
-                        <input id="advTlToken" placeholder="Token" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr">
-                        <div id="advTlOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
-                        <h3 class="text-sm font-bold text-emerald-300">Policy Engine</h3>
-                        <textarea id="advPolicyJson" rows="5" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr">{"allowed_ips":[],"allowed_countries":[],"require_otp":false,"otp_code":"123456","min_hour":0,"max_hour":23}</textarea>
-                        <input id="advPolicyOtp" placeholder="OTP (if required)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                        <button onclick="advPolicyEvaluate()" class="w-full py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Evaluate</button>
-                        <div id="advPolicyOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
-                        <h3 class="text-sm font-bold text-emerald-300">Watermark Signature</h3>
-                        <input id="advWmFile" type="file" class="block w-full text-sm text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-full file:border-0 file:bg-slate-800 file:text-emerald-300 border border-slate-700 p-2 rounded-xl">
-                        <input id="advWmLabel" placeholder="Asset label" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                        <div class="flex gap-2">
-                            <button onclick="advWatermarkSign()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Sign</button>
-                            <button onclick="advWatermarkVerify()" class="flex-1 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Verify</button>
-                        </div>
-                        <input id="advWmSig" placeholder="Signature" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr">
-                        <div id="advWmOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-2">
-                        <h3 class="text-sm font-bold text-emerald-300">Key Lifecycle (Create/Rotate/Revoke)</h3>
-                        <input id="advKeyName" placeholder="Key name" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                        <div class="flex gap-2">
-                            <button onclick="advKeyCreate()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Create</button>
-                            <button onclick="advKeyList()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs">List</button>
-                        </div>
-                        <div class="flex gap-2">
-                            <input id="advKeyId" type="number" placeholder="Key ID" class="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-xs">
-                            <button onclick="advKeyRotate()" class="px-3 py-2 rounded bg-amber-900/40 border border-amber-800/50 text-xs">Rotate</button>
-                            <button onclick="advKeyRevoke()" class="px-3 py-2 rounded bg-red-900/40 border border-red-800/50 text-xs">Revoke</button>
-                        </div>
-                        <textarea id="advKeyPlain" rows="2" placeholder="Plain text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs"></textarea>
-                        <div class="flex gap-2">
-                            <button onclick="advKeyEncrypt()" class="flex-1 py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-xs">Encrypt</button>
-                            <button onclick="advKeyDecrypt()" class="flex-1 py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-xs">Decrypt</button>
-                        </div>
-                        <textarea id="advKeyCipher" rows="2" placeholder="Cipher text" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs font-mono" dir="ltr"></textarea>
-                        <div id="advKeyOut" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
-                    </div>
                 </div>
             </div>
 
@@ -3891,44 +3484,6 @@ HTML_TEMPLATE = """
                                 <span class="uppercase tracking-widest text-sm">تصدير كامل بيانات الهوية الرقمية</span>
                             </button>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ===== EXTREME PRIVACY SECTION ===== -->
-            <div id="extreme-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-teal-400 border-b border-slate-700 pb-2">🛡️ أدوات الخصوصية القصوى (Extreme Privacy)</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-slate-900/50 p-6 rounded-2xl border border-teal-500/20">
-                        <label class="block text-sm text-teal-400 mb-3 font-bold">📄 منظف ملفات PDF:</label>
-                        <p class="text-[10px] text-gray-500 mb-4">إزالة الميتابيانات من ملفات PDF لحماية الخصوصية.</p>
-                        <input type="file" id="pdfCleanFile" accept=".pdf" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-teal-600/10 file:text-teal-400 hover:file:bg-teal-600/20 mb-4">
-                        <button onclick="cleanPdf()" class="w-full py-3 bg-teal-600 hover:bg-teal-500 rounded-xl font-bold transition-all text-sm">بدء التنظيف العميق 🧹</button>
-                    </div>
-                    <div class="bg-slate-900/50 p-6 rounded-2xl border border-indigo-500/20">
-                        <label class="block text-sm text-indigo-400 mb-3 font-bold">🪪 بصمة المتصفح (Browser Fingerprint):</label>
-                        <p class="text-[10px] text-gray-500 mb-4">توليد ملف تعريف وهمي لتجنب التتبع الرقمي.</p>
-                        <div id="fingerprintDisplay" class="font-mono text-[9px] text-indigo-300 bg-black/60 p-3 rounded-lg mb-4 h-24 overflow-y-auto italic">اضغط لتوليد هوية جديدة...</div>
-                        <button onclick="generateStealthFingerprint()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition-all text-sm">توليد هوية وهمية 🔀</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ===== NETWORK INTELLIGENCE SECTION ===== -->
-            <div id="netintel-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-orange-400 border-b border-slate-700 pb-2">🔬 استخبارات الشبكة (TITAN Intel)</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-slate-900/50 p-6 rounded-2xl border border-orange-500/20">
-                        <label class="block text-sm text-orange-400 mb-3 font-bold">🔍 فحص Shodan (المنافذ العامة):</label>
-                        <input type="text" id="shodanIp" placeholder="IP عام..." class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-orange-500 outline-none mb-4 text-center font-mono">
-                        <div id="shodanResult" class="font-mono text-[10px] text-gray-400 mb-4 h-24 overflow-y-auto"></div>
-                        <button onclick="runShodanScan()" class="w-full py-3 bg-orange-600 hover:bg-orange-500 rounded-xl font-bold transition-all text-sm">جلب بيانات Shodan 📡</button>
-                    </div>
-                    <div class="bg-slate-900/50 p-6 rounded-2xl border border-red-500/20 text-center">
-                        <label class="block text-sm text-red-400 mb-3 font-bold">🚰 فحص تسريب DNS:</label>
-                        <div id="dnsLeakStatus" class="text-2xl font-black mb-1 text-white">—</div>
-                        <div id="dnsLeakDetails" class="text-[9px] text-gray-500 mb-4">سيتم فحص خوادم DNS الحالية...</div>
-                        <button onclick="checkDnsLeak()" class="w-full py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition-all text-sm">بدء الفحص السريع 🚨</button>
                     </div>
                 </div>
             </div>
@@ -4766,29 +4321,77 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','suite','tools','ghost','osint','ir','maltego','hunting','forensics','brand','se','advcrypto','audio','video','qr','identity','extreme','netintel','admin'];
+        const ALL_TABS = ['dash','pass','vault','crypt','fileprotect','suite','tools','ghost','osint','ir','forensics','brand','se','audio','video','qr','identity','admin'];
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
+
+        function setAiLauncherPulse(active) {
+            const launcher = document.getElementById('ai-float-launcher');
+            if (!launcher) return;
+            if (active) {
+                launcher.style.animation = 'aiLauncherPulse 2.2s ease-in-out infinite';
+            } else {
+                launcher.style.animation = 'none';
+            }
+        }
+
+        function applyAiDockPosition() {
+            const isMobile = window.innerWidth <= 640;
+            const panelRight = isMobile ? '10px' : '20px';
+            const panelBottom = isMobile ? '88px' : '96px';
+            const launcherRight = isMobile ? '10px' : '20px';
+            const launcherBottom = isMobile ? '14px' : '20px';
+
+            const sec = document.getElementById('ai-section');
+            if (sec) {
+                sec.style.position = 'fixed';
+                sec.style.left = 'auto';
+                sec.style.right = panelRight;
+                sec.style.bottom = panelBottom;
+            }
+
+            const launcher = document.getElementById('ai-float-launcher');
+            if (launcher) {
+                launcher.style.position = 'fixed';
+                launcher.style.left = 'auto';
+                launcher.style.right = launcherRight;
+                launcher.style.bottom = launcherBottom;
+                launcher.style.zIndex = '2147483647';
+            }
+        }
 
         function openAiSection() {
             const sec = document.getElementById('ai-section');
             if (sec) {
                 sec.classList.remove('hidden');
-                sec.style.left = 'auto';
-                sec.style.right = '16px';
-                sec.style.bottom = '84px';
+                applyAiDockPosition();
                 sec.style.display = 'block';
                 sec.style.pointerEvents = 'auto';
+                sec.style.opacity = '0';
+                sec.style.transform = 'translateY(14px) scale(0.985)';
+                requestAnimationFrame(() => {
+                    sec.style.opacity = '1';
+                    sec.style.transform = 'translateY(0) scale(1)';
+                });
             }
+            setAiLauncherPulse(false);
             showAiSubTab(_aiActiveSubTab || 'chat');
         }
 
         function closeAiBubble() {
             const sec = document.getElementById('ai-section');
             if (sec) {
-                sec.classList.add('hidden');
-                sec.style.display = 'none';
                 sec.style.pointerEvents = 'none';
+                sec.style.opacity = '0';
+                sec.style.transform = 'translateY(14px) scale(0.985)';
+                setTimeout(() => {
+                    sec.classList.add('hidden');
+                    sec.style.display = 'none';
+                    const launcher = document.getElementById('ai-float-launcher');
+                    if (launcher && launcher.style.display !== 'none') {
+                        setAiLauncherPulse(true);
+                    }
+                }, 180);
             }
         }
 
@@ -4797,22 +4400,21 @@ HTML_TEMPLATE = """
             if (!launcher) return;
             if (isVisible) {
                 launcher.classList.remove('hidden');
-                launcher.style.position = 'fixed';
-                launcher.style.left = 'auto';
-                launcher.style.right = '16px';
-                launcher.style.bottom = '12px';
+                applyAiDockPosition();
                 launcher.style.display = 'flex';
                 launcher.style.alignItems = 'center';
                 launcher.style.justifyContent = 'center';
                 launcher.style.visibility = 'visible';
                 launcher.style.opacity = '1';
                 launcher.style.pointerEvents = 'auto';
+                setAiLauncherPulse(true);
             } else {
                 launcher.classList.add('hidden');
                 launcher.style.display = 'none';
                 launcher.style.visibility = 'hidden';
                 launcher.style.opacity = '0';
                 launcher.style.pointerEvents = 'none';
+                setAiLauncherPulse(false);
             }
             if (!isVisible) closeAiBubble();
         }
@@ -5167,7 +4769,7 @@ HTML_TEMPLATE = """
 
         async function processFile(action) {
             const file = document.getElementById('fileInput').files[0];
-            const key = document.getElementById('cryptKey').value;
+            const key = (document.getElementById('fileProtectKey')?.value || document.getElementById('cryptKey')?.value || '').trim();
             if(!file || !key) return titanAlert("يرجى اختيار ملف وإدخال كلمة السر!");
             const formData = new FormData();
             formData.append('file', file);
@@ -5186,6 +4788,13 @@ HTML_TEMPLATE = """
                 soundManager.error();
                 const err = await res.json(); titanAlert(err.error);
             }
+        }
+
+        function updateFileProtectName(input) {
+            const out = document.getElementById('fileProtectName');
+            if (!out) return;
+            const file = input?.files?.[0];
+            out.innerText = file ? file.name : 'لم يتم اختيار ملف';
         }
 
         async function generatePass(mode = 'random') {
@@ -5235,35 +4844,6 @@ HTML_TEMPLATE = """
             } else {
                 soundManager.error();
                 setResultError(dataBox, data.message || 'فشل جلب البيانات');
-            }
-        }
-
-        async function generate2FA() {
-            const res = await fetch('/api/2fa/generate');
-            const data = await res.json();
-            document.getElementById('tfaResult').classList.remove('hidden');
-            document.getElementById('qrCodeImg').src = data.qr_code;
-            document.getElementById('tfaSecret').innerText = data.secret;
-            document.getElementById('tfaCodeInput').value = '';
-        }
-
-        async function verify2FA() {
-            const secret = document.getElementById('tfaSecret').innerText;
-            const code = document.getElementById('tfaCodeInput').value;
-            if(!secret || !code) return titanAlert("الرجاء إدخال الرمز للتحقق!");
-            
-            const res = await fetch('/api/2fa/verify', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({secret, code})
-            });
-            const data = await res.json();
-            if(data.valid) {
-                soundManager.success();
-                titanAlert("✅ الرمز صحيح! المصادقة ناجحة.");
-            } else {
-                soundManager.error();
-                titanAlert("❌ الرمز خاطئ أو منتهي الصلاحية.");
             }
         }
 
@@ -5827,37 +5407,6 @@ HTML_TEMPLATE = """
             refreshLogs();
         }
 
-        async function processPdf(action) {
-            const file = document.getElementById('pdfFileInput').files[0];
-            const password = document.getElementById('pdfPass').value;
-            if(!file || !password) return titanAlert("الرجاء اختيار ملف PDF وإدخال كلمة سر المكونة منه!");
-            
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('password', password);
-            formData.append('action', action);
-            
-            try {
-                const res = await fetch('/api/pdf-process', { method: 'POST', body: formData });
-                if(res.ok) {
-                    soundManager.success();
-                    const blob = await res.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = (action === 'lock' ? 'locked_' : 'unlocked_') + file.name;
-                    a.click();
-                    refreshLogs();
-                } else {
-                    const data = await res.json();
-                    throw new Error(data.error || "خطأ غير معروف (ربما كلمة السر التي أدخلتها خاطئة!)");
-                }
-            } catch (e) {
-                titanAlert(e.message);
-                soundManager.error();
-            }
-        }
-
         async function scanPorts() {
             const ip = document.getElementById('portIpInput').value.trim() || '127.0.0.1';
             const btn = document.getElementById('btnPortScan');
@@ -6232,30 +5781,6 @@ HTML_TEMPLATE = """
             `;
         }
 
-        function _osintRenderHashResult(data) {
-            if (!data || !data.success) {
-                return `<div class="text-red-400 text-sm">${_osintEscape(data?.error || 'فشل التحليل')}</div>`;
-            }
-            return `
-                <div class="space-y-2">
-                    ${_osintRenderKeyValueGrid(data, ['hash_type', 'length', 'entropy_hint', 'reputation', 'risk_score'])}
-                    <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-2">
-                        <div class="text-[10px] text-gray-500 uppercase tracking-wider">HASH</div>
-                        <div class="text-xs font-mono text-amber-300 break-all" dir="ltr">${_osintEscape(data.hash)}</div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function _osintRenderThreatResult(title, payload) {
-            return `
-                <div class="space-y-2">
-                    <div class="bg-rose-900/20 border border-rose-800/40 rounded-lg p-2 text-sm font-bold text-rose-300">${_osintEscape(title)}</div>
-                    <div class="bg-slate-900/70 border border-slate-700 rounded-lg p-2 text-xs font-mono whitespace-pre-wrap" dir="ltr">${_osintEscape(JSON.stringify(payload, null, 2))}</div>
-                </div>
-            `;
-        }
-
         function _osintDetectTargetType(target) {
             const t = (target || '').trim();
             if (!t) return 'unknown';
@@ -6357,75 +5882,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        async function analyzeHashIndicator() {
-            const hashValue = (document.getElementById('osintHashInput')?.value || '').trim();
-            const out = document.getElementById('osintHashResult');
-            if (!hashValue) return titanAlert('الصق قيمة Hash أولاً.');
-            if (!out) return;
-
-            setResultLoading(out, 'Hash Indicator', 'Analyzing hash indicator...');
-            try {
-                const res = await fetch('/api/osint/hash', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({hash: hashValue})
-                });
-                const data = await res.json();
-                setResultMarkup(out, 'Hash Indicator', _osintRenderHashResult(data), { badge: data.success ? 'Analyzed' : 'Failed' });
-                _osintRenderRisk(Number(data.risk_score || 0), data.reputation || 'Unknown');
-            } catch (e) {
-                setResultError(out, `Hash analyze failed: ${e.message || e}`);
-            }
-        }
-
-        async function osintQuickDnsLeak() {
-            const out = document.getElementById('osintThreatResult');
-            if (!out) return;
-            setResultLoading(out, 'Threat Intel', 'Checking DNS leak...');
-            try {
-                const res = await fetch('/api/intel/dns-leak');
-                const data = await res.json();
-                setResultMarkup(out, 'Threat Intel', _osintRenderThreatResult('DNS Leak Result', data), { badge: 'DNS' });
-                _osintRenderRisk(data.leaked ? 80 : 10, data.leaked ? 'DNS Leak Detected' : 'No DNS Leak');
-            } catch (e) {
-                setResultError(out, `DNS check failed: ${e.message || e}`);
-            }
-        }
-
-        async function osintQuickShodan() {
-            const ip = (document.getElementById('osintShodanIp')?.value || '').trim();
-            const out = document.getElementById('osintThreatResult');
-            if (!ip) return titanAlert('ادخل IP لفحص Shodan.');
-            if (!out) return;
-            setResultLoading(out, 'Threat Intel', 'Running shodan intel...');
-            try {
-                const res = await fetch('/api/intel/shodan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ip}) });
-                const data = await res.json();
-                setResultMarkup(out, 'Threat Intel', _osintRenderThreatResult('Shodan Intel', data), { badge: 'Shodan' });
-                const risk = (data.vulnerabilities && data.vulnerabilities.length) ? 75 : 35;
-                _osintRenderRisk(risk, (data.vulnerabilities && data.vulnerabilities.length) ? 'Exposed Services / CVEs' : 'Open Ports Observed');
-            } catch (e) {
-                setResultError(out, `Shodan check failed: ${e.message || e}`);
-            }
-        }
-
-        async function osintQuickMalwareUrl() {
-            const url = (document.getElementById('osintMalwareUrl')?.value || '').trim();
-            const out = document.getElementById('osintThreatResult');
-            if (!url) return titanAlert('ادخل URL للفحص.');
-            if (!out) return;
-            setResultLoading(out, 'Threat Intel', 'Scanning malware URL...');
-            try {
-                const res = await fetch('/api/scan/malware_url', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({url}) });
-                const data = await res.json();
-                setResultMarkup(out, 'Threat Intel', _osintRenderThreatResult('Malware URL Scan', data), { badge: 'Malware URL' });
-                const rs = Number((data.result && data.result.risk_score) || data.risk_score || 0);
-                _osintRenderRisk(rs, rs >= 70 ? 'Malware/Phishing Risk' : 'No High Malware Signal');
-            } catch (e) {
-                setResultError(out, `Malware URL scan failed: ${e.message || e}`);
-            }
-        }
-
         function loadOsintWatchlist() {
             const box = document.getElementById('osintWatchlist');
             if (!box) return;
@@ -6483,7 +5939,6 @@ HTML_TEMPLATE = """
         }
 
         let currentIncidentCaseId = null;
-        let graphState = { nodes: [], edges: [] };
 
         async function irCreateCase() {
             const title = (document.getElementById('irCaseTitle')?.value || '').trim();
@@ -6590,86 +6045,6 @@ HTML_TEMPLATE = """
             a.download = `incident-${currentIncidentCaseId}-report.json`;
             a.click();
             URL.revokeObjectURL(url);
-        }
-
-        function graphAddEntity() {
-            const type = document.getElementById('graphEntityType')?.value || 'ip';
-            const value = (document.getElementById('graphEntityValue')?.value || '').trim();
-            if (!value) return titanAlert('أدخل قيمة الكيان.');
-            graphState.nodes.push({ id: `n${Date.now()}${Math.floor(Math.random()*999)}`, type, value });
-            document.getElementById('graphEntityValue').value = '';
-            graphRender();
-        }
-
-        async function graphAutoLink() {
-            if (!graphState.nodes.length) return titanAlert('أضف عقد أولاً.');
-            const res = await fetch('/api/link-analyzer/build', {
-                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({nodes: graphState.nodes})
-            });
-            const data = await res.json();
-            if (!data.success) return titanAlert(data.error || 'فشل التحليل');
-            graphState = { nodes: data.nodes || [], edges: data.edges || [] };
-            graphRender();
-        }
-
-        function graphRender() {
-            const canvas = document.getElementById('graphCanvas');
-            const links = document.getElementById('graphLinksList');
-            if (!canvas || !links) return;
-
-            const width = canvas.clientWidth || 500;
-            const height = 260;
-            const nodes = graphState.nodes || [];
-            const edges = graphState.edges || [];
-
-            const placed = nodes.map((n, i) => {
-                const angle = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
-                const r = Math.min(width, height) * 0.32;
-                const x = width / 2 + Math.cos(angle) * r;
-                const y = height / 2 + Math.sin(angle) * r;
-                return { ...n, x, y };
-            });
-
-            const byId = Object.fromEntries(placed.map(n => [n.id, n]));
-            const edgeSvg = `<svg width="${width}" height="${height}" class="absolute inset-0 pointer-events-none">${edges.map(e => {
-                const a = byId[e.source];
-                const b = byId[e.target];
-                if (!a || !b) return '';
-                return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(217,70,239,0.6)" stroke-width="1.5"/>`;
-            }).join('')}</svg>`;
-
-            const nodeHtml = placed.map(n => `<div class="absolute px-2 py-1 rounded-lg border border-fuchsia-700/50 bg-fuchsia-900/20 text-[10px]" style="left:${n.x-50}px;top:${n.y-14}px;width:100px;text-align:center;"><div class="text-fuchsia-300 font-bold">${_osintEscape(n.type)}</div><div class="text-gray-200 font-mono truncate" dir="ltr">${_osintEscape(n.value)}</div></div>`).join('');
-            canvas.innerHTML = edgeSvg + nodeHtml;
-
-            links.innerHTML = edges.length ? edges.map(e => `<div class="mb-1 p-1 rounded bg-slate-900/40 border border-slate-700 text-[11px]"><span class="text-fuchsia-300">${_osintEscape(e.relation)}</span> | <span class="text-gray-300">${_osintEscape(e.source_value || e.source)} -> ${_osintEscape(e.target_value || e.target)}</span></div>`).join('') : '<div class="text-gray-500 text-xs">لا توجد روابط حتى الآن.</div>';
-        }
-
-        async function huntRunQuery() {
-            const q = (document.getElementById('huntQueryText')?.value || '').trim();
-            const ioc_type = document.getElementById('huntQueryType')?.value || 'all';
-            const out = document.getElementById('huntQueryResult');
-            if (!out) return;
-            setResultLoading(out, 'Threat Hunting', 'Running hunt...');
-            const res = await fetch('/api/hunt/query', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({query: q, ioc_type}) });
-            const data = await res.json();
-            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
-            const rows = data.rows || [];
-            const viewRows = rows.map(r => `<span class="text-orange-300">${_osintEscape(r.ioc_type)}</span> <span class="font-mono" dir="ltr">${_osintEscape(r.ioc_value)}</span> <span class="text-[10px] text-gray-500">case#${_osintEscape(r.case_id)} risk=${_osintEscape(r.risk_score)}</span>`);
-            setResultList(out, 'Threat Hunting', viewRows, { badge: `${rows.length} Hits`, emptyText: 'No hits.' });
-        }
-
-        async function huntEvaluateRule() {
-            const threshold = Number(document.getElementById('huntRuleThreshold')?.value || 70);
-            const out = document.getElementById('huntRuleResult');
-            if (!out) return;
-            const res = await fetch('/api/hunt/rule-evaluate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({threshold}) });
-            const data = await res.json();
-            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
-            setResultInfo(out, 'Rule Evaluation', [
-                { label: 'Average Risk', value: data.avg_risk ?? 'N/A', tone: _resultToneByScore(data.avg_risk) },
-                { label: 'Threshold', value: threshold, tone: 'info' },
-                { label: 'Alert', value: data.alert_created ? 'Created' : 'No Alert', tone: data.alert_created ? 'danger' : 'safe' }
-            ], { badge: data.alert_created ? 'Alert' : 'Normal', cols: 3 });
         }
 
         async function forensicsTriage() {
@@ -6825,190 +6200,6 @@ HTML_TEMPLATE = """
             if (!confirm('هل تريد حذف كل عناصر لوحة المعلومات؟')) return;
             localStorage.removeItem('titan_se_intel_board');
             seLoadIntelBoard();
-        }
-
-        async function advHiddenVaultCreate() {
-            const payload = {
-                label: (document.getElementById('advHvLabel')?.value || '').trim(),
-                decoy_text: (document.getElementById('advHvDecoy')?.value || '').trim(),
-                hidden_text: (document.getElementById('advHvHidden')?.value || '').trim(),
-                decoy_pass: document.getElementById('advHvDecoyPass')?.value || '',
-                hidden_pass: document.getElementById('advHvHiddenPass')?.value || ''
-            };
-            const out = document.getElementById('advHvOut');
-            if (out) out.innerText = 'Creating...';
-            const res = await fetch('/api/adv/hidden-vault/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advHiddenVaultList() {
-            const out = document.getElementById('advHvOut');
-            if (out) out.innerText = 'Loading...';
-            const res = await fetch('/api/adv/hidden-vault/list');
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advHiddenVaultOpen() {
-            const payload = {
-                vault_id: Number(document.getElementById('advHvOpenId')?.value || 0),
-                password: document.getElementById('advHvOpenPass')?.value || ''
-            };
-            const out = document.getElementById('advHvOut');
-            if (out) out.innerText = 'Opening...';
-            const res = await fetch('/api/adv/hidden-vault/open', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advSecretSplit() {
-            const secret = (document.getElementById('advSsSecret')?.value || '').trim();
-            const out = document.getElementById('advSsOut');
-            if (out) out.innerText = 'Splitting...';
-            const res = await fetch('/api/adv/secret-sharing/split', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({secret, n:5, k:3}) });
-            const data = await res.json();
-            if (data.success && document.getElementById('advSsShares')) {
-                document.getElementById('advSsShares').value = JSON.stringify(data.shares, null, 2);
-            }
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advSecretRecover() {
-            const sharesRaw = document.getElementById('advSsShares')?.value || '[]';
-            let shares = [];
-            try { shares = JSON.parse(sharesRaw); } catch (e) {}
-            const out = document.getElementById('advSsOut');
-            if (out) out.innerText = 'Recovering...';
-            const res = await fetch('/api/adv/secret-sharing/recover', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({shares}) });
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advTimeLockCreate() {
-            const payload = {
-                message: (document.getElementById('advTlMsg')?.value || '').trim(),
-                password: document.getElementById('advTlPass')?.value || '',
-                unlock_minutes: Number(document.getElementById('advTlMinutes')?.value || 10),
-                one_time: !!document.getElementById('advTlOneTime')?.checked
-            };
-            const out = document.getElementById('advTlOut');
-            if (out) out.innerText = 'Creating token...';
-            const res = await fetch('/api/adv/timelock/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-            const data = await res.json();
-            if (data.success && document.getElementById('advTlToken')) {
-                document.getElementById('advTlToken').value = data.token || '';
-            }
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advTimeLockOpen() {
-            const payload = {
-                token: (document.getElementById('advTlToken')?.value || '').trim(),
-                password: document.getElementById('advTlPass')?.value || ''
-            };
-            const out = document.getElementById('advTlOut');
-            if (out) out.innerText = 'Opening...';
-            const res = await fetch('/api/adv/timelock/open', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advPolicyEvaluate() {
-            const out = document.getElementById('advPolicyOut');
-            let policy = {};
-            try {
-                policy = JSON.parse(document.getElementById('advPolicyJson')?.value || '{}');
-            } catch (e) {
-                if (out) out.innerText = 'Policy JSON غير صالح';
-                return;
-            }
-            const payload = { policy, otp: (document.getElementById('advPolicyOtp')?.value || '').trim() };
-            if (out) out.innerText = 'Evaluating...';
-            const res = await fetch('/api/adv/policy/evaluate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advWatermarkSign() {
-            const file = document.getElementById('advWmFile')?.files?.[0];
-            const out = document.getElementById('advWmOut');
-            if (!file) { if (out) out.innerText = 'اختر ملفاً'; return; }
-            const form = new FormData();
-            form.append('file', file);
-            form.append('label', (document.getElementById('advWmLabel')?.value || '').trim());
-            if (out) out.innerText = 'Signing...';
-            const res = await fetch('/api/adv/watermark/sign', { method: 'POST', body: form });
-            const data = await res.json();
-            if (data.success && document.getElementById('advWmSig')) {
-                document.getElementById('advWmSig').value = data.signature || '';
-            }
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advWatermarkVerify() {
-            const file = document.getElementById('advWmFile')?.files?.[0];
-            const out = document.getElementById('advWmOut');
-            if (!file) { if (out) out.innerText = 'اختر ملفاً'; return; }
-            const form = new FormData();
-            form.append('file', file);
-            form.append('signature', (document.getElementById('advWmSig')?.value || '').trim());
-            form.append('label', (document.getElementById('advWmLabel')?.value || '').trim());
-            if (out) out.innerText = 'Verifying...';
-            const res = await fetch('/api/adv/watermark/verify', { method: 'POST', body: form });
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advKeyCreate() {
-            const name = (document.getElementById('advKeyName')?.value || '').trim();
-            const out = document.getElementById('advKeyOut');
-            const res = await fetch('/api/adv/keyring/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name}) });
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advKeyList() {
-            const out = document.getElementById('advKeyOut');
-            const res = await fetch('/api/adv/keyring/list');
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advKeyRotate() {
-            const key_id = Number(document.getElementById('advKeyId')?.value || 0);
-            const out = document.getElementById('advKeyOut');
-            const res = await fetch('/api/adv/keyring/rotate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key_id}) });
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advKeyRevoke() {
-            const key_id = Number(document.getElementById('advKeyId')?.value || 0);
-            const out = document.getElementById('advKeyOut');
-            const res = await fetch('/api/adv/keyring/revoke', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key_id}) });
-            const data = await res.json();
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advKeyEncrypt() {
-            const key_id = Number(document.getElementById('advKeyId')?.value || 0);
-            const text = document.getElementById('advKeyPlain')?.value || '';
-            const out = document.getElementById('advKeyOut');
-            const res = await fetch('/api/adv/keyring/encrypt', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key_id, text}) });
-            const data = await res.json();
-            if (data.success && document.getElementById('advKeyCipher')) document.getElementById('advKeyCipher').value = data.cipher || '';
-            if (out) out.innerText = JSON.stringify(data, null, 2);
-        }
-
-        async function advKeyDecrypt() {
-            const key_id = Number(document.getElementById('advKeyId')?.value || 0);
-            const cipher = document.getElementById('advKeyCipher')?.value || '';
-            const out = document.getElementById('advKeyOut');
-            const res = await fetch('/api/adv/keyring/decrypt', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key_id, cipher}) });
-            const data = await res.json();
-            if (data.success && document.getElementById('advKeyPlain')) document.getElementById('advKeyPlain').value = data.text || '';
-            if (out) out.innerText = JSON.stringify(data, null, 2);
         }
 
         function renderMalwareResult(data, targetName, isUrl = true) {
@@ -7258,59 +6449,6 @@ HTML_TEMPLATE = """
                     refreshLogs();
                 };
                 fileInput.click();
-            }
-        }
-
-        async function toggleUsbGuardian(action) {
-            try {
-                const res = await fetch('/api/defense/usb', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action})
-                });
-                const data = await res.json();
-                
-                const badge = document.getElementById('usbStatusBadge');
-                if(data.status === 'active') {
-                    badge.innerText = 'يراقب 🛡️';
-                    badge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-teal-900/50 text-teal-300 border border-teal-500/50 animate-pulse';
-                    soundManager.success();
-                } else {
-                    badge.innerText = 'متوقف';
-                    badge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-gray-400 border border-slate-700';
-                    soundManager.click();
-                }
-                refreshLogs();
-            } catch(e) {
-                soundManager.error();
-            }
-        }
-
-        async function toggleFim(action) {
-            const target = document.getElementById('fimTargetPath').value;
-            if(action === 'start' && !target) return titanAlert("الرجاء إدخال مسار الملف للمراقبة");
-            
-            try {
-                const res = await fetch('/api/defense/fim', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action, target})
-                });
-                const data = await res.json();
-                if(data.error) throw new Error(data.error);
-                
-                const badge = document.getElementById('fimStatusBadge');
-                if(data.status === 'active') {
-                    badge.innerText = 'يراقب ⚖️';
-                    badge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-orange-900/50 text-orange-300 border border-orange-500/50 animate-pulse';
-                    soundManager.success();
-                } else {
-                    badge.innerText = 'متوقف';
-                    badge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-gray-400 border border-slate-700';
-                    soundManager.click();
-                }
-                refreshLogs();
-            } catch(e) {
-                titanAlert("خطأ: " + e.message);
-                soundManager.error();
             }
         }
 
@@ -7903,27 +7041,31 @@ HTML_TEMPLATE = """
                 if (aiPanel.parentElement !== document.body) {
                     document.body.appendChild(aiPanel);
                 }
-                aiPanel.style.position = 'fixed';
-                aiPanel.style.left = 'auto';
-                aiPanel.style.right = '16px';
-                aiPanel.style.bottom = '84px';
                 aiPanel.style.zIndex = '2147483646';
                 aiPanel.style.width = 'min(92vw,34rem)';
                 aiPanel.style.maxHeight = '78vh';
+                aiPanel.style.transition = 'opacity 0.18s ease, transform 0.18s ease';
+                aiPanel.style.willChange = 'transform, opacity';
+                aiPanel.style.opacity = '0';
+                aiPanel.style.transform = 'translateY(14px) scale(0.985)';
                 aiPanel.style.display = 'none';
                 aiPanel.style.pointerEvents = 'none';
+            }
+
+            if (!document.getElementById('ai-launcher-pulse-style')) {
+                const style = document.createElement('style');
+                style.id = 'ai-launcher-pulse-style';
+                style.textContent = '@keyframes aiLauncherPulse{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(168,85,247,0.42)}70%{transform:scale(1.03);box-shadow:0 0 0 14px rgba(168,85,247,0)}100%{transform:scale(1);box-shadow:0 0 0 0 rgba(168,85,247,0)}}';
+                document.head.appendChild(style);
             }
 
             if (aiLauncher) {
                 if (aiLauncher.parentElement !== document.body) {
                     document.body.appendChild(aiLauncher);
                 }
-                aiLauncher.style.position = 'fixed';
-                aiLauncher.style.left = 'auto';
-                aiLauncher.style.right = '16px';
-                aiLauncher.style.bottom = '12px';
-                aiLauncher.style.zIndex = '2147483647';
             }
+            applyAiDockPosition();
+            window.addEventListener('resize', applyAiDockPosition);
             closeAiBubble();
             setAiBubbleVisibility(false);
 
@@ -8778,23 +7920,6 @@ UUID: ${getVal('idUuid')}
 
         }
 
-        async function runShodanScan() {
-            const ip = document.getElementById('shodanIp').value;
-            if (!ip) return;
-            const res = await fetch('/api/intel/shodan', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip}) });
-            const data = await res.json();
-            document.getElementById('shodanResult').innerText = JSON.stringify(data, null, 2);
-
-        }
-
-        async function checkDnsLeak() {
-            const res = await fetch('/api/intel/dns-leak');
-            const data = await res.json();
-            document.getElementById('dnsLeakStatus').innerText = data.leaked ? "⚠️ تسريب!" : "✅ آمن";
-            document.getElementById('dnsLeakStatus').className = data.leaked ? "text-2xl font-black mb-1 text-red-500" : "text-2xl font-black mb-1 text-green-500";
-
-        }
-
         function panicWipe() {
             if (confirm('تدمير الجلسة؟ سيتم تسجيل الخروج فوراً ومسح كافة البيانات المؤقتة!')) {
                 doLogout();
@@ -9636,42 +8761,6 @@ def admin_support_tickets_update(ticket_id):
 
 
 
-@app.route('/api/pdf-process', methods=['POST'])
-def pdf_process_route():
-    try:
-        file = request.files['file']
-        password = request.form['password']
-        action = request.form.get('action', 'lock')
-        
-        reader = PdfReader(file.stream)
-        writer = PdfWriter()
-        
-        if action == 'lock':
-            for page in reader.pages:
-                writer.add_page(page)
-            writer.encrypt(password)
-            add_audit_log("حماية PDF 🔒", f"تم تشفير الملف بكلمة سر ({file.filename})")
-        else:
-            if reader.is_encrypted:
-                reader.decrypt(password)
-            for page in reader.pages:
-                writer.add_page(page)
-            add_audit_log("فك حماية PDF 🔓", f"تم فتح الملف ({file.filename})")
-            
-        out_stream = io.BytesIO()
-        writer.write(out_stream)
-        out_stream.seek(0)
-        
-        dl_name = f"locked_{file.filename}" if action == 'lock' else f"unlocked_{file.filename}"
-        return send_file(
-            out_stream, 
-            mimetype='application/pdf', 
-            as_attachment=True, 
-            download_name=dl_name
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
 @app.route('/api/port-scan', methods=['POST'])
 def port_scan_route():
     ip = request.json.get('ip', '127.0.0.1')
@@ -9890,15 +8979,6 @@ def pdf_clean_route():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route('/api/intel/dns-leak', methods=['GET'])
-def dns_leak_route():
-    return jsonify(get_dns_leak_info())
-
-@app.route('/api/intel/shodan', methods=['POST'])
-def shodan_intel_route():
-    ip = request.json.get('ip', '')
-    return jsonify(get_shodan_intel(ip))
-
 # --- مسارات الإضافات للحزمة الثانية المتقدمة ---
 
 @app.route('/api/osint/image', methods=['POST'])
@@ -9928,17 +9008,6 @@ def osint_username_route():
     if not result.get('success'):
         return jsonify(result), 400
     add_audit_log("Username Hunter (OSINT)", f"فحص اليوزرنيم: {username}")
-    return jsonify(result)
-
-
-@app.route('/api/osint/hash', methods=['POST'])
-def osint_hash_route():
-    data = request.json or {}
-    hash_value = data.get('hash', '').strip()
-    result = analyze_hash_indicator(hash_value)
-    if not result.get('success'):
-        return jsonify(result), 400
-    add_audit_log("Hash Analyzer (OSINT)", f"تحليل Hash بطول {len(hash_value)}")
     return jsonify(result)
 
 
@@ -10104,84 +9173,6 @@ def ir_case_report_route(case_id: int):
         }
         return jsonify({"success": True, "report": report})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
-@app.route('/api/link-analyzer/build', methods=['POST'])
-def link_analyzer_build_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    nodes = (request.json or {}).get('nodes', [])
-    graph = build_link_analysis_graph(nodes)
-    add_audit_log("Link Analysis", f"nodes={len(graph['nodes'])} edges={len(graph['edges'])}", username=session.get('username', ''))
-    return jsonify({"success": True, "nodes": graph['nodes'], "edges": graph['edges']})
-
-
-@app.route('/api/hunt/query', methods=['POST'])
-def hunt_query_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    data = request.json or {}
-    query = (data.get('query') or '').strip().lower()
-    ioc_type = (data.get('ioc_type') or 'all').strip().lower()
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        sql = """
-            SELECT ii.case_id, ii.ioc_type, ii.ioc_value, ii.risk_score, ii.created_at
-            FROM incident_iocs ii
-            JOIN incident_cases ic ON ic.id = ii.case_id
-            WHERE ic.user_id = %s
-        """
-        params: list[object] = [user_id]
-        if ioc_type != 'all':
-            sql += " AND ii.ioc_type = %s"
-            params.append(ioc_type)
-        if query:
-            sql += " AND LOWER(ii.ioc_value) LIKE %s"
-            params.append(f"%{query}%")
-        sql += " ORDER BY ii.id DESC LIMIT 200"
-        c.execute(sql, tuple(params))
-        rows = c.fetchall()
-        out = [{"case_id": r[0], "ioc_type": r[1], "ioc_value": r[2], "risk_score": r[3], "created_at": r[4]} for r in rows]
-        return jsonify({"success": True, "rows": out})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
-@app.route('/api/hunt/rule-evaluate', methods=['POST'])
-def hunt_rule_evaluate_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    threshold = int((request.json or {}).get('threshold', 70) or 70)
-    threshold = max(0, min(100, threshold))
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute("""
-            SELECT AVG(ii.risk_score)
-            FROM incident_iocs ii
-            JOIN incident_cases ic ON ic.id = ii.case_id
-            WHERE ic.user_id = %s
-        """, (user_id,))
-        row = c.fetchone()
-        avg_risk = float((row[0] if row else 0) or 0)
-        alert_created = avg_risk >= threshold
-        if alert_created:
-            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            c.execute("INSERT INTO hunting_alerts (user_id, title, details, severity, created_at) VALUES (%s,%s,%s,%s,%s)",
-                      (user_id, 'Hunting Rule Triggered', f'Avg risk {avg_risk:.2f} >= {threshold}', 'high', now))
-            conn.commit()
-        return jsonify({"success": True, "avg_risk": round(avg_risk, 2), "threshold": threshold, "alert_created": alert_created})
-    except Exception as e:
-        if conn: conn.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         if conn: conn.close()
@@ -11427,348 +10418,6 @@ def vault_timelocked_download():
 
 
 
-
-
-# =====================================================================
-# === Advanced Crypto Lab Routes ===
-# =====================================================================
-
-@app.route('/api/adv/hidden-vault/create', methods=['POST'])
-def adv_hidden_vault_create():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    data = request.json or {}
-    label = (data.get('label') or '').strip() or 'vault'
-    decoy_text = (data.get('decoy_text') or '').strip()
-    hidden_text = (data.get('hidden_text') or '').strip()
-    decoy_pass = data.get('decoy_pass') or ''
-    hidden_pass = data.get('hidden_pass') or ''
-    if not decoy_text or not hidden_text or not decoy_pass or not hidden_pass:
-        return jsonify({"success": False, "error": "All fields are required"}), 400
-    try:
-        container = {
-            "version": 1,
-            "decoy": base64.b64encode(encrypt_data(decoy_text.encode('utf-8'), decoy_pass)).decode('ascii'),
-            "hidden": base64.b64encode(encrypt_data(hidden_text.encode('utf-8'), hidden_pass)).decode('ascii')
-        }
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO advanced_hidden_vaults (user_id, label, container_json, created_at) VALUES (%s, %s, %s, %s) RETURNING id",
-            (user_id, label, json.dumps(container), datetime.datetime.now().isoformat())
-        )
-        row = c.fetchone()
-        conn.commit()
-        conn.close()
-        add_audit_log("ADV Hidden Vault", f"created id={row[0] if row else '?'}", username=session.get('username', ''))
-        return jsonify({"success": True, "vault_id": row[0] if row else None})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/adv/hidden-vault/list', methods=['GET'])
-def adv_hidden_vault_list():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT id, label, created_at FROM advanced_hidden_vaults WHERE user_id=%s ORDER BY id DESC LIMIT 100", (user_id,))
-    rows = c.fetchall()
-    conn.close()
-    return jsonify({"success": True, "vaults": [{"id": r[0], "label": r[1], "created_at": r[2]} for r in rows]})
-
-
-@app.route('/api/adv/hidden-vault/open', methods=['POST'])
-def adv_hidden_vault_open():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    data = request.json or {}
-    vault_id = int(data.get('vault_id') or 0)
-    password = data.get('password') or ''
-    if not vault_id or not password:
-        return jsonify({"success": False, "error": "vault_id/password required"}), 400
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT container_json FROM advanced_hidden_vaults WHERE id=%s AND user_id=%s", (vault_id, user_id))
-    row = c.fetchone()
-    conn.close()
-    if not row:
-        return jsonify({"success": False, "error": "Vault not found"}), 404
-    container = json.loads(row[0])
-    for name in ('decoy', 'hidden'):
-        try:
-            encrypted = base64.b64decode(container[name])
-            plain = decrypt_data(encrypted, password).decode('utf-8')
-            return jsonify({"success": True, "compartment": name, "text": plain})
-        except Exception:
-            pass
-    return jsonify({"success": False, "error": "Wrong password"}), 401
-
-
-@app.route('/api/adv/secret-sharing/split', methods=['POST'])
-def adv_secret_split():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    data = request.json or {}
-    secret = (data.get('secret') or '').strip()
-    n = int(data.get('n') or 5)
-    k = int(data.get('k') or 3)
-    if not secret:
-        return jsonify({"success": False, "error": "secret required"}), 400
-    shares = split_secret_shares(secret, n=n, k=k)
-    add_audit_log("ADV Secret Sharing", f"split n={n} k={k}", username=session.get('username', ''))
-    return jsonify({"success": True, "shares": shares})
-
-
-@app.route('/api/adv/secret-sharing/recover', methods=['POST'])
-def adv_secret_recover():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    data = request.json or {}
-    shares = data.get('shares') or []
-    if not isinstance(shares, list):
-        return jsonify({"success": False, "error": "shares must be array"}), 400
-    try:
-        secret = recover_secret_shares(shares)
-        add_audit_log("ADV Secret Sharing", "recover", username=session.get('username', ''))
-        return jsonify({"success": True, "secret": secret})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 400
-
-
-@app.route('/api/adv/timelock/create', methods=['POST'])
-def adv_timelock_create():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    data = request.json or {}
-    message = (data.get('message') or '').strip()
-    password = data.get('password') or ''
-    unlock_minutes = max(1, int(data.get('unlock_minutes') or 10))
-    one_time = 1 if data.get('one_time', True) else 0
-    if not message or not password:
-        return jsonify({"success": False, "error": "message/password required"}), 400
-    token = secrets.token_urlsafe(24)
-    unlock_at = (datetime.datetime.now() + datetime.timedelta(minutes=unlock_minutes)).isoformat()
-    enc_payload = encrypt_data(message.encode('utf-8'), password)
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute(
-        "INSERT INTO advanced_timelock_messages (user_id, token, enc_payload, unlock_at, one_time_read, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
-        (user_id, token, psycopg2.Binary(enc_payload), unlock_at, one_time, datetime.datetime.now().isoformat())
-    )
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True, "token": token, "unlock_at": unlock_at})
-
-
-@app.route('/api/adv/timelock/open', methods=['POST'])
-def adv_timelock_open():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    data = request.json or {}
-    token = (data.get('token') or '').strip()
-    password = data.get('password') or ''
-    if not token or not password:
-        return jsonify({"success": False, "error": "token/password required"}), 400
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT id, enc_payload, unlock_at, one_time_read, is_used FROM advanced_timelock_messages WHERE token=%s AND user_id=%s", (token, user_id))
-    row = c.fetchone()
-    if not row:
-        conn.close()
-        return jsonify({"success": False, "error": "token not found"}), 404
-    msg_id, enc_payload, unlock_at, one_time_read, is_used = row
-    if int(is_used or 0) == 1:
-        conn.close()
-        return jsonify({"success": False, "error": "token already consumed"}), 410
-    if datetime.datetime.now() < datetime.datetime.fromisoformat(unlock_at):
-        conn.close()
-        return jsonify({"success": False, "error": "still locked", "unlock_at": unlock_at}), 403
-    try:
-        plain = decrypt_data(bytes(enc_payload), password).decode('utf-8')
-    except Exception:
-        conn.close()
-        return jsonify({"success": False, "error": "wrong password"}), 401
-    if int(one_time_read or 0) == 1:
-        c.execute("UPDATE advanced_timelock_messages SET is_used=1 WHERE id=%s", (msg_id,))
-        conn.commit()
-    conn.close()
-    return jsonify({"success": True, "message": plain, "one_time": bool(one_time_read)})
-
-
-@app.route('/api/adv/policy/evaluate', methods=['POST'])
-def adv_policy_evaluate():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    data = request.json or {}
-    policy = data.get('policy') or {}
-    otp = (data.get('otp') or '').strip()
-    context = {
-        "ip": request.remote_addr,
-        "country": _get_country(request.remote_addr or ''),
-        "otp": otp
-    }
-    result = evaluate_advanced_policy(policy, context)
-    return jsonify({"success": True, "context": context, **result})
-
-
-@app.route('/api/adv/watermark/sign', methods=['POST'])
-def adv_watermark_sign():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    file = request.files.get('file')
-    label = (request.form.get('label') or '').strip() or 'asset'
-    if not file:
-        return jsonify({"success": False, "error": "file required"}), 400
-    data = file.read()
-    wm = create_watermark_signature(data, label, user_id)
-    return jsonify({"success": True, "label": label, **wm})
-
-
-@app.route('/api/adv/watermark/verify', methods=['POST'])
-def adv_watermark_verify():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    file = request.files.get('file')
-    signature = (request.form.get('signature') or '').strip()
-    label = (request.form.get('label') or '').strip() or 'asset'
-    if not file or not signature:
-        return jsonify({"success": False, "error": "file/signature required"}), 400
-    data = file.read()
-    file_hash = hashlib.sha256(data).hexdigest()
-    raw_secret = app.secret_key or 'titan'
-    secret = raw_secret if isinstance(raw_secret, (bytes, bytearray)) else str(raw_secret).encode('utf-8')
-    expected = hashlib.sha256(secret + f"{user_id}|{label}|{file_hash}".encode('utf-8')).hexdigest()
-    valid = signature == expected
-    return jsonify({"success": True, "valid": valid, "file_hash": file_hash, "label": label})
-
-
-@app.route('/api/adv/keyring/create', methods=['POST'])
-def adv_keyring_create():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    data = request.json or {}
-    key_name = (data.get('name') or '').strip() or f"key-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-    key_material = Fernet.generate_key().decode('ascii')
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("INSERT INTO advanced_keyring (user_id, key_name, key_material, status, created_at) VALUES (%s,%s,%s,'active',%s) RETURNING id",
-              (user_id, key_name, key_material, datetime.datetime.now().isoformat()))
-    row = c.fetchone()
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True, "key_id": row[0] if row else None, "key_name": key_name})
-
-
-@app.route('/api/adv/keyring/list', methods=['GET'])
-def adv_keyring_list():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT id, key_name, status, rotated_from, created_at FROM advanced_keyring WHERE user_id=%s ORDER BY id DESC", (user_id,))
-    rows = c.fetchall()
-    conn.close()
-    return jsonify({"success": True, "keys": [{"id": r[0], "name": r[1], "status": r[2], "rotated_from": r[3], "created_at": r[4]} for r in rows]})
-
-
-@app.route('/api/adv/keyring/rotate', methods=['POST'])
-def adv_keyring_rotate():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    key_id = int((request.json or {}).get('key_id') or 0)
-    if not key_id:
-        return jsonify({"success": False, "error": "key_id required"}), 400
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT id, key_name FROM advanced_keyring WHERE id=%s AND user_id=%s", (key_id, user_id))
-    row = c.fetchone()
-    if not row:
-        conn.close()
-        return jsonify({"success": False, "error": "key not found"}), 404
-    c.execute("UPDATE advanced_keyring SET status='rotated' WHERE id=%s", (key_id,))
-    new_key = Fernet.generate_key().decode('ascii')
-    c.execute("INSERT INTO advanced_keyring (user_id, key_name, key_material, status, rotated_from, created_at) VALUES (%s,%s,%s,'active',%s,%s) RETURNING id",
-              (user_id, f"{row[1]}-rotated", new_key, key_id, datetime.datetime.now().isoformat()))
-    new_row = c.fetchone()
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True, "new_key_id": new_row[0] if new_row else None})
-
-
-@app.route('/api/adv/keyring/revoke', methods=['POST'])
-def adv_keyring_revoke():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    key_id = int((request.json or {}).get('key_id') or 0)
-    if not key_id:
-        return jsonify({"success": False, "error": "key_id required"}), 400
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("UPDATE advanced_keyring SET status='revoked' WHERE id=%s AND user_id=%s", (key_id, user_id))
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True})
-
-
-def _adv_get_key_material(user_id: int, key_id: int) -> str | None:
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT key_material, status FROM advanced_keyring WHERE id=%s AND user_id=%s", (key_id, user_id))
-    row = c.fetchone()
-    conn.close()
-    if not row:
-        return None
-    if row[1] != 'active':
-        return None
-    return row[0]
-
-
-@app.route('/api/adv/keyring/encrypt', methods=['POST'])
-def adv_keyring_encrypt():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    data = request.json or {}
-    key_id = int(data.get('key_id') or 0)
-    text = data.get('text') or ''
-    if not key_id or text == '':
-        return jsonify({"success": False, "error": "key_id/text required"}), 400
-    key_material = _adv_get_key_material(user_id, key_id)
-    if not key_material:
-        return jsonify({"success": False, "error": "active key not found"}), 404
-    cipher = Fernet(key_material.encode('ascii')).encrypt(text.encode('utf-8')).decode('ascii')
-    return jsonify({"success": True, "cipher": cipher})
-
-
-@app.route('/api/adv/keyring/decrypt', methods=['POST'])
-def adv_keyring_decrypt():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    assert user_id is not None
-    data = request.json or {}
-    key_id = int(data.get('key_id') or 0)
-    cipher = data.get('cipher') or ''
-    if not key_id or not cipher:
-        return jsonify({"success": False, "error": "key_id/cipher required"}), 400
-    key_material = _adv_get_key_material(user_id, key_id)
-    if not key_material:
-        return jsonify({"success": False, "error": "active key not found"}), 404
-    try:
-        text = Fernet(key_material.encode('ascii')).decrypt(cipher.encode('ascii')).decode('utf-8')
-        return jsonify({"success": True, "text": text})
-    except Exception:
-        return jsonify({"success": False, "error": "decrypt failed"}), 400
 
 
 # =====================================================================
