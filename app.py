@@ -90,7 +90,6 @@ AI_SYSTEM_PROMPT = """
 - ارفض أي طلب ضار أو غير قانوني بأسلوب لطيف
 - قدّم بديل توعوي آمن بدل الرفض المباشر
 """.strip()
-```
 
 AI_IMAGE_EXTENSIONS = (
     '.png', '.jpg', '.jpeg', '.jpe', '.jfif', '.pjpeg', '.pjp',
