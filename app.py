@@ -15,7 +15,7 @@ import datetime
 import time
 import tempfile
 from werkzeug.utils import secure_filename
-from flask import Flask, request, jsonify, render_template_string, send_file, session  # type: ignore
+from flask import Flask, request, jsonify, render_template_string, send_file, session, Response  # type: ignore
 from cryptography.fernet import Fernet  # type: ignore
 from cryptography.hazmat.primitives import hashes  # type: ignore
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # type: ignore
@@ -1640,7 +1640,8 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TITAN | التشفير والأمن السيبراني</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjE4IiBmaWxsPSIjMGQwZDFhIi8+PHRleHQgeD0iNTAiIHk9IjY4IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSI1NCIgZm9udC13ZWlnaHQ9IjkwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0idXJsKCNnKSI+VEFOPC90ZXh0PjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2MwODRmYyIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzdjM2FlZCIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==">
-    <link rel="stylesheet" href="/static/css/tailwind.css?v=1">
+    <link rel="stylesheet" href="/tailwind.css?v=3">
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Tajawal', sans-serif; background: #070b19; color: white; margin: 0; overflow-x: hidden; cursor: crosshair; }
@@ -4310,6 +4311,17 @@ HTML_TEMPLATE = """
             }
         }
 
+        let __hudIntervalId = null;
+        function updateHUD() {
+            loadDashboard();
+        }
+
+        function startHUDTicker() {
+            if (__hudIntervalId) return;
+            updateHUD();
+            __hudIntervalId = setInterval(updateHUD, 2000);
+        }
+
         function showAuthSuccess() {
             const overlay = document.getElementById('auth-overlay');
             overlay.style.transition = 'opacity 0.6s ease';
@@ -4335,7 +4347,7 @@ HTML_TEMPLATE = """
                         cancelAnimationFrame(introMatrixAnimId);
                     }
                     initMatrix('matrix-bg', false);
-                    setInterval(updateHUD, 2000);
+                    startHUDTicker();
                     document.querySelectorAll('button').forEach(btn => {
                         btn.addEventListener('mouseenter', soundManager.hover);
                         btn.addEventListener('click', soundManager.click);
@@ -4409,7 +4421,7 @@ HTML_TEMPLATE = """
                         cancelAnimationFrame(introMatrixAnimId);
                     }
                     initMatrix('matrix-bg', false);
-                    setInterval(updateHUD, 2000);
+                    startHUDTicker();
                     document.querySelectorAll('button').forEach(btn => {
                         btn.addEventListener('mouseenter', soundManager.hover);
                         btn.addEventListener('click', soundManager.click);
@@ -4476,7 +4488,7 @@ HTML_TEMPLATE = """
                 });
                 document.querySelectorAll('input, textarea').forEach(inp => inp.addEventListener('focus', soundManager.hover));
                 
-                setInterval(updateHUD, 2000);
+                startHUDTicker();
             }, 1000);
         }
 
@@ -8793,6 +8805,26 @@ UUID: ${getVal('idUuid')}
 """
 
 # --- المسارات (Routes) ---
+
+@app.route('/tailwind.css')
+def tailwind_css():
+    """Serve Tailwind CSS from disk, with a safe minimal fallback in production."""
+    css_path = os.path.join(app.root_path, 'static', 'css', 'tailwind.css')
+    try:
+        with open(css_path, 'r', encoding='utf-8') as f:
+            css = f.read()
+        return Response(css, mimetype='text/css')
+    except Exception:
+        fallback_css = """
+/* TITAN emergency CSS fallback */
+html,body{margin:0;padding:0;font-family:'Tajawal',sans-serif;background:#070b19;color:#fff}
+.hidden{display:none !important}
+.container{width:100%;max-width:64rem;margin-left:auto;margin-right:auto}
+.glass{background:rgba(10,15,30,.85);border:1px solid rgba(168,85,247,.2);border-radius:1rem}
+.tab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.45rem}
+button,input,textarea,select{font:inherit}
+"""
+        return Response(fallback_css, mimetype='text/css')
 
 @app.route('/')
 def index():
