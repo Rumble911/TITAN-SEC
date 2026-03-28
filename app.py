@@ -2270,7 +2270,7 @@ HTML_TEMPLATE = """
 
 
             <!-- ===== AI SECTION ===== -->
-            <div id="ai-section" class="hidden fixed right-4 bottom-24 z-[9998] w-[min(92vw,34rem)] max-h-[78vh] overflow-y-auto rounded-2xl border border-purple-900/40 bg-slate-950/96 shadow-[0_0_40px_rgba(139,92,246,0.24)] p-4 space-y-4">
+            <div id="ai-section" class="hidden fixed right-4 bottom-24 z-[9998] w-[min(92vw,34rem)] max-h-[78vh] overflow-y-auto rounded-2xl border border-purple-900/40 bg-slate-950/96 shadow-[0_0_40px_rgba(139,92,246,0.24)] p-4 space-y-4" style="display:none;">
                 <div class="flex items-center justify-between border-b border-slate-700 pb-2">
                     <h2 class="text-lg font-bold text-purple-300">&#129302; TITAN AI</h2>
                     <button type="button" onclick="closeAiBubble()" class="text-xs px-2 py-1 rounded-lg border border-slate-700 text-gray-300 hover:bg-slate-800">✕</button>
@@ -4787,13 +4787,21 @@ HTML_TEMPLATE = """
 
         function openAiSection() {
             const sec = document.getElementById('ai-section');
-            if (sec) sec.classList.remove('hidden');
+            if (sec) {
+                sec.classList.remove('hidden');
+                sec.style.display = 'block';
+                sec.style.pointerEvents = 'auto';
+            }
             showAiSubTab(_aiActiveSubTab || 'chat');
         }
 
         function closeAiBubble() {
             const sec = document.getElementById('ai-section');
-            if (sec) sec.classList.add('hidden');
+            if (sec) {
+                sec.classList.add('hidden');
+                sec.style.display = 'none';
+                sec.style.pointerEvents = 'none';
+            }
         }
 
         function setAiBubbleVisibility(isVisible) {
@@ -7904,12 +7912,14 @@ HTML_TEMPLATE = """
                     document.body.appendChild(aiPanel);
                 }
                 aiPanel.style.position = 'fixed';
-                aiPanel.style.left = '12px';
+                aiPanel.style.left = 'auto';
+                aiPanel.style.right = '16px';
                 aiPanel.style.bottom = '84px';
-                aiPanel.style.right = 'auto';
                 aiPanel.style.zIndex = '2147483646';
                 aiPanel.style.width = 'min(92vw,34rem)';
                 aiPanel.style.maxHeight = '78vh';
+                aiPanel.style.display = 'none';
+                aiPanel.style.pointerEvents = 'none';
             }
 
             if (aiLauncher) {
@@ -7917,11 +7927,12 @@ HTML_TEMPLATE = """
                     document.body.appendChild(aiLauncher);
                 }
                 aiLauncher.style.position = 'fixed';
-                aiLauncher.style.left = '12px';
+                aiLauncher.style.left = 'auto';
+                aiLauncher.style.right = '16px';
                 aiLauncher.style.bottom = '12px';
-                aiLauncher.style.right = 'auto';
                 aiLauncher.style.zIndex = '2147483647';
             }
+            closeAiBubble();
             setAiBubbleVisibility(false);
 
             var aiInput = document.getElementById('ai-chat-input');
