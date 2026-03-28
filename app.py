@@ -1253,7 +1253,7 @@ def scan_local_network():
         }
 
 
-def check_username_presence(username: str) -> dict:
+def check_username_presence(username: str, mode: str = 'deep') -> dict:
     u = (username or '').strip()
     if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', u):
         return {
@@ -1261,19 +1261,104 @@ def check_username_presence(username: str) -> dict:
             "error": "اسم المستخدم غير صالح. المسموح: أحرف/أرقام/._- وبطول 3-30."
         }
 
-    platforms = {
-        "github": f"https://github.com/{u}",
-        "reddit": f"https://www.reddit.com/user/{u}",
-        "instagram": f"https://www.instagram.com/{u}/",
+    scan_mode = (mode or 'deep').strip().lower()
+    if scan_mode not in ('quick', 'deep', 'extreme'):
+        scan_mode = 'deep'
+
+    # Broad coverage of high-traffic public platforms.
+    all_platforms = {
+        # Core social
         "x": f"https://x.com/{u}",
+        "instagram": f"https://www.instagram.com/{u}/",
+        "facebook": f"https://www.facebook.com/{u}",
+        "threads": f"https://www.threads.net/@{u}",
         "tiktok": f"https://www.tiktok.com/@{u}",
+        "snapchat": f"https://www.snapchat.com/add/{u}",
         "pinterest": f"https://www.pinterest.com/{u}/",
+        "reddit": f"https://www.reddit.com/user/{u}",
+        "telegram": f"https://t.me/{u}",
+        "discord": f"https://discord.com/users/{u}",
+        "twitch": f"https://www.twitch.tv/{u}",
+        "kick": f"https://kick.com/{u}",
+
+        # Video / music
         "youtube": f"https://www.youtube.com/@{u}",
+        "vimeo": f"https://vimeo.com/{u}",
+        "dailymotion": f"https://www.dailymotion.com/{u}",
+        "soundcloud": f"https://soundcloud.com/{u}",
+        "spotify": f"https://open.spotify.com/user/{u}",
+
+        # Developer / professional
+        "github": f"https://github.com/{u}",
+        "gitlab": f"https://gitlab.com/{u}",
+        "bitbucket": f"https://bitbucket.org/{u}/",
+        "codeberg": f"https://codeberg.org/{u}",
+        "sourceforge": f"https://sourceforge.net/u/{u}/profile/",
+        "devto": f"https://dev.to/{u}",
+        "hashnode": f"https://hashnode.com/@{u}",
         "medium": f"https://medium.com/@{u}",
+        "linkedin": f"https://www.linkedin.com/in/{u}",
+        "replit": f"https://replit.com/@{u}",
+        "kaggle": f"https://www.kaggle.com/{u}",
+
+        # Design / creator / creator economy
+        "behance": f"https://www.behance.net/{u}",
+        "dribbble": f"https://dribbble.com/{u}",
+        "deviantart": f"https://www.deviantart.com/{u}",
+        "patreon": f"https://www.patreon.com/{u}",
+        "gumroad": f"https://{u}.gumroad.com",
+        "buymeacoffee": f"https://www.buymeacoffee.com/{u}",
+        "ko-fi": f"https://ko-fi.com/{u}",
+        "linktree": f"https://linktr.ee/{u}",
+
+        # Gaming / misc
+        "steam": f"https://steamcommunity.com/id/{u}",
+        "roblox": f"https://www.roblox.com/user.aspx?username={u}",
+        "chesscom": f"https://www.chess.com/member/{u}",
+        "lichess": f"https://lichess.org/@/{u}",
+        "itchio": f"https://{u}.itch.io",
+        "producthunt": f"https://www.producthunt.com/@{u}",
     }
 
+    extreme_extra_platforms = {
+        "quora": f"https://www.quora.com/profile/{u}",
+        "slideshare": f"https://www.slideshare.net/{u}",
+        "aboutme": f"https://about.me/{u}",
+        "gravatar": f"https://gravatar.com/{u}",
+        "instructables": f"https://www.instructables.com/member/{u}/",
+        "pastebin": f"https://pastebin.com/u/{u}",
+        "flickr": f"https://www.flickr.com/people/{u}",
+        "lastfm": f"https://www.last.fm/user/{u}",
+        "mixcloud": f"https://www.mixcloud.com/{u}/",
+        "tripadvisor": f"https://www.tripadvisor.com/members/{u}",
+        "booking": f"https://www.booking.com/profile/{u}.html",
+        "freelancer": f"https://www.freelancer.com/u/{u}",
+        "upwork": f"https://www.upwork.com/freelancers/~{u}",
+        "fiverr": f"https://www.fiverr.com/{u}",
+        "npm": f"https://www.npmjs.com/~{u}",
+        "pypi": f"https://pypi.org/user/{u}/",
+        "huggingface": f"https://huggingface.co/{u}",
+        "dockerhub": f"https://hub.docker.com/u/{u}",
+        "keybase": f"https://keybase.io/{u}",
+        "mastodon": f"https://mastodon.social/@{u}",
+    }
+
+    quick_keys = {
+        "x", "instagram", "facebook", "threads", "tiktok", "snapchat", "pinterest",
+        "reddit", "telegram", "twitch", "youtube", "github", "gitlab", "medium", "linkedin"
+    }
+
+    if scan_mode == 'quick':
+        platforms = {k: v for k, v in all_platforms.items() if k in quick_keys}
+    elif scan_mode == 'extreme':
+        platforms = dict(all_platforms)
+        platforms.update(extreme_extra_platforms)
+    else:
+        platforms = all_platforms
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
     }
 
     not_found_markers = [
@@ -1281,37 +1366,86 @@ def check_username_presence(username: str) -> dict:
         "sorry, this page isn't available",
         "this account doesn't exist",
         "couldn't find that page",
-        "doesn't exist"
+        "doesn't exist",
+        "not found",
+        "user not found",
+        "this profile is unavailable",
+        "does not exist",
+        "looks like this page doesn't exist",
+        "profile couldn't be found",
+        "there isn't a user with this name"
     ]
+
+    per_platform_markers = {
+        "github": ["not found · github", "there isn’t a github account"],
+        "instagram": ["sorry, this page isn't available"],
+        "x": ["this account doesn’t exist", "account doesn\u2019t exist"],
+        "reddit": ["nobody on reddit goes by that name"],
+        "youtube": ["this page isn't available"],
+        "tiktok": ["couldn't find this account"],
+        "telegram": ["if you have telegram"],
+        "twitch": ["sorry. unless you\u2019ve got a time machine"],
+        "soundcloud": ["we can\u2019t find that user"],
+        "devto": ["does not exist"],
+    }
+
+    scan_profiles = {
+        'quick': {'timeout': 5, 'max_workers': 8, 'retries': 0},
+        'deep': {'timeout': 7, 'max_workers': 18, 'retries': 0},
+        'extreme': {'timeout': 9, 'max_workers': 30, 'retries': 1},
+    }
+    profile = scan_profiles[scan_mode]
 
     def _probe(item):
         platform, url = item
-        try:
-            r = requests.get(url, headers=headers, timeout=8, allow_redirects=True)
-            status = r.status_code
-            body = (r.text or '').lower()
-            if status == 404:
-                exists = False
-            elif status in (200, 301, 302):
-                exists = not any(m in body for m in not_found_markers)
-            else:
-                exists = False
-            return {
-                "platform": platform,
-                "url": url,
-                "status_code": status,
-                "exists": exists
-            }
-        except Exception as e:
-            return {
-                "platform": platform,
-                "url": url,
-                "status_code": 0,
-                "exists": False,
-                "error": str(e)
-            }
+        last_error = None
+        attempts = 1 + int(profile['retries'])
+        for _ in range(attempts):
+            try:
+                r = requests.get(url, headers=headers, timeout=profile['timeout'], allow_redirects=True)
+                status = r.status_code
+                body = (r.text or '').lower()
+                if status in (404, 410):
+                    exists = False
+                elif status in (200, 301, 302, 307, 308):
+                    markers = not_found_markers + per_platform_markers.get(platform, [])
+                    exists = not any(m in body for m in markers)
+                else:
+                    exists = False
+                return {
+                    "platform": platform,
+                    "url": url,
+                    "final_url": str(r.url),
+                    "status_code": status,
+                    "exists": exists
+                }
+            except Exception as e:
+                last_error = str(e)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        if scan_mode == 'extreme':
+            try:
+                r = requests.head(url, headers=headers, timeout=profile['timeout'], allow_redirects=True)
+                status = r.status_code
+                exists = status in (200, 301, 302, 307, 308)
+                return {
+                    "platform": platform,
+                    "url": url,
+                    "final_url": str(r.url),
+                    "status_code": status,
+                    "exists": exists
+                }
+            except Exception as e:
+                last_error = str(e)
+
+        return {
+            "platform": platform,
+            "url": url,
+            "status_code": 0,
+            "exists": False,
+            "error": last_error or "request failed"
+        }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=profile['max_workers']) as ex:
         rows = list(ex.map(_probe, platforms.items()))
 
     found = [r for r in rows if r.get("exists")]
@@ -1321,6 +1455,8 @@ def check_username_presence(username: str) -> dict:
     return {
         "success": True,
         "username": u,
+        "mode": scan_mode,
+        "checked_count": len(rows),
         "found_count": len(found),
         "found": found,
         "not_found": missing,
@@ -1500,6 +1636,43 @@ HTML_TEMPLATE = """
             box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.22);
         }
         .titan-gradient { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); }
+        #global-file-dropzone {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100000;
+            background: rgba(2, 6, 23, 0.76);
+            backdrop-filter: blur(2px);
+            border: 2px dashed rgba(56, 189, 248, 0.55);
+        }
+        #global-file-dropzone .dropzone-card {
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(56, 189, 248, 0.45);
+            border-radius: 16px;
+            padding: 18px 22px;
+            box-shadow: 0 0 32px rgba(56, 189, 248, 0.22);
+            text-align: center;
+            max-width: 420px;
+        }
+        #global-file-dropzone .dropzone-title {
+            color: #67e8f9;
+            font-weight: 800;
+            font-size: 15px;
+            margin-bottom: 6px;
+        }
+        #global-file-dropzone .dropzone-hint {
+            color: #cbd5e1;
+            font-size: 12px;
+        }
+        .drop-target-highlight {
+            outline: 2px solid rgba(34, 211, 238, 0.9) !important;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.22), 0 0 22px rgba(34, 211, 238, 0.28) !important;
+            border-color: rgba(34, 211, 238, 0.85) !important;
+            transition: box-shadow 0.12s ease, outline-color 0.12s ease;
+        }
         
         /* Scanlines & CRT Effect */
         body::after { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); z-index: 999; background-size: 100% 2px, 3px 100%; pointer-events: none; }
@@ -2042,6 +2215,13 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
+    <div id="global-file-dropzone" aria-hidden="true">
+        <div class="dropzone-card">
+            <div class="dropzone-title">📂 إفلات الملف هنا</div>
+            <div class="dropzone-hint">سيتم إسناد الملف تلقائياً لحقل الرفع في التبويب الحالي.</div>
+        </div>
+    </div>
+
     <div id="main-app" class="opacity-0 transition-opacity duration-1000 ease-in-out pointer-events-none">
         <canvas id="matrix-bg"></canvas>
         <div class="container mx-auto px-4 py-12 max-w-4xl relative z-10">
@@ -2094,6 +2274,7 @@ HTML_TEMPLATE = """
                     <div class="tab-group-title px-1"><span>🧪</span> مختبر التشفير</div>
                     <div class="tab-grid">
                     <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
+                    <button onclick="showTab('filelab')" id="btn-filelab" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span class="inline-block animate-pulse">📁</span> تشفير الملفات</button>
                     <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> تشفير الصور</button>
                     <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
                     <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> فيديو مشفر</button>
@@ -2563,6 +2744,34 @@ HTML_TEMPLATE = """
                                 <button onclick="processText('encrypt')" class="flex-1 titan-gradient p-2 rounded-lg font-bold">تشفير النص</button>
                                 <button onclick="processText('decrypt')" class="flex-1 bg-slate-700 p-2 rounded-lg font-bold">فك التشفير</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== UNIVERSAL FILE ENCRYPTION LAB ===== -->
+                <div id="filelab-section" class="hidden space-y-6">
+                    <div class="bg-slate-900/60 p-5 rounded-2xl border border-emerald-900/40">
+                        <h2 class="text-xl font-bold text-emerald-400 border-b border-slate-700 pb-2 flex items-center gap-2">
+                            <span class="inline-block animate-bounce">🧬</span>
+                            مختبر تشفير الملفات الشامل
+                        </h2>
+                        <p class="text-xs text-gray-400 mt-3 mb-4">
+                            يدعم جميع أنواع الملفات: نصوص، Word، PDF، صور، فيديو، أرشيفات، وأي امتداد آخر.
+                            اختر الملف ثم شفّره أو فكّه بنفس كلمة السر.
+                        </p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            <input type="password" id="fileLabKey" placeholder="كلمة سر التشفير..." class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none text-center tracking-widest">
+                            <div class="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/50 p-2">
+                                <input type="file" id="fileLabInput" class="hidden" onchange="updateFileLabName(this)">
+                                <label for="fileLabInput" class="px-4 py-2 rounded-lg bg-emerald-900/40 hover:bg-emerald-800 text-emerald-300 border border-emerald-800/40 text-sm font-bold cursor-pointer transition-all">اختيار ملف</label>
+                                <span id="fileLabName" class="text-xs text-gray-400 truncate">لم يتم اختيار ملف</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col md:flex-row gap-2">
+                            <button onclick="processFileLab('encrypt')" class="flex-1 bg-emerald-700/60 hover:bg-emerald-600 rounded-xl font-bold p-3 border border-emerald-700/40">تشفير الملف 🔒</button>
+                            <button onclick="processFileLab('decrypt')" class="flex-1 bg-emerald-900/40 hover:bg-emerald-800 rounded-xl font-bold p-3 border border-emerald-800/40 text-emerald-300">فك التشفير 🔓</button>
                         </div>
                     </div>
                 </div>
@@ -3059,7 +3268,15 @@ HTML_TEMPLATE = """
                         <p class="text-[11px] text-gray-500 mb-3">البحث عن اليوزرنيم على منصات متعددة لمعرفة وين موجود.</p>
                         <div class="flex gap-2">
                             <input id="osintUsernameInput" type="text" placeholder="username" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none font-mono text-left" dir="ltr">
+                            <select id="osintUsernameMode" onchange="updateUsernameModeHint()" class="p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none text-xs text-cyan-200">
+                                <option value="quick">Quick</option>
+                                <option value="deep" selected>Deep</option>
+                                <option value="extreme">Extreme</option>
+                            </select>
                             <button onclick="huntUsername()" class="bg-cyan-900/50 hover:bg-cyan-800 px-5 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-300">ابحث</button>
+                        </div>
+                        <div id="osintUsernameModeHint" class="mt-2 text-[11px] text-cyan-200/90 bg-cyan-950/20 border border-cyan-900/35 rounded-lg px-3 py-2">
+                            Deep: توازن ممتاز بين السرعة والدقة. المدة المتوقعة: 4-9 ثواني.
                         </div>
                         <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
                     </div>
@@ -3253,20 +3470,20 @@ HTML_TEMPLATE = """
                                 <label class="absolute -top-2 right-4 px-2 bg-gray-900 text-[10px] text-teal-500 font-bold z-20">اختر الموقع الجغرافي</label>
                                 <select id="identityLang" class="w-full p-4 pl-10 rounded-2xl bg-black/40 border border-teal-500/20 text-gray-200 outline-none focus:ring-2 focus:ring-teal-500/40 transition-all appearance-none cursor-pointer">
                                     <optgroup label="Arabic Locales">
-                                        <option value="ar_JO" selected>الأردن (Jordan) 🇯🇴</option>
-                                        <option value="ar_SA">السعودية (Saudi Arabia) 🇸🇦</option>
-                                        <option value="ar_AE">الإمارات (UAE) 🇦🇪</option>
-                                        <option value="ar_EG">مصر (Egypt) 🇪🇬</option>
+                                        <option value="ar_JO" selected>🇯🇴 الأردن (Jordan)</option>
+                                        <option value="ar_SA">🇸🇦 السعودية (Saudi Arabia)</option>
+                                        <option value="ar_AE">🇦🇪 الإمارات (UAE)</option>
+                                        <option value="ar_EG">🇪🇬 مصر (Egypt)</option>
                                     </optgroup>
                                     <optgroup label="International">
-                                        <option value="en_US">United States 🇺🇸</option>
-                                        <option value="en_GB">United Kingdom 🇬🇧</option>
-                                        <option value="fr_FR">France 🇫🇷</option>
-                                        <option value="de_DE">Germany 🇩🇪</option>
-                                        <option value="es_ES">Spain 🇪🇸</option>
-                                        <option value="tr_TR">Turkey 🇹🇷</option>
-                                        <option value="ru_RU">Russia 🇷🇺</option>
-                                        <option value="zh_CN">China 🇨🇳</option>
+                                        <option value="en_US">🇺🇸 United States</option>
+                                        <option value="en_GB">🇬🇧 United Kingdom</option>
+                                        <option value="fr_FR">🇫🇷 France</option>
+                                        <option value="de_DE">🇩🇪 Germany</option>
+                                        <option value="es_ES">🇪🇸 Spain</option>
+                                        <option value="tr_TR">🇹🇷 Turkey</option>
+                                        <option value="ru_RU">🇷🇺 Russia</option>
+                                        <option value="zh_CN">🇨🇳 China</option>
                                     </optgroup>
                                 </select>
                                 <div class="absolute left-4 top-1/2 -translate-y-1/2 text-teal-500/50 pointer-events-none">▼</div>
@@ -4030,9 +4247,11 @@ HTML_TEMPLATE = """
             if (terms) terms.addEventListener('change', updateRegisterButtonState);
             resetTermsAgreementGate();
             loadOsintWatchlist();
+            updateUsernameModeHint();
         }
         window.onload = () => {
             initRegisterTermsUi();
+            initGlobalFileDropZone();
             setTimeout(checkAuth, 100);
         };
 
@@ -4341,7 +4560,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','fileprotect','suite','tools','ghost','osint','ir','forensics','brand','se','audio','video','qr','identity','admin'];
+        const ALL_TABS = ['dash','pass','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','ir','forensics','brand','se','audio','video','qr','identity','admin'];
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
 
@@ -4527,6 +4746,166 @@ HTML_TEMPLATE = """
 
             const empty = document.getElementById('tab-search-empty');
             if (empty) empty.classList.toggle('hidden', !(query && visibleCount === 0));
+        }
+
+        function _isVisibleElement(el) {
+            if (!el) return false;
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+        }
+
+        function _activeDropContexts() {
+            const contexts = [];
+            const aiSection = document.getElementById('ai-section');
+            if (aiSection && !aiSection.classList.contains('hidden') && aiSection.style.display !== 'none') {
+                contexts.push(aiSection);
+            }
+            ALL_TABS.forEach((tab) => {
+                const sec = document.getElementById(tab + '-section');
+                if (!sec) return;
+                const hidden = sec.classList.contains('hidden') || sec.style.display === 'none';
+                if (!hidden) contexts.push(sec);
+            });
+            return contexts;
+        }
+
+        function _collectFileInputsFromContexts(contexts) {
+            const inputs = [];
+            (contexts || []).forEach((ctx) => {
+                ctx.querySelectorAll('input[type="file"]').forEach((el) => inputs.push(el));
+            });
+            if (!inputs.length) {
+                document.querySelectorAll('#main-app input[type="file"]').forEach((el) => inputs.push(el));
+            }
+            return inputs;
+        }
+
+        function _resolveDropTarget(dropX, dropY) {
+            const inputs = _collectFileInputsFromContexts(_activeDropContexts());
+            if (!inputs.length) return null;
+
+            if (typeof dropX !== 'number' || typeof dropY !== 'number') {
+                const first = inputs[0];
+                let firstAnchor = first;
+                if (first && first.id) {
+                    const firstLabel = document.querySelector(`label[for="${first.id}"]`);
+                    if (_isVisibleElement(firstLabel)) firstAnchor = firstLabel;
+                }
+                return { input: first, anchor: firstAnchor };
+            }
+
+            let bestInput = null;
+            let bestAnchor = null;
+            let bestDist = Infinity;
+
+            inputs.forEach((input) => {
+                let anchor = input;
+                if (input.id) {
+                    const label = document.querySelector(`label[for="${input.id}"]`);
+                    if (_isVisibleElement(label)) anchor = label;
+                }
+                if (!_isVisibleElement(anchor)) return;
+
+                const r = anchor.getBoundingClientRect();
+                const cx = r.left + r.width / 2;
+                const cy = r.top + r.height / 2;
+                const dist = Math.hypot(dropX - cx, dropY - cy);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestInput = input;
+                    bestAnchor = anchor;
+                }
+            });
+
+            if (!bestInput) {
+                return { input: inputs[0], anchor: inputs[0] };
+            }
+            return { input: bestInput, anchor: bestAnchor || bestInput };
+        }
+
+        function _findActiveDropFileInput(dropX, dropY) {
+            const target = _resolveDropTarget(dropX, dropY);
+            return target ? target.input : null;
+        }
+
+        function _assignDroppedFileToInput(inputEl, file) {
+            if (!inputEl || !file) return false;
+            try {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                inputEl.files = dt.files;
+                inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function initGlobalFileDropZone() {
+            const drop = document.getElementById('global-file-dropzone');
+            if (!drop || window.__globalDropzoneInited) return;
+            window.__globalDropzoneInited = true;
+
+            let dragCounter = 0;
+            let activeTargetAnchor = null;
+            const clearTargetHighlight = () => {
+                if (activeTargetAnchor && activeTargetAnchor.classList) {
+                    activeTargetAnchor.classList.remove('drop-target-highlight');
+                }
+                activeTargetAnchor = null;
+            };
+            const setTargetHighlight = (anchorEl) => {
+                if (!anchorEl) return;
+                if (activeTargetAnchor === anchorEl) return;
+                clearTargetHighlight();
+                if (anchorEl.classList) {
+                    anchorEl.classList.add('drop-target-highlight');
+                    activeTargetAnchor = anchorEl;
+                }
+            };
+            const show = () => { drop.style.display = 'flex'; };
+            const hide = () => { drop.style.display = 'none'; clearTargetHighlight(); };
+
+            window.addEventListener('dragenter', (e) => {
+                if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+                dragCounter += 1;
+                show();
+            });
+
+            window.addEventListener('dragover', (e) => {
+                if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                show();
+                const target = _resolveDropTarget(e.clientX, e.clientY);
+                if (target && target.anchor) setTargetHighlight(target.anchor);
+            });
+
+            window.addEventListener('dragleave', (e) => {
+                if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+                dragCounter = Math.max(0, dragCounter - 1);
+                if (dragCounter === 0) hide();
+            });
+
+            window.addEventListener('drop', (e) => {
+                if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+                e.preventDefault();
+                dragCounter = 0;
+                hide();
+
+                const targetInput = _findActiveDropFileInput(e.clientX, e.clientY);
+                if (!targetInput) {
+                    titanAlert('لا يوجد حقل رفع ملفات في التبويب الحالي.');
+                    return;
+                }
+
+                const file = e.dataTransfer.files[0];
+                const ok = _assignDroppedFileToInput(targetInput, file);
+                if (ok) titanAlert('✅ تم إرفاق الملف بالسحب والإفلات.');
+                else titanAlert('تعذر إسناد الملف تلقائياً. استخدم زر اختيار الملف.');
+            });
         }
 
         function showTab(type) {
@@ -4815,6 +5194,40 @@ HTML_TEMPLATE = """
             if (!out) return;
             const file = input?.files?.[0];
             out.innerText = file ? file.name : 'لم يتم اختيار ملف';
+        }
+
+        function updateFileLabName(input) {
+            const out = document.getElementById('fileLabName');
+            if (!out) return;
+            const file = input?.files?.[0];
+            out.innerText = file ? file.name : 'لم يتم اختيار ملف';
+        }
+
+        async function processFileLab(action) {
+            const file = document.getElementById('fileLabInput').files[0];
+            const key = (document.getElementById('fileLabKey')?.value || '').trim();
+            if(!file || !key) return titanAlert("يرجى اختيار ملف وإدخال كلمة السر!");
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('key', key);
+
+            const endpoint = action === 'encrypt' ? '/api/filelab/encrypt' : '/api/filelab/decrypt';
+            const res = await fetch(endpoint, { method:'POST', body: formData });
+            if (res.ok) {
+                soundManager.success();
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = action === 'encrypt' ? (file.name + '.titan') : (file.name.replace(/\\.titan$/i, '') || ('decrypted_' + file.name));
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } else {
+                soundManager.error();
+                const err = await res.json();
+                titanAlert(err.error || 'فشل عملية الملف');
+            }
         }
 
         async function generatePass(mode = 'random') {
@@ -5776,7 +6189,7 @@ HTML_TEMPLATE = """
 
             return `
                 <div class="space-y-3">
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-4 gap-2">
                         <div class="bg-green-900/20 border border-green-800/50 rounded-lg p-2 text-center">
                             <div class="text-[10px] text-gray-400">FOUND</div>
                             <div class="text-lg font-black text-green-400">${_osintEscape(found.length)}</div>
@@ -5784,6 +6197,10 @@ HTML_TEMPLATE = """
                         <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-2 text-center">
                             <div class="text-[10px] text-gray-400">NOT FOUND</div>
                             <div class="text-lg font-black text-gray-300">${_osintEscape(notFound.length)}</div>
+                        </div>
+                        <div class="bg-cyan-900/20 border border-cyan-800/50 rounded-lg p-2 text-center">
+                            <div class="text-[10px] text-gray-400">CHECKED</div>
+                            <div class="text-lg font-black text-cyan-300">${_osintEscape(data.checked_count || (found.length + notFound.length))}</div>
                         </div>
                         <div class="bg-indigo-900/20 border border-indigo-800/50 rounded-lg p-2 text-center">
                             <div class="text-[10px] text-gray-400">USERNAME</div>
@@ -5879,19 +6296,21 @@ HTML_TEMPLATE = """
 
         async function huntUsername() {
             const username = (document.getElementById('osintUsernameInput')?.value || '').trim();
+            const mode = (document.getElementById('osintUsernameMode')?.value || 'deep').trim().toLowerCase();
             const out = document.getElementById('osintUsernameResult');
             if (!username) return titanAlert('ادخل اسم مستخدم أولاً.');
             if (!out) return;
 
-            setResultLoading(out, 'Username Hunt', 'Hunting username across platforms...');
+            setResultLoading(out, 'Username Hunt', `Hunting username in ${mode.toUpperCase()} mode...`);
             try {
                 const res = await fetch('/api/osint/username', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username})
+                    body: JSON.stringify({username, mode})
                 });
                 const data = await res.json();
-                setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge: data.success ? 'Completed' : 'Failed' });
+                const badge = data.success ? String((data.mode || mode).toUpperCase()) : 'Failed';
+                setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge });
                 if (data.found_count > 0) {
                     _osintRenderRisk(60, 'Public Username Footprint Detected');
                 } else {
@@ -5900,6 +6319,27 @@ HTML_TEMPLATE = """
             } catch (e) {
                 setResultError(out, `Username scan failed: ${e.message || e}`);
             }
+        }
+
+        function updateUsernameModeHint() {
+            const mode = (document.getElementById('osintUsernameMode')?.value || 'deep').trim().toLowerCase();
+            const hint = document.getElementById('osintUsernameModeHint');
+            if (!hint) return;
+
+            if (mode === 'quick') {
+                hint.innerText = 'Quick: فحص سريع للمنصات الأهم فقط. المدة المتوقعة: 2-5 ثواني.';
+                hint.className = 'mt-2 text-[11px] text-emerald-200/90 bg-emerald-950/20 border border-emerald-900/35 rounded-lg px-3 py-2';
+                return;
+            }
+
+            if (mode === 'extreme') {
+                hint.innerText = 'Extreme: أوسع تغطية ممكنة مع retries إضافية. المدة المتوقعة: 8-20 ثانية.';
+                hint.className = 'mt-2 text-[11px] text-amber-200/90 bg-amber-950/20 border border-amber-900/35 rounded-lg px-3 py-2';
+                return;
+            }
+
+            hint.innerText = 'Deep: توازن ممتاز بين السرعة والدقة. المدة المتوقعة: 4-9 ثواني.';
+            hint.className = 'mt-2 text-[11px] text-cyan-200/90 bg-cyan-950/20 border border-cyan-900/35 rounded-lg px-3 py-2';
         }
 
         function loadOsintWatchlist() {
@@ -9072,10 +9512,11 @@ def scan_email_route():
 def osint_username_route():
     data = request.json or {}
     username = data.get('username', '').strip()
-    result = check_username_presence(username)
+    mode = data.get('mode', 'deep')
+    result = check_username_presence(username, mode)
     if not result.get('success'):
         return jsonify(result), 400
-    add_audit_log("Username Hunter (OSINT)", f"فحص اليوزرنيم: {username}")
+    add_audit_log("Username Hunter (OSINT)", f"فحص اليوزرنيم: {username} | mode={result.get('mode', 'deep')}")
     return jsonify(result)
 
 
