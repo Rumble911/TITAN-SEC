@@ -2499,10 +2499,7 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
                     <div class="p-3 border-t border-slate-700 bg-slate-950/70 sticky bottom-0 space-y-2">
-                        <div id="ai-attach-list" class="hidden flex flex-wrap gap-1.5"></div>
-                        <input id="ai-file-input" type="file" class="hidden" multiple accept="image/*,.pdf,.txt,.md,.csv,.json,.log,.doc,.docx,.zip,.rar,.7z">
                         <div class="flex gap-2">
-                            <button type="button" onclick="document.getElementById('ai-file-input').click()" class="bg-slate-800 hover:bg-slate-700 text-gray-200 px-3 py-2 rounded-xl font-bold text-sm border border-slate-600/70">📎</button>
                         <input type="text" id="ai-chat-input" placeholder="اسأل عن الأمن السيبراني..."
                             class="flex-1 bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none">
                         <button onclick="sendAiMessage()" id="ai-send-btn"
@@ -7920,57 +7917,6 @@ HTML_TEMPLATE = """
         // === AI Functions ===
         // =====================================================================
 
-        let aiPendingFiles = [];
-
-        function _aiFmtBytes(n) {
-            if (n < 1024) return n + ' B';
-            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-            return (n / (1024 * 1024)).toFixed(1) + ' MB';
-        }
-
-        function renderAiPendingFiles() {
-            const list = document.getElementById('ai-attach-list');
-            if (!list) return;
-            if (!aiPendingFiles.length) {
-                list.classList.add('hidden');
-                list.innerHTML = '';
-                return;
-            }
-            list.classList.remove('hidden');
-            list.innerHTML = aiPendingFiles.map((f, i) => `
-                <span class="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-gray-300">
-                    <span>📎 ${_osintEscape(f.name)} (${_aiFmtBytes(f.size)})</span>
-                    <button type="button" onclick="removeAiPendingFile(${i})" class="text-red-300 hover:text-red-200">✕</button>
-                </span>
-            `).join('');
-        }
-
-        function removeAiPendingFile(index) {
-            aiPendingFiles.splice(index, 1);
-            renderAiPendingFiles();
-        }
-
-        function onAiFilesSelected(ev) {
-            const input = ev.target;
-            const selected = Array.from(input.files || []);
-            const maxFiles = 5;
-            const maxPerFile = 8 * 1024 * 1024;
-            for (const f of selected) {
-                if (aiPendingFiles.length >= maxFiles) {
-                    titanAlert('الحد الأقصى للمرفقات هو 5 ملفات', 'warning');
-                    break;
-                }
-                if (f.size > maxPerFile) {
-                    titanAlert(`الملف كبير جداً: ${f.name} (الحد 8MB لكل ملف)`, 'warning');
-                    continue;
-                }
-                const exists = aiPendingFiles.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified);
-                if (!exists) aiPendingFiles.push(f);
-            }
-            input.value = '';
-            renderAiPendingFiles();
-        }
-
         document.addEventListener('DOMContentLoaded', function() {
             var aiLauncher = document.getElementById('ai-float-launcher');
             var aiPanel = document.getElementById('ai-section');
@@ -8013,10 +7959,6 @@ HTML_TEMPLATE = """
                     if (e.key === 'Enter') sendAiMessage();
                 });
             }
-            var aiFileInput = document.getElementById('ai-file-input');
-            if (aiFileInput) {
-                aiFileInput.addEventListener('change', onAiFilesSelected);
-            }
         });
 
         async function sendAiMessage() {
@@ -8027,17 +7969,12 @@ HTML_TEMPLATE = """
             var modelEl = document.getElementById('ai-model-select');
             var model = modelEl ? modelEl.value : 'titan_ultimate';
             var msg = input.value.trim();
-            const hasFiles = aiPendingFiles.length > 0;
-            if (!msg && !hasFiles) return;
+            if (!msg) return;
 
             var userDiv = document.createElement('div');
             userDiv.className = 'flex justify-end items-end gap-2';
-            const attachPreview = hasFiles
-                ? `<div class="mt-2 flex flex-wrap gap-1">${aiPendingFiles.map(f => `<span class="text-[10px] px-2 py-0.5 rounded bg-purple-900/30 border border-purple-700/40">📎 ${_osintEscape(f.name)}</span>`).join('')}</div>`
-                : '';
             userDiv.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] text-sm shadow-lg border border-purple-600/40">' +
-                (msg ? _osintEscape(msg).replace(/\\n/g, '<br>') : '<span class="text-purple-100/80">(مرفقات بدون نص)</span>') +
-                attachPreview +
+                _osintEscape(msg).replace(/\\n/g, '<br>') +
                 '</div><div class="w-7 h-7 rounded-full bg-purple-800/40 border border-purple-700/50 flex items-center justify-center text-xs">👤</div>';
             flow.appendChild(userDiv);
             input.value = '';
@@ -8059,23 +7996,11 @@ HTML_TEMPLATE = """
             messages.scrollTop = messages.scrollHeight;
 
             try {
-                let res;
-                if (hasFiles) {
-                    const fd = new FormData();
-                    fd.append('message', msg);
-                    fd.append('model', model);
-                    aiPendingFiles.forEach(f => fd.append('files', f, f.name));
-                    res = await fetch('/api/ai/chat', {
-                        method: 'POST',
-                        body: fd
-                    });
-                } else {
-                    res = await fetch('/api/ai/chat', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({message: msg, model: model})
-                    });
-                }
+                const res = await fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: msg, model: model})
+                });
                 var data = await res.json();
                 if (data.reply) {
                     replyInner.textContent = data.reply;
@@ -8085,8 +8010,6 @@ HTML_TEMPLATE = """
             } catch(e) {
                 replyInner.textContent = 'فشل الاتصال';
             }
-            aiPendingFiles = [];
-            renderAiPendingFiles();
             btn.disabled = false;
             btn.textContent = 'إرسال';
             messages.scrollTop = messages.scrollHeight;
@@ -12018,143 +11941,21 @@ def ai_chat():
     if 'user_id' not in session:
         return jsonify({"error": "غير مصرح"}), 401
 
-    is_multipart = (request.content_type or '').lower().startswith('multipart/form-data')
-    message = ''
-    model = 'titan_ultimate'
-    files = []
-    if is_multipart:
-        message = (request.form.get('message') or '').strip()
-        model = (request.form.get('model') or 'titan_ultimate').strip()
-        files = request.files.getlist('files')
-    else:
-        data = request.get_json(silent=True) or {}
-        message = (data.get('message') or '').strip()
-        model = (data.get('model') or 'titan_ultimate').strip()
+    if (request.content_type or '').lower().startswith('multipart/form-data'):
+        return jsonify({"error": "رفع الصور والملفات للذكاء الصناعي معطل حالياً. أرسل نص فقط."}), 400
 
-    if not message and not files:
-        return jsonify({"error": "الرسالة أو المرفقات مطلوبة"}), 400
+    data = request.get_json(silent=True) or {}
+    message = (data.get('message') or '').strip()
+    model = (data.get('model') or 'titan_ultimate').strip()
+
+    if not message:
+        return jsonify({"error": "الرسالة مطلوبة"}), 400
     if not DO_AI_KEY:
         return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
 
     try:
-        attachment_chunks = []
-        skipped = []
-        ai_image_data_urls = []
-        max_files = 8
-        max_file_size = 8 * 1024 * 1024
-        max_ai_image_size = 2 * 1024 * 1024
-        max_ai_images = 3
-
-        if files:
-            for idx, f in enumerate(files[:max_files], start=1):
-                filename = secure_filename(f.filename or f"file_{idx}")
-                content_type = (f.mimetype or 'application/octet-stream').lower()
-                raw = f.read() or b''
-                if not raw:
-                    skipped.append(f"{filename}: empty")
-                    continue
-                if len(raw) > max_file_size:
-                    skipped.append(f"{filename}: too large")
-                    continue
-
-                lower_name = filename.lower()
-                try:
-                    is_image = (
-                        content_type.startswith('image/')
-                        or lower_name.endswith(AI_IMAGE_EXTENSIONS)
-                        or _looks_like_image_bytes(raw)
-                    )
-                    if is_image:
-                        w = h = None
-                        img_format = 'unknown'
-                        img_mode = 'unknown'
-                        try:
-                            img = Image.open(io.BytesIO(raw))
-                            w, h = img.size
-                            img_format = (img.format or 'unknown')
-                            img_mode = (img.mode or 'unknown')
-                        except Exception:
-                            pass
-                        dims = f"{w}x{h}" if w and h else "unknown-size"
-                        ocr_text, ocr_err = extract_image_ocr_text(raw, max_chars=5000)
-                        image_header = (
-                            f"[Attachment {idx}] IMAGE: name={filename}, mime={content_type}, "
-                            f"size={len(raw)} bytes, dimensions={dims}, format={img_format}, mode={img_mode}"
-                        )
-
-                        # Fallback path: pass the actual image to the AI model when OCR is unavailable/weak.
-                        if len(ai_image_data_urls) < max_ai_images and len(raw) <= max_ai_image_size:
-                            mime_for_data_url = content_type if content_type.startswith('image/') else 'image/png'
-                            img_b64 = base64.b64encode(raw).decode('ascii')
-                            ai_image_data_urls.append(f"data:{mime_for_data_url};base64,{img_b64}")
-                        elif len(raw) > max_ai_image_size:
-                            skipped.append(f"{filename}: image too large for vision payload")
-
-                        if lower_name.endswith('.svg'):
-                            svg_excerpt = raw.decode('utf-8', errors='ignore').strip()[:2200]
-                            if svg_excerpt:
-                                attachment_chunks.append(
-                                    f"{image_header}\nSVG_SNIPPET:\n{svg_excerpt}"
-                                )
-                                continue
-
-                        if ocr_text:
-                            attachment_chunks.append(
-                                f"{image_header}\n"
-                                f"OCR_TEXT:\n{ocr_text}"
-                            )
-                        else:
-                            ocr_state = 'local_ocr_unavailable' if ocr_err == 'OCR library missing' else (ocr_err or 'unavailable')
-                            attachment_chunks.append(
-                                f"{image_header}, "
-                                f"ocr_status={ocr_state}"
-                            )
-                    elif content_type == 'application/pdf' or lower_name.endswith('.pdf'):
-                        reader = PdfReader(io.BytesIO(raw))
-                        pages = reader.pages[:5]
-                        extracted = []
-                        for p in pages:
-                            txt = (p.extract_text() or '').strip()
-                            if txt:
-                                extracted.append(txt[:1800])
-                        joined = "\n\n".join(extracted).strip()
-                        if not joined:
-                            joined = "(No extractable text found in PDF)"
-                        attachment_chunks.append(
-                            f"[Attachment {idx}] PDF: name={filename}, pages_read={len(pages)}\n{joined}"
-                        )
-                    elif content_type.startswith('text/') or lower_name.endswith(('.txt', '.md', '.csv', '.json', '.log', '.xml', '.html', '.css', '.js', '.py', '.yaml', '.yml', '.ini', '.conf')):
-                        text = raw.decode('utf-8', errors='ignore').strip()
-                        if not text:
-                            text = "(Empty text file)"
-                        attachment_chunks.append(
-                            f"[Attachment {idx}] TEXT: name={filename}\n{text[:6000]}"
-                        )
-                    else:
-                        attachment_chunks.append(
-                            f"[Attachment {idx}] FILE: name={filename}, mime={content_type}, size={len(raw)} bytes"
-                        )
-                except Exception as ex:
-                    skipped.append(f"{filename}: {str(ex)[:80]}")
-
-        prompt_parts = []
-        if message:
-            prompt_parts.append(message)
-        if attachment_chunks:
-            prompt_parts.append("\n\n=== ATTACHMENTS CONTEXT ===\n" + "\n\n".join(attachment_chunks))
-            prompt_parts.append("\nAnalyze all attachments carefully and answer in Arabic. If images are attached, perform direct visual analysis even when local OCR is unavailable. Include concise practical guidance, confidence notes, and light emoji usage.")
-        if skipped:
-            prompt_parts.append("\n\nSkipped attachments: " + ", ".join(skipped))
-
-        final_prompt = "\n".join(prompt_parts).strip()
-        if ai_image_data_urls:
-            try:
-                reply = _call_do_ai_multimodal(final_prompt, ai_image_data_urls, system_prompt=AI_SYSTEM_PROMPT)
-            except Exception:
-                reply = _call_do_ai(final_prompt, system_prompt=AI_SYSTEM_PROMPT)
-        else:
-            reply = _call_do_ai(final_prompt, system_prompt=AI_SYSTEM_PROMPT)
-        add_audit_log("AI Chat 🤖", f"AI: {message[:50]} | files={len(files)} | model={model}", username=session.get('username', ''))
+        reply = _call_do_ai(message, system_prompt=AI_SYSTEM_PROMPT)
+        add_audit_log("AI Chat 🤖", f"AI: {message[:50]} | files=0 | model={model}", username=session.get('username', ''))
         return jsonify({"success": True, "reply": reply})
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
