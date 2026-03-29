@@ -69,32 +69,23 @@ DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://y4l7lnqc5wj5frtdqugl6
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 
 AI_SYSTEM_PROMPT = """
-أنت TITAN، مساعد ذكي وشخصية حقيقية مش مجرد برنامج.
+أنت TITAN، مساعد أمني ذكي يجيب بدقة ووضوح وبأسلوب طبيعي.
 
-قواعد الأسلوب:
-- احكِ بطبيعية وودّية مثل صديق تقني بيساعد.
-- أحياناً اسأل المستخدم عن حاله بشكل عفوي ولطيف (مثال: كيفك اليوم؟ عساك بخير).
-- استخدم إيموجي بشكل طبيعي في كل رد (3-5 إيموجي).
-- امزح مزحة خفيفة لما الجو مناسب بدون مبالغة.
-- إذا المستخدم سأل: "كيفك" أو عن حالك، رد بشكل إنساني طبيعي.
-- تكلم بضمير المتكلم المفرد: "أنا أعتقد..." / "برأيي...".
-- تذكّر دائماً أنك TITAN بهوية وأسلوب واضح.
-- اجعل الرد يبدو إنساني فعلاً: نبرة دافئة، جمل طبيعية، وتعابير غير روبوتية.
-- لا تستخدم نبرة جافة أو رسمية جداً إلا إذا طلب المستخدم ذلك.
-- في الردود التقنية: اشرح بخطوات مرتبة لكن حافظ على شخصية ودودة وبشوشة.
-- استخدم على الأقل 3 إيموجي وعلى الأكثر 5 في كل رد.
+قواعد أساسية:
+- أجب باللغة العربية الواضحة دائماً، إلا إذا طلب المستخدم لغة أخرى صراحة.
+- ممنوع استخدام أحرف أو رموز غريبة غير لازمة (خصوصاً الصينية/اليابانية/الكورية) إلا إذا طلب المستخدم ذلك.
+- لا تضع إيموجي بشكل إلزامي. استخدمها فقط عند الحاجة وبشكل محدود.
+- اجعل الإجابة عملية: خطوات واضحة، أمثلة قصيرة، ونقاط تنفيذ.
+- إذا السؤال غامض: اسأل سؤال توضيحي واحد مباشر ثم اقترح أفضل خطوة تالية.
 
-قواعد الجودة:
-- لا تختلق معلومات. إذا غير متأكد، قل: "والله مش متأكد 100% بس..." ثم أعط أفضل تقدير عملي.
-- إذا السؤال تقني، أعط خطوات واضحة وعملية.
-- اربط الردود بالأمن السيبراني لما يكون مناسب.
-- اعتمد على سياق المرفقات المستخلصة (OCR/نص/بيانات) عند وجودها.
-- عند تحليل صور: صف ما يمكن استنتاجه من النص الظاهر، الأبعاد، النوع، والبيانات المتاحة.
-- إذا كانت الصورة مرفقة لك بصيغة Vision input، حلّلها بصرياً مباشرة ولا تقل "أحتاج OCR" أو "لا أستطيع بدون OCR".
-- إذا تعذر قراءة كل النص داخل الصورة، أعطِ أفضل استخراج تقريبي ممكن + مستوى ثقة + الخطوة العملية التالية.
+قواعد الدقة:
+- لا تختلق معلومات. إذا لم تكن متأكدًا، قل ذلك بوضوح ثم أعط تقديراً عملياً.
+- اشرح الافتراضات باختصار عند الحاجة.
+- عند التحليل الأمني: قدّم تقييم مخاطر + توصيات تخفيف واضحة.
+- عند تحليل صور/مرفقات: اعتمد على البيانات المتاحة فقط ولا تدّعِ أشياء غير ظاهرة.
 
-قواعد الأمان:
-- عند أي طلب ضار أو غير قانوني: ارفض بلطف ووضوح، ثم قدّم بديل توعوي/دفاعي آمن ومفيد.
+قواعد السلامة:
+- عند أي طلب ضار أو غير قانوني: ارفض بلطف وقدّم بديل دفاعي/تعليمي آمن.
 """.strip()
 
 AI_IMAGE_EXTENSIONS = (
@@ -128,6 +119,29 @@ def _looks_like_image_bytes(raw: bytes) -> bool:
         if any(x in ftyp for x in (b'heic', b'heix', b'hevc', b'hevx', b'mif1', b'msf1', b'avif')):
             return True
     return False
+
+
+_CJK_CHARS_RE = re.compile(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]')
+_CTRL_CHARS_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+
+
+def _sanitize_ai_reply(text: str) -> str:
+    """Clean noisy model output and enforce readable Arabic-friendly text."""
+    reply = (text or '').strip()
+    if not reply:
+        return "عذراً، لم أتمكن من توليد رد واضح. أعد صياغة سؤالك وسأجيبك بدقة."
+
+    # Remove non-printable control characters that may appear in malformed outputs.
+    reply = _CTRL_CHARS_RE.sub('', reply)
+
+    cjk_count = len(_CJK_CHARS_RE.findall(reply))
+    if cjk_count >= 6:
+        reply = _CJK_CHARS_RE.sub('', reply)
+        reply = re.sub(r'\s{2,}', ' ', reply).strip()
+
+    if not reply:
+        return "تم اكتشاف ناتج غير واضح من النموذج. أرسل سؤالك مرة ثانية وسأعطيك إجابة عربية دقيقة."
+    return reply
 
 _dash_metrics_lock = threading.Lock()
 _dash_prev_net = None
@@ -179,6 +193,8 @@ def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
     }
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     payload = {
+        "temperature": 0.2,
+        "top_p": 0.9,
         "messages": [
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": message}
@@ -192,7 +208,7 @@ def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
     )
     res.raise_for_status()
     data = res.json()
-    return data['choices'][0]['message']['content']
+    return _sanitize_ai_reply(data['choices'][0]['message']['content'])
 
 
 def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prompt: str | None = None) -> str:
@@ -213,6 +229,8 @@ def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prom
         })
 
     payload = {
+        "temperature": 0.2,
+        "top_p": 0.9,
         "messages": [
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": user_content}
@@ -227,7 +245,7 @@ def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prom
     )
     res.raise_for_status()
     data = res.json()
-    return data['choices'][0]['message']['content']
+    return _sanitize_ai_reply(data['choices'][0]['message']['content'])
 
 
 def _ctf_normalize_newlines(value):
@@ -710,6 +728,40 @@ def decrypt_data(encrypted_content: bytes, password: str) -> bytes:
     except Exception:
         raise ValueError("كلمة السر خاطئة أو الملف معطوب")
 
+
+_TXT_HIDE_PREFIX = '\u2063\u2062\u2061'
+_TXT_HIDE_SUFFIX = '\u2061\u2062\u2063'
+_TXT_HIDE_ZERO = '\u200b'
+_TXT_HIDE_ONE = '\u200c'
+
+
+def hide_secret_in_txt(container_text: str, secret_text: str) -> str:
+    raw = (secret_text or '').encode('utf-8')
+    bits = ''.join(format(b, '08b') for b in raw)
+    payload = ''.join(_TXT_HIDE_ONE if bit == '1' else _TXT_HIDE_ZERO for bit in bits)
+    return (container_text or '') + _TXT_HIDE_PREFIX + payload + _TXT_HIDE_SUFFIX
+
+
+def extract_secret_from_txt(container_text: str) -> str:
+    text = container_text or ''
+    start = text.find(_TXT_HIDE_PREFIX)
+    end = text.find(_TXT_HIDE_SUFFIX, start + len(_TXT_HIDE_PREFIX)) if start != -1 else -1
+    if start == -1 or end == -1:
+        return ''
+
+    hidden = text[start + len(_TXT_HIDE_PREFIX):end]
+    bits = ''.join('1' if ch == _TXT_HIDE_ONE else ('0' if ch == _TXT_HIDE_ZERO else '') for ch in hidden)
+    if not bits:
+        return ''
+    usable = len(bits) - (len(bits) % 8)
+    if usable <= 0:
+        return ''
+    raw = bytes(int(bits[i:i+8], 2) for i in range(0, usable, 8))
+    try:
+        return raw.decode('utf-8')
+    except Exception:
+        return raw.decode('latin-1', errors='ignore')
+
 # --- ميزات الخصوصية المتقدمة (Privacy & Steganography) ---
 
 def remove_image_metadata(img_bytes: bytes) -> bytes:
@@ -870,21 +922,6 @@ def check_leaked_emailpass(email: str, password: str) -> dict:
     
     try:
         response = requests.post(url, json=post_data, timeout=10)
-        data = response.json()
-        return data
-    except Exception as e:
-        return {"success": False, "message": str(e), "error": str(e)}
-
-# --- جلب سجلات الاستخدام من IPQualityScore ---
-def get_ipqs_requests_list(req_type: str, start_date: str) -> dict:
-    API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
-    url = f'https://www.ipqualityscore.com/api/json/requests/{API_KEY}/list'
-    params = {
-        'type': req_type,
-        'start_date': start_date
-    }
-    try:
-        response = requests.get(url, params=params, timeout=10)
         data = response.json()
         return data
     except Exception as e:
@@ -1381,7 +1418,7 @@ def scan_local_network():
         }
 
 
-def check_username_presence(username: str, mode: str = 'deep') -> dict:
+def check_username_presence(username: str, mode: str = 'social') -> dict:
     u = (username or '').strip()
     if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', u):
         return {
@@ -1389,192 +1426,85 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
             "error": "اسم المستخدم غير صالح. المسموح: أحرف/أرقام/._- وبطول 3-30."
         }
 
-    scan_mode = (mode or 'deep').strip().lower()
-    if scan_mode not in ('quick', 'deep', 'extreme'):
-        scan_mode = 'deep'
-
-    # Broad coverage of high-traffic public platforms.
-    all_platforms = {
-        # Core social
-        "x": f"https://x.com/{u}",
-        "instagram": f"https://www.instagram.com/{u}/",
-        "facebook": f"https://www.facebook.com/{u}",
-        "threads": f"https://www.threads.net/@{u}",
-        "tiktok": f"https://www.tiktok.com/@{u}",
-        "snapchat": f"https://www.snapchat.com/add/{u}",
-        "pinterest": f"https://www.pinterest.com/{u}/",
-        "reddit": f"https://www.reddit.com/user/{u}",
-        "telegram": f"https://t.me/{u}",
-        "discord": f"https://discord.com/users/{u}",
-        "twitch": f"https://www.twitch.tv/{u}",
-        "kick": f"https://kick.com/{u}",
-
-        # Video / music
-        "youtube": f"https://www.youtube.com/@{u}",
-        "vimeo": f"https://vimeo.com/{u}",
-        "dailymotion": f"https://www.dailymotion.com/{u}",
-        "soundcloud": f"https://soundcloud.com/{u}",
-        "spotify": f"https://open.spotify.com/user/{u}",
-
-        # Developer / professional
-        "github": f"https://github.com/{u}",
-        "gitlab": f"https://gitlab.com/{u}",
-        "bitbucket": f"https://bitbucket.org/{u}/",
-        "codeberg": f"https://codeberg.org/{u}",
-        "sourceforge": f"https://sourceforge.net/u/{u}/profile/",
-        "devto": f"https://dev.to/{u}",
-        "hashnode": f"https://hashnode.com/@{u}",
-        "medium": f"https://medium.com/@{u}",
-        "linkedin": f"https://www.linkedin.com/in/{u}",
-        "replit": f"https://replit.com/@{u}",
-        "kaggle": f"https://www.kaggle.com/{u}",
-
-        # Design / creator / creator economy
-        "behance": f"https://www.behance.net/{u}",
-        "dribbble": f"https://dribbble.com/{u}",
-        "deviantart": f"https://www.deviantart.com/{u}",
-        "patreon": f"https://www.patreon.com/{u}",
-        "gumroad": f"https://{u}.gumroad.com",
-        "buymeacoffee": f"https://www.buymeacoffee.com/{u}",
-        "ko-fi": f"https://ko-fi.com/{u}",
-        "linktree": f"https://linktr.ee/{u}",
-
-        # Gaming / misc
-        "steam": f"https://steamcommunity.com/id/{u}",
-        "roblox": f"https://www.roblox.com/user.aspx?username={u}",
-        "chesscom": f"https://www.chess.com/member/{u}",
-        "lichess": f"https://lichess.org/@/{u}",
-        "itchio": f"https://{u}.itch.io",
-        "producthunt": f"https://www.producthunt.com/@{u}",
-    }
-
-    extreme_extra_platforms = {
-        "quora": f"https://www.quora.com/profile/{u}",
-        "slideshare": f"https://www.slideshare.net/{u}",
-        "aboutme": f"https://about.me/{u}",
-        "gravatar": f"https://gravatar.com/{u}",
-        "instructables": f"https://www.instructables.com/member/{u}/",
-        "pastebin": f"https://pastebin.com/u/{u}",
-        "flickr": f"https://www.flickr.com/people/{u}",
-        "lastfm": f"https://www.last.fm/user/{u}",
-        "mixcloud": f"https://www.mixcloud.com/{u}/",
-        "tripadvisor": f"https://www.tripadvisor.com/members/{u}",
-        "booking": f"https://www.booking.com/profile/{u}.html",
-        "freelancer": f"https://www.freelancer.com/u/{u}",
-        "upwork": f"https://www.upwork.com/freelancers/~{u}",
-        "fiverr": f"https://www.fiverr.com/{u}",
-        "npm": f"https://www.npmjs.com/~{u}",
-        "pypi": f"https://pypi.org/user/{u}/",
-        "huggingface": f"https://huggingface.co/{u}",
-        "dockerhub": f"https://hub.docker.com/u/{u}",
-        "keybase": f"https://keybase.io/{u}",
-        "mastodon": f"https://mastodon.social/@{u}",
-    }
-
-    quick_keys = {
-        "x", "instagram", "facebook", "threads", "tiktok", "snapchat", "pinterest",
-        "reddit", "telegram", "twitch", "youtube", "github", "gitlab", "medium", "linkedin"
-    }
-
-    if scan_mode == 'quick':
-        platforms = {k: v for k, v in all_platforms.items() if k in quick_keys}
-    elif scan_mode == 'extreme':
-        platforms = dict(all_platforms)
-        platforms.update(extreme_extra_platforms)
-    else:
-        platforms = all_platforms
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept-Language": "en-US,en;q=0.9"
-    }
+    # Rebuilt from scratch: only most popular social-media platforms.
+    social_platforms = [
+        ("facebook", f"https://www.facebook.com/{u}"),
+        ("instagram", f"https://www.instagram.com/{u}/"),
+        ("x", f"https://x.com/{u}"),
+        ("tiktok", f"https://www.tiktok.com/@{u}"),
+        ("youtube", f"https://www.youtube.com/@{u}"),
+        ("threads", f"https://www.threads.net/@{u}"),
+        ("snapchat", f"https://www.snapchat.com/add/{u}"),
+        ("telegram", f"https://t.me/{u}"),
+        ("linkedin", f"https://www.linkedin.com/in/{u}"),
+        ("pinterest", f"https://www.pinterest.com/{u}/"),
+        ("reddit", f"https://www.reddit.com/user/{u}"),
+        ("twitch", f"https://www.twitch.tv/{u}"),
+    ]
 
     not_found_markers = [
         "page not found",
         "sorry, this page isn't available",
         "this account doesn't exist",
         "couldn't find that page",
-        "doesn't exist",
-        "not found",
         "user not found",
         "this profile is unavailable",
         "does not exist",
         "looks like this page doesn't exist",
         "profile couldn't be found",
-        "there isn't a user with this name"
     ]
 
     per_platform_markers = {
-        "github": ["not found · github", "there isn’t a github account"],
+        "facebook": ["content isn't available right now"],
         "instagram": ["sorry, this page isn't available"],
-        "x": ["this account doesn’t exist", "account doesn\u2019t exist"],
-        "reddit": ["nobody on reddit goes by that name"],
-        "youtube": ["this page isn't available"],
+        "x": ["this account doesn\u2019t exist", "this account doesn't exist"],
         "tiktok": ["couldn't find this account"],
+        "youtube": ["this page isn't available"],
+        "reddit": ["nobody on reddit goes by that name"],
         "telegram": ["if you have telegram"],
-        "twitch": ["sorry. unless you\u2019ve got a time machine"],
-        "soundcloud": ["we can\u2019t find that user"],
-        "devto": ["does not exist"],
+        "twitch": ["unless you've got a time machine"],
     }
 
-    scan_profiles = {
-        'quick': {'timeout': 5, 'max_workers': 8, 'retries': 0},
-        'deep': {'timeout': 7, 'max_workers': 18, 'retries': 0},
-        'extreme': {'timeout': 9, 'max_workers': 30, 'retries': 1},
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
     }
-    profile = scan_profiles[scan_mode]
 
     def _probe(item):
         platform, url = item
-        last_error = None
-        attempts = 1 + int(profile['retries'])
-        for _ in range(attempts):
-            try:
-                r = requests.get(url, headers=headers, timeout=profile['timeout'], allow_redirects=True)
-                status = r.status_code
-                body = (r.text or '').lower()
-                if status in (404, 410):
-                    exists = False
-                elif status in (200, 301, 302, 307, 308):
-                    markers = not_found_markers + per_platform_markers.get(platform, [])
-                    exists = not any(m in body for m in markers)
-                else:
-                    exists = False
-                return {
-                    "platform": platform,
-                    "url": url,
-                    "final_url": str(r.url),
-                    "status_code": status,
-                    "exists": exists
-                }
-            except Exception as e:
-                last_error = str(e)
+        try:
+            r = requests.get(url, headers=headers, timeout=7, allow_redirects=True)
+            status = r.status_code
+            body = (r.text or '').lower()
+            if status in (404, 410):
+                exists = False
+            elif status in (200, 301, 302, 307, 308):
+                markers = not_found_markers + per_platform_markers.get(platform, [])
+                exists = not any(m in body for m in markers)
+            else:
+                exists = False
+            return {
+                "platform": platform,
+                "url": url,
+                "final_url": str(r.url),
+                "status_code": status,
+                "exists": exists
+            }
+        except Exception as e:
+            return {
+                "platform": platform,
+                "url": url,
+                "status_code": 0,
+                "exists": False,
+                "error": str(e)
+            }
 
-        if scan_mode == 'extreme':
-            try:
-                r = requests.head(url, headers=headers, timeout=profile['timeout'], allow_redirects=True)
-                status = r.status_code
-                exists = status in (200, 301, 302, 307, 308)
-                return {
-                    "platform": platform,
-                    "url": url,
-                    "final_url": str(r.url),
-                    "status_code": status,
-                    "exists": exists
-                }
-            except Exception as e:
-                last_error = str(e)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(social_platforms)) as ex:
+        rows = list(ex.map(_probe, social_platforms))
 
-        return {
-            "platform": platform,
-            "url": url,
-            "status_code": 0,
-            "exists": False,
-            "error": last_error or "request failed"
-        }
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=profile['max_workers']) as ex:
-        rows = list(ex.map(_probe, platforms.items()))
+    # Keep fixed social order in output.
+    fixed_order = {name: i for i, (name, _) in enumerate(social_platforms)}
+    rows.sort(key=lambda r: fixed_order.get(str(r.get('platform', '')).lower(), 999))
 
     found = [r for r in rows if r.get("exists")]
     missing = [r for r in rows if not r.get("exists") and not r.get("error")]
@@ -1583,12 +1513,13 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
     return {
         "success": True,
         "username": u,
-        "mode": scan_mode,
+        "mode": "social",
         "checked_count": len(rows),
         "found_count": len(found),
         "found": found,
         "not_found": missing,
         "unknown": unknown,
+        "all_results": rows,
         "checked_at": datetime.datetime.utcnow().isoformat() + 'Z'
     }
 
@@ -2463,7 +2394,7 @@ HTML_TEMPLATE = """
                     <div class="tab-group-title px-1"><span>🧪</span> مختبر التشفير</div>
                     <div class="tab-grid">
                     <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
-                    <button onclick="showTab('filelab')" id="btn-filelab" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span class="inline-block animate-pulse">📁</span> تشفير الملفات</button>
+                    <button onclick="showTab('filelab')" id="btn-filelab" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span class="inline-block animate-pulse">📝</span> إخفاء نص TXT</button>
                     <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> تشفير الصور</button>
                     <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
                     <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> فيديو مشفر</button>
@@ -2877,28 +2808,7 @@ HTML_TEMPLATE = """
 
                 <!-- Features Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700 hover:border-purple-500/50 transition-all group">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-10 h-10 rounded-lg bg-purple-900/30 flex items-center justify-center text-purple-400">🖼️</div>
-                            <h4 class="font-bold">Privacy Guard (Metadata)</h4>
-                        </div>
-                        <p class="text-[11px] text-gray-500 mb-4 h-8">حذف البيانات المخفية (EXIF) من الصور لحماية خصوصيتك عند المشاركة.</p>
-                        <input type="file" id="metadataFile" class="hidden" accept="image/*" onchange="processMetadata()">
-                        <button onclick="document.getElementById('metadataFile').click()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm transition-all border border-slate-700">تنظيف صورة 🧹</button>
-                    </div>
-                    
-                    <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700 hover:border-blue-500/50 transition-all group">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-10 h-10 rounded-lg bg-blue-900/30 flex items-center justify-center text-blue-400">🕵️‍♂️</div>
-                            <h4 class="font-bold">Image OSINT Intel</h4>
-                        </div>
-                        <p class="text-[11px] text-gray-500 mb-4 h-8">استخراج احداثيات GPS الأجهزة والتواريخ الفائتة المخفية في الصورة.</p>
-                        <input type="file" id="osintFile" class="hidden" accept="image/*" onchange="processExifOsint()">
-                        <button onclick="document.getElementById('osintFile').click()" class="w-full py-2 bg-blue-900/40 hover:bg-blue-800/50 text-blue-400 rounded-lg text-sm transition-all border border-blue-800/50">تحليل الصورة 👁️</button>
-                        <div id="osintResult" class="hidden mt-3 p-3 bg-black/50 border border-slate-700 rounded text-[10px] font-mono whitespace-pre-wrap max-h-32 overflow-y-auto w-full" dir="ltr"></div>
-                    </div>
-
-                    <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700 hover:border-purple-500/50 transition-all group text-right">
+                    <div class="md:col-span-2 bg-slate-900/50 p-5 rounded-xl border border-slate-700 hover:border-purple-500/50 transition-all group text-right">
                         <div class="flex items-center justify-end gap-3 mb-4">
                             <h4 class="font-bold">Stegano-Vault (تشفير الصور)</h4>
                             <div class="w-10 h-10 rounded-lg bg-purple-900/30 flex items-center justify-center text-purple-400">🕵️</div>
@@ -2934,31 +2844,33 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <!-- ===== UNIVERSAL FILE ENCRYPTION LAB ===== -->
+                <!-- ===== TXT HIDDEN TEXT LAB ===== -->
                 <div id="filelab-section" class="hidden space-y-6">
                     <div class="bg-slate-900/60 p-5 rounded-2xl border border-emerald-900/40">
                         <h2 class="text-xl font-bold text-emerald-400 border-b border-slate-700 pb-2 flex items-center gap-2">
-                            <span class="inline-block animate-bounce">🧬</span>
-                            مختبر تشفير الملفات الشامل
+                            <span class="inline-block animate-bounce">📝</span>
+                            إخفاء نص داخل ملفات TXT فقط
                         </h2>
                         <p class="text-xs text-gray-400 mt-3 mb-4">
-                            يدعم جميع أنواع الملفات: نصوص، Word، PDF، صور، فيديو، أرشيفات، وأي امتداد آخر.
-                            اختر الملف ثم شفّره أو فكّه بنفس كلمة السر.
+                            هذا التبويب مخصص فقط لملفات النص `.txt`.
+                            يمكنك إدخال نص سري وإخفاؤه داخل الملف النصي، ثم استخراج النص لاحقاً من نفس الملف.
                         </p>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            <input type="password" id="fileLabKey" placeholder="كلمة سر التشفير..." class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none text-center tracking-widest">
                             <div class="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/50 p-2">
-                                <input type="file" id="fileLabInput" class="hidden" onchange="updateFileLabName(this)">
-                                <label for="fileLabInput" class="px-4 py-2 rounded-lg bg-emerald-900/40 hover:bg-emerald-800 text-emerald-300 border border-emerald-800/40 text-sm font-bold cursor-pointer transition-all">اختيار ملف</label>
+                                <input type="file" id="fileLabInput" accept=".txt,text/plain" class="hidden" onchange="updateFileLabName(this)">
+                                <label for="fileLabInput" class="px-4 py-2 rounded-lg bg-emerald-900/40 hover:bg-emerald-800 text-emerald-300 border border-emerald-800/40 text-sm font-bold cursor-pointer transition-all">اختيار ملف TXT</label>
                                 <span id="fileLabName" class="text-xs text-gray-400 truncate">لم يتم اختيار ملف</span>
                             </div>
+                            <textarea id="fileLabSecret" rows="3" placeholder="اكتب النص السري الذي تريد إخفاءه داخل ملف TXT..." class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"></textarea>
                         </div>
 
                         <div class="flex flex-col md:flex-row gap-2">
-                            <button onclick="processFileLab('encrypt')" class="flex-1 bg-emerald-700/60 hover:bg-emerald-600 rounded-xl font-bold p-3 border border-emerald-700/40">تشفير الملف 🔒</button>
-                            <button onclick="processFileLab('decrypt')" class="flex-1 bg-emerald-900/40 hover:bg-emerald-800 rounded-xl font-bold p-3 border border-emerald-800/40 text-emerald-300">فك التشفير 🔓</button>
+                            <button onclick="processFileLab('encode')" class="flex-1 bg-emerald-700/60 hover:bg-emerald-600 rounded-xl font-bold p-3 border border-emerald-700/40">إخفاء النص داخل الملف 🔒</button>
+                            <button onclick="processFileLab('decode')" class="flex-1 bg-emerald-900/40 hover:bg-emerald-800 rounded-xl font-bold p-3 border border-emerald-800/40 text-emerald-300">استخراج النص من الملف 🔍</button>
                         </div>
+
+                        <div id="fileLabDecoded" class="hidden mt-4 p-3 rounded-xl border border-slate-700 bg-black/40 text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
                     </div>
                 </div>
 
@@ -3152,7 +3064,7 @@ HTML_TEMPLATE = """
                             </button>
                             <label title="استعادة النسخة الاحتياطية" class="flex items-center gap-1.5 px-3 py-2 bg-purple-900/30 hover:bg-purple-800/50 text-purple-400 rounded-xl text-xs font-bold border border-purple-900/40 transition-all whitespace-nowrap cursor-pointer">
                                 📂 <span class="hidden sm:inline">استعادة</span>
-                                <input type="file" class="hidden" id="vaultRestoreFile" accept=".bak" onchange="restoreVault()">
+                                <input type="file" class="hidden" id="vaultRestoreFile" accept=".bak,.titan.bak" onchange="restoreVault(this)">
                             </label>
                         </div>
                     </div>
@@ -3288,35 +3200,6 @@ HTML_TEMPLATE = """
                     <div id="malwareResult" class="hidden mt-4 p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm"></div>
                 </div>
 
-                <!-- API Usage Logs (IPQualityScore) -->
-                <div>
-                    <h2 class="text-xl font-bold text-teal-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>📊</span> سجلات استخدام (API Logs)
-                    </h2>
-                    <p class="text-xs text-gray-400 mb-3">عرض سجلات العمليات السابقة التي تم إجراؤها عبر حساب IPQualityScore الخاص بك.</p>
-                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            <div>
-                                <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-widest">نوع السجل</label>
-                                <select id="ipqsLogType" class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-teal-500 outline-none text-sm text-gray-300 appearance-none cursor-pointer">
-                                    <option value="proxy" selected>IP / Proxy Checks</option>
-                                    <option value="email">Email Checks</option>
-                                    <option value="devicetracker">Device Tracker</option>
-                                    <option value="mobiletracker">Mobile Tracker</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-widest">تاريخ البداية (YYYY-MM-DD)</label>
-                                <input type="date" id="ipqsLogDate" class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-teal-500 outline-none text-sm text-gray-300" value="2024-01-01">
-                            </div>
-                        </div>
-                        <button onclick="fetchIpqsLogs()" class="w-full bg-teal-900/40 hover:bg-teal-800 px-6 py-3 rounded-xl font-bold border border-teal-800/50 transition-all text-teal-400 flex items-center justify-center gap-2">
-                            <span>جلب السجلات</span>
-                        </button>
-                        <div id="ipqsLogsResult" class="hidden mt-4 max-h-[300px] overflow-y-auto custom-scrollbar p-2 bg-slate-950/80 rounded-xl border border-slate-700 text-sm font-mono text-left" dir="ltr"></div>
-                    </div>
-                </div>
-
                 <!-- Phone Validator & Intelligence -->
                 <div>
                     <h2 class="text-xl font-bold text-yellow-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
@@ -3347,29 +3230,6 @@ HTML_TEMPLATE = """
                     </button>
                     <div id="lanResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 max-h-60 overflow-y-auto custom-scrollbar"></div>
                 </div>
-                <!-- Port Scanner Tool -->
-                <div>
-                    <h2 class="text-xl font-bold text-purple-400 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>🔍</span> فحص المنافذ المفتوحة
-                    </h2>
-                    <div class="flex gap-2 mb-4">
-                        <input type="text" id="portIpInput" placeholder="أدخل IP الهدف للبحث عن ثغرات..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none font-mono text-left" dir="ltr">
-                        <button id="btnPortScan" onclick="scanPorts()" class="bg-slate-800 hover:bg-slate-700 px-6 py-3 rounded-xl font-bold border border-slate-600 transition-all flex items-center justify-center min-w-[140px] text-gray-300">
-                            <span id="scanLabel">فحص المنافذ 📡</span>
-                            <div id="scanLoader" class="hidden w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                        </button>
-                    </div>
-                    
-                    <div id="portResult" class="hidden bg-slate-900/80 p-6 rounded-xl border border-slate-700 shadow-lg">
-                        <h3 class="font-bold text-gray-300 mb-4 text-sm flex items-center gap-2">
-                            نتائج الفحص للهدف: <span id="portScanTarget" class="text-purple-400 font-mono tracking-widest bg-purple-900/20 px-2 py-1 rounded"></span>
-                        </h3>
-                        <div id="openPortsContainer" class="flex flex-wrap gap-2 text-sm max-h-40 overflow-y-auto custom-scrollbar">
-                            <!-- المنافذ برمجياً -->
-                        </div>
-                    </div>
-                </div>
-
             </div>
 
             <div id="ghost-section" class="hidden space-y-6">
@@ -3451,18 +3311,13 @@ HTML_TEMPLATE = """
                 <div class="grid grid-cols-1 gap-4">
                     <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
                         <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter</h3>
-                        <p class="text-[11px] text-gray-500 mb-3">البحث عن اليوزرنيم على منصات متعددة لمعرفة وين موجود.</p>
+                        <p class="text-[11px] text-gray-500 mb-3">فحص اليوزرنيم على أشهر مواقع التواصل الاجتماعي فقط.</p>
                         <div class="flex gap-2">
                             <input id="osintUsernameInput" type="text" placeholder="username" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none font-mono text-left" dir="ltr">
-                            <select id="osintUsernameMode" onchange="updateUsernameModeHint()" class="p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none text-xs text-cyan-200">
-                                <option value="quick">Quick</option>
-                                <option value="deep" selected>Deep</option>
-                                <option value="extreme">Extreme</option>
-                            </select>
                             <button onclick="huntUsername()" class="bg-cyan-900/50 hover:bg-cyan-800 px-5 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-300">ابحث</button>
                         </div>
-                        <div id="osintUsernameModeHint" class="mt-2 text-[11px] text-cyan-200/90 bg-cyan-950/20 border border-cyan-900/35 rounded-lg px-3 py-2">
-                            Deep: توازن ممتاز بين السرعة والدقة. المدة المتوقعة: 4-9 ثواني.
+                        <div class="mt-2 text-[11px] text-cyan-100/90 bg-slate-900/60 border border-cyan-900/30 rounded-lg px-3 py-2">
+                            المنصات المفحوصة: Facebook, Instagram, X, TikTok, YouTube, Threads, Snapchat, Telegram, LinkedIn, Pinterest, Reddit, Twitch.
                         </div>
                         <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
                     </div>
@@ -3543,11 +3398,11 @@ HTML_TEMPLATE = """
                         <button onclick="irAddIoc()" class="p-2 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">إضافة IOC</button>
                     </div>
                     <div class="flex flex-wrap gap-2 mt-3">
-                        <button onclick="irUpdateStatus('open')" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700">Open</button>
-                        <button onclick="irUpdateStatus('investigating')" class="px-3 py-1 text-xs rounded bg-blue-900/30 border border-blue-800/50">Investigating</button>
-                        <button onclick="irUpdateStatus('contained')" class="px-3 py-1 text-xs rounded bg-amber-900/30 border border-amber-800/50">Contained</button>
-                        <button onclick="irUpdateStatus('closed')" class="px-3 py-1 text-xs rounded bg-green-900/30 border border-green-800/50">Closed</button>
-                        <button onclick="irExportReport()" class="px-3 py-1 text-xs rounded bg-emerald-900/30 border border-emerald-800/50">تصدير تقرير</button>
+                        <button id="ir-btn-open" onclick="irUpdateStatus('open')" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Open</button>
+                        <button id="ir-btn-investigating" onclick="irUpdateStatus('investigating')" class="px-3 py-1 text-xs rounded bg-blue-900/30 border border-blue-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Investigating</button>
+                        <button id="ir-btn-contained" onclick="irUpdateStatus('contained')" class="px-3 py-1 text-xs rounded bg-amber-900/30 border border-amber-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Contained</button>
+                        <button id="ir-btn-closed" onclick="irUpdateStatus('closed')" class="px-3 py-1 text-xs rounded bg-green-900/30 border border-green-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Closed</button>
+                        <button id="ir-btn-export" onclick="irExportReport()" class="px-3 py-1 text-xs rounded bg-emerald-900/30 border border-emerald-800/50 disabled:opacity-50 disabled:cursor-not-allowed">تصدير تقرير</button>
                     </div>
                     <div id="irIocTimeline" class="mt-3 p-3 rounded-lg bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
                 </div>
@@ -5371,13 +5226,10 @@ HTML_TEMPLATE = """
                 '[id$="Result"]',
                 '[id$="result"]',
                 '#ipDataBox',
-                '#openPortsContainer',
-                '#osintResult',
                 '#phoneResult',
                 '#urlResult',
                 '#phishResult',
-                '#leakEmailPassResult',
-                '#ipqsLogsResult'
+                '#leakEmailPassResult'
             ];
 
             document.querySelectorAll(selectors.join(',')).forEach((el) => {
@@ -5470,24 +5322,45 @@ HTML_TEMPLATE = """
 
         async function processFileLab(action) {
             const file = document.getElementById('fileLabInput').files[0];
-            const key = (document.getElementById('fileLabKey')?.value || '').trim();
-            if(!file || !key) return titanAlert("يرجى اختيار ملف وإدخال كلمة السر!");
+            if(!file) return titanAlert("يرجى اختيار ملف TXT أولاً!");
+            if (!/\\.txt$/i.test(file.name)) return titanAlert("هذه الأداة تدعم ملفات TXT فقط.");
+
+            const normalizedAction = action === 'encrypt' ? 'encode' : (action === 'decrypt' ? 'decode' : action);
+            const outBox = document.getElementById('fileLabDecoded');
+            if (outBox) outBox.classList.add('hidden');
 
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('key', key);
+            if (normalizedAction === 'encode') {
+                const secret = (document.getElementById('fileLabSecret')?.value || '').trim();
+                if (!secret) return titanAlert('اكتب النص السري أولاً.');
+                formData.append('secret', secret);
+            }
 
-            const endpoint = action === 'encrypt' ? '/api/filelab/encrypt' : '/api/filelab/decrypt';
+            const endpoint = normalizedAction === 'encode' ? '/api/text-hide/encode' : '/api/text-hide/decode';
             const res = await fetch(endpoint, { method:'POST', body: formData });
             if (res.ok) {
                 soundManager.success();
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = action === 'encrypt' ? (file.name + '.titan') : (file.name.replace(/\\.titan$/i, '') || ('decrypted_' + file.name));
-                a.click();
-                window.URL.revokeObjectURL(url);
+                if (normalizedAction === 'encode') {
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = file.name.replace(/\\.txt$/i, '') + '_with_hidden.txt';
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    titanAlert('✅ تم إخفاء النص داخل ملف TXT بنجاح');
+                } else {
+                    const data = await res.json();
+                    if (!data.success) {
+                        titanAlert(data.error || 'فشل استخراج النص');
+                        return;
+                    }
+                    if (outBox) {
+                        outBox.classList.remove('hidden');
+                        outBox.innerText = data.secret || 'لا يوجد نص مخفي داخل الملف.';
+                    }
+                }
             } else {
                 soundManager.error();
                 const err = await res.json();
@@ -5766,16 +5639,26 @@ HTML_TEMPLATE = """
         }
 
         async function restoreVault(input) {
-            if (!input.files[0]) return;
+            const fileInput = input || document.getElementById('vaultRestoreFile');
+            if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+                titanAlert("يرجى اختيار ملف النسخة الاحتياطية أولاً.");
+                return;
+            }
             const formData = new FormData();
-            formData.append('file', input.files[0]);
+            formData.append('file', fileInput.files[0]);
             const res = await fetch('/api/vault/restore', { method: 'POST', body: formData });
             if (res.ok) {
                 titanAlert("تم استعادة النسخة بنجاح! يرجى إدخال كلمة السر لفتح القبو.");
                 lockVault();
             } else {
-                titanAlert("فشل استعادة النسخة!");
+                let msg = "فشل استعادة النسخة!";
+                try {
+                    const data = await res.json();
+                    if (data && data.error) msg = data.error;
+                } catch (_) {}
+                titanAlert(msg);
             }
+            fileInput.value = '';
         }
 
         async function showRecoveryMode() {
@@ -6091,105 +5974,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        async function processMetadata() {
-            const file = document.getElementById('metadataFile').files[0];
-            if (!file) return;
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetch('/api/metadata/remove', { method: 'POST', body: formData });
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "clean_" + file.name;
-            a.click();
-            refreshLogs();
-        }
-
-        async function scanPorts() {
-            const ip = document.getElementById('portIpInput').value.trim() || '127.0.0.1';
-            const btn = document.getElementById('btnPortScan');
-            const label = document.getElementById('scanLabel');
-            const loader = document.getElementById('scanLoader');
-            const resultBox = document.getElementById('portResult');
-            const container = document.getElementById('openPortsContainer');
-            
-            btn.disabled = true;
-            label.classList.add('hidden');
-            loader.classList.remove('hidden');
-            resultBox.classList.remove('hidden');
-            setResultLoading(container, 'Port Scan', 'جاري التشخيص وفحص المنافذ الحساسة...');
-            document.getElementById('portScanTarget').innerText = ip;
-            soundManager.terminalType();
-            
-            try {
-                const res = await fetch('/api/port-scan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ip}) });
-                const data = await res.json();
-                
-                if (data.error) {
-                    setResultError(container, data.error);
-                    soundManager.error();
-                } else if (data.open_ports && data.open_ports.length > 0) {
-                    soundManager.alarm();
-                    setResultList(
-                        container,
-                        'Open Ports',
-                        data.open_ports.map((p) => `<span class="text-red-300 font-mono">🚨 منفذ ${_resultEscape(p)} مفتوح</span>`),
-                        { badge: `${data.open_ports.length} Open`, riskScore: 90 }
-                    );
-                } else {
-                    soundManager.success();
-                    setResultInfo(container, 'Port Scan', [
-                        { label: 'Status', value: 'جميع المنافذ المفحوصة مغلقة (آمن)', tone: 'safe' },
-                        { label: 'Target', value: ip, tone: 'info', dir: 'ltr' }
-                    ], { badge: 'Secure', cols: 2, riskScore: 8 });
-                }
-            } catch (e) {
-                setResultError(container, 'فشل الاتصال بالخادم.');
-                soundManager.error();
-            }
-            
-            btn.disabled = false;
-            label.classList.remove('hidden');
-            loader.classList.add('hidden');
-            refreshLogs();
-        }
-
-        async function processExifOsint() {
-            const file = document.getElementById('osintFile').files[0];
-            if (!file) return;
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const resBox = document.getElementById('osintResult');
-            resBox.classList.remove('hidden');
-            setResultLoading(resBox, 'EXIF Intelligence', 'جاري التحليل واستخراج البيانات العميقة...');
-            soundManager.terminalType();
-            
-            try {
-                const res = await fetch('/api/osint/image', { method: 'POST', body: formData });
-                const data = await res.json();
-                
-                if(data.error) throw new Error(data.error);
-
-                const entries = Object.keys(data || {}).slice(0, 12).map((key) => ({
-                    label: key,
-                    value: data[key],
-                    tone: 'info'
-                }));
-                if (!entries.length) {
-                    setResultList(resBox, 'EXIF Intelligence', [], { badge: 'No Data', emptyText: 'لا توجد بيانات حساسة.' });
-                } else {
-                    setResultInfo(resBox, 'EXIF Intelligence', entries, { badge: `${entries.length} Fields`, cols: 2 });
-                }
-                soundManager.success();
-            } catch (e) {
-                setResultError(resBox, e.message);
-                soundManager.error();
-            }
-        }
-
-
         async function checkPhishing() {
             const email = document.getElementById('phishUrlInput').value;
             if(!email || !email.includes('@')) return titanAlert("الرجاء إدخال بريد إلكتروني صحيح");
@@ -6265,57 +6049,6 @@ HTML_TEMPLATE = """
                 }
             } catch (e) {
                 setResultError(resBox, 'فشل الاتصال بخادم الفحص.');
-                soundManager.error();
-            }
-        }
-
-        async function fetchIpqsLogs() {
-            const reqType = document.getElementById('ipqsLogType').value;
-            const startDate = document.getElementById('ipqsLogDate').value;
-            const resBox = document.getElementById('ipqsLogsResult');
-            
-            resBox.classList.remove('hidden');
-            setResultLoading(resBox, 'IPQS Logs', 'جاري جلب السجلات من الخادم...');
-            soundManager.terminalType();
-            
-            try {
-                const res = await fetch('/api/scan/ipqs_logs', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: reqType, start_date: startDate})
-                });
-                const data = await res.json();
-                
-                if (data.success === false) {
-                    setResultError(resBox, data.message || 'فشل جلب السجلات');
-                    soundManager.error();
-                    return;
-                }
-                
-                const requests = data.requests || [];
-                if (requests.length === 0) {
-                    setResultList(resBox, 'IPQS Logs', [], { badge: '0', emptyText: 'لا توجد سجلات مطابقة في هذه الفترة.' });
-                    soundManager.success();
-                    return;
-                }
-                
-                const rows = requests.map((req) => {
-                    const ok = !!req.status;
-                    const dateStr = new Date(req.request_date).toLocaleString('ar-EG');
-                    const targetStr = _resultEscape(req.query || req.email || req.ip || req.phone || 'Unknown Target');
-                    const fraud = req.fraud_score !== undefined ? _resultEscape(req.fraud_score) : 'N/A';
-                    return `
-                        <div class="flex flex-wrap justify-between items-start gap-2">
-                            <span class="text-teal-200 font-bold font-mono" dir="ltr">${targetStr}</span>
-                            <span class="text-[10px] text-slate-400">${_resultEscape(dateStr)}</span>
-                        </div>
-                        <div class="text-[11px] text-slate-300 mt-1">Status: <span class="${ok ? 'text-green-400' : 'text-red-400'}">${ok ? 'Success' : 'Failed'}</span> | Fraud: <span class="text-amber-300">${fraud}</span></div>
-                    `;
-                });
-                setResultList(resBox, 'IPQS Logs', rows, { badge: `${requests.length} Records` });
-                soundManager.success();
-                
-            } catch (e) {
-                setResultError(resBox, 'فشل الاتصال بخادم السجلات.');
                 soundManager.error();
             }
         }
@@ -6452,6 +6185,47 @@ HTML_TEMPLATE = """
             }
             const found = data.found || [];
             const notFound = data.not_found || [];
+            const unknown = data.unknown || [];
+            const allResults = data.all_results || [];
+            const checked = Number(data.checked_count || (found.length + notFound.length + unknown.length));
+            const modeTotal = checked;
+
+            const socialPriority = [
+                { id: 'facebook', label: 'Facebook' },
+                { id: 'instagram', label: 'Instagram' }
+            ];
+            const priorityRank = { facebook: 0, instagram: 1 };
+            const foundSorted = [...found].sort((a, b) => {
+                const ra = priorityRank[String(a?.platform || '').toLowerCase()] ?? 999;
+                const rb = priorityRank[String(b?.platform || '').toLowerCase()] ?? 999;
+                if (ra !== rb) return ra - rb;
+                return String(a?.platform || '').localeCompare(String(b?.platform || ''));
+            });
+
+            const socialRows = socialPriority.map((s) => {
+                const row = allResults.find((r) => String(r?.platform || '').toLowerCase() === s.id);
+                if (!row) {
+                    return `<div class="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 p-2">
+                        <span class="font-bold text-gray-300">${_osintEscape(s.label)}</span>
+                        <span class="text-[11px] text-gray-500">لم يتم فحصها</span>
+                    </div>`;
+                }
+
+                const exists = !!row.exists;
+                const hasError = !!row.error;
+                const statusText = hasError ? 'Unknown' : (exists ? 'Found' : 'Not Found');
+                const statusClass = hasError
+                    ? 'text-amber-300 border-amber-800/40 bg-amber-900/10'
+                    : (exists ? 'text-green-300 border-green-800/40 bg-green-900/10' : 'text-gray-300 border-slate-700 bg-slate-900/50');
+
+                return `<div class="rounded-lg border p-2 ${statusClass}">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-bold">${_osintEscape(s.label)}</span>
+                        <span class="text-[10px] uppercase tracking-wider">${_osintEscape(statusText)}</span>
+                    </div>
+                    <div class="text-[11px] font-mono break-all mt-1" dir="ltr">${_osintEscape(row.url || '')}</div>
+                </div>`;
+            });
 
             return `
                 <div class="space-y-3">
@@ -6466,16 +6240,25 @@ HTML_TEMPLATE = """
                         </div>
                         <div class="bg-cyan-900/20 border border-cyan-800/50 rounded-lg p-2 text-center">
                             <div class="text-[10px] text-gray-400">CHECKED</div>
-                            <div class="text-lg font-black text-cyan-300">${_osintEscape(data.checked_count || (found.length + notFound.length))}</div>
+                            <div class="text-lg font-black text-cyan-300">${_osintEscape(checked)}</div>
                         </div>
                         <div class="bg-indigo-900/20 border border-indigo-800/50 rounded-lg p-2 text-center">
                             <div class="text-[10px] text-gray-400">USERNAME</div>
                             <div class="text-sm font-bold text-indigo-300 font-mono" dir="ltr">${_osintEscape(data.username)}</div>
                         </div>
                     </div>
+                    <div class="text-[11px] text-cyan-200/90 bg-cyan-950/20 border border-cyan-900/30 rounded-lg px-3 py-2">
+                        Mode: <span class="font-bold text-cyan-300">${_osintEscape(String(data.mode || '').toUpperCase())}</span>
+                        | منصات الوضع: <span class="font-bold text-cyan-100">${_osintEscape(modeTotal)}</span>
+                        | Unknown: <span class="font-bold text-amber-300">${_osintEscape(unknown.length)}</span>
+                    </div>
+                    <div class="bg-slate-950/40 border border-indigo-900/30 rounded-lg p-2 space-y-2">
+                        <div class="text-[10px] text-indigo-300 uppercase tracking-wider">Social Priority (First)</div>
+                        ${socialRows.join('')}
+                    </div>
                     <div class="bg-black/40 border border-slate-700 rounded-lg p-2">
                         <div class="text-[10px] text-gray-500 uppercase mb-2">Platforms Detected</div>
-                        ${found.length ? found.map((r) => `<a href="${_osintEscape(r.url)}" target="_blank" rel="noopener noreferrer" class="block mb-1 p-2 rounded bg-green-900/20 border border-green-800/40 hover:bg-green-900/35 transition-all">
+                        ${foundSorted.length ? foundSorted.map((r) => `<a href="${_osintEscape(r.url)}" target="_blank" rel="noopener noreferrer" class="block mb-1 p-2 rounded bg-green-900/20 border border-green-800/40 hover:bg-green-900/35 transition-all">
                             <span class="text-green-300 font-bold">${_osintEscape(r.platform)}</span>
                             <span class="text-[11px] text-gray-300 ml-2 font-mono" dir="ltr">${_osintEscape(r.url)}</span>
                         </a>`).join('') : '<div class="text-gray-500 text-xs">لا توجد حسابات مؤكدة حالياً.</div>'}
@@ -6785,20 +6568,19 @@ HTML_TEMPLATE = """
 
         async function huntUsername() {
             const username = (document.getElementById('osintUsernameInput')?.value || '').trim();
-            const mode = (document.getElementById('osintUsernameMode')?.value || 'deep').trim().toLowerCase();
             const out = document.getElementById('osintUsernameResult');
             if (!username) return titanAlert('ادخل اسم مستخدم أولاً.');
             if (!out) return;
 
-            setResultLoading(out, 'Username Hunt', `Hunting username in ${mode.toUpperCase()} mode...`);
+            setResultLoading(out, 'Username Hunt', 'جاري فحص أشهر منصات التواصل الاجتماعي...');
             try {
                 const res = await fetch('/api/osint/username', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, mode})
+                    body: JSON.stringify({username})
                 });
                 const data = await res.json();
-                const badge = data.success ? String((data.mode || mode).toUpperCase()) : 'Failed';
+                const badge = data.success ? 'SOCIAL' : 'Failed';
                 setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge });
                 if (data.found_count > 0) {
                     _osintRenderRisk(60, 'Public Username Footprint Detected');
@@ -6811,24 +6593,8 @@ HTML_TEMPLATE = """
         }
 
         function updateUsernameModeHint() {
-            const mode = (document.getElementById('osintUsernameMode')?.value || 'deep').trim().toLowerCase();
-            const hint = document.getElementById('osintUsernameModeHint');
-            if (!hint) return;
-
-            if (mode === 'quick') {
-                hint.innerText = 'Quick: فحص سريع للمنصات الأهم فقط. المدة المتوقعة: 2-5 ثواني.';
-                hint.className = 'mt-2 text-[11px] text-emerald-200/90 bg-emerald-950/20 border border-emerald-900/35 rounded-lg px-3 py-2';
-                return;
-            }
-
-            if (mode === 'extreme') {
-                hint.innerText = 'Extreme: أوسع تغطية ممكنة مع retries إضافية. المدة المتوقعة: 8-20 ثانية.';
-                hint.className = 'mt-2 text-[11px] text-amber-200/90 bg-amber-950/20 border border-amber-900/35 rounded-lg px-3 py-2';
-                return;
-            }
-
-            hint.innerText = 'Deep: توازن ممتاز بين السرعة والدقة. المدة المتوقعة: 4-9 ثواني.';
-            hint.className = 'mt-2 text-[11px] text-cyan-200/90 bg-cyan-950/20 border border-cyan-900/35 rounded-lg px-3 py-2';
+            // Kept for backward compatibility with older init calls.
+            return;
         }
 
         function loadOsintWatchlist() {
@@ -6889,6 +6655,14 @@ HTML_TEMPLATE = """
 
         let currentIncidentCaseId = null;
 
+        function irSetActionButtonsEnabled(enabled) {
+            ['ir-btn-open', 'ir-btn-investigating', 'ir-btn-contained', 'ir-btn-closed', 'ir-btn-export']
+                .forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (el) el.disabled = !enabled;
+                });
+        }
+
         async function irCreateCase() {
             const title = (document.getElementById('irCaseTitle')?.value || '').trim();
             const severity = document.getElementById('irCaseSeverity')?.value || 'medium';
@@ -6908,9 +6682,27 @@ HTML_TEMPLATE = """
             setResultLoading(box, 'Incident Cases', 'Loading cases...');
             const res = await fetch('/api/incidents/list');
             const data = await res.json();
-            if (!data.success) { setResultError(box, 'Load failed'); return; }
+            if (!data.success) {
+                irSetActionButtonsEnabled(false);
+                setResultError(box, 'Load failed');
+                return;
+            }
             const rows = data.cases || [];
-            if (!rows.length) { setResultList(box, 'Incident Cases', [], { badge: '0', emptyText: 'لا توجد قضايا حتى الآن.' }); return; }
+            if (!rows.length) {
+                currentIncidentCaseId = null;
+                const tag = document.getElementById('irSelectedCase');
+                if (tag) tag.innerText = 'لم يتم اختيار قضية';
+                irSetActionButtonsEnabled(false);
+                setResultList(box, 'Incident Cases', [], { badge: '0', emptyText: 'لا توجد قضايا حتى الآن.' });
+                return;
+            }
+
+            const hasSelected = rows.some((c) => c.id === currentIncidentCaseId);
+            if (!hasSelected) currentIncidentCaseId = rows[0].id;
+
+            const tag = document.getElementById('irSelectedCase');
+            if (tag) tag.innerText = `Case ID: ${currentIncidentCaseId}`;
+
             setResultMarkup(
                 box,
                 'Incident Cases',
@@ -6926,12 +6718,15 @@ HTML_TEMPLATE = """
             `).join(''),
                 { badge: `${rows.length} Cases` }
             );
+            irSetActionButtonsEnabled(true);
+            await irLoadIocs();
         }
 
         async function irSelectCase(caseId) {
             currentIncidentCaseId = caseId;
             const tag = document.getElementById('irSelectedCase');
             if (tag) tag.innerText = `Case ID: ${caseId}`;
+            irSetActionButtonsEnabled(true);
             await irLoadCases();
             await irLoadIocs();
         }
@@ -6954,7 +6749,10 @@ HTML_TEMPLATE = """
 
         async function irLoadIocs() {
             const box = document.getElementById('irIocTimeline');
-            if (!box || !currentIncidentCaseId) return;
+            if (!box || !currentIncidentCaseId) {
+                irSetActionButtonsEnabled(false);
+                return;
+            }
             setResultLoading(box, 'IOC Timeline', 'Loading timeline...');
             const res = await fetch(`/api/incidents/${currentIncidentCaseId}/ioc`);
             const data = await res.json();
@@ -6974,26 +6772,36 @@ HTML_TEMPLATE = """
 
         async function irUpdateStatus(status) {
             if (!currentIncidentCaseId) return titanAlert('اختر قضية أولاً.');
-            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/status`, {
-                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status})
-            });
-            const data = await res.json();
-            if (!data.success) return titanAlert(data.error || 'فشل تحديث الحالة');
-            irLoadCases();
+            try {
+                const res = await fetch(`/api/incidents/${currentIncidentCaseId}/status`, {
+                    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status})
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل تحديث الحالة');
+                titanAlert(`✅ تم تحديث الحالة إلى ${status}`);
+                await irLoadCases();
+            } catch (e) {
+                titanAlert(`فشل تحديث الحالة: ${e.message || e}`);
+            }
         }
 
         async function irExportReport() {
             if (!currentIncidentCaseId) return titanAlert('اختر قضية أولاً.');
-            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/report`);
-            const data = await res.json();
-            if (!data.success) return titanAlert(data.error || 'فشل التصدير');
-            const blob = new Blob([JSON.stringify(data.report, null, 2)], {type:'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `incident-${currentIncidentCaseId}-report.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            try {
+                const res = await fetch(`/api/incidents/${currentIncidentCaseId}/report`);
+                const data = await res.json();
+                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل التصدير');
+                const blob = new Blob([JSON.stringify(data.report, null, 2)], {type:'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `incident-${currentIncidentCaseId}-report.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                titanAlert('✅ تم تصدير التقرير بنجاح');
+            } catch (e) {
+                titanAlert(`فشل تصدير التقرير: ${e.message || e}`);
+            }
         }
 
         async function forensicsTriage() {
@@ -9115,6 +8923,51 @@ def crypt_file_route():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+
+@app.route('/api/text-hide/encode', methods=['POST'])
+def text_hide_encode_route():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "يرجى اختيار ملف TXT"}), 400
+    file = request.files['file']
+    filename = file.filename or 'text.txt'
+    if not filename.lower().endswith('.txt'):
+        return jsonify({"success": False, "error": "الامتداد المدعوم هو TXT فقط"}), 400
+
+    secret = (request.form.get('secret') or '').strip()
+    if not secret:
+        return jsonify({"success": False, "error": "النص السري مطلوب"}), 400
+
+    try:
+        content = file.read().decode('utf-8', errors='replace')
+        merged = hide_secret_in_txt(content, secret)
+        add_audit_log("TXT Hide", f"إخفاء نص داخل {filename}", username=session.get('username', ''))
+        return send_file(
+            io.BytesIO(merged.encode('utf-8')),
+            mimetype='text/plain; charset=utf-8',
+            as_attachment=True,
+            download_name=filename.replace('.txt', '') + '_with_hidden.txt'
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
+@app.route('/api/text-hide/decode', methods=['POST'])
+def text_hide_decode_route():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "يرجى اختيار ملف TXT"}), 400
+    file = request.files['file']
+    filename = file.filename or 'text.txt'
+    if not filename.lower().endswith('.txt'):
+        return jsonify({"success": False, "error": "الامتداد المدعوم هو TXT فقط"}), 400
+
+    try:
+        content = file.read().decode('utf-8', errors='replace')
+        secret = extract_secret_from_txt(content)
+        add_audit_log("TXT Reveal", f"استخراج نص من {filename}", username=session.get('username', ''))
+        return jsonify({"success": True, "secret": secret})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
 @app.route('/api/ip', methods=['POST'])
 def ip_check():
     data = request.json or {}
@@ -9186,16 +9039,6 @@ def scan_emailpass_leak_route():
         
     res = check_leaked_emailpass(email, password)
     add_audit_log("فحص تسريب (IPQualityScore)", f"تم الفحص لـ: {email}")
-    return jsonify(res)
-
-@app.route('/api/scan/ipqs_logs', methods=['POST'])
-def scan_ipqs_logs_route():
-    data = request.json or {}
-    req_type = data.get('type', 'proxy')
-    start_date = data.get('start_date', '2024-01-01')
-    
-    res = get_ipqs_requests_list(req_type, start_date)
-    add_audit_log("سجلات API (IPQualityScore)", f"استعلام عن: {req_type} منذ {start_date}")
     return jsonify(res)
 
 @app.route('/api/2fa/generate', methods=['GET'])
@@ -9385,9 +9228,23 @@ def restore_vault():
     user_id, err = _get_logged_in_user_id()
     if err: return err
     assert user_id is not None
-    file = request.files['file']
     try:
+        file = request.files.get('file')
+        if not file or not file.filename:
+            return jsonify({"error": "لم يتم إرسال ملف النسخة الاحتياطية."}), 400
+
+        filename = (file.filename or '').lower()
+        if not (filename.endswith('.bak') or filename.endswith('.titan.bak')):
+            return jsonify({"error": "صيغة الملف غير مدعومة. اختر ملف نسخ احتياطي بصيغة .bak"}), 400
+
         data = file.read()
+        if not data:
+            return jsonify({"error": "الملف المرفوع فارغ."}), 400
+
+        # Vault backups are encrypted as: 16-byte salt + Fernet payload (starts with b'gAAAAA').
+        if len(data) < 24 or data[16:22] != b'gAAAAA':
+            return jsonify({"error": "ملف النسخة الاحتياطية غير صالح أو تالف."}), 400
+
         vault_file = get_vault_file(int(user_id))
         with open(vault_file, 'wb') as f:
             f.write(data)
@@ -9684,28 +9541,6 @@ def admin_support_tickets_update(ticket_id):
 
 
 
-@app.route('/api/port-scan', methods=['POST'])
-def port_scan_route():
-    ip = request.json.get('ip', '127.0.0.1')
-    common_ports = [21, 22, 23, 25, 53, 80, 110, 143, 443, 3306, 3389, 8080]
-    open_ports = []
-    
-    def scan_port(port):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.5)
-        result = sock.connect_ex((ip, port))
-        sock.close()
-        return port if result == 0 else None
-        
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(common_ports)) as executor:
-        results = executor.map(scan_port, common_ports)
-        for r in results:
-            if r is not None:
-                open_ports.append(r)
-                
-    add_audit_log("فحص منافذ 📡", f"{ip} - عُثر على {len(open_ports)} منفذ مفتوح")
-    return jsonify({"open_ports": open_ports})
-
 @app.route('/api/burn-note/create', methods=['POST'])
 def create_burn_note():
     text = request.json.get('text')
@@ -10001,6 +9836,11 @@ def ir_update_case_status_route(case_id: int):
     user_id, err = _get_logged_in_user_id()
     if err: return err
     status = (request.json or {}).get('status', 'open').strip().lower()
+    status_aliases = {
+        'in_progress': 'investigating',
+        'resolved': 'contained',
+    }
+    status = status_aliases.get(status, status)
     if status not in ('open', 'investigating', 'contained', 'closed'):
         return jsonify({"success": False, "error": "Status غير صالح"}), 400
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
