@@ -31,6 +31,7 @@ import concurrent.futures
 import subprocess
 import threading
 import wave
+import math
 import psutil  # type: ignore
 import exifread  # type: ignore
 from cryptography.hazmat.primitives.asymmetric import rsa  # type: ignore
@@ -84,6 +85,8 @@ AI_SYSTEM_PROMPT = """
 - لا تختلق معلومات. إذا مش متأكد، قل "والله مش متأكد 100% بس..."
 - إذا السؤال تقني، اعطِ خطوات واضحة وعملية
 - اربط ردودك بالأمن السيبراني لما يكون مناسب
+- إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
+- لا تنهِ الرد بشكل مقطوع؛ اختم دائماً بخطوة عملية تالية واضحة.
 
 قواعد الأمان:
 - ارفض أي طلب ضار أو غير قانوني بأسلوب لطيف
@@ -187,38 +190,62 @@ def _dash_public_ip_cached():
         pass
     return _dash_public_ip
 
-def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
-    """استدعاء TITAN AI عبر DigitalOcean Agent"""
+
+def _do_ai_chat_completion(messages: list[dict[str, object]], timeout_seconds: int = 45, max_tokens: int = 1400) -> tuple[str, str]:
     headers = {
         'Authorization': f'Bearer {DO_AI_KEY}',
         'Content-Type': 'application/json',
     }
-    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     payload = {
         "temperature": 0.2,
         "top_p": 0.9,
-        "messages": [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": message}
-        ]
+        "max_tokens": max_tokens,
+        "messages": messages,
     }
     res = requests.post(
         f"{DO_AI_ENDPOINT}/api/v1/chat/completions",
         headers=headers,
         json=payload,
-        timeout=30
+        timeout=timeout_seconds,
     )
     res.raise_for_status()
     data = res.json()
-    return _sanitize_ai_reply(data['choices'][0]['message']['content'])
+    choice = (data.get('choices') or [{}])[0]
+    msg = choice.get('message') or {}
+    content = str(msg.get('content') or '').strip()
+    finish_reason = str(choice.get('finish_reason') or '')
+    return content, finish_reason
+
+def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
+    """استدعاء TITAN AI عبر DigitalOcean Agent"""
+    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
+    messages: list[dict[str, object]] = [
+        {"role": "system", "content": sys_prompt},
+        {"role": "user", "content": message},
+    ]
+
+    chunks: list[str] = []
+    for _ in range(3):
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1400)
+        if chunk:
+            chunks.append(chunk)
+            messages.append({"role": "assistant", "content": chunk})
+
+        if finish_reason != 'length':
+            break
+
+        # Ask model to continue exactly from the interruption point when token limit cuts output.
+        messages.append({
+            "role": "user",
+            "content": "Continue from the exact last sentence without repeating, and complete the answer to the end."
+        })
+
+    full_reply = "\n".join(chunks).strip()
+    return _sanitize_ai_reply(full_reply)
 
 
 def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prompt: str | None = None) -> str:
     """Call DigitalOcean AI with text + inline image data URLs (OpenAI-compatible format)."""
-    headers = {
-        'Authorization': f'Bearer {DO_AI_KEY}',
-        'Content-Type': 'application/json',
-    }
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
 
     user_content: list[dict[str, object]] = [{"type": "text", "text": (message or "حلّل الصور المرفقة.").strip()}]
@@ -230,24 +257,22 @@ def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prom
             "image_url": {"url": url}
         })
 
-    payload = {
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "messages": [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": user_content}
-        ]
-    }
+    messages: list[dict[str, object]] = [
+        {"role": "system", "content": sys_prompt},
+        {"role": "user", "content": user_content},
+    ]
 
-    res = requests.post(
-        f"{DO_AI_ENDPOINT}/api/v1/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=45
-    )
-    res.raise_for_status()
-    data = res.json()
-    return _sanitize_ai_reply(data['choices'][0]['message']['content'])
+    chunks: list[str] = []
+    for _ in range(2):
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=60, max_tokens=1600)
+        if chunk:
+            chunks.append(chunk)
+            messages.append({"role": "assistant", "content": chunk})
+        if finish_reason != 'length':
+            break
+        messages.append({"role": "user", "content": "Continue without repeating."})
+
+    return _sanitize_ai_reply("\n".join(chunks).strip())
 
 
 def _ctf_normalize_newlines(value):
@@ -490,7 +515,14 @@ def init_db():
             user_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             severity TEXT DEFAULT 'medium',
+            priority TEXT DEFAULT 'p2',
             status TEXT DEFAULT 'open',
+            category TEXT DEFAULT 'general',
+            source TEXT DEFAULT 'manual',
+            owner TEXT DEFAULT 'SOC',
+            sla_minutes INTEGER DEFAULT 240,
+            due_at TEXT DEFAULT NULL,
+            closed_at TEXT DEFAULT NULL,
             description TEXT DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -514,7 +546,20 @@ def init_db():
             case_id INTEGER NOT NULL,
             filename TEXT NOT NULL,
             file_hash TEXT NOT NULL,
+            file_size INTEGER DEFAULT 0,
+            mime_type TEXT DEFAULT 'application/octet-stream',
             note TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS incident_case_notes (
+            id SERIAL PRIMARY KEY,
+            case_id INTEGER NOT NULL,
+            note_type TEXT DEFAULT 'analysis',
+            note TEXT NOT NULL,
+            created_by TEXT DEFAULT '',
             created_at TEXT NOT NULL
         )
     ''')
@@ -586,6 +631,109 @@ def init_db():
             details TEXT NOT NULL,
             status TEXT DEFAULT 'open',
             admin_note TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    ''')
+
+    # --- Safe migrations for existing deployments (Incident Response expansion) ---
+    for stmt in [
+        "ALTER TABLE incident_cases ADD COLUMN priority TEXT DEFAULT 'p2'",
+        "ALTER TABLE incident_cases ADD COLUMN category TEXT DEFAULT 'general'",
+        "ALTER TABLE incident_cases ADD COLUMN source TEXT DEFAULT 'manual'",
+        "ALTER TABLE incident_cases ADD COLUMN owner TEXT DEFAULT 'SOC'",
+        "ALTER TABLE incident_cases ADD COLUMN sla_minutes INTEGER DEFAULT 240",
+        "ALTER TABLE incident_cases ADD COLUMN due_at TEXT DEFAULT NULL",
+        "ALTER TABLE incident_cases ADD COLUMN closed_at TEXT DEFAULT NULL",
+        "ALTER TABLE incident_evidence ADD COLUMN file_size INTEGER DEFAULT 0",
+        "ALTER TABLE incident_evidence ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream'",
+    ]:
+        try:
+            c.execute(stmt)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS social_quiz_results (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            question_id INTEGER NOT NULL,
+            selected_option INTEGER NOT NULL,
+            correct_option INTEGER NOT NULL,
+            is_correct INTEGER DEFAULT 0,
+            score_after INTEGER DEFAULT 0,
+            answered_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS social_risk_snapshots (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            total_items INTEGER DEFAULT 0,
+            high_count INTEGER DEFAULT 0,
+            medium_count INTEGER DEFAULT 0,
+            low_count INTEGER DEFAULT 0,
+            avg_risk REAL DEFAULT 0,
+            risk_index REAL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS forensics_sessions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            filename TEXT NOT NULL,
+            file_size INTEGER DEFAULT 0,
+            file_type TEXT DEFAULT 'unknown',
+            mime_type TEXT DEFAULT 'application/octet-stream',
+            md5 TEXT NOT NULL,
+            sha1 TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            entropy REAL DEFAULT 0,
+            risk_score INTEGER DEFAULT 0,
+            summary_json TEXT DEFAULT '{}',
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS forensics_artifacts (
+            id SERIAL PRIMARY KEY,
+            session_id INTEGER NOT NULL,
+            artifact_type TEXT NOT NULL,
+            artifact_value TEXT NOT NULL,
+            confidence TEXT DEFAULT 'medium',
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS brand_watchlist (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            asset_type TEXT NOT NULL,
+            asset_value TEXT NOT NULL,
+            label TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS brand_alerts (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            alert_type TEXT NOT NULL,
+            target TEXT NOT NULL,
+            platform TEXT DEFAULT '',
+            severity TEXT DEFAULT 'medium',
+            risk_score INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'open',
+            details TEXT DEFAULT '',
+            source_ref TEXT DEFAULT '',
+            incident_case_id INTEGER DEFAULT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -1544,27 +1692,246 @@ def generate_typosquatting_variants(domain: str) -> list[str]:
     return sorted(v for v in variants if v != d)[:25]
 
 
+def _brand_severity_from_risk(risk_score: int) -> str:
+    n = max(0, min(100, int(risk_score or 0)))
+    if n >= 80:
+        return 'critical'
+    if n >= 60:
+        return 'high'
+    if n >= 35:
+        return 'medium'
+    return 'low'
+
+
+def _brand_rank_variant(base_domain: str, variant: str) -> tuple[int, str]:
+    base = (base_domain or '').strip().lower()
+    cand = (variant or '').strip().lower()
+    if '.' not in base or '.' not in cand:
+        return 0, 'invalid'
+    base_name = base.rsplit('.', 1)[0]
+
+    score = 20
+    reasons = []
+    if '-login' in cand or '-secure' in cand:
+        score += 25
+        reasons.append('credential_lure_pattern')
+    if any(ch.isdigit() for ch in cand):
+        score += 15
+        reasons.append('digit_substitution')
+    if cand.count('-') >= 1:
+        score += 8
+        reasons.append('hyphenation')
+    if cand.endswith(base.split('.')[-1]):
+        score += 10
+        reasons.append('same_tld')
+    if abs(len(cand) - len(base)) <= 2:
+        score += 12
+        reasons.append('near_length')
+    if base_name and base_name[0] in cand[:2]:
+        score += 6
+        reasons.append('visual_similarity')
+
+    return min(100, score), ','.join(reasons) if reasons else 'baseline'
+
+
+def _brand_build_domain_analysis(domain: str) -> dict:
+    d = (domain or '').strip().lower()
+    variants = generate_typosquatting_variants(d)
+    ranked = []
+    for v in variants:
+        sc, reason = _brand_rank_variant(d, v)
+        ranked.append({"domain": v, "risk_score": sc, "reason": reason})
+    ranked.sort(key=lambda x: int(x.get('risk_score', 0)), reverse=True)
+
+    if ranked:
+        top = ranked[:8]
+        risk_index = int(round(sum(int(x.get('risk_score', 0)) for x in top) / max(1, len(top))))
+    else:
+        risk_index = 0
+
+    return {
+        "domain": d,
+        "risk_index": max(0, min(100, risk_index)),
+        "variants": ranked,
+    }
+
+
+def _brand_build_impersonation_analysis(username: str) -> dict:
+    u = (username or '').strip()
+    base = check_username_presence(u, mode='social')
+    if not base.get('success'):
+        return {"success": False, "error": base.get('error', 'فشل فحص الانتحال')}
+
+    found = base.get('found', []) or []
+    found_platforms = {str(x.get('platform', '')).lower() for x in found}
+    priority_platforms = ['twitter', 'instagram', 'facebook', 'linkedin', 'youtube', 'tiktok', 'telegram', 'github']
+    missing_priority = [p for p in priority_platforms if p not in found_platforms]
+
+    checked_count = int(base.get('checked_count', 0) or 0)
+    found_count = int(base.get('found_count', 0) or 0)
+    unknown_count = len(base.get('unknown', []) or [])
+
+    score = 20
+    score += min(35, len(missing_priority) * 5)
+    score += min(20, max(0, checked_count - found_count) // 3)
+    score += min(15, unknown_count * 2)
+    if found_count >= 6:
+        score -= 12
+    if found_count >= 10:
+        score -= 8
+    score = max(0, min(100, int(score)))
+
+    return {
+        "success": True,
+        "username": u,
+        "risk_index": score,
+        "found": found,
+        "missing_priority": missing_priority,
+        "checked_count": checked_count,
+        "found_count": found_count,
+        "unknown_count": unknown_count,
+        "checked_at": base.get('checked_at', ''),
+    }
+
+
 def create_social_defense_scenario(scenario_type: str) -> dict:
     scenarios = {
         'phishing_email': {
-            'scenario': 'تلقيت ايميل عاجل يطلب تحديث كلمة السر عبر رابط خارجي مع تهديد بتعطيل الحساب خلال ساعة.',
-            'red_flags': ['Urgency language', 'External lookalike domain', 'Mismatched sender display name'],
-            'defense_actions': ['Do not click link', 'Verify sender domain', 'Open service manually from trusted URL', 'Report to security team']
+            'title': 'Credential Reset Trap',
+            'scenario': 'وصلك بريد بعنوان "Security Incident - Reset Required" يطلب تحديث كلمة السر خلال 60 دقيقة عبر رابط يشبه موقع الشركة.',
+            'attacker_goal': 'سرقة بيانات الدخول وإعادة استخدام الحساب داخلياً.',
+            'impact': 'اختراق الحساب ثم الحركة الجانبية داخل بيئة العمل.',
+            'red_flags': [
+                'لغة استعجال وتهديد بإيقاف الحساب',
+                'نطاق مشابه لكنه ليس الرسمي',
+                'تحية عامة بدون اسمك الحقيقي',
+                'الرابط الحقيقي مخفي داخل زر مختصر'
+            ],
+            'defense_actions': [
+                'لا تفتح الرابط مباشرة',
+                'افحص النطاق حرفياً قبل أي إجراء',
+                'افتح الخدمة يدوياً من المفضلة الرسمية',
+                'بلّغ فريق الأمن مع نسخة من الرسالة'
+            ],
+            'control_points': ['Email Gateway', 'MFA Enforcement', 'User Awareness', 'SOC Escalation'],
+            'safe_reply_template': 'مرحباً، لأسباب أمنية لا يمكنني معالجة هذا الطلب من هذا الرابط. سأتحقق عبر القنوات الرسمية الداخلية.',
+            'difficulty': 'medium'
         },
         'vishing_call': {
-            'scenario': 'متصل يدعي انه من الدعم الفني ويطلب رمز OTP للتحقق من هويتك.',
-            'red_flags': ['Requesting OTP', 'Pressure tactics', 'Unverified caller ID'],
-            'defense_actions': ['Never share OTP', 'Hang up and call official support number', 'Document call details']
+            'title': 'OTP Phone Harvest',
+            'scenario': 'مكالمة من شخص يدّعي أنه من IT ويطلب رمز OTP فوراً بحجة إيقاف هجوم جارٍ على حسابك.',
+            'attacker_goal': 'تجاوز المصادقة الثنائية والسيطرة على الجلسة.',
+            'impact': 'دخول غير مصرح وسحب بيانات حساسة.',
+            'red_flags': [
+                'طلب صريح لرمز OTP',
+                'ضغط نفسي بوجود تهديد فوري',
+                'رفض إعطاء رقم تذكرة أو مرجع رسمي'
+            ],
+            'defense_actions': [
+                'لا تشارك OTP نهائياً',
+                'أنه المكالمة بأدب واتصل بالرقم الرسمي',
+                'وثّق رقم المتصل وتوقيت الاتصال',
+                'ارفع بلاغاً فورياً لفريق الأمن'
+            ],
+            'control_points': ['Call-back Verification', 'MFA Hygiene', 'Helpdesk Policy'],
+            'safe_reply_template': 'لا أشارك رموز المصادقة عبر الهاتف. سأغلق المكالمة وأتواصل مع الدعم عبر الرقم المعتمد.',
+            'difficulty': 'high'
         },
         'pretexting': {
-            'scenario': 'شخص يرسل رسالة باسم المدير ويطلب تحويل بيانات حساسة فوراً بدون المرور بالاجراءات.',
-            'red_flags': ['Authority impersonation', 'Policy bypass request', 'Out-of-band urgency'],
-            'defense_actions': ['Enforce approval process', 'Verify request through second channel', 'Escalate to manager']
+            'title': 'Executive Impersonation',
+            'scenario': 'رسالة من حساب ينتحل هوية المدير التنفيذي تطلب إرسال ملف عملاء بشكل عاجل خارج ساعات الدوام.',
+            'attacker_goal': 'استخراج بيانات أعمال حساسة بغطاء السلطة.',
+            'impact': 'تسريب بيانات وضرر قانوني وسمعة المؤسسة.',
+            'red_flags': [
+                'انتحال صفة قيادية',
+                'طلب تجاوز السياسة الداخلية',
+                'توقيت غير اعتيادي',
+                'رفض الانتظار حتى التحقق'
+            ],
+            'defense_actions': [
+                'طبّق مسار الموافقات المعتاد',
+                'تحقق عبر قناة ثانية موثوقة',
+                'صعّد الحالة إلى المدير المباشر وSOC'
+            ],
+            'control_points': ['Dual Approval', 'Data Loss Prevention', 'Manager Escalation'],
+            'safe_reply_template': 'بحسب سياسة الشركة، هذا الطلب يحتاج تحقق ثنائي وموافقة رسمية. سأتابع عبر القناة المعتمدة.',
+            'difficulty': 'high'
         },
         'baiting_usb': {
-            'scenario': 'تم العثور على USB مجهول قرب المكتب مكتوب عليه Payroll/Q4.',
-            'red_flags': ['Unknown removable media', 'Curiosity bait label', 'No chain-of-custody'],
-            'defense_actions': ['Do not plug in', 'Submit device to IT/SOC', 'Scan in isolated forensic environment only']
+            'title': 'Curiosity USB Bait',
+            'scenario': 'تم العثور على USB قرب المصعد مكتوب عليه "Payroll_Q4_Final" مع شعار الشركة.',
+            'attacker_goal': 'تنفيذ برمجية خبيثة بعد تشغيل الوسيط القابل للإزالة.',
+            'impact': 'عدوى نقطة النهاية وانتقال داخلي في الشبكة.',
+            'red_flags': [
+                'وسيط تخزين مجهول المصدر',
+                'تسمية تحفيزية لفتح الملف بسرعة',
+                'غياب سجل تسليم واستلام'
+            ],
+            'defense_actions': [
+                'لا تقم بتوصيل USB بالجهاز الإنتاجي',
+                'سلّم الوسيط لفريق IT/SOC وفق الإجراء',
+                'أي فحص يتم داخل بيئة معزولة فقط'
+            ],
+            'control_points': ['Device Control', 'Endpoint Hardening', 'Forensics Intake'],
+            'safe_reply_template': 'تم العثور على وسيط غير معروف. لن يتم تشغيله، وتم تحويله مباشرةً لفريق الأمن للفحص المعزول.',
+            'difficulty': 'medium'
+        },
+        'banking_ar': {
+            'title': 'قطاع البنوك: رسالة تحويل عاجل',
+            'scenario': 'موظف فرع يستلم رسالة تبدو من الإدارة المالية تطلب تحويل مبلغ كبير لحساب جديد "قبل إغلاق اليوم".',
+            'attacker_goal': 'احتيال مالي مباشر عبر انتحال جهة داخلية موثوقة.',
+            'impact': 'خسارة مالية فورية ومخاطر امتثال وتنظيم مصرفي.',
+            'red_flags': [
+                'طلب تحويل خارج النمط المعتاد',
+                'استعجال شديد مع تهديد مهني',
+                'تعديل مفاجئ في رقم الحساب المستفيد'
+            ],
+            'defense_actions': [
+                'إيقاف التنفيذ حتى تحقق ثنائي مع مسؤول معتمد',
+                'مراجعة سجل المستفيدين والحدود المعتمدة',
+                'إبلاغ وحدة مكافحة الاحتيال فوراً'
+            ],
+            'control_points': ['Dual Authorization', 'Fraud Desk', 'Transaction Hold'],
+            'safe_reply_template': 'سياسة التحويل البنكي تتطلب تحقق ثنائي وموافقة موثقة. لن يتم تنفيذ العملية قبل استكمال الإجراء الرسمي.',
+            'difficulty': 'high'
+        },
+        'education_ar': {
+            'title': 'قطاع التعليم: انتحال بوابة الطلاب',
+            'scenario': 'طلاب يتلقون رابطاً بعنوان "تحديث حساب الجامعة" يطلب بيانات الدخول الجامعية مع كود تحقق.',
+            'attacker_goal': 'الاستيلاء على حسابات الطلاب والوصول للأنظمة التعليمية.',
+            'impact': 'تسريب بيانات أكاديمية وتعطيل الوصول للمنصات.',
+            'red_flags': [
+                'رابط خارجي ليس ضمن نطاق الجامعة',
+                'صياغة عامة مليئة بالأخطاء',
+                'طلب بيانات حساسة خارج البوابة الرسمية'
+            ],
+            'defense_actions': [
+                'نشر تنبيه رسمي للطلاب عبر القنوات المعتمدة',
+                'حجب الرابط على مستوى الشبكة',
+                'فرض إعادة تعيين كلمات السر للحسابات المتأثرة'
+            ],
+            'control_points': ['Student Awareness', 'Domain Protection', 'SSO Monitoring'],
+            'safe_reply_template': 'الجامعة لا تطلب بيانات الدخول عبر روابط خارجية. استخدم البوابة الرسمية فقط من الرابط المعتمد.',
+            'difficulty': 'medium'
+        },
+        'healthcare_ar': {
+            'title': 'قطاع الصحة: طلب سجلات مرضى مزيف',
+            'scenario': 'موظف استقبال يتلقى اتصالاً يدّعي أنه من "جهة تنظيمية" ويطلب إرسال سجل مرضى فوراً للتحقيق.',
+            'attacker_goal': 'سرقة بيانات صحية حساسة عبر ضغط السلطة.',
+            'impact': 'اختراق خصوصية المرضى ومخالفة تشريعات حماية البيانات الصحية.',
+            'red_flags': [
+                'جهة اتصال غير موثقة',
+                'طلب بيانات مرضى دون مسار قانوني',
+                'ضغط زمني لمنع التحقق'
+            ],
+            'defense_actions': [
+                'رفض مشاركة أي بيانات دون تفويض رسمي موثق',
+                'تصعيد الحالة لمسؤول الامتثال وSOC',
+                'توثيق كل تفاصيل الاتصال كحادث أمني'
+            ],
+            'control_points': ['PHI Protection', 'Compliance Gate', 'Incident Escalation'],
+            'safe_reply_template': 'لا يمكن مشاركة أي بيانات مرضى دون تفويض قانوني موثق عبر القنوات المعتمدة للمؤسسة الصحية.',
+            'difficulty': 'high'
         }
     }
     return scenarios.get(scenario_type, scenarios['phishing_email'])
@@ -3358,24 +3725,90 @@ HTML_TEMPLATE = """
 
             <div id="ir-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-red-400 border-b border-slate-700 pb-2">🚨 Incident Response</h2>
+
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40 space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-red-300">Incident Command Dashboard</h3>
+                        <button onclick="irRefreshSummary()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">تحديث</button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 text-xs">
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Total</div><div id="irSumTotal" class="text-gray-100 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Open</div><div id="irSumOpen" class="text-blue-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Investigating</div><div id="irSumInvestigating" class="text-amber-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Contained</div><div id="irSumContained" class="text-emerald-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Closed</div><div id="irSumClosed" class="text-teal-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Critical</div><div id="irSumCritical" class="text-red-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">SLA Breached</div><div id="irSumSlaBreached" class="text-rose-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Avg IOC Risk</div><div id="irSumAvgRisk" class="text-fuchsia-300 font-bold">0</div></div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-red-300">إنشاء قضية</h3>
+                        <h3 class="text-sm font-bold text-red-300">إنشاء قضية متقدمة</h3>
                         <input id="irCaseTitle" type="text" placeholder="عنوان القضية" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm">
-                        <select id="irCaseSeverity" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm">
-                            <option value="low">Low</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
-                            <option value="critical">Critical</option>
-                        </select>
+                        <div class="grid grid-cols-2 gap-2">
+                            <select id="irCaseSeverity" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
+                                <option value="low">Severity: Low</option>
+                                <option value="medium" selected>Severity: Medium</option>
+                                <option value="high">Severity: High</option>
+                                <option value="critical">Severity: Critical</option>
+                            </select>
+                            <select id="irCasePriority" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
+                                <option value="p1">Priority P1</option>
+                                <option value="p2" selected>Priority P2</option>
+                                <option value="p3">Priority P3</option>
+                                <option value="p4">Priority P4</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <select id="irCaseCategory" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
+                                <option value="general" selected>Category: General</option>
+                                <option value="phishing">Phishing</option>
+                                <option value="malware">Malware</option>
+                                <option value="account_takeover">Account Takeover</option>
+                                <option value="data_leak">Data Leak</option>
+                                <option value="insider">Insider</option>
+                                <option value="fraud">Fraud</option>
+                            </select>
+                            <select id="irCaseSource" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
+                                <option value="manual" selected>Source: Manual</option>
+                                <option value="siem">SIEM</option>
+                                <option value="user_report">User Report</option>
+                                <option value="external_feed">External Feed</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input id="irCaseOwner" type="text" placeholder="Owner (SOC/IR Team)" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs" dir="ltr">
+                            <input id="irCaseSla" type="number" min="15" max="10080" value="240" placeholder="SLA minutes" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
+                        </div>
                         <textarea id="irCaseDesc" rows="3" placeholder="وصف سريع للحادث" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm"></textarea>
                         <button onclick="irCreateCase()" class="w-full py-2 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 font-bold border border-red-800/40">إنشاء</button>
                     </div>
 
                     <div class="lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-red-900/40">
                         <div class="flex items-center justify-between mb-3">
-                            <h3 class="text-sm font-bold text-red-300">القضايا</h3>
-                            <button onclick="irLoadCases()" class="text-xs px-3 py-1 rounded bg-slate-800 border border-slate-700">تحديث</button>
+                            <h3 class="text-sm font-bold text-red-300">قائمة القضايا</h3>
+                            <div class="flex items-center gap-2">
+                                <button onclick="irLoadCases()" class="text-xs px-3 py-1 rounded bg-slate-800 border border-slate-700">تحديث</button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
+                            <input id="irCaseSearch" type="text" placeholder="بحث بالعنوان/الوصف..." class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2">
+                            <select id="irFilterStatus" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="all" selected>كل الحالات</option>
+                                <option value="open">Open</option>
+                                <option value="investigating">Investigating</option>
+                                <option value="contained">Contained</option>
+                                <option value="closed">Closed</option>
+                            </select>
+                            <select id="irFilterSeverity" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="all" selected>كل الشدات</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
                         </div>
                         <div id="irCasesList" class="space-y-2 max-h-56 overflow-y-auto"></div>
                     </div>
@@ -3385,6 +3818,12 @@ HTML_TEMPLATE = """
                     <div class="flex items-center justify-between mb-3">
                         <h3 class="text-sm font-bold text-red-300">إدارة مؤشرات القضية</h3>
                         <div id="irSelectedCase" class="text-xs text-gray-400">لم يتم اختيار قضية</div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2 text-xs">
+                        <div id="irSelectedMetaStatus" class="p-2 rounded bg-black/40 border border-slate-700">Status: --</div>
+                        <div id="irSelectedMetaSeverity" class="p-2 rounded bg-black/40 border border-slate-700">Severity/Priority: --</div>
+                        <div id="irSelectedMetaOwner" class="p-2 rounded bg-black/40 border border-slate-700">Owner: --</div>
+                        <div id="irSelectedMetaSla" class="p-2 rounded bg-black/40 border border-slate-700">SLA: --</div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                         <select id="irIocType" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
@@ -3405,62 +3844,362 @@ HTML_TEMPLATE = """
                         <button id="ir-btn-contained" onclick="irUpdateStatus('contained')" class="px-3 py-1 text-xs rounded bg-amber-900/30 border border-amber-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Contained</button>
                         <button id="ir-btn-closed" onclick="irUpdateStatus('closed')" class="px-3 py-1 text-xs rounded bg-green-900/30 border border-green-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Closed</button>
                         <button id="ir-btn-export" onclick="irExportReport()" class="px-3 py-1 text-xs rounded bg-emerald-900/30 border border-emerald-800/50 disabled:opacity-50 disabled:cursor-not-allowed">تصدير تقرير</button>
+                        <button id="ir-btn-export-pdf" onclick="irExportReport('pdf')" class="px-3 py-1 text-xs rounded bg-indigo-900/30 border border-indigo-800/50 disabled:opacity-50 disabled:cursor-not-allowed">PDF</button>
+                        <button id="ir-btn-auto-priority" onclick="irRunAutoPriority()" class="px-3 py-1 text-xs rounded bg-fuchsia-900/30 border border-fuchsia-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Auto Priority</button>
                     </div>
                     <div id="irIocTimeline" class="mt-3 p-3 rounded-lg bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
+                </div>
+
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40 space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-red-300">Incident Kanban Board</h3>
+                        <div class="text-[11px] text-gray-500">اسحب القضية وأفلتها لتغيير الحالة بسرعة.</div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-2">
+                            <div class="text-xs font-bold text-blue-300 mb-2">Open</div>
+                            <div id="irKanban-open" data-status="open" class="space-y-2 min-h-[120px]"></div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-2">
+                            <div class="text-xs font-bold text-amber-300 mb-2">Investigating</div>
+                            <div id="irKanban-investigating" data-status="investigating" class="space-y-2 min-h-[120px]"></div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-2">
+                            <div class="text-xs font-bold text-orange-300 mb-2">Contained</div>
+                            <div id="irKanban-contained" data-status="contained" class="space-y-2 min-h-[120px]"></div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-2">
+                            <div class="text-xs font-bold text-emerald-300 mb-2">Closed</div>
+                            <div id="irKanban-closed" data-status="closed" class="space-y-2 min-h-[120px]"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-orange-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-orange-300">Incident Timeline Notes</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <select id="irNoteType" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="analysis" selected>Analysis</option>
+                                <option value="containment">Containment</option>
+                                <option value="eradication">Eradication</option>
+                                <option value="recovery">Recovery</option>
+                                <option value="lesson">Lesson Learned</option>
+                            </select>
+                            <textarea id="irNoteText" rows="2" placeholder="اكتب تحديث الحالة/الإجراء المتخذ..." class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2"></textarea>
+                        </div>
+                        <button onclick="irAddNote()" class="w-full py-2 rounded bg-orange-900/40 border border-orange-800/50 text-orange-300 text-xs font-bold">إضافة ملاحظة</button>
+                        <div id="irNotesTimeline" class="p-2 rounded bg-black/40 border border-slate-700 max-h-60 overflow-y-auto text-xs"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-emerald-300">Evidence Locker</h3>
+                        <input id="irEvidenceFile" type="file" class="block w-full text-sm text-slate-400 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-slate-800 file:text-emerald-300 border border-slate-700 p-2 rounded-xl">
+                        <input id="irEvidenceNote" type="text" placeholder="ملاحظة على الدليل" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                        <button onclick="irUploadEvidence()" class="w-full py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">رفع دليل</button>
+                        <div id="irEvidenceList" class="p-2 rounded bg-black/40 border border-slate-700 max-h-60 overflow-y-auto text-xs"></div>
+                    </div>
                 </div>
             </div>
 
             <div id="forensics-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-teal-400 border-b border-slate-700 pb-2">🧪 Digital Forensics</h2>
+
                 <div class="bg-slate-900/60 p-4 rounded-xl border border-teal-900/40 space-y-3">
-                    <h3 class="text-sm font-bold text-teal-300">File Triage</h3>
-                    <input id="forensicsFile" type="file" class="block w-full text-sm text-slate-400 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-slate-800 file:text-teal-300 border border-slate-700 p-2 rounded-xl">
-                    <button onclick="forensicsTriage()" class="w-full py-2 rounded bg-teal-900/40 border border-teal-800/50 text-teal-300 text-xs font-bold">تحليل الدليل</button>
-                    <div id="forensicsResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-teal-300">Forensics Command Dashboard</h3>
+                        <button onclick="forensicsRefreshSummary()" class="px-3 py-1 rounded bg-teal-900/40 border border-teal-800/50 text-teal-300 text-xs font-bold">تحديث</button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Sessions</div><div id="forensicsSumSessions" class="text-gray-100 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">High Risk</div><div id="forensicsSumHighRisk" class="text-red-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Avg Entropy</div><div id="forensicsSumEntropy" class="text-amber-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Artifacts</div><div id="forensicsSumArtifacts" class="text-cyan-300 font-bold">0</div></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-teal-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-teal-300">Advanced File Triage</h3>
+                        <input id="forensicsFile" type="file" class="block w-full text-sm text-slate-400 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-slate-800 file:text-teal-300 border border-slate-700 p-2 rounded-xl">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input id="forensicsMinStringLen" type="number" min="4" max="32" value="6" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" placeholder="Min string length">
+                            <button onclick="forensicsTriage()" class="py-2 rounded bg-teal-900/40 border border-teal-800/50 text-teal-300 text-xs font-bold">تحليل الدليل</button>
+                            <button onclick="forensicsLoadHistory()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs font-bold text-gray-300">تحديث السجل</button>
+                        </div>
+                        <div id="forensicsResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-cyan-300">IOC Extractor</h3>
+                        <textarea id="forensicsTextInput" rows="8" placeholder="الصق نص/لوج لفحص IOCs (IPs, URLs, Emails, Hashes)..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr"></textarea>
+                        <button onclick="forensicsExtractIocs()" class="w-full py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">Extract IOCs</button>
+                        <div id="forensicsIocResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-60 overflow-y-auto text-xs"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-3 xl:col-span-1">
+                        <h3 class="text-sm font-bold text-emerald-300">Forensics Sessions</h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <select id="forensicsFilterRisk" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="all">All Risk</option>
+                                <option value="high">High (>=70)</option>
+                                <option value="medium">Medium (40-69)</option>
+                                <option value="low">Low (&lt;40)</option>
+                            </select>
+                            <input id="forensicsFilterType" type="text" placeholder="file type (pdf, zip...)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
+                            <input id="forensicsFilterFrom" type="date" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <input id="forensicsFilterTo" type="date" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="forensicsApplyHistoryFilters()" class="py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Apply Filters</button>
+                            <button onclick="forensicsResetHistoryFilters()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs font-bold text-gray-300">Reset</button>
+                        </div>
+                        <div id="forensicsHistory" class="p-2 rounded bg-black/40 border border-slate-700 max-h-80 overflow-y-auto text-xs"></div>
+                    </div>
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3 xl:col-span-2">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <h3 class="text-sm font-bold text-indigo-300">Session Details</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full sm:w-auto">
+                                <button onclick="forensicsExportSession('json')" class="px-3 py-1 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">Export JSON</button>
+                                <button onclick="forensicsExportSession('pdf')" class="px-3 py-1 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">Export PDF</button>
+                                <button onclick="forensicsCreateIncidentFromSession()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">Create Incident</button>
+                            </div>
+                        </div>
+                        <div id="forensicsSessionDetail" class="p-2 rounded bg-black/40 border border-slate-700 max-h-80 overflow-y-auto text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
+                    </div>
                 </div>
             </div>
 
             <div id="brand-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-cyan-400 border-b border-slate-700 pb-2">🛡️ Brand & Social Protection</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-cyan-300">Typosquatting Checker</h3>
-                        <input id="brandDomainInput" type="text" placeholder="example.com" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
-                        <button onclick="brandCheckTypos()" class="w-full py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">فحص</button>
-                        <div id="brandTyposResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-44 overflow-y-auto text-xs"></div>
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-cyan-300">Brand Command Dashboard</h3>
+                        <button onclick="brandRefreshDashboard()" class="px-3 py-1 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">تحديث</button>
                     </div>
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-cyan-300">Fake Account Detector</h3>
-                        <input id="brandUserInput" type="text" placeholder="brand_username" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
-                        <button onclick="brandCheckImpersonation()" class="w-full py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">تحليل</button>
-                        <div id="brandUserResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-44 overflow-y-auto text-xs"></div>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Watchlist</div><div id="brandSumWatchlist" class="text-gray-100 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Alerts</div><div id="brandSumAlerts" class="text-gray-100 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Open Alerts</div><div id="brandSumOpen" class="text-amber-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Critical</div><div id="brandSumCritical" class="text-red-300 font-bold">0</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Escalated</div><div id="brandSumEscalated" class="text-emerald-300 font-bold">0</div></div>
                     </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3 xl:col-span-2">
+                        <h3 class="text-sm font-bold text-cyan-300">Domain Defense Lab</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input id="brandDomainInput" type="text" placeholder="example.com" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono md:col-span-2" dir="ltr">
+                            <button onclick="brandCheckTypos()" class="py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">تحليل النطاق</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input id="brandWatchlistLabel" type="text" placeholder="Label / Team" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <button onclick="brandAddWatchlist('domain')" class="py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">إضافة للـ Watchlist</button>
+                        </div>
+                        <button onclick="brandCreateAlertFromLastDomain()" class="w-full py-2 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">Create Alert From Domain Analysis</button>
+                        <div id="brandTyposResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-emerald-300">Protected Assets Watchlist</h3>
+                        <div id="brandWatchlist" class="p-2 rounded bg-black/40 border border-slate-700 max-h-72 overflow-y-auto text-xs"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3 xl:col-span-2">
+                        <h3 class="text-sm font-bold text-indigo-300">Impersonation Intel Lab</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input id="brandUserInput" type="text" placeholder="brand_username" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono md:col-span-2" dir="ltr">
+                            <button onclick="brandCheckImpersonation()" class="py-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تحليل الانتحال</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input id="brandWatchlistUserLabel" type="text" placeholder="Label / Department" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <button onclick="brandAddWatchlist('username')" class="py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">حماية الحساب في Watchlist</button>
+                        </div>
+                        <button onclick="brandCreateAlertFromLastImpersonation()" class="w-full py-2 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">Create Alert From Impersonation Analysis</button>
+                        <div id="brandUserResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-amber-300">Manual Alert Intake</h3>
+                        <select id="brandAlertType" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="domain_abuse">Domain Abuse</option>
+                            <option value="impersonation">Impersonation</option>
+                            <option value="fake_campaign">Fake Campaign</option>
+                        </select>
+                        <input id="brandAlertTarget" type="text" placeholder="Target (domain / account)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
+                        <input id="brandAlertPlatform" type="text" placeholder="Platform (optional)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
+                        <select id="brandAlertSeverity" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                        <textarea id="brandAlertDetails" rows="5" placeholder="Context, indicators, references..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></textarea>
+                        <button onclick="brandCreateManualAlert()" class="w-full py-2 rounded bg-amber-900/40 border border-amber-800/50 text-amber-300 text-xs font-bold">حفظ التنبيه</button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40 space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-red-300">Alert Board & Escalation Desk</h3>
+                        <button onclick="brandLoadAlerts()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">تحديث</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <input id="brandAlertSearch" type="text" placeholder="search target/details" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                        <select id="brandFilterSeverity" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="all">All Severity</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                        <select id="brandFilterStatus" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="all">All Status</option>
+                            <option value="open">Open</option>
+                            <option value="monitoring">Monitoring</option>
+                            <option value="mitigated">Mitigated</option>
+                            <option value="escalated">Escalated</option>
+                        </select>
+                        <button onclick="brandLoadAlerts()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs font-bold text-gray-300">Apply</button>
+                    </div>
+                    <div id="brandAlertBoard" class="p-2 rounded bg-black/40 border border-slate-700 max-h-96 overflow-y-auto text-xs"></div>
                 </div>
             </div>
 
             <div id="se-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-pink-400 border-b border-slate-700 pb-2">🎭 Social Engineering Defense</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-pink-300">Awareness Simulator</h3>
-                        <select id="seScenarioType" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="phishing_email">Phishing Email</option>
-                            <option value="vishing_call">Vishing Call</option>
-                            <option value="pretexting">Pretexting</option>
-                            <option value="baiting_usb">Baiting USB</option>
-                        </select>
-                        <button onclick="seGenerateScenario()" class="w-full py-2 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">Generate Scenario</button>
+
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-violet-900/40 space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-violet-300">Defense Pulse Dashboard</h3>
+                        <button onclick="seRefreshDashboard()" class="px-3 py-1 rounded bg-violet-900/40 border border-violet-800/50 text-violet-300 text-xs font-bold">تحديث</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <div class="p-2 rounded border border-slate-700 bg-black/40 text-xs">
+                            <div class="text-gray-400">Quiz Accuracy</div>
+                            <div id="seDashQuizAccuracy" class="text-emerald-300 font-bold text-base">0%</div>
+                        </div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40 text-xs">
+                            <div class="text-gray-400">Quiz Answers</div>
+                            <div id="seDashQuizAnswers" class="text-cyan-300 font-bold text-base">0</div>
+                        </div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40 text-xs">
+                            <div class="text-gray-400">Last Quiz Score</div>
+                            <div id="seDashLastScore" class="text-fuchsia-300 font-bold text-base">0</div>
+                        </div>
+                        <div class="p-2 rounded border border-slate-700 bg-black/40 text-xs">
+                            <div class="text-gray-400">Risk Index</div>
+                            <div id="seDashRiskIndex" class="text-rose-300 font-bold text-base">0</div>
+                        </div>
+                    </div>
+                    <div id="seRiskTrendBars" class="grid grid-cols-7 gap-2"></div>
+                    <div id="seRiskTrendMeta" class="text-[11px] text-gray-500">Trend: waiting for data...</div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <h3 class="text-sm font-bold text-pink-300">Scenario Lab (Defensive)</h3>
+                            <span id="seScenarioDifficulty" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">Difficulty: --</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                            <select id="seScenarioType" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2">
+                                <option value="phishing_email">Phishing Email</option>
+                                <option value="vishing_call">Vishing Call</option>
+                                <option value="pretexting">Pretexting</option>
+                                <option value="baiting_usb">Baiting USB</option>
+                                <option value="banking_ar">Arabic Sector - Banking</option>
+                                <option value="education_ar">Arabic Sector - Education</option>
+                                <option value="healthcare_ar">Arabic Sector - Healthcare</option>
+                                <option value="sector_ar">Arabic Sector (Auto by selector)</option>
+                            </select>
+                            <select id="seScenarioSector" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="banking" selected>Sector: Banking</option>
+                                <option value="education">Sector: Education</option>
+                                <option value="healthcare">Sector: Healthcare</option>
+                            </select>
+                            <select id="seScenarioPressure" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="normal" selected>Pressure: Normal</option>
+                                <option value="high">Pressure: High</option>
+                                <option value="critical">Pressure: Critical</option>
+                            </select>
+                            <button onclick="seGenerateScenario()" class="py-2 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">Generate Scenario</button>
+                        </div>
                         <div id="seScenarioResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
                     </div>
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-pink-300">Training Checklist</h3>
-                        <label class="flex items-center gap-2 text-xs"><input type="checkbox"> Verify sender domain before clicking links</label>
-                        <label class="flex items-center gap-2 text-xs"><input type="checkbox"> Never share OTP or passwords</label>
-                        <label class="flex items-center gap-2 text-xs"><input type="checkbox"> Confirm urgent requests via second channel</label>
-                        <label class="flex items-center gap-2 text-xs"><input type="checkbox"> Report suspicious message to SOC</label>
-                        <div class="text-[11px] text-gray-500">هذا القسم توعوي دفاعي فقط وليس للاستخدام الهجومي.</div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-fuchsia-300">Micro Drill Quiz</h3>
+                        <div id="seQuizMeta" class="text-[11px] text-gray-400">اختبار سريع يرفع جاهزيتك الدفاعية.</div>
+                        <div id="seQuizQuestion" class="p-2 rounded bg-black/40 border border-slate-700 text-xs text-gray-100"></div>
+                        <div id="seQuizOptions" class="space-y-2"></div>
+                        <div class="flex gap-2">
+                            <button onclick="seNextQuizQuestion()" class="flex-1 py-2 rounded bg-fuchsia-900/40 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">التالي</button>
+                            <button onclick="seRestartQuiz()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs font-bold text-gray-300">إعادة</button>
+                        </div>
+                        <div id="seQuizFeedback" class="text-[11px] text-gray-400"></div>
                     </div>
                 </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-rose-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-rose-300">Threat Signal Analyzer</h3>
+                        <div class="grid grid-cols-1 gap-2">
+                            <select id="seSignalChannel" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="email" selected>Email</option>
+                                <option value="chat">Chat</option>
+                                <option value="phone">Phone</option>
+                                <option value="social_dm">Social DM</option>
+                            </select>
+                            <select id="seSignalSenderTrust" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="known" selected>Known Sender</option>
+                                <option value="unknown">Unknown Sender</option>
+                                <option value="spoofed">Likely Spoofed</option>
+                            </select>
+                            <select id="seSignalUrgency" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="low">Urgency: Low</option>
+                                <option value="medium" selected>Urgency: Medium</option>
+                                <option value="high">Urgency: High</option>
+                            </select>
+                            <label class="flex items-center gap-2 text-xs"><input id="seSignalHasLink" type="checkbox" class="accent-rose-500"> يحتوي رابط مختصر أو غامض</label>
+                            <label class="flex items-center gap-2 text-xs"><input id="seSignalSensitiveReq" type="checkbox" class="accent-rose-500"> يطلب بيانات حساسة / OTP</label>
+                            <label class="flex items-center gap-2 text-xs"><input id="seSignalPolicyBypass" type="checkbox" class="accent-rose-500"> يطلب تجاوز السياسة</label>
+                            <button onclick="seAnalyzeSignal()" class="w-full py-2 rounded bg-rose-900/40 border border-rose-800/50 text-rose-300 text-xs font-bold">تحليل الإشارة</button>
+                        </div>
+                        <div id="seSignalResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs"></div>
+                    </div>
+
+                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-3">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <h3 class="text-sm font-bold text-emerald-300">Response Playbook Builder</h3>
+                            <div class="flex gap-2">
+                                <button onclick="sePlaybookInjectTemplate()" class="px-3 py-1 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">قالب جاهز</button>
+                                <button onclick="seExportPlaybook()" class="px-3 py-1 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تصدير</button>
+                                <button onclick="seClearPlaybook()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">تفريغ</button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
+                            <select id="sePlaybookPhase" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="detect" selected>Detect</option>
+                                <option value="verify">Verify</option>
+                                <option value="contain">Contain</option>
+                                <option value="report">Report</option>
+                                <option value="lessons">Lessons Learned</option>
+                            </select>
+                            <input id="sePlaybookOwner" type="text" placeholder="Owner (SOC/IT/Manager)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
+                            <input id="sePlaybookEta" type="text" placeholder="ETA (e.g. 15m)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
+                            <input id="sePlaybookAction" type="text" placeholder="Action description" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2">
+                            <button onclick="seAddPlaybookStep()" class="py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">إضافة</button>
+                        </div>
+                        <div id="sePlaybookResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
+                    </div>
+                </div>
+
                 <div class="bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
                     <div class="flex items-center justify-between gap-2 flex-wrap">
                         <h3 class="text-sm font-bold text-pink-300">Information Collection Board</h3>
@@ -3469,6 +4208,12 @@ HTML_TEMPLATE = """
                             <button onclick="seExportIntelBoard()" class="px-3 py-1 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تصدير JSON</button>
                             <button onclick="seClearIntelBoard()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">تفريغ</button>
                         </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <div id="seIntelTotal" class="p-2 rounded border border-slate-700 bg-black/40 text-xs">Total: 0</div>
+                        <div id="seIntelHighRisk" class="p-2 rounded border border-red-900/50 bg-red-900/10 text-xs text-red-300">High Risk: 0</div>
+                        <div id="seIntelMediumRisk" class="p-2 rounded border border-amber-900/50 bg-amber-900/10 text-xs text-amber-300">Medium Risk: 0</div>
+                        <div id="seIntelLowRisk" class="p-2 rounded border border-emerald-900/50 bg-emerald-900/10 text-xs text-emerald-300">Low Risk: 0</div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
                         <input id="seIntelSubject" type="text" placeholder="Subject (person/domain)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2" dir="ltr">
@@ -3487,7 +4232,24 @@ HTML_TEMPLATE = """
                     </div>
                     <textarea id="seIntelNote" rows="3" placeholder="اكتب المعلومة أو الملاحظة الأمنية هنا..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></textarea>
                     <button onclick="seAddIntelItem()" class="w-full py-2 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">إضافة معلومة</button>
-                    <div id="seIntelBoardResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-60 overflow-y-auto text-xs"></div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <input id="seIntelSearch" type="text" placeholder="بحث في الملاحظات/الموضوع..." class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                        <select id="seIntelFilterConfidence" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="all" selected>كل مستويات الثقة</option>
+                            <option value="high">High Confidence</option>
+                            <option value="medium">Medium Confidence</option>
+                            <option value="low">Low Confidence</option>
+                        </select>
+                        <select id="seIntelFilterCategory" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="all" selected>كل الفئات</option>
+                            <option value="identity">Identity</option>
+                            <option value="behavior">Behavior</option>
+                            <option value="infrastructure">Infrastructure</option>
+                            <option value="message">Message Pattern</option>
+                        </select>
+                    </div>
+                    <div id="seIntelBoardResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-72 overflow-y-auto text-xs"></div>
+                    <div class="text-[11px] text-gray-500">هذا القسم دفاعي توعوي فقط: التحليل والاستجابة والرفع إلى SOC.</div>
                 </div>
             </div>
 
@@ -5072,8 +5834,10 @@ HTML_TEMPLATE = """
             if(type === 'tools' && typeof fetchIpIntel === 'function') fetchIpIntel();
             if(type === 'osint' && typeof loadOsintWatchlist === 'function') loadOsintWatchlist();
             if(type === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
-            if(type === 'ir' && typeof irLoadCases === 'function') irLoadCases();
-            if(type === 'se' && typeof seLoadIntelBoard === 'function') seLoadIntelBoard();
+            if(type === 'ir' && typeof irInitSection === 'function') irInitSection();
+            if(type === 'forensics' && typeof forensicsInitSection === 'function') forensicsInitSection();
+            if(type === 'brand' && typeof brandInitSection === 'function') brandInitSection();
+            if(type === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
 
             const activeBtn = document.getElementById('btn-' + type);
@@ -6656,72 +7420,214 @@ HTML_TEMPLATE = """
         }
 
         let currentIncidentCaseId = null;
+        let irCasesCache = [];
 
         function irSetActionButtonsEnabled(enabled) {
-            ['ir-btn-open', 'ir-btn-investigating', 'ir-btn-contained', 'ir-btn-closed', 'ir-btn-export']
+            ['ir-btn-open', 'ir-btn-investigating', 'ir-btn-contained', 'ir-btn-closed', 'ir-btn-export', 'ir-btn-export-pdf', 'ir-btn-auto-priority']
                 .forEach((id) => {
                     const el = document.getElementById(id);
                     if (el) el.disabled = !enabled;
                 });
         }
 
+        function irRenderKanban(cases) {
+            const statuses = ['open', 'investigating', 'contained', 'closed'];
+            statuses.forEach((st) => {
+                const lane = document.getElementById(`irKanban-${st}`);
+                if (!lane) return;
+                const rows = (cases || []).filter((c) => c.status === st);
+                lane.innerHTML = rows.map((c) => `
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/60 cursor-move" draggable="true" data-case-id="${c.id}">
+                        <div class="text-xs font-bold text-gray-200">${_osintEscape(c.title || '')}</div>
+                        <div class="text-[10px] text-gray-400">${_osintEscape(c.severity || '')} | ${_osintEscape(c.priority || '')} | Risk ${_osintEscape(c.top_ioc_risk || 0)}</div>
+                    </div>
+                `).join('') || '<div class="text-[10px] text-gray-500">Empty</div>';
+            });
+
+            document.querySelectorAll('#ir-section [draggable="true"][data-case-id]').forEach((card) => {
+                if (card.dataset.dragBound === '1') return;
+                card.dataset.dragBound = '1';
+                card.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', card.getAttribute('data-case-id') || '');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+            });
+
+            document.querySelectorAll('#ir-section [id^="irKanban-"][data-status]').forEach((lane) => {
+                if (lane.dataset.dropBound === '1') return;
+                lane.dataset.dropBound = '1';
+                lane.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    lane.classList.add('ring-1', 'ring-red-500/40');
+                });
+                lane.addEventListener('dragleave', () => lane.classList.remove('ring-1', 'ring-red-500/40'));
+                lane.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    lane.classList.remove('ring-1', 'ring-red-500/40');
+                    const caseId = Number(e.dataTransfer.getData('text/plain') || 0);
+                    const status = lane.getAttribute('data-status') || 'open';
+                    if (!caseId || !status) return;
+                    await irMoveCaseToStatus(caseId, status);
+                });
+            });
+        }
+
+        async function irMoveCaseToStatus(caseId, status) {
+            try {
+                const res = await fetch(`/api/incidents/${caseId}/status`, {
+                    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status})
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل نقل القضية');
+                if (currentIncidentCaseId === caseId) {
+                    await irLoadCases();
+                } else {
+                    await Promise.all([irLoadCases(), irRefreshSummary()]);
+                }
+            } catch (e) {
+                titanAlert(`فشل التحديث: ${e.message || e}`);
+            }
+        }
+
+        function irBindFilters() {
+            if (window.__irFiltersBound) return;
+            window.__irFiltersBound = true;
+            const q = document.getElementById('irCaseSearch');
+            const st = document.getElementById('irFilterStatus');
+            const sv = document.getElementById('irFilterSeverity');
+            if (q) q.addEventListener('input', () => irLoadCases());
+            if (st) st.addEventListener('change', () => irLoadCases());
+            if (sv) sv.addEventListener('change', () => irLoadCases());
+        }
+
+        async function irRefreshSummary() {
+            try {
+                const res = await fetch('/api/incidents/summary');
+                const data = await res.json();
+                if (!res.ok || !data.success) return;
+                const s = data.summary || {};
+                const set = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = String(value ?? 0);
+                };
+                set('irSumTotal', s.total || 0);
+                set('irSumOpen', s.open || 0);
+                set('irSumInvestigating', s.investigating || 0);
+                set('irSumContained', s.contained || 0);
+                set('irSumClosed', s.closed || 0);
+                set('irSumCritical', s.critical || 0);
+                set('irSumSlaBreached', s.sla_breached || 0);
+                set('irSumAvgRisk', Number(s.avg_ioc_risk || 0).toFixed(1));
+            } catch (_) {}
+        }
+
+        function irUpdateSelectedCaseMeta(caseObj) {
+            const statusEl = document.getElementById('irSelectedMetaStatus');
+            const sevEl = document.getElementById('irSelectedMetaSeverity');
+            const ownerEl = document.getElementById('irSelectedMetaOwner');
+            const slaEl = document.getElementById('irSelectedMetaSla');
+            if (!caseObj) {
+                if (statusEl) statusEl.textContent = 'Status: --';
+                if (sevEl) sevEl.textContent = 'Severity/Priority: --';
+                if (ownerEl) ownerEl.textContent = 'Owner: --';
+                if (slaEl) slaEl.textContent = 'SLA: --';
+                return;
+            }
+            if (statusEl) statusEl.textContent = `Status: ${caseObj.status || '--'} ${caseObj.sla_state === 'breached' ? '(SLA BREACH)' : ''}`;
+            if (sevEl) sevEl.textContent = `Severity/Priority: ${caseObj.severity || '--'} / ${caseObj.priority || '--'}`;
+            if (ownerEl) ownerEl.textContent = `Owner: ${caseObj.owner || '--'} | Source: ${caseObj.source || '--'}`;
+            if (slaEl) slaEl.textContent = `SLA: ${caseObj.sla_minutes || '--'}m | Due: ${caseObj.due_at || '--'}`;
+        }
+
         async function irCreateCase() {
             const title = (document.getElementById('irCaseTitle')?.value || '').trim();
             const severity = document.getElementById('irCaseSeverity')?.value || 'medium';
+            const priority = document.getElementById('irCasePriority')?.value || 'p2';
+            const category = document.getElementById('irCaseCategory')?.value || 'general';
+            const source = document.getElementById('irCaseSource')?.value || 'manual';
+            const owner = (document.getElementById('irCaseOwner')?.value || '').trim() || 'SOC';
+            const sla_minutes = Number(document.getElementById('irCaseSla')?.value || 240);
             const description = (document.getElementById('irCaseDesc')?.value || '').trim();
             if (!title) return titanAlert('اكتب عنوان القضية أولاً.');
-            const res = await fetch('/api/incidents/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({title, severity, description}) });
+
+            const res = await fetch('/api/incidents/create', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({title, severity, priority, category, source, owner, sla_minutes, description})
+            });
             const data = await res.json();
-            if (!data.success) return titanAlert(data.error || 'فشل إنشاء القضية');
+            if (!res.ok || !data.success) return titanAlert(data.error || 'فشل إنشاء القضية');
+
             document.getElementById('irCaseTitle').value = '';
             document.getElementById('irCaseDesc').value = '';
-            irLoadCases();
+            document.getElementById('irCaseOwner').value = '';
+            await irLoadCases();
+            await irRefreshSummary();
         }
 
         async function irLoadCases() {
             const box = document.getElementById('irCasesList');
             if (!box) return;
             setResultLoading(box, 'Incident Cases', 'Loading cases...');
-            const res = await fetch('/api/incidents/list');
+
+            const q = encodeURIComponent((document.getElementById('irCaseSearch')?.value || '').trim());
+            const status = encodeURIComponent(document.getElementById('irFilterStatus')?.value || 'all');
+            const severity = encodeURIComponent(document.getElementById('irFilterSeverity')?.value || 'all');
+
+            const res = await fetch(`/api/incidents/list?q=${q}&status=${status}&severity=${severity}`);
             const data = await res.json();
             if (!data.success) {
                 irSetActionButtonsEnabled(false);
                 setResultError(box, 'Load failed');
                 return;
             }
-            const rows = data.cases || [];
+
+            irCasesCache = data.cases || [];
+            const rows = irCasesCache;
             if (!rows.length) {
                 currentIncidentCaseId = null;
                 const tag = document.getElementById('irSelectedCase');
                 if (tag) tag.innerText = 'لم يتم اختيار قضية';
                 irSetActionButtonsEnabled(false);
-                setResultList(box, 'Incident Cases', [], { badge: '0', emptyText: 'لا توجد قضايا حتى الآن.' });
+                irUpdateSelectedCaseMeta(null);
+                irRenderKanban([]);
+                setResultList(box, 'Incident Cases', [], { badge: '0', emptyText: 'لا توجد قضايا مطابقة.' });
+                await irRefreshSummary();
                 return;
             }
 
             const hasSelected = rows.some((c) => c.id === currentIncidentCaseId);
             if (!hasSelected) currentIncidentCaseId = rows[0].id;
 
+            const selected = rows.find(c => c.id === currentIncidentCaseId) || null;
             const tag = document.getElementById('irSelectedCase');
             if (tag) tag.innerText = `Case ID: ${currentIncidentCaseId}`;
+            irUpdateSelectedCaseMeta(selected);
 
             setResultMarkup(
                 box,
                 'Incident Cases',
                 rows.map(c => `
                 <div class="p-2 rounded-lg border ${currentIncidentCaseId===c.id ? 'border-red-500 bg-red-900/20' : 'border-slate-700 bg-black/30'}">
-                    <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-start justify-between gap-2">
                         <button onclick="irSelectCase(${c.id})" class="text-left flex-1">
                             <div class="text-sm font-bold text-gray-200">${_osintEscape(c.title)}</div>
-                            <div class="text-[10px] text-gray-500">${_osintEscape(c.severity)} | ${_osintEscape(c.status)}</div>
+                            <div class="text-[10px] text-gray-400 mt-0.5">${_osintEscape(c.severity)} | ${_osintEscape(c.priority)} | ${_osintEscape(c.status)} | ${_osintEscape(c.category)}</div>
+                            <div class="text-[10px] text-gray-500 mt-0.5">Owner: ${_osintEscape(c.owner || 'SOC')} | IOCs: ${_osintEscape(c.ioc_count || 0)} | Top Risk: ${_osintEscape(c.top_ioc_risk || 0)}</div>
+                            <div class="text-[10px] ${c.recommended_priority && c.recommended_priority !== c.priority ? 'text-fuchsia-300' : 'text-gray-600'} mt-0.5">Auto Priority: ${_osintEscape(c.recommended_priority || c.priority || 'p2')}</div>
                         </button>
+                        <span class="text-[10px] px-2 py-0.5 rounded border ${c.sla_state === 'breached' ? 'text-red-300 border-red-800/50 bg-red-900/20' : 'text-emerald-300 border-emerald-800/50 bg-emerald-900/20'}">${c.sla_state === 'breached' ? 'SLA BREACH' : 'SLA OK'}</span>
                     </div>
                 </div>
             `).join(''),
                 { badge: `${rows.length} Cases` }
             );
+
+            irRenderKanban(rows);
+
             irSetActionButtonsEnabled(true);
-            await irLoadIocs();
+            await Promise.all([irLoadIocs(), irLoadNotes(), irLoadEvidence(), irRefreshSummary()]);
         }
 
         async function irSelectCase(caseId) {
@@ -6730,7 +7636,6 @@ HTML_TEMPLATE = """
             if (tag) tag.innerText = `Case ID: ${caseId}`;
             irSetActionButtonsEnabled(true);
             await irLoadCases();
-            await irLoadIocs();
         }
 
         async function irAddIoc() {
@@ -6739,6 +7644,7 @@ HTML_TEMPLATE = """
             const ioc_value = (document.getElementById('irIocValue')?.value || '').trim();
             const risk_score = Number(document.getElementById('irIocRisk')?.value || 50);
             if (!ioc_value) return titanAlert('اكتب قيمة IOC.');
+
             const res = await fetch(`/api/incidents/${currentIncidentCaseId}/ioc`, {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({ioc_type, ioc_value, risk_score})
@@ -6746,7 +7652,7 @@ HTML_TEMPLATE = """
             const data = await res.json();
             if (!data.success) return titanAlert(data.error || 'فشل إضافة IOC');
             document.getElementById('irIocValue').value = '';
-            irLoadIocs();
+            await Promise.all([irLoadIocs(), irLoadNotes(), irLoadCases(), irRefreshSummary()]);
         }
 
         async function irLoadIocs() {
@@ -6767,8 +7673,100 @@ HTML_TEMPLATE = """
             setResultList(
                 box,
                 'IOC Timeline',
-                rows.map(r => `<span class="text-red-300 font-bold">${_osintEscape(r.ioc_type)}</span> <span class="font-mono" dir="ltr">${_osintEscape(r.ioc_value)}</span> <span class="text-[10px] text-gray-500">risk=${_osintEscape(r.risk_score)} | ${_osintEscape(r.created_at)}</span>`),
+                rows.map(r => {
+                    const tone = Number(r.risk_score || 0) >= 70 ? 'text-red-300' : (Number(r.risk_score || 0) >= 40 ? 'text-amber-300' : 'text-emerald-300');
+                    return `<span class="${tone} font-bold">${_osintEscape(r.ioc_type)}</span> <span class="font-mono" dir="ltr">${_osintEscape(r.ioc_value)}</span> <span class="text-[10px] text-gray-500">risk=${_osintEscape(r.risk_score)} | ${_osintEscape(r.created_at)}</span>`;
+                }),
                 { badge: `${rows.length} IOCs` }
+            );
+        }
+
+        async function irAddNote() {
+            if (!currentIncidentCaseId) return titanAlert('اختر قضية أولاً.');
+            const note_type = document.getElementById('irNoteType')?.value || 'analysis';
+            const note = (document.getElementById('irNoteText')?.value || '').trim();
+            if (!note) return titanAlert('اكتب ملاحظة أولاً.');
+            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/notes`, {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({note_type, note})
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) return titanAlert(data.error || 'فشل إضافة الملاحظة');
+            document.getElementById('irNoteText').value = '';
+            await Promise.all([irLoadNotes(), irLoadCases()]);
+        }
+
+        async function irLoadNotes() {
+            const box = document.getElementById('irNotesTimeline');
+            if (!box || !currentIncidentCaseId) return;
+            setResultLoading(box, 'Incident Notes', 'Loading timeline notes...');
+            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/notes`);
+            const data = await res.json();
+            if (!res.ok || !data.success) { setResultError(box, 'Failed'); return; }
+            const rows = data.notes || [];
+            if (!rows.length) {
+                setResultList(box, 'Incident Notes', [], { badge: '0', emptyText: 'لا توجد ملاحظات حتى الآن.' });
+                return;
+            }
+            setResultMarkup(
+                box,
+                'Incident Notes',
+                rows.map((n) => `
+                    <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/40">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-orange-300 font-bold text-[11px]">${_osintEscape(n.note_type)}</span>
+                            <span class="text-[10px] text-gray-500">${_osintEscape(n.created_at || '')}</span>
+                        </div>
+                        <div class="text-[10px] text-gray-400">by ${_osintEscape(n.created_by || 'unknown')}</div>
+                        <div class="text-xs text-gray-200 mt-1 whitespace-pre-wrap">${_osintEscape(n.note || '')}</div>
+                    </div>
+                `).join(''),
+                { badge: `${rows.length} Notes` }
+            );
+        }
+
+        async function irUploadEvidence() {
+            if (!currentIncidentCaseId) return titanAlert('اختر قضية أولاً.');
+            const file = document.getElementById('irEvidenceFile')?.files?.[0];
+            const note = (document.getElementById('irEvidenceNote')?.value || '').trim();
+            if (!file) return titanAlert('اختر ملف دليل أولاً.');
+
+            const form = new FormData();
+            form.append('file', file);
+            form.append('note', note);
+            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/evidence`, { method: 'POST', body: form });
+            const data = await res.json();
+            if (!res.ok || !data.success) return titanAlert(data.error || 'فشل رفع الدليل');
+
+            const input = document.getElementById('irEvidenceFile');
+            if (input) input.value = '';
+            document.getElementById('irEvidenceNote').value = '';
+            await Promise.all([irLoadEvidence(), irLoadNotes(), irLoadCases()]);
+        }
+
+        async function irLoadEvidence() {
+            const box = document.getElementById('irEvidenceList');
+            if (!box || !currentIncidentCaseId) return;
+            setResultLoading(box, 'Evidence Locker', 'Loading evidence...');
+            const res = await fetch(`/api/incidents/${currentIncidentCaseId}/evidence`);
+            const data = await res.json();
+            if (!res.ok || !data.success) { setResultError(box, 'Failed'); return; }
+            const rows = data.evidence || [];
+            if (!rows.length) {
+                setResultList(box, 'Evidence Locker', [], { badge: '0', emptyText: 'لا يوجد أدلة مرفوعة.' });
+                return;
+            }
+            setResultMarkup(
+                box,
+                'Evidence Locker',
+                rows.map((e) => `
+                    <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/40">
+                        <div class="text-emerald-300 font-bold text-xs">${_osintEscape(e.filename || 'evidence.bin')}</div>
+                        <div class="text-[10px] text-gray-400">${_osintEscape(e.mime_type || '')} | ${_osintEscape(e.file_size || 0)} bytes | ${_osintEscape(e.created_at || '')}</div>
+                        <div class="text-[10px] text-gray-500 font-mono break-all" dir="ltr">sha256: ${_osintEscape(e.file_hash || '')}</div>
+                        <div class="text-xs text-gray-200 mt-1">${_osintEscape(e.note || '')}</div>
+                    </div>
+                `).join(''),
+                { badge: `${rows.length} Files` }
             );
         }
 
@@ -6787,9 +7785,45 @@ HTML_TEMPLATE = """
             }
         }
 
-        async function irExportReport() {
+        async function irRunAutoPriority() {
             if (!currentIncidentCaseId) return titanAlert('اختر قضية أولاً.');
             try {
+                const res = await fetch(`/api/incidents/${currentIncidentCaseId}/auto-priority`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل تشغيل Auto Priority');
+                const msg = data.updated
+                    ? `✅ تم رفع الأولوية تلقائياً ${data.from} -> ${data.to}`
+                    : `ℹ️ لا حاجة للتغيير. الأولوية الحالية ${data.from} (الموصى ${data.recommended})`;
+                titanAlert(msg);
+                await irLoadCases();
+            } catch (e) {
+                titanAlert(`فشل Auto Priority: ${e.message || e}`);
+            }
+        }
+
+        async function irExportReport(format = 'json') {
+            if (!currentIncidentCaseId) return titanAlert('اختر قضية أولاً.');
+            try {
+                if (format === 'pdf') {
+                    const resPdf = await fetch(`/api/incidents/${currentIncidentCaseId}/report.pdf`);
+                    if (!resPdf.ok) {
+                        let msg = 'فشل تصدير PDF';
+                        try {
+                            const err = await resPdf.json();
+                            msg = err.error || msg;
+                        } catch (_) {}
+                        return titanAlert(msg);
+                    }
+                    const blob = await resPdf.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `incident-${currentIncidentCaseId}-report.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    return titanAlert('✅ تم تصدير تقرير PDF بنجاح');
+                }
+
                 const res = await fetch(`/api/incidents/${currentIncidentCaseId}/report`);
                 const data = await res.json();
                 if (!res.ok || !data.success) return titanAlert(data.error || 'فشل التصدير');
@@ -6806,68 +7840,665 @@ HTML_TEMPLATE = """
             }
         }
 
+        async function irInitSection() {
+            irBindFilters();
+            await irLoadCases();
+        }
+
+        let currentForensicsSessionId = null;
+        let currentForensicsSessionData = null;
+
+        async function forensicsRefreshSummary() {
+            try {
+                const res = await fetch('/api/forensics/summary');
+                const data = await res.json();
+                if (!res.ok || !data.success) return;
+                const s = data.summary || {};
+                const set = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = String(val ?? 0);
+                };
+                set('forensicsSumSessions', s.sessions || 0);
+                set('forensicsSumHighRisk', s.high_risk_sessions || 0);
+                set('forensicsSumEntropy', Number(s.avg_entropy || 0).toFixed(2));
+                set('forensicsSumArtifacts', s.artifacts || 0);
+            } catch (_) {}
+        }
+
         async function forensicsTriage() {
             const file = document.getElementById('forensicsFile')?.files?.[0];
             const out = document.getElementById('forensicsResult');
+            const minStringLen = Number(document.getElementById('forensicsMinStringLen')?.value || 6);
             if (!file || !out) return titanAlert('اختر ملفاً أولاً.');
             setResultLoading(out, 'Forensics Triage', 'Analyzing evidence...');
+
             const form = new FormData();
             form.append('file', file);
+            form.append('min_string_len', String(minStringLen));
             const res = await fetch('/api/forensics/triage', { method:'POST', body: form });
             const data = await res.json();
-            setResultMarkup(out, 'Forensics Triage', `<div class="bg-slate-900/70 border border-slate-700 rounded-lg p-2 text-xs font-mono whitespace-pre-wrap" dir="ltr">${_resultEscape(JSON.stringify(data, null, 2))}</div>`, { badge: 'JSON' });
+            if (!res.ok || !data.success) {
+                setResultError(out, data.error || 'Triage failed');
+                return;
+            }
+
+            currentForensicsSessionId = data.session_id || null;
+            const riskScore = Number(data.risk_score || 0);
+            const riskTone = riskScore >= 70 ? 'danger' : (riskScore >= 40 ? 'warn' : 'safe');
+
+            const infoRows = [
+                { label: 'Filename', value: data.filename || '', tone: 'info' },
+                { label: 'Type', value: data.file_type || 'unknown', tone: 'info' },
+                { label: 'Risk', value: `${riskScore}/100`, tone: riskTone },
+                { label: 'Entropy', value: Number(data.entropy || 0).toFixed(3), tone: 'warn' },
+                { label: 'Size', value: `${data.size_bytes || 0} bytes`, tone: 'info' },
+                { label: 'Session ID', value: data.session_id || '-', tone: 'info' },
+            ];
+
+            const iocCounts = data.ioc_counts || {};
+            const topStrings = (data.strings_preview || []).map((s) => _resultEscape(s)).join('<br>') || 'N/A';
+            const metadataObj = data.metadata || {};
+
+            setResultMarkup(
+                out,
+                'Forensics Triage',
+                `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    ${infoRows.map((row) => `<div class="p-2 rounded border border-slate-700 bg-black/40 text-xs"><div class="text-gray-400">${_resultEscape(row.label)}</div><div class="font-bold text-gray-100">${_resultEscape(row.value)}</div></div>`).join('')}
+                </div>
+                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/60 text-xs">
+                        <div class="text-cyan-300 font-bold mb-1">IOC Counts</div>
+                        <div class="text-gray-200">IPs: ${_resultEscape(iocCounts.ipv4 || 0)} | URLs: ${_resultEscape(iocCounts.urls || 0)} | Emails: ${_resultEscape(iocCounts.emails || 0)}</div>
+                        <div class="text-gray-200">Domains: ${_resultEscape(iocCounts.domains || 0)} | Hashes: ${_resultEscape(iocCounts.hashes || 0)}</div>
+                    </div>
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/60 text-xs">
+                        <div class="text-amber-300 font-bold mb-1">File Metadata</div>
+                        <div class="text-gray-200 whitespace-pre-wrap">${_resultEscape(JSON.stringify(metadataObj, null, 2))}</div>
+                    </div>
+                </div>
+                <div class="mt-2 p-2 rounded border border-slate-700 bg-slate-900/60 text-xs">
+                    <div class="text-emerald-300 font-bold mb-1">Printable Strings Preview</div>
+                    <div class="text-gray-200 whitespace-pre-wrap" dir="ltr">${topStrings}</div>
+                </div>`,
+                { badge: riskTone === 'danger' ? 'High Risk' : (riskTone === 'warn' ? 'Medium Risk' : 'Low Risk'), riskScore }
+            );
+
+            await Promise.all([forensicsLoadHistory(), forensicsRefreshSummary()]);
+            if (currentForensicsSessionId) await forensicsLoadSessionDetail(currentForensicsSessionId);
+        }
+
+        async function forensicsExtractIocs() {
+            const text = (document.getElementById('forensicsTextInput')?.value || '').trim();
+            const out = document.getElementById('forensicsIocResult');
+            if (!out) return;
+            if (!text) return titanAlert('الصق نص أو لوج أولاً.');
+            setResultLoading(out, 'IOC Extractor', 'Extracting indicators...');
+
+            const res = await fetch('/api/forensics/extract-iocs', {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text})
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                setResultError(out, data.error || 'Extraction failed');
+                return;
+            }
+
+            const i = data.iocs || {};
+            setResultMarkup(
+                out,
+                'IOC Extractor',
+                `<div class="text-xs space-y-2">
+                    <div>Counts: IP=${_resultEscape(i.ipv4?.length || 0)} | URL=${_resultEscape(i.urls?.length || 0)} | Email=${_resultEscape(i.emails?.length || 0)} | Domain=${_resultEscape(i.domains?.length || 0)} | Hash=${_resultEscape(i.hashes?.length || 0)}</div>
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/60"><div class="text-cyan-300 font-bold">IPs</div><div class="text-gray-200 font-mono">${(i.ipv4 || []).map(_resultEscape).join('<br>') || 'N/A'}</div></div>
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/60"><div class="text-amber-300 font-bold">URLs</div><div class="text-gray-200 font-mono">${(i.urls || []).map(_resultEscape).join('<br>') || 'N/A'}</div></div>
+                </div>`,
+                { badge: 'Extracted' }
+            );
+        }
+
+        async function forensicsLoadHistory() {
+            const box = document.getElementById('forensicsHistory');
+            if (!box) return;
+            setResultLoading(box, 'Forensics Sessions', 'Loading sessions...');
+
+            const risk = (document.getElementById('forensicsFilterRisk')?.value || 'all').trim();
+            const fileType = (document.getElementById('forensicsFilterType')?.value || '').trim();
+            const dateFrom = (document.getElementById('forensicsFilterFrom')?.value || '').trim();
+            const dateTo = (document.getElementById('forensicsFilterTo')?.value || '').trim();
+            const qs = new URLSearchParams();
+            if (risk && risk !== 'all') qs.set('risk', risk);
+            if (fileType) qs.set('file_type', fileType);
+            if (dateFrom) qs.set('date_from', dateFrom);
+            if (dateTo) qs.set('date_to', dateTo);
+
+            const url = qs.toString() ? `/api/forensics/history?${qs.toString()}` : '/api/forensics/history';
+            const res = await fetch(url);
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                setResultError(box, data.error || 'Load failed');
+                return;
+            }
+            const rows = data.sessions || [];
+            if (!rows.length) {
+                setResultList(box, 'Forensics Sessions', [], { badge: '0', emptyText: 'لا يوجد تحليل سابق بعد.' });
+                return;
+            }
+
+            if (!currentForensicsSessionId) currentForensicsSessionId = rows[0].id;
+            setResultMarkup(
+                box,
+                'Forensics Sessions',
+                rows.map((r) => `
+                    <button onclick="forensicsLoadSessionDetail(${r.id})" class="w-full text-right mb-2 p-2 rounded border ${currentForensicsSessionId===r.id ? 'border-teal-500 bg-teal-900/20' : 'border-slate-700 bg-slate-900/40'}">
+                        <div class="text-xs font-bold text-gray-200">${_osintEscape(r.filename || 'unknown')}</div>
+                        <div class="text-[10px] text-gray-500">#${_osintEscape(r.id)} | ${_osintEscape(r.file_type || 'unknown')} | risk ${_osintEscape(r.risk_score || 0)} | ${_osintEscape(r.created_at || '')}</div>
+                    </button>
+                `).join(''),
+                { badge: `${rows.length} Sessions` }
+            );
+        }
+
+        async function forensicsApplyHistoryFilters() {
+            await forensicsLoadHistory();
+        }
+
+        async function forensicsResetHistoryFilters() {
+            const risk = document.getElementById('forensicsFilterRisk');
+            const type = document.getElementById('forensicsFilterType');
+            const from = document.getElementById('forensicsFilterFrom');
+            const to = document.getElementById('forensicsFilterTo');
+            if (risk) risk.value = 'all';
+            if (type) type.value = '';
+            if (from) from.value = '';
+            if (to) to.value = '';
+            await forensicsLoadHistory();
+        }
+
+        async function forensicsLoadSessionDetail(sessionId) {
+            currentForensicsSessionId = sessionId;
+            const box = document.getElementById('forensicsSessionDetail');
+            if (!box) return;
+            setResultLoading(box, 'Session Details', 'Loading session...');
+
+            const res = await fetch(`/api/forensics/session/${sessionId}`);
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                setResultError(box, data.error || 'Failed');
+                return;
+            }
+            currentForensicsSessionData = data;
+            const s = data.session || {};
+            const m = data.metadata || {};
+            const c = data.ioc_counts || {};
+
+            setResultMarkup(
+                box,
+                'Session Details',
+                `<div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/60"><div class="text-gray-400">Filename</div><div class="text-gray-100 font-bold">${_resultEscape(s.filename || '')}</div></div>
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/60"><div class="text-gray-400">Type</div><div class="text-gray-100 font-bold">${_resultEscape(s.file_type || '')}</div></div>
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/60"><div class="text-gray-400">Risk</div><div class="text-red-300 font-bold">${_resultEscape(s.risk_score || 0)}/100</div></div>
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/60"><div class="text-gray-400">Entropy</div><div class="text-amber-300 font-bold">${_resultEscape(Number(s.entropy || 0).toFixed(3))}</div></div>
+                </div>
+                <div class="mt-2 p-2 rounded border border-slate-700 bg-black/40 text-xs">
+                    <div class="text-indigo-300 font-bold mb-1">IOC Counts</div>
+                    <div>IP=${_resultEscape(c.ipv4 || 0)} | URL=${_resultEscape(c.urls || 0)} | Email=${_resultEscape(c.emails || 0)} | Domain=${_resultEscape(c.domains || 0)} | Hash=${_resultEscape(c.hashes || 0)}</div>
+                </div>
+                <div class="mt-2 p-2 rounded border border-slate-700 bg-black/40 text-xs">
+                    <div class="text-cyan-300 font-bold mb-1">Metadata</div>
+                    <div class="font-mono whitespace-pre-wrap" dir="ltr">${_resultEscape(JSON.stringify(m, null, 2))}</div>
+                </div>`,
+                { badge: `#${sessionId}` }
+            );
+            await forensicsLoadHistory();
+        }
+
+        async function forensicsExportSession(format) {
+            if (!currentForensicsSessionId) return titanAlert('اختر جلسة أولاً.');
+            try {
+                if (format === 'pdf') {
+                    const res = await fetch(`/api/forensics/session/${currentForensicsSessionId}/report.pdf`);
+                    if (!res.ok) {
+                        const data = await res.json().catch(() => ({}));
+                        return titanAlert(data.error || 'فشل تصدير PDF');
+                    }
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `forensics-${currentForensicsSessionId}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    return titanAlert('✅ تم تصدير تقرير PDF');
+                }
+
+                const res = await fetch(`/api/forensics/session/${currentForensicsSessionId}/report`);
+                const data = await res.json();
+                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل التصدير');
+                const blob = new Blob([JSON.stringify(data.report, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `forensics-${currentForensicsSessionId}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                titanAlert('✅ تم تصدير تقرير JSON');
+            } catch (e) {
+                titanAlert(`فشل التصدير: ${e.message || e}`);
+            }
+        }
+
+        async function forensicsCreateIncidentFromSession() {
+            if (!currentForensicsSessionId) return titanAlert('اختر جلسة أولاً.');
+            try {
+                const res = await fetch(`/api/forensics/session/${currentForensicsSessionId}/create-incident`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل إنشاء Incident');
+                titanAlert(`✅ تم إنشاء Incident #${data.case_id} بالأولوية ${data.priority}`);
+                if (typeof irInitSection === 'function') irInitSection();
+            } catch (e) {
+                titanAlert(`فشل إنشاء Incident: ${e.message || e}`);
+            }
+        }
+
+        async function forensicsInitSection() {
+            await Promise.all([forensicsRefreshSummary(), forensicsLoadHistory()]);
+            if (currentForensicsSessionId) await forensicsLoadSessionDetail(currentForensicsSessionId);
+        }
+
+        let brandLastDomainAnalysis = null;
+        let brandLastImpersonationAnalysis = null;
+
+        function _brandSeverityClass(sev) {
+            const s = String(sev || 'medium').toLowerCase();
+            if (s === 'critical') return 'text-red-300 border-red-800/60 bg-red-900/20';
+            if (s === 'high') return 'text-amber-300 border-amber-800/60 bg-amber-900/20';
+            if (s === 'low') return 'text-emerald-300 border-emerald-800/60 bg-emerald-900/20';
+            return 'text-cyan-300 border-cyan-800/60 bg-cyan-900/20';
+        }
+
+        async function brandRefreshDashboard() {
+            try {
+                const res = await fetch('/api/brand/dashboard');
+                const data = await res.json();
+                if (!res.ok || !data.success) return;
+                const s = data.summary || {};
+                const set = (id, v) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = String(v ?? 0);
+                };
+                set('brandSumWatchlist', s.watchlist || 0);
+                set('brandSumAlerts', s.alerts || 0);
+                set('brandSumOpen', s.open || 0);
+                set('brandSumCritical', s.critical || 0);
+                set('brandSumEscalated', s.escalated || 0);
+            } catch (_) {}
+        }
+
+        async function brandAddWatchlist(assetType) {
+            const type = String(assetType || 'domain').toLowerCase();
+            const value = (type === 'username' ? (document.getElementById('brandUserInput')?.value || '') : (document.getElementById('brandDomainInput')?.value || '')).trim();
+            const label = (type === 'username' ? (document.getElementById('brandWatchlistUserLabel')?.value || '') : (document.getElementById('brandWatchlistLabel')?.value || '')).trim();
+            if (!value) return titanAlert('أدخل قيمة الأصل أولاً.');
+            try {
+                const res = await fetch('/api/brand/watchlist', {
+                    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({asset_type: type, asset_value: value, label})
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل الإضافة');
+                titanAlert('✅ تمت إضافة الأصل إلى قائمة الحماية');
+                await Promise.all([brandLoadWatchlist(), brandRefreshDashboard()]);
+            } catch (e) {
+                titanAlert(`فشل الإضافة: ${e.message || e}`);
+            }
+        }
+
+        async function brandRemoveWatchlist(id) {
+            if (!confirm('حذف هذا الأصل من الـ Watchlist؟')) return;
+            try {
+                const res = await fetch(`/api/brand/watchlist/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل الحذف');
+                await Promise.all([brandLoadWatchlist(), brandRefreshDashboard()]);
+            } catch (e) {
+                titanAlert(`فشل الحذف: ${e.message || e}`);
+            }
+        }
+
+        async function brandLoadWatchlist() {
+            const box = document.getElementById('brandWatchlist');
+            if (!box) return;
+            setResultLoading(box, 'Watchlist', 'Loading protected assets...');
+            const res = await fetch('/api/brand/watchlist');
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                setResultError(box, data.error || 'Load failed');
+                return;
+            }
+            const rows = data.items || [];
+            if (!rows.length) {
+                setResultList(box, 'Watchlist', [], { badge: '0', emptyText: 'لا توجد أصول محمية بعد.' });
+                return;
+            }
+            setResultMarkup(
+                box,
+                'Watchlist',
+                rows.map((r) => `
+                    <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/50">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <div class="text-xs text-gray-100 font-bold">${_resultEscape(r.asset_value || '')}</div>
+                                <div class="text-[10px] text-gray-500">${_resultEscape(r.asset_type || '')} | ${_resultEscape(r.label || '-')} | ${_resultEscape(r.created_at || '')}</div>
+                            </div>
+                            <button onclick="brandRemoveWatchlist(${r.id})" class="px-2 py-1 rounded border border-red-800/50 bg-red-900/20 text-red-300 text-[10px]">Remove</button>
+                        </div>
+                    </div>
+                `).join(''),
+                { badge: `${rows.length} Assets` }
+            );
         }
 
         async function brandCheckTypos() {
             const domain = (document.getElementById('brandDomainInput')?.value || '').trim();
             const out = document.getElementById('brandTyposResult');
             if (!domain || !out) return titanAlert('اكتب دومين أولاً.');
-            setResultLoading(out, 'Brand Protection', 'Checking similar domains...');
-            const res = await fetch('/api/brand/typosquatting', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({domain}) });
+            setResultLoading(out, 'Domain Defense', 'Analyzing typosquatting risk...');
+
+            const res = await fetch('/api/brand/analyze-domain', {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({domain})
+            });
             const data = await res.json();
-            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
-            const variants = data.similar_domains || [];
-            setResultList(out, 'Brand Protection', variants.map((d) => `<span class="font-mono" dir="ltr">${_osintEscape(d)}</span>`), { badge: `${variants.length} Variants`, emptyText: 'No variants' });
+            if (!res.ok || !data.success) {
+                setResultError(out, data.error || 'Analysis failed');
+                return;
+            }
+            brandLastDomainAnalysis = data;
+            const rows = data.variants || [];
+            setResultMarkup(
+                out,
+                'Domain Defense',
+                `<div class="text-xs mb-2">Risk Index: <span class="font-bold ${data.risk_index >= 70 ? 'text-red-300' : (data.risk_index >= 40 ? 'text-amber-300' : 'text-emerald-300')}">${_resultEscape(data.risk_index || 0)}/100</span></div>
+                 <div class="space-y-2">
+                 ${rows.slice(0, 25).map((r) => `<div class="p-2 rounded border border-slate-700 bg-slate-900/60"><div class="font-mono text-gray-100" dir="ltr">${_resultEscape(r.domain || '')}</div><div class="text-[10px] text-gray-500">score=${_resultEscape(r.risk_score || 0)} | ${_resultEscape(r.reason || '')}</div></div>`).join('')}
+                 </div>`,
+                { badge: `${rows.length} Variants`, riskScore: Number(data.risk_index || 0) }
+            );
         }
 
         async function brandCheckImpersonation() {
             const username = (document.getElementById('brandUserInput')?.value || '').trim();
             const out = document.getElementById('brandUserResult');
             if (!username || !out) return titanAlert('اكتب اسم المستخدم.');
-            setResultLoading(out, 'Impersonation Check', 'Scanning impersonation footprint...');
-            const res = await fetch('/api/osint/username', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username}) });
-            const data = await res.json();
-            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
-            const found = data.found || [];
-            const rows = found.map((r) => `<a href="${_osintEscape(r.url)}" target="_blank" rel="noopener noreferrer" class="text-cyan-300">${_osintEscape(r.platform)}</a>`);
-            setResultList(out, 'Impersonation Check', rows, { badge: `${found.length} Profiles`, emptyText: 'No public footprint detected.' });
-        }
+            setResultLoading(out, 'Impersonation Intel', 'Scanning social impersonation surface...');
 
-        async function seGenerateScenario() {
-            const scenario_type = document.getElementById('seScenarioType')?.value || 'phishing_email';
-            const out = document.getElementById('seScenarioResult');
-            if (!out) return;
-            setResultLoading(out, 'SE Simulation', 'Generating defensive scenario...');
-            const res = await fetch('/api/social/simulate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({scenario_type}) });
+            const res = await fetch('/api/brand/analyze-impersonation', {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username})
+            });
             const data = await res.json();
-            if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
-            const nl = String.fromCharCode(10);
-            const scenarioText = [
-                data.scenario || '',
-                '',
-                'Red flags:',
-                ...((data.red_flags || []).map((x) => `- ${x}`)),
-                '',
-                'Recommended response:',
-                ...((data.defense_actions || []).map((x) => `- ${x}`))
-            ].join(nl);
+            if (!res.ok || !data.success) {
+                setResultError(out, data.error || 'Failed');
+                return;
+            }
+            brandLastImpersonationAnalysis = data;
+            const found = data.found || [];
+            const missing = data.missing_priority || [];
             setResultMarkup(
                 out,
-                'SE Simulation',
-                `<div class="result-list-item text-gray-100 whitespace-pre-wrap">${_resultEscape(scenarioText)}</div>`,
-                { badge: 'Generated' }
+                'Impersonation Intel',
+                `<div class="text-xs mb-2">Risk Index: <span class="font-bold ${data.risk_index >= 70 ? 'text-red-300' : (data.risk_index >= 40 ? 'text-amber-300' : 'text-emerald-300')}">${_resultEscape(data.risk_index || 0)}/100</span></div>
+                <div class="text-[11px] mb-2 text-gray-300">Found profiles: ${_resultEscape(found.length || 0)} | Missing priority platforms: ${_resultEscape(missing.length || 0)}</div>
+                <div class="space-y-2">
+                    ${found.slice(0, 16).map((r) => `<div class="p-2 rounded border border-slate-700 bg-slate-900/60"><a href="${_osintEscape(r.url)}" target="_blank" rel="noopener noreferrer" class="text-cyan-300">${_osintEscape(r.platform)}</a></div>`).join('') || '<div class="text-gray-500">No visible profiles found</div>'}
+                </div>`,
+                { badge: 'Intel', riskScore: Number(data.risk_index || 0) }
             );
         }
+
+        async function brandCreateAlert(payload) {
+            const res = await fetch('/api/brand/alerts', {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                titanAlert(data.error || 'فشل حفظ التنبيه');
+                return false;
+            }
+            await Promise.all([brandLoadAlerts(), brandRefreshDashboard()]);
+            return true;
+        }
+
+        async function brandCreateManualAlert() {
+            const alert_type = (document.getElementById('brandAlertType')?.value || 'domain_abuse').trim();
+            const target = (document.getElementById('brandAlertTarget')?.value || '').trim();
+            const platform = (document.getElementById('brandAlertPlatform')?.value || '').trim();
+            const severity = (document.getElementById('brandAlertSeverity')?.value || 'medium').trim();
+            const details = (document.getElementById('brandAlertDetails')?.value || '').trim();
+            if (!target) return titanAlert('أدخل الهدف أولاً.');
+            const ok = await brandCreateAlert({ alert_type, target, platform, severity, risk_score: 55, details, source_ref: 'manual' });
+            if (ok) titanAlert('✅ تم حفظ التنبيه اليدوي');
+        }
+
+        async function brandCreateAlertFromLastDomain() {
+            if (!brandLastDomainAnalysis) return titanAlert('قم بتحليل نطاق أولاً.');
+            const domain = brandLastDomainAnalysis.domain || (document.getElementById('brandDomainInput')?.value || '').trim();
+            const risk = Number(brandLastDomainAnalysis.risk_index || 0);
+            const severity = risk >= 80 ? 'critical' : (risk >= 60 ? 'high' : (risk >= 35 ? 'medium' : 'low'));
+            const details = `variants=${(brandLastDomainAnalysis.variants || []).length}; top=${(brandLastDomainAnalysis.variants || []).slice(0,3).map(v => v.domain).join(', ')}`;
+            const ok = await brandCreateAlert({ alert_type:'domain_abuse', target: domain, platform:'dns/web', severity, risk_score: risk, details, source_ref:'domain_analysis' });
+            if (ok) titanAlert('✅ تم إنشاء تنبيه من تحليل النطاق');
+        }
+
+        async function brandCreateAlertFromLastImpersonation() {
+            if (!brandLastImpersonationAnalysis) return titanAlert('قم بتحليل الانتحال أولاً.');
+            const username = brandLastImpersonationAnalysis.username || (document.getElementById('brandUserInput')?.value || '').trim();
+            const risk = Number(brandLastImpersonationAnalysis.risk_index || 0);
+            const severity = risk >= 80 ? 'critical' : (risk >= 60 ? 'high' : (risk >= 35 ? 'medium' : 'low'));
+            const details = `found=${(brandLastImpersonationAnalysis.found || []).length}; missing_priority=${(brandLastImpersonationAnalysis.missing_priority || []).join(', ')}`;
+            const ok = await brandCreateAlert({ alert_type:'impersonation', target: username, platform:'social', severity, risk_score: risk, details, source_ref:'impersonation_analysis' });
+            if (ok) titanAlert('✅ تم إنشاء تنبيه من تحليل الانتحال');
+        }
+
+        async function brandSetAlertStatus(alertId, status) {
+            const res = await fetch(`/api/brand/alerts/${alertId}/status`, {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status})
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) return titanAlert(data.error || 'فشل التحديث');
+            await Promise.all([brandLoadAlerts(), brandRefreshDashboard()]);
+        }
+
+        async function brandPromoteAlertIncident(alertId) {
+            const res = await fetch(`/api/brand/alerts/${alertId}/promote-incident`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok || !data.success) return titanAlert(data.error || 'فشل التصعيد');
+            titanAlert(`✅ تم التصعيد إلى Incident #${data.case_id}`);
+            await Promise.all([brandLoadAlerts(), brandRefreshDashboard()]);
+            if (typeof irInitSection === 'function') irInitSection();
+        }
+
+        async function brandLoadAlerts() {
+            const box = document.getElementById('brandAlertBoard');
+            if (!box) return;
+            setResultLoading(box, 'Alert Board', 'Loading brand alerts...');
+
+            const q = (document.getElementById('brandAlertSearch')?.value || '').trim();
+            const severity = (document.getElementById('brandFilterSeverity')?.value || 'all').trim();
+            const status = (document.getElementById('brandFilterStatus')?.value || 'all').trim();
+            const qs = new URLSearchParams();
+            if (q) qs.set('q', q);
+            if (severity !== 'all') qs.set('severity', severity);
+            if (status !== 'all') qs.set('status', status);
+            const res = await fetch(`/api/brand/alerts?${qs.toString()}`);
+            const data = await res.json();
+
+            if (!res.ok || !data.success) {
+                setResultError(box, data.error || 'Load failed');
+                return;
+            }
+            const alerts = data.alerts || [];
+            if (!alerts.length) {
+                setResultList(box, 'Alert Board', [], { badge: '0', emptyText: 'لا توجد تنبيهات مطابقة.' });
+                return;
+            }
+            setResultMarkup(
+                box,
+                'Alert Board',
+                alerts.map((a) => {
+                    const sevClass = _brandSeverityClass(a.severity);
+                    return `
+                        <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/60">
+                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                <div class="text-xs text-gray-100 font-bold">${_resultEscape(a.target || '')}</div>
+                                <span class="px-2 py-0.5 rounded border text-[10px] ${sevClass}">${_resultEscape(String(a.severity || '').toUpperCase())}</span>
+                            </div>
+                            <div class="text-[10px] text-gray-500 mt-1">type=${_resultEscape(a.alert_type || '')} | status=${_resultEscape(a.status || '')} | risk=${_resultEscape(a.risk_score || 0)} | ${_resultEscape(a.created_at || '')}</div>
+                            <div class="text-[11px] text-gray-300 mt-1">${_resultEscape(a.details || '')}</div>
+                            <div class="mt-2 grid grid-cols-2 md:grid-cols-5 gap-1">
+                                <button onclick="brandSetAlertStatus(${a.id}, 'monitoring')" class="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-[10px]">Monitoring</button>
+                                <button onclick="brandSetAlertStatus(${a.id}, 'mitigated')" class="px-2 py-1 rounded bg-emerald-900/30 border border-emerald-800/50 text-[10px] text-emerald-300">Mitigated</button>
+                                <button onclick="brandSetAlertStatus(${a.id}, 'open')" class="px-2 py-1 rounded bg-cyan-900/30 border border-cyan-800/50 text-[10px] text-cyan-300">Reopen</button>
+                                <button onclick="brandSetAlertStatus(${a.id}, 'escalated')" class="px-2 py-1 rounded bg-amber-900/30 border border-amber-800/50 text-[10px] text-amber-300">Escalate Tag</button>
+                                <button onclick="brandPromoteAlertIncident(${a.id})" class="px-2 py-1 rounded bg-red-900/30 border border-red-800/50 text-[10px] text-red-300">Create Incident</button>
+                            </div>
+                        </div>
+                    `;
+                }).join(''),
+                { badge: `${alerts.length} Alerts` }
+            );
+        }
+
+        function brandBindFilters() {
+            if (window.__brandFiltersBound) return;
+            window.__brandFiltersBound = true;
+            const ids = ['brandAlertSearch', 'brandFilterSeverity', 'brandFilterStatus'];
+            ids.forEach((id) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const evt = id === 'brandAlertSearch' ? 'input' : 'change';
+                el.addEventListener(evt, () => brandLoadAlerts());
+            });
+        }
+
+        async function brandInitSection() {
+            brandBindFilters();
+            await Promise.all([brandRefreshDashboard(), brandLoadWatchlist(), brandLoadAlerts()]);
+        }
+
+        const SE_INTEL_STORAGE_KEY = 'titan_se_intel_board';
+        const SE_PLAYBOOK_STORAGE_KEY = 'titan_se_playbook';
+        const SE_QUIZ_STORAGE_KEY = 'titan_se_quiz_state';
+
+        function _seRenderTrendBars(points) {
+            const host = document.getElementById('seRiskTrendBars');
+            const meta = document.getElementById('seRiskTrendMeta');
+            if (!host || !meta) return;
+            const rows = Array.isArray(points) ? points : [];
+            if (!rows.length) {
+                host.innerHTML = '<div class="text-xs text-gray-500 col-span-7">لا توجد بيانات Trend كافية بعد.</div>';
+                meta.textContent = 'Trend: no snapshots yet';
+                return;
+            }
+
+            const visible = rows.slice(-7);
+            host.innerHTML = visible.map((p) => {
+                const score = Math.max(0, Math.min(100, Number(p.risk_index || 0)));
+                const tone = score >= 70 ? 'bg-red-500' : (score >= 40 ? 'bg-amber-500' : 'bg-emerald-500');
+                const dayLabel = String(p.day || '').slice(5);
+                return `
+                    <div class="rounded border border-slate-700 bg-black/40 p-2 flex flex-col gap-2 items-center justify-end">
+                        <div class="w-full h-16 rounded bg-slate-800/80 border border-slate-700 overflow-hidden flex items-end">
+                            <div class="w-full ${tone}" style="height:${score}%;"></div>
+                        </div>
+                        <div class="text-[10px] text-gray-400">${_resultEscape(dayLabel || '--')}</div>
+                        <div class="text-[10px] text-gray-300">${score.toFixed(1)}</div>
+                    </div>
+                `;
+            }).join('');
+
+            const first = Number(visible[0]?.risk_index || 0);
+            const last = Number(visible[visible.length - 1]?.risk_index || 0);
+            const delta = (last - first).toFixed(1);
+            meta.textContent = `Trend delta (last 7): ${delta >= 0 ? '+' : ''}${delta}`;
+        }
+
+        function _seComputeLocalRiskSnapshot() {
+            const items = _seGetIntelItems().map((it) => ({ ...it, risk_score: Number(it.risk_score || _seIntelRiskScore(it)) }));
+            const total = items.length;
+            const high = items.filter((i) => Number(i.risk_score || 0) >= 70).length;
+            const medium = items.filter((i) => Number(i.risk_score || 0) >= 40 && Number(i.risk_score || 0) < 70).length;
+            const low = items.filter((i) => Number(i.risk_score || 0) < 40).length;
+            const avg = total ? (items.reduce((acc, it) => acc + Number(it.risk_score || 0), 0) / total) : 0;
+            return {
+                total_items: total,
+                high_count: high,
+                medium_count: medium,
+                low_count: low,
+                avg_risk: Number(avg.toFixed(2))
+            };
+        }
+
+        async function seSyncRiskSnapshot() {
+            const payload = _seComputeLocalRiskSnapshot();
+            try {
+                await fetch('/api/social/risk/snapshot', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+            } catch (_) {}
+        }
+
+        async function seRefreshDashboard() {
+            try {
+                const [quizRes, trendRes] = await Promise.all([
+                    fetch('/api/social/quiz/stats'),
+                    fetch('/api/social/risk/trend')
+                ]);
+                const quizData = await quizRes.json();
+                const trendData = await trendRes.json();
+
+                const quizAccuracyEl = document.getElementById('seDashQuizAccuracy');
+                const quizAnswersEl = document.getElementById('seDashQuizAnswers');
+                const lastScoreEl = document.getElementById('seDashLastScore');
+                const riskIndexEl = document.getElementById('seDashRiskIndex');
+
+                if (quizData?.success) {
+                    if (quizAccuracyEl) quizAccuracyEl.textContent = `${Number(quizData.accuracy || 0).toFixed(1)}%`;
+                    if (quizAnswersEl) quizAnswersEl.textContent = String(quizData.total_answers || 0);
+                    if (lastScoreEl) lastScoreEl.textContent = String(quizData.last_score || 0);
+                }
+
+                if (trendData?.success) {
+                    const latest = trendData.latest || {};
+                    if (riskIndexEl) riskIndexEl.textContent = Number(latest.risk_index || 0).toFixed(1);
+                    _seRenderTrendBars(trendData.points || []);
+                }
+            } catch (_) {
+                const meta = document.getElementById('seRiskTrendMeta');
+                if (meta) meta.textContent = 'Trend: failed to load';
+            }
+        }
+
+        const SE_QUIZ_BANK = [
+            {
+                question: 'طلبت رسالة عاجلة إدخال OTP لحماية الحساب. ما التصرف الصحيح؟',
+                options: ['إرسال OTP لتسريع الإغلاق', 'الرفض والتحقق عبر قناة رسمية', 'إرسال OTP جزئي فقط'],
+                answer: 1,
+                explain: 'OTP سرّي ولا يُشارك. يتم التحقق عبر القنوات المعتمدة فقط.'
+            },
+            {
+                question: 'إيميل يبدو من البنك لكن النطاق مختلف بحرف واحد. التقييم الأدق؟',
+                options: ['آمن غالباً', 'مؤشر تصيد قوي', 'مجرد خطأ إملائي'],
+                answer: 1,
+                explain: 'النطاقات المشابهة Lookalike من أكثر تكتيكات التصيد شيوعاً.'
+            },
+            {
+                question: 'رسالة من مدير تطلب تجاوز السياسة وإرسال بيانات عميل فوراً. ما الخطوة الأولى؟',
+                options: ['التنفيذ لأن المرسل مدير', 'التحقق الثنائي ورفع الحالة', 'تجاهل الرسالة بلا توثيق'],
+                answer: 1,
+                explain: 'انتحال السلطة يتطلب تحقق ثنائي ومسار تصعيد رسمي.'
+            }
+        ];
 
         function _seConfidenceScore(level) {
             if (level === 'high') return 3;
@@ -6875,24 +8506,233 @@ HTML_TEMPLATE = """
             return 1;
         }
 
+        function _seCategoryWeight(category) {
+            if (category === 'infrastructure') return 3;
+            if (category === 'identity') return 2;
+            if (category === 'behavior') return 2;
+            return 1;
+        }
+
+        function _seTextRiskBoost(text) {
+            const t = String(text || '').toLowerCase();
+            const keywords = ['otp', 'password', 'urgent', 'wire', 'invoice', 'credentials', 'bypass', 'executive'];
+            let boost = 0;
+            keywords.forEach((k) => {
+                if (t.includes(k)) boost += 7;
+            });
+            return Math.min(boost, 35);
+        }
+
+        function _seIntelRiskScore(item) {
+            const confidenceBase = _seConfidenceScore(item.confidence) * 18;
+            const categoryBase = _seCategoryWeight(item.category) * 10;
+            const textBoost = _seTextRiskBoost(`${item.subject || ''} ${item.note || ''}`);
+            return Math.min(100, confidenceBase + categoryBase + textBoost);
+        }
+
+        function _seRiskBand(score) {
+            if (score >= 70) return { label: 'HIGH', cls: 'text-red-300 border-red-800/50 bg-red-900/20' };
+            if (score >= 40) return { label: 'MEDIUM', cls: 'text-amber-300 border-amber-800/50 bg-amber-900/20' };
+            return { label: 'LOW', cls: 'text-emerald-300 border-emerald-800/50 bg-emerald-900/20' };
+        }
+
+        function _seGetIntelItems() {
+            try {
+                return JSON.parse(localStorage.getItem(SE_INTEL_STORAGE_KEY) || '[]');
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function _seSetIntelItems(items) {
+            localStorage.setItem(SE_INTEL_STORAGE_KEY, JSON.stringify((items || []).slice(0, 300)));
+        }
+
+        function _seGetPlaybookItems() {
+            try {
+                return JSON.parse(localStorage.getItem(SE_PLAYBOOK_STORAGE_KEY) || '[]');
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function _seSetPlaybookItems(items) {
+            localStorage.setItem(SE_PLAYBOOK_STORAGE_KEY, JSON.stringify((items || []).slice(0, 120)));
+        }
+
+        function seAnalyzeSignal() {
+            const out = document.getElementById('seSignalResult');
+            if (!out) return;
+
+            const channel = document.getElementById('seSignalChannel')?.value || 'email';
+            const senderTrust = document.getElementById('seSignalSenderTrust')?.value || 'known';
+            const urgency = document.getElementById('seSignalUrgency')?.value || 'medium';
+            const hasLink = !!document.getElementById('seSignalHasLink')?.checked;
+            const hasSensitiveReq = !!document.getElementById('seSignalSensitiveReq')?.checked;
+            const hasPolicyBypass = !!document.getElementById('seSignalPolicyBypass')?.checked;
+
+            let score = 12;
+            if (channel === 'social_dm') score += 10;
+            if (channel === 'phone') score += 8;
+            if (senderTrust === 'unknown') score += 20;
+            if (senderTrust === 'spoofed') score += 35;
+            if (urgency === 'medium') score += 12;
+            if (urgency === 'high') score += 25;
+            if (hasLink) score += 14;
+            if (hasSensitiveReq) score += 28;
+            if (hasPolicyBypass) score += 20;
+            score = Math.min(100, score);
+
+            const band = _seRiskBand(score);
+            const actions = [];
+            if (score >= 70) {
+                actions.push('اعزل الطلب فوراً ولا تستجب له.');
+                actions.push('ارفع بلاغاً عاجلاً إلى SOC مع كل المؤشرات.');
+                actions.push('تحقق من الحساب/الجهاز لاحتمال اختراق سابق.');
+            } else if (score >= 40) {
+                actions.push('أوقف التنفيذ لحين تحقق ثنائي عبر قناة رسمية.');
+                actions.push('وثّق الأدلة (لقطة شاشة، وقت، مرسل).');
+            } else {
+                actions.push('استمر بحذر واتبع سياسة التحقق القياسية.');
+                actions.push('راقب أي تغيّر مفاجئ في سلوك الرسائل.');
+            }
+
+            setResultMarkup(
+                out,
+                'Threat Signal Analyzer',
+                `<div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-300">Risk Score</span>
+                        <span class="px-2 py-0.5 rounded border ${band.cls} font-bold">${band.label} - ${score}/100</span>
+                    </div>
+                    <div class="h-2 rounded bg-slate-800 border border-slate-700 overflow-hidden">
+                        <div style="width:${score}%;" class="h-full ${score >= 70 ? 'bg-red-500' : (score >= 40 ? 'bg-amber-500' : 'bg-emerald-500')}"></div>
+                    </div>
+                    <div class="text-gray-200 text-xs">${actions.map(a => `• ${_resultEscape(a)}`).join('<br>')}</div>
+                </div>`,
+                { badge: band.label }
+            );
+        }
+
+        async function seGenerateScenario() {
+            const scenario_type = document.getElementById('seScenarioType')?.value || 'phishing_email';
+            const sector = document.getElementById('seScenarioSector')?.value || 'banking';
+            const pressure = document.getElementById('seScenarioPressure')?.value || 'normal';
+            const out = document.getElementById('seScenarioResult');
+            if (!out) return;
+            setResultLoading(out, 'SE Scenario Lab', 'Generating defensive scenario...');
+            try {
+                const res = await fetch('/api/social/simulate', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({scenario_type, sector})
+                });
+                const data = await res.json();
+                if (!data.success) { setResultError(out, data.error || 'Failed'); return; }
+
+                const difficultyRaw = String(data.difficulty || 'medium').toLowerCase();
+                const difficulty = pressure === 'critical' ? 'critical' : (pressure === 'high' && difficultyRaw === 'medium' ? 'high' : difficultyRaw);
+                const difficultyEl = document.getElementById('seScenarioDifficulty');
+                if (difficultyEl) {
+                    difficultyEl.textContent = `Difficulty: ${difficulty.toUpperCase()}`;
+                }
+
+                const html = `
+                    <div class="space-y-2">
+                        <div class="text-pink-300 font-bold">${_resultEscape(data.title || 'Scenario')}</div>
+                        <div class="text-gray-100">${_resultEscape(data.scenario || '')}</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div class="rounded border border-slate-700 p-2 bg-slate-900/60">
+                                <div class="text-[11px] text-amber-300 font-bold mb-1">Attacker Goal</div>
+                                <div class="text-xs text-gray-200">${_resultEscape(data.attacker_goal || 'N/A')}</div>
+                            </div>
+                            <div class="rounded border border-slate-700 p-2 bg-slate-900/60">
+                                <div class="text-[11px] text-red-300 font-bold mb-1">Potential Impact</div>
+                                <div class="text-xs text-gray-200">${_resultEscape(data.impact || 'N/A')}</div>
+                            </div>
+                        </div>
+                        <div class="rounded border border-slate-700 p-2 bg-slate-900/60">
+                            <div class="text-[11px] text-rose-300 font-bold mb-1">Red Flags</div>
+                            <div class="text-xs text-gray-200">${(data.red_flags || []).map((x) => `• ${_resultEscape(x)}`).join('<br>') || 'N/A'}</div>
+                        </div>
+                        <div class="rounded border border-slate-700 p-2 bg-slate-900/60">
+                            <div class="text-[11px] text-emerald-300 font-bold mb-1">Recommended Response</div>
+                            <div class="text-xs text-gray-200">${(data.defense_actions || []).map((x) => `• ${_resultEscape(x)}`).join('<br>') || 'N/A'}</div>
+                        </div>
+                        <div class="rounded border border-slate-700 p-2 bg-slate-900/60">
+                            <div class="text-[11px] text-cyan-300 font-bold mb-1">Safe Reply Template</div>
+                            <div class="text-xs text-gray-100">${_resultEscape(data.safe_reply_template || 'N/A')}</div>
+                        </div>
+                    </div>`;
+
+                setResultMarkup(out, 'SE Scenario Lab', html, { badge: 'Generated' });
+            } catch (e) {
+                setResultError(out, e.message || 'Failed to generate scenario');
+            }
+        }
+
+        function seUpdateIntelSummary(items) {
+            const rows = items || [];
+            let high = 0, medium = 0, low = 0;
+            rows.forEach((it) => {
+                const band = _seRiskBand(Number(it.risk_score || 0)).label;
+                if (band === 'HIGH') high += 1;
+                else if (band === 'MEDIUM') medium += 1;
+                else low += 1;
+            });
+            const totalEl = document.getElementById('seIntelTotal');
+            const highEl = document.getElementById('seIntelHighRisk');
+            const mediumEl = document.getElementById('seIntelMediumRisk');
+            const lowEl = document.getElementById('seIntelLowRisk');
+            if (totalEl) totalEl.textContent = `Total: ${rows.length}`;
+            if (highEl) highEl.textContent = `High Risk: ${high}`;
+            if (mediumEl) mediumEl.textContent = `Medium Risk: ${medium}`;
+            if (lowEl) lowEl.textContent = `Low Risk: ${low}`;
+        }
+
         function seLoadIntelBoard() {
             const box = document.getElementById('seIntelBoardResult');
             if (!box) return;
-            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
+
+            const search = (document.getElementById('seIntelSearch')?.value || '').trim().toLowerCase();
+            const confFilter = document.getElementById('seIntelFilterConfidence')?.value || 'all';
+            const catFilter = document.getElementById('seIntelFilterCategory')?.value || 'all';
+
+            const allItems = _seGetIntelItems().map((it, idx) => ({ ...it, __index: idx, risk_score: Number(it.risk_score || _seIntelRiskScore(it)) }));
+            seUpdateIntelSummary(allItems);
+
+            const items = allItems.filter((it) => {
+                if (confFilter !== 'all' && it.confidence !== confFilter) return false;
+                if (catFilter !== 'all' && it.category !== catFilter) return false;
+                if (search) {
+                    const hay = `${it.subject || ''} ${it.source || ''} ${it.note || ''}`.toLowerCase();
+                    if (!hay.includes(search)) return false;
+                }
+                return true;
+            });
+
             if (!items.length) {
-                box.innerHTML = '<div class="text-gray-500">لا توجد معلومات بعد. أضف أول ملاحظة.</div>';
+                box.innerHTML = '<div class="text-gray-500">لا توجد نتائج مطابقة. غيّر الفلاتر أو أضف ملاحظة جديدة.</div>';
                 return;
             }
-            box.innerHTML = items.map((it, idx) => `
-                <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/40">
-                    <div class="flex items-center justify-between gap-2">
-                        <div class="text-pink-300 font-bold">${_osintEscape(it.subject || 'unknown')}</div>
-                        <button onclick="seDeleteIntelItem(${idx})" class="text-red-400 text-[10px]">حذف</button>
+
+            box.innerHTML = items.map((it) => {
+                const idx = Number(it.__index);
+                const band = _seRiskBand(Number(it.risk_score || 0));
+                return `
+                    <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/40">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="text-pink-300 font-bold">${_osintEscape(it.subject || 'unknown')}</div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] px-2 py-0.5 rounded border ${band.cls}">${band.label} ${_osintEscape(String(it.risk_score || 0))}</span>
+                                <button onclick="seDeleteIntelItem(${idx})" class="text-red-400 text-[10px]">حذف</button>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-gray-400 mt-1">${_osintEscape(it.category)} | ${_osintEscape(it.confidence)} | ${_osintEscape(it.source)} | ${_osintEscape(it.created_at)}</div>
+                        <div class="text-gray-200 mt-1 whitespace-pre-wrap">${_osintEscape(it.note || '')}</div>
                     </div>
-                    <div class="text-[10px] text-gray-400 mt-1">${_osintEscape(it.category)} | ${_osintEscape(it.confidence)} | ${_osintEscape(it.source)} | ${_osintEscape(it.created_at)}</div>
-                    <div class="text-gray-200 mt-1 whitespace-pre-wrap">${_osintEscape(it.note || '')}</div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function seAddIntelItem() {
@@ -6903,47 +8743,67 @@ HTML_TEMPLATE = """
             const note = (document.getElementById('seIntelNote')?.value || '').trim();
             if (!subject || !note) return titanAlert('اكتب Subject والملاحظة أولاً.');
 
-            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
-            items.unshift({
+            const items = _seGetIntelItems();
+            const duplicate = items.find((it) =>
+                String(it.subject || '').toLowerCase() === subject.toLowerCase() &&
+                String(it.note || '').toLowerCase() === note.toLowerCase()
+            );
+            if (duplicate) return titanAlert('هذه المعلومة موجودة مسبقاً.');
+
+            const entry = {
                 subject,
                 source: source || 'unknown',
                 category,
                 confidence,
                 note,
                 score: _seConfidenceScore(confidence),
+                risk_score: 0,
                 created_at: new Date().toISOString()
-            });
-            localStorage.setItem('titan_se_intel_board', JSON.stringify(items.slice(0, 200)));
+            };
+            entry.risk_score = _seIntelRiskScore(entry);
+
+            items.unshift(entry);
+            _seSetIntelItems(items);
 
             document.getElementById('seIntelSubject').value = '';
             document.getElementById('seIntelSource').value = '';
             document.getElementById('seIntelNote').value = '';
             seLoadIntelBoard();
+            seSyncRiskSnapshot().then(seRefreshDashboard);
         }
 
         function seDeleteIntelItem(index) {
-            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
+            const items = _seGetIntelItems();
+            if (index < 0 || index >= items.length) return;
             items.splice(index, 1);
-            localStorage.setItem('titan_se_intel_board', JSON.stringify(items));
+            _seSetIntelItems(items);
             seLoadIntelBoard();
+            seSyncRiskSnapshot().then(seRefreshDashboard);
         }
 
         function seSortIntelBoard() {
-            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
+            const items = _seGetIntelItems();
+            items.forEach((it) => { it.risk_score = Number(it.risk_score || _seIntelRiskScore(it)); });
             items.sort((a, b) => {
-                if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+                if ((Number(b.risk_score) || 0) !== (Number(a.risk_score) || 0)) return (Number(b.risk_score) || 0) - (Number(a.risk_score) || 0);
                 return String(b.created_at || '').localeCompare(String(a.created_at || ''));
             });
-            localStorage.setItem('titan_se_intel_board', JSON.stringify(items));
+            _seSetIntelItems(items);
             seLoadIntelBoard();
-            titanAlert('تم ترتيب المعلومات حسب الثقة ثم الزمن.');
+            titanAlert('تم ترتيب المعلومات حسب المخاطرة ثم الزمن.');
+            seSyncRiskSnapshot().then(seRefreshDashboard);
         }
 
         function seExportIntelBoard() {
-            const items = JSON.parse(localStorage.getItem('titan_se_intel_board') || '[]');
+            const items = _seGetIntelItems().map((it) => ({ ...it, risk_score: Number(it.risk_score || _seIntelRiskScore(it)) }));
             const payload = {
                 exported_at: new Date().toISOString(),
                 total_items: items.length,
+                summary: {
+                    high: items.filter(i => Number(i.risk_score || 0) >= 70).length,
+                    medium: items.filter(i => Number(i.risk_score || 0) >= 40 && Number(i.risk_score || 0) < 70).length,
+                    low: items.filter(i => Number(i.risk_score || 0) < 40).length
+                },
                 items
             };
             const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -6957,8 +8817,189 @@ HTML_TEMPLATE = """
 
         function seClearIntelBoard() {
             if (!confirm('هل تريد حذف كل عناصر لوحة المعلومات؟')) return;
-            localStorage.removeItem('titan_se_intel_board');
+            localStorage.removeItem(SE_INTEL_STORAGE_KEY);
             seLoadIntelBoard();
+            seSyncRiskSnapshot().then(seRefreshDashboard);
+        }
+
+        function seLoadPlaybook() {
+            const box = document.getElementById('sePlaybookResult');
+            if (!box) return;
+            const rows = _seGetPlaybookItems();
+            if (!rows.length) {
+                box.innerHTML = '<div class="text-gray-500">لا توجد خطوات بعد. أضف خطوة استجابة.</div>';
+                return;
+            }
+            box.innerHTML = rows.map((step, idx) => `
+                <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/40">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="text-emerald-300 font-bold">${_osintEscape(step.phase || 'detect')}</div>
+                        <button onclick="seDeletePlaybookStep(${idx})" class="text-red-400 text-[10px]">حذف</button>
+                    </div>
+                    <div class="text-[10px] text-gray-400 mt-1">Owner: ${_osintEscape(step.owner || 'SOC')} | ETA: ${_osintEscape(step.eta || 'N/A')} | ${_osintEscape(step.created_at || '')}</div>
+                    <div class="text-gray-200 mt-1">${_osintEscape(step.action || '')}</div>
+                </div>
+            `).join('');
+        }
+
+        function seAddPlaybookStep() {
+            const phase = document.getElementById('sePlaybookPhase')?.value || 'detect';
+            const owner = (document.getElementById('sePlaybookOwner')?.value || '').trim() || 'SOC';
+            const eta = (document.getElementById('sePlaybookEta')?.value || '').trim() || 'N/A';
+            const action = (document.getElementById('sePlaybookAction')?.value || '').trim();
+            if (!action) return titanAlert('اكتب خطوة الاستجابة أولاً.');
+
+            const rows = _seGetPlaybookItems();
+            rows.push({ phase, owner, eta, action, created_at: new Date().toISOString() });
+            _seSetPlaybookItems(rows);
+
+            document.getElementById('sePlaybookOwner').value = '';
+            document.getElementById('sePlaybookEta').value = '';
+            document.getElementById('sePlaybookAction').value = '';
+            seLoadPlaybook();
+        }
+
+        function seDeletePlaybookStep(index) {
+            const rows = _seGetPlaybookItems();
+            if (index < 0 || index >= rows.length) return;
+            rows.splice(index, 1);
+            _seSetPlaybookItems(rows);
+            seLoadPlaybook();
+        }
+
+        function sePlaybookInjectTemplate() {
+            const rows = _seGetPlaybookItems();
+            const seed = [
+                { phase: 'detect', owner: 'SOC', eta: '5m', action: 'تأكيد مؤشرات التهديد وتجميع الأدلة الأولية.' },
+                { phase: 'verify', owner: 'IT', eta: '10m', action: 'التحقق عبر قناة ثانية مع صاحب الطلب.' },
+                { phase: 'contain', owner: 'SOC', eta: '15m', action: 'حظر الرابط/المرسل وعزل الجلسات المشبوهة.' },
+                { phase: 'report', owner: 'Manager', eta: '20m', action: 'إرسال تقرير حادث مختصر للجهات المعنية.' },
+                { phase: 'lessons', owner: 'Awareness', eta: '1d', action: 'تحديث التوعية والإجراءات بناء على الدرس المستفاد.' }
+            ];
+            const merged = rows.concat(seed.map((s) => ({ ...s, created_at: new Date().toISOString() })));
+            _seSetPlaybookItems(merged);
+            seLoadPlaybook();
+            titanAlert('تم إدراج قالب الاستجابة الدفاعي.');
+        }
+
+        function seExportPlaybook() {
+            const rows = _seGetPlaybookItems();
+            const payload = {
+                exported_at: new Date().toISOString(),
+                total_steps: rows.length,
+                steps: rows
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'se-response-playbook.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function seClearPlaybook() {
+            if (!confirm('هل تريد حذف كل خطوات Playbook؟')) return;
+            localStorage.removeItem(SE_PLAYBOOK_STORAGE_KEY);
+            seLoadPlaybook();
+        }
+
+        function seLoadQuiz() {
+            const stateRaw = localStorage.getItem(SE_QUIZ_STORAGE_KEY);
+            let state = { idx: 0, score: 0, answered: false };
+            if (stateRaw) {
+                try { state = JSON.parse(stateRaw); } catch (_) {}
+            }
+            const q = SE_QUIZ_BANK[state.idx % SE_QUIZ_BANK.length];
+            const qEl = document.getElementById('seQuizQuestion');
+            const optsEl = document.getElementById('seQuizOptions');
+            const metaEl = document.getElementById('seQuizMeta');
+            const feedbackEl = document.getElementById('seQuizFeedback');
+            if (!qEl || !optsEl || !metaEl || !feedbackEl) return;
+
+            qEl.textContent = q.question;
+            metaEl.textContent = `Question ${state.idx + 1}/${SE_QUIZ_BANK.length} - Score ${state.score}`;
+            optsEl.innerHTML = q.options.map((op, i) =>
+                `<button onclick="seSubmitQuizAnswer(${i})" class="w-full text-right p-2 rounded border border-slate-700 bg-slate-900/60 hover:bg-slate-800 text-xs">${_resultEscape(op)}</button>`
+            ).join('');
+            if (!state.answered) feedbackEl.textContent = 'اختر الإجابة الأنسب دفاعياً.';
+        }
+
+        async function seSubmitQuizAnswer(index) {
+            const stateRaw = localStorage.getItem(SE_QUIZ_STORAGE_KEY);
+            let state = { idx: 0, score: 0, answered: false };
+            if (stateRaw) {
+                try { state = JSON.parse(stateRaw); } catch (_) {}
+            }
+            if (state.answered) return;
+            const q = SE_QUIZ_BANK[state.idx % SE_QUIZ_BANK.length];
+            const feedbackEl = document.getElementById('seQuizFeedback');
+            if (index === q.answer) {
+                state.score += 1;
+                if (feedbackEl) feedbackEl.textContent = `✅ صحيح: ${q.explain}`;
+            } else {
+                if (feedbackEl) feedbackEl.textContent = `❌ غير دقيق: ${q.explain}`;
+            }
+            state.answered = true;
+            localStorage.setItem(SE_QUIZ_STORAGE_KEY, JSON.stringify(state));
+
+            try {
+                await fetch('/api/social/quiz/result', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        question_id: state.idx,
+                        selected_option: index,
+                        correct_option: q.answer,
+                        is_correct: index === q.answer,
+                        score_after: state.score
+                    })
+                });
+            } catch (_) {}
+
+            seLoadQuiz();
+            seRefreshDashboard();
+        }
+
+        function seNextQuizQuestion() {
+            const stateRaw = localStorage.getItem(SE_QUIZ_STORAGE_KEY);
+            let state = { idx: 0, score: 0, answered: false };
+            if (stateRaw) {
+                try { state = JSON.parse(stateRaw); } catch (_) {}
+            }
+            state.idx = (state.idx + 1) % SE_QUIZ_BANK.length;
+            state.answered = false;
+            localStorage.setItem(SE_QUIZ_STORAGE_KEY, JSON.stringify(state));
+            seLoadQuiz();
+        }
+
+        function seRestartQuiz() {
+            localStorage.setItem(SE_QUIZ_STORAGE_KEY, JSON.stringify({ idx: 0, score: 0, answered: false }));
+            seLoadQuiz();
+        }
+
+        function seBindIntelFilters() {
+            if (window.__seFiltersBound) return;
+            window.__seFiltersBound = true;
+            const search = document.getElementById('seIntelSearch');
+            const conf = document.getElementById('seIntelFilterConfidence');
+            const cat = document.getElementById('seIntelFilterCategory');
+            if (search) search.addEventListener('input', seLoadIntelBoard);
+            if (conf) conf.addEventListener('change', seLoadIntelBoard);
+            if (cat) cat.addEventListener('change', seLoadIntelBoard);
+        }
+
+        function seInitDefenseTab() {
+            seBindIntelFilters();
+            seLoadIntelBoard();
+            seLoadPlaybook();
+            seLoadQuiz();
+            seSyncRiskSnapshot().then(seRefreshDashboard);
+
+            const signalBox = document.getElementById('seSignalResult');
+            if (signalBox && !signalBox.innerHTML.trim()) seAnalyzeSignal();
+            const scenarioBox = document.getElementById('seScenarioResult');
+            if (scenarioBox && !scenarioBox.innerHTML.trim()) seGenerateScenario();
         }
 
         function renderMalwareResult(data, targetName, isUrl = true) {
@@ -9772,6 +11813,69 @@ def osint_username_route():
     return jsonify(result)
 
 
+def _ir_priority_rank(priority: str) -> int:
+    mapping = {'p1': 1, 'p2': 2, 'p3': 3, 'p4': 4}
+    return mapping.get((priority or 'p2').lower(), 2)
+
+
+def _ir_recommended_priority(severity: str, top_ioc_risk: int = 0, sla_breached: bool = False) -> str:
+    sev = (severity or 'medium').lower()
+    if sev == 'critical' or top_ioc_risk >= 90:
+        return 'p1'
+    if sev == 'high' or top_ioc_risk >= 75 or sla_breached:
+        return 'p2'
+    if sev == 'medium' or top_ioc_risk >= 40:
+        return 'p3'
+    return 'p4'
+
+
+def _ir_recompute_case_priority(conn, case_id: int, user_id: int | None, reason: str, actor: str = '') -> dict:
+    if user_id is None:
+        return {"updated": False, "error": "case_not_found"}
+    c = conn.cursor()
+    c.execute(
+        "SELECT severity, priority, status, due_at FROM incident_cases WHERE id=%s AND user_id=%s",
+        (case_id, user_id)
+    )
+    row = c.fetchone()
+    if not row:
+        return {"updated": False, "error": "case_not_found"}
+
+    severity, current_priority, status, due_at = row
+    c.execute("SELECT COALESCE(MAX(risk_score), 0) FROM incident_iocs WHERE case_id=%s", (case_id,))
+    top_ioc_risk = int((c.fetchone() or [0])[0] or 0)
+
+    now = datetime.datetime.now()
+    due_dt = None
+    try:
+        due_dt = datetime.datetime.strptime(due_at, "%Y-%m-%d %H:%M:%S") if due_at else None
+    except Exception:
+        due_dt = None
+    sla_breached = bool(due_dt and status != 'closed' and now > due_dt)
+
+    recommended = _ir_recommended_priority(severity, top_ioc_risk=top_ioc_risk, sla_breached=sla_breached)
+    old_rank = _ir_priority_rank(current_priority)
+    rec_rank = _ir_priority_rank(recommended)
+
+    # Auto-priority only escalates urgency automatically; downgrades remain manual.
+    if rec_rank < old_rank:
+        now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        c.execute("UPDATE incident_cases SET priority=%s, updated_at=%s WHERE id=%s", (recommended, now_str, case_id))
+        c.execute(
+            "INSERT INTO incident_case_notes (case_id, note_type, note, created_by, created_at) VALUES (%s,%s,%s,%s,%s)",
+            (
+                case_id,
+                'analysis',
+                f"Auto-priority escalated {current_priority} -> {recommended} (reason={reason}, top_ioc_risk={top_ioc_risk}, sla_breached={sla_breached})",
+                actor,
+                now_str,
+            )
+        )
+        return {"updated": True, "from": current_priority, "to": recommended, "recommended": recommended, "top_ioc_risk": top_ioc_risk, "sla_breached": sla_breached}
+
+    return {"updated": False, "from": current_priority, "to": current_priority, "recommended": recommended, "top_ioc_risk": top_ioc_risk, "sla_breached": sla_breached}
+
+
 @app.route('/api/incidents/create', methods=['POST'])
 def ir_create_case_route():
     user_id, err = _get_logged_in_user_id()
@@ -9779,31 +11883,110 @@ def ir_create_case_route():
     data = request.json or {}
     title = data.get('title', '').strip()
     severity = (data.get('severity') or 'medium').strip().lower()
+    priority = (data.get('priority') or 'p2').strip().lower()
+    category = (data.get('category') or 'general').strip().lower()
+    source = (data.get('source') or 'manual').strip().lower()
+    owner = (data.get('owner') or 'SOC').strip()
+    try:
+        sla_minutes = int(data.get('sla_minutes', 240) or 240)
+    except Exception:
+        sla_minutes = 240
+    sla_minutes = max(15, min(10080, sla_minutes))
     description = data.get('description', '').strip()
     if not title:
         return jsonify({"success": False, "error": "عنوان القضية مطلوب"}), 400
     if severity not in ('low', 'medium', 'high', 'critical'):
         severity = 'medium'
+    if priority not in ('p1', 'p2', 'p3', 'p4'):
+        priority = 'p2'
+    if source not in ('manual', 'siem', 'user_report', 'external_feed'):
+        source = 'manual'
+    if category not in ('general', 'phishing', 'malware', 'account_takeover', 'data_leak', 'insider', 'fraud'):
+        category = 'general'
+    recommended_on_create = _ir_recommended_priority(severity, top_ioc_risk=0, sla_breached=False)
+    if _ir_priority_rank(recommended_on_create) < _ir_priority_rank(priority):
+        priority = recommended_on_create
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    due_at = (datetime.datetime.now() + datetime.timedelta(minutes=sla_minutes)).strftime("%Y-%m-%d %H:%M:%S")
 
     conn = None
     try:
         conn = get_db_conn()
         c = conn.cursor()
         c.execute("""
-            INSERT INTO incident_cases (user_id, title, severity, status, description, created_at, updated_at)
-            VALUES (%s,%s,%s,'open',%s,%s,%s) RETURNING id
-        """, (user_id, title, severity, description, now, now))
+            INSERT INTO incident_cases
+            (user_id, title, severity, priority, status, category, source, owner, sla_minutes, due_at, description, created_at, updated_at)
+            VALUES (%s,%s,%s,%s,'open',%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        """, (user_id, title, severity, priority, category, source, owner, sla_minutes, due_at, description, now, now))
         row = c.fetchone()
         if not row:
             conn.rollback()
             return jsonify({"success": False, "error": "فشل إنشاء القضية"}), 500
         case_id = row[0]
+        c.execute(
+            "INSERT INTO incident_case_notes (case_id, note_type, note, created_by, created_at) VALUES (%s,%s,%s,%s,%s)",
+            (case_id, 'created', 'Case created and queued for triage.', session.get('username', ''), now)
+        )
         conn.commit()
-        add_audit_log("Incident Created", f"case#{case_id} {title}", username=session.get('username', ''))
-        return jsonify({"success": True, "case_id": case_id})
+        add_audit_log("Incident Created", f"case#{case_id} {title} sev={severity} prio={priority}", username=session.get('username', ''))
+        return jsonify({"success": True, "case_id": case_id, "due_at": due_at})
     except Exception as e:
         if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/summary', methods=['GET'])
+def ir_summary_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM incident_cases WHERE user_id=%s", (user_id,))
+        total = int((c.fetchone() or [0])[0] or 0)
+
+        c.execute("SELECT status, COUNT(*) FROM incident_cases WHERE user_id=%s GROUP BY status", (user_id,))
+        by_status = {r[0]: int(r[1]) for r in (c.fetchall() or [])}
+
+        c.execute("SELECT severity, COUNT(*) FROM incident_cases WHERE user_id=%s GROUP BY severity", (user_id,))
+        by_severity = {r[0]: int(r[1]) for r in (c.fetchall() or [])}
+
+        c.execute(
+            "SELECT COUNT(*) FROM incident_cases WHERE user_id=%s AND status != 'closed' AND due_at IS NOT NULL AND due_at < %s",
+            (user_id, now)
+        )
+        sla_breached = int((c.fetchone() or [0])[0] or 0)
+
+        c.execute(
+            """
+            SELECT ROUND(AVG(ii.risk_score)::numeric, 2)
+            FROM incident_iocs ii
+            JOIN incident_cases ic ON ic.id = ii.case_id
+            WHERE ic.user_id=%s
+            """,
+            (user_id,)
+        )
+        avg_ioc_risk = float((c.fetchone() or [0])[0] or 0)
+
+        return jsonify({
+            "success": True,
+            "summary": {
+                "total": total,
+                "open": by_status.get('open', 0),
+                "investigating": by_status.get('investigating', 0),
+                "contained": by_status.get('contained', 0),
+                "closed": by_status.get('closed', 0),
+                "critical": by_severity.get('critical', 0),
+                "high": by_severity.get('high', 0),
+                "sla_breached": sla_breached,
+                "avg_ioc_risk": avg_ioc_risk,
+            }
+        })
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         if conn: conn.close()
@@ -9813,16 +11996,52 @@ def ir_create_case_route():
 def ir_list_cases_route():
     user_id, err = _get_logged_in_user_id()
     if err: return err
+    q = (request.args.get('q') or '').strip().lower()
+    status_filter = (request.args.get('status') or 'all').strip().lower()
+    severity_filter = (request.args.get('severity') or 'all').strip().lower()
     conn = None
     try:
         conn = get_db_conn()
         c = conn.cursor()
-        c.execute("SELECT id, title, severity, status, description, created_at, updated_at FROM incident_cases WHERE user_id=%s ORDER BY id DESC", (user_id,))
+        query = """
+            SELECT
+                ic.id, ic.title, ic.severity, ic.priority, ic.status, ic.category, ic.source, ic.owner,
+                ic.sla_minutes, ic.due_at, ic.closed_at, ic.description, ic.created_at, ic.updated_at,
+                COALESCE(COUNT(ii.id), 0) AS ioc_count,
+                COALESCE(SUM(CASE WHEN ii.risk_score >= 70 THEN 1 ELSE 0 END), 0) AS high_ioc_count,
+                COALESCE(MAX(ii.risk_score), 0) AS top_ioc_risk
+            FROM incident_cases ic
+            LEFT JOIN incident_iocs ii ON ii.case_id = ic.id
+            WHERE ic.user_id=%s
+        """
+        params: list[object] = [user_id]
+        if q:
+            query += " AND (LOWER(ic.title) LIKE %s OR LOWER(ic.description) LIKE %s)"
+            like_q = f"%{q}%"
+            params.extend([like_q, like_q])
+        if status_filter in ('open', 'investigating', 'contained', 'closed'):
+            query += " AND ic.status=%s"
+            params.append(status_filter)
+        if severity_filter in ('low', 'medium', 'high', 'critical'):
+            query += " AND ic.severity=%s"
+            params.append(severity_filter)
+        query += " GROUP BY ic.id ORDER BY ic.id DESC"
+
+        c.execute(query, tuple(params))
         rows = c.fetchall()
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cases = [
             {
-                "id": r[0], "title": r[1], "severity": r[2], "status": r[3],
-                "description": r[4], "created_at": r[5], "updated_at": r[6]
+                "id": r[0], "title": r[1], "severity": r[2], "priority": r[3], "status": r[4], "category": r[5],
+                "source": r[6], "owner": r[7], "sla_minutes": r[8], "due_at": r[9], "closed_at": r[10],
+                "description": r[11], "created_at": r[12], "updated_at": r[13],
+                "ioc_count": int(r[14] or 0), "high_ioc_count": int(r[15] or 0), "top_ioc_risk": int(r[16] or 0),
+                "sla_state": 'breached' if (r[9] and r[4] != 'closed' and str(r[9]) < now) else 'ok',
+                "recommended_priority": _ir_recommended_priority(
+                    str(r[2] or 'medium'),
+                    top_ioc_risk=int(r[16] or 0),
+                    sla_breached=bool(r[9] and r[4] != 'closed' and str(r[9]) < now)
+                )
             }
             for r in rows
         ]
@@ -9846,11 +12065,20 @@ def ir_update_case_status_route(case_id: int):
     if status not in ('open', 'investigating', 'contained', 'closed'):
         return jsonify({"success": False, "error": "Status غير صالح"}), 400
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    closed_at = now if status == 'closed' else None
     conn = None
     try:
         conn = get_db_conn()
         c = conn.cursor()
-        c.execute("UPDATE incident_cases SET status=%s, updated_at=%s WHERE id=%s AND user_id=%s", (status, now, case_id, user_id))
+        c.execute(
+            "UPDATE incident_cases SET status=%s, closed_at=%s, updated_at=%s WHERE id=%s AND user_id=%s",
+            (status, closed_at, now, case_id, user_id)
+        )
+        c.execute(
+            "INSERT INTO incident_case_notes (case_id, note_type, note, created_by, created_at) VALUES (%s,%s,%s,%s,%s)",
+            (case_id, 'status', f"Status changed to {status}", session.get('username', ''), now)
+        )
+        _ir_recompute_case_priority(conn, case_id, user_id, reason='status_change', actor=session.get('username', ''))
         conn.commit()
         add_audit_log("Incident Status", f"case#{case_id} -> {status}", username=session.get('username', ''))
         return jsonify({"success": True})
@@ -9882,6 +12110,11 @@ def ir_add_ioc_route(case_id: int):
             return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
         c.execute("INSERT INTO incident_iocs (case_id, ioc_type, ioc_value, risk_score, created_at) VALUES (%s,%s,%s,%s,%s)",
                   (case_id, ioc_type, ioc_value, risk_score, now))
+        c.execute(
+            "INSERT INTO incident_case_notes (case_id, note_type, note, created_by, created_at) VALUES (%s,%s,%s,%s,%s)",
+            (case_id, 'ioc', f"IOC added: {ioc_type}={ioc_value} (risk={risk_score})", session.get('username', ''), now)
+        )
+        _ir_recompute_case_priority(conn, case_id, user_id, reason='ioc_added', actor=session.get('username', ''))
         conn.commit()
         add_audit_log("IOC Added", f"case#{case_id} {ioc_type}:{ioc_value}", username=session.get('username', ''))
         return jsonify({"success": True})
@@ -9913,6 +12146,417 @@ def ir_list_iocs_route(case_id: int):
         if conn: conn.close()
 
 
+@app.route('/api/incidents/<int:case_id>/auto-priority', methods=['POST'])
+def ir_auto_priority_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        result = _ir_recompute_case_priority(conn, case_id, user_id, reason='manual_run', actor=session.get('username', ''))
+        if result.get('error') == 'case_not_found':
+            return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
+        conn.commit()
+        add_audit_log("Incident Auto Priority", f"case#{case_id} {result.get('from')} -> {result.get('to')}", username=session.get('username', ''))
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/<int:case_id>/notes', methods=['POST'])
+def ir_add_note_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    data = request.json or {}
+    note_type = (data.get('note_type') or 'analysis').strip().lower()
+    note = (data.get('note') or '').strip()
+    if note_type not in ('analysis', 'containment', 'eradication', 'recovery', 'lesson', 'status', 'ioc', 'created'):
+        note_type = 'analysis'
+    if not note:
+        return jsonify({"success": False, "error": "الملاحظة مطلوبة"}), 400
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT id FROM incident_cases WHERE id=%s AND user_id=%s", (case_id, user_id))
+        if not c.fetchone():
+            return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
+        c.execute(
+            "INSERT INTO incident_case_notes (case_id, note_type, note, created_by, created_at) VALUES (%s,%s,%s,%s,%s)",
+            (case_id, note_type, note, session.get('username', ''), now)
+        )
+        c.execute("UPDATE incident_cases SET updated_at=%s WHERE id=%s", (now, case_id))
+        conn.commit()
+        add_audit_log("Incident Note", f"case#{case_id} type={note_type}", username=session.get('username', ''))
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/<int:case_id>/notes', methods=['GET'])
+def ir_list_notes_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT id FROM incident_cases WHERE id=%s AND user_id=%s", (case_id, user_id))
+        if not c.fetchone():
+            return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
+        c.execute(
+            "SELECT id, note_type, note, created_by, created_at FROM incident_case_notes WHERE case_id=%s ORDER BY id DESC",
+            (case_id,)
+        )
+        notes = [
+            {"id": r[0], "note_type": r[1], "note": r[2], "created_by": r[3], "created_at": r[4]}
+            for r in (c.fetchall() or [])
+        ]
+        return jsonify({"success": True, "notes": notes})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/<int:case_id>/evidence', methods=['POST'])
+def ir_add_evidence_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "يرجى اختيار ملف دليل"}), 400
+
+    file = request.files['file']
+    note = (request.form.get('note') or '').strip()
+    raw = file.read()
+    if not raw:
+        return jsonify({"success": False, "error": "الملف فارغ"}), 400
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    file_hash = hashlib.sha256(raw).hexdigest()
+    mime_type = (file.mimetype or 'application/octet-stream').strip()
+    filename = secure_filename(file.filename or 'evidence.bin')
+    file_size = len(raw)
+
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT id FROM incident_cases WHERE id=%s AND user_id=%s", (case_id, user_id))
+        if not c.fetchone():
+            return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
+        c.execute(
+            """
+            INSERT INTO incident_evidence (case_id, filename, file_hash, file_size, mime_type, note, created_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (case_id, filename, file_hash, file_size, mime_type, note, now)
+        )
+        c.execute(
+            "INSERT INTO incident_case_notes (case_id, note_type, note, created_by, created_at) VALUES (%s,%s,%s,%s,%s)",
+            (case_id, 'analysis', f"Evidence uploaded: {filename} sha256={file_hash[:16]}...", session.get('username', ''), now)
+        )
+        c.execute("UPDATE incident_cases SET updated_at=%s WHERE id=%s", (now, case_id))
+        conn.commit()
+        add_audit_log("Incident Evidence", f"case#{case_id} file={filename} size={file_size}", username=session.get('username', ''))
+        return jsonify({"success": True, "filename": filename, "file_hash": file_hash, "file_size": file_size, "mime_type": mime_type})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/<int:case_id>/evidence', methods=['GET'])
+def ir_list_evidence_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT id FROM incident_cases WHERE id=%s AND user_id=%s", (case_id, user_id))
+        if not c.fetchone():
+            return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
+        c.execute(
+            "SELECT id, filename, file_hash, file_size, mime_type, note, created_at FROM incident_evidence WHERE case_id=%s ORDER BY id DESC",
+            (case_id,)
+        )
+        evidence = [
+            {
+                "id": r[0], "filename": r[1], "file_hash": r[2], "file_size": int(r[3] or 0),
+                "mime_type": r[4], "note": r[5], "created_at": r[6]
+            }
+            for r in (c.fetchall() or [])
+        ]
+        return jsonify({"success": True, "evidence": evidence})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+def _ir_build_report_payload(conn, case_id: int, user_id: int | None):
+    if user_id is None:
+        return None
+    c = conn.cursor()
+    c.execute(
+        """
+        SELECT id, title, severity, priority, status, category, source, owner,
+               sla_minutes, due_at, closed_at, description, created_at, updated_at
+        FROM incident_cases WHERE id=%s AND user_id=%s
+        """,
+        (case_id, user_id)
+    )
+    case_row = c.fetchone()
+    if not case_row:
+        return None
+
+    c.execute("SELECT ioc_type, ioc_value, risk_score, created_at FROM incident_iocs WHERE case_id=%s ORDER BY id DESC", (case_id,))
+    iocs = c.fetchall()
+    c.execute("SELECT note_type, note, created_by, created_at FROM incident_case_notes WHERE case_id=%s ORDER BY id DESC", (case_id,))
+    notes = c.fetchall()
+    c.execute("SELECT filename, file_hash, file_size, mime_type, note, created_at FROM incident_evidence WHERE case_id=%s ORDER BY id DESC", (case_id,))
+    evidence = c.fetchall()
+
+    def _parse_dt(v):
+        try:
+            return datetime.datetime.strptime(v, "%Y-%m-%d %H:%M:%S") if v else None
+        except Exception:
+            return None
+
+    created_dt = _parse_dt(case_row[12])
+    closed_dt = _parse_dt(case_row[10])
+    end_dt = closed_dt or datetime.datetime.now()
+    mttr_minutes = int((end_dt - created_dt).total_seconds() // 60) if created_dt else 0
+    mean_ioc_risk = round(sum((int(r[2] or 0) for r in iocs)) / max(1, len(iocs)), 2)
+
+    return {
+        "case": {
+            "id": case_row[0], "title": case_row[1], "severity": case_row[2], "priority": case_row[3], "status": case_row[4],
+            "category": case_row[5], "source": case_row[6], "owner": case_row[7], "sla_minutes": case_row[8],
+            "due_at": case_row[9], "closed_at": case_row[10], "description": case_row[11], "created_at": case_row[12], "updated_at": case_row[13]
+        },
+        "iocs": [
+            {"ioc_type": r[0], "ioc_value": r[1], "risk_score": r[2], "created_at": r[3]} for r in iocs
+        ],
+        "notes": [
+            {"note_type": r[0], "note": r[1], "created_by": r[2], "created_at": r[3]} for r in notes
+        ],
+        "evidence": [
+            {"filename": r[0], "file_hash": r[1], "file_size": r[2], "mime_type": r[3], "note": r[4], "created_at": r[5]} for r in evidence
+        ],
+        "metrics": {
+            "ioc_count": len(iocs),
+            "note_count": len(notes),
+            "evidence_count": len(evidence),
+            "high_risk_iocs": sum(1 for r in iocs if int(r[2] or 0) >= 70),
+            "mean_ioc_risk": mean_ioc_risk,
+            "mttr_minutes": mttr_minutes,
+        },
+        "generated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+
+def _build_minimal_pdf_bytes(lines: list[str]) -> bytes:
+    safe_lines = [str(x or '').replace('(', '[').replace(')', ']').replace('\\', '/') for x in (lines or [])]
+    y = 780
+    content_lines = ["BT", "/F1 10 Tf"]
+    for line in safe_lines[:90]:
+        content_lines.append(f"1 0 0 1 40 {y} Tm ({line[:120]}) Tj")
+        y -= 12
+        if y < 40:
+            break
+    content_lines.append("ET")
+    stream = "\n".join(content_lines).encode('latin-1', errors='replace')
+
+    objects: list[bytes] = []
+    objects.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n")
+    objects.append(b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n")
+    objects.append(b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n")
+    objects.append(b"4 0 obj << /Length " + str(len(stream)).encode('ascii') + b" >> stream\n" + stream + b"\nendstream endobj\n")
+    objects.append(b"5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n")
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for obj in objects:
+        offsets.append(len(pdf))
+        pdf.extend(obj)
+    xref_pos = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects)+1}\n".encode('ascii'))
+    pdf.extend(b"0000000000 65535 f \n")
+    for off in offsets[1:]:
+        pdf.extend(f"{off:010d} 00000 n \n".encode('ascii'))
+    pdf.extend(f"trailer << /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode('ascii'))
+    return bytes(pdf)
+
+
+def _forensics_unique(values):
+    out = []
+    seen = set()
+    for v in values or []:
+        item = str(v or '').strip()
+        if not item:
+            continue
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return out
+
+
+def _forensics_entropy(raw: bytes) -> float:
+    if not raw:
+        return 0.0
+    freq = {}
+    for b in raw:
+        freq[b] = freq.get(b, 0) + 1
+    total = float(len(raw))
+    ent = 0.0
+    for count in freq.values():
+        p = count / total
+        if p > 0:
+            ent -= p * math.log2(p)
+    return round(ent, 4)
+
+
+def _forensics_detect_file_type(raw: bytes, filename: str, mime_type: str) -> str:
+    name = (filename or '').lower()
+    mime = (mime_type or '').lower()
+    head = raw[:16] if raw else b''
+
+    if head.startswith(b'MZ'):
+        return 'windows-pe'
+    if head.startswith(b'%PDF'):
+        return 'pdf'
+    if head.startswith(b'PK\x03\x04'):
+        if name.endswith(('.docx', '.xlsx', '.pptx')):
+            return 'office-openxml'
+        return 'zip'
+    if head.startswith(b'\x89PNG'):
+        return 'png'
+    if head.startswith(b'\xff\xd8\xff'):
+        return 'jpeg'
+    if head.startswith((b'GIF87a', b'GIF89a')):
+        return 'gif'
+    if b'javascript' in head.lower() or name.endswith('.js'):
+        return 'javascript'
+    if mime.startswith('text/') or name.endswith(('.txt', '.log', '.csv', '.json', '.xml', '.html')):
+        return 'text'
+    return 'unknown'
+
+
+def _forensics_extract_strings(raw: bytes, min_len: int = 6, max_items: int = 120):
+    min_len = max(4, min(32, int(min_len or 6)))
+    pattern = rb'[\x20-\x7e]{' + str(min_len).encode('ascii') + rb',}'
+    found = re.findall(pattern, raw or b'')
+    strings_out = []
+    for chunk in found[: max_items * 3]:
+        try:
+            s = chunk.decode('ascii', errors='ignore').strip()
+        except Exception:
+            s = ''
+        if s:
+            strings_out.append(s[:220])
+    return _forensics_unique(strings_out)[:max_items]
+
+
+def _forensics_extract_iocs_text(text: str):
+    body = str(text or '')
+    ipv4 = re.findall(r'\b(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}\b', body)
+    urls = re.findall(r'\bhttps?://[^\s"\'<>]+', body, flags=re.IGNORECASE)
+    emails = re.findall(r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}\b', body)
+    hashes = re.findall(r'\b[a-fA-F0-9]{32}\b|\b[a-fA-F0-9]{40}\b|\b[a-fA-F0-9]{64}\b', body)
+    domains = re.findall(r'\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b', body)
+
+    blacklist = {'com', 'org', 'net', 'local', 'localhost'}
+    norm_domains = []
+    for d in domains:
+        dd = d.lower()
+        if dd in blacklist:
+            continue
+        if dd.startswith('http'):
+            continue
+        norm_domains.append(dd)
+
+    return {
+        'ipv4': _forensics_unique(ipv4),
+        'urls': _forensics_unique(urls),
+        'emails': _forensics_unique(emails),
+        'domains': _forensics_unique(norm_domains),
+        'hashes': _forensics_unique(hashes),
+    }
+
+
+def _forensics_build_analysis(raw: bytes, filename: str, mime_type: str, min_string_len: int):
+    strings_preview = _forensics_extract_strings(raw, min_len=min_string_len, max_items=120)
+    text_probe = '\n'.join(strings_preview)
+    iocs = _forensics_extract_iocs_text(text_probe)
+    entropy = _forensics_entropy(raw)
+    file_type = _forensics_detect_file_type(raw, filename, mime_type)
+
+    suspicious_keywords = [
+        'powershell', 'cmd.exe', 'rundll32', 'regsvr32', 'invoke-webrequest', 'wget ',
+        'curl ', 'base64', 'fromcharcode', 'mshta', 'wscript', 'cscript', 'certutil'
+    ]
+    lowered = text_probe.lower()
+    keyword_hits = [k for k in suspicious_keywords if k in lowered]
+
+    score = 0
+    factors = []
+    if entropy >= 7.2:
+        score += 30
+        factors.append('high_entropy')
+    elif entropy >= 6.8:
+        score += 16
+        factors.append('medium_entropy')
+
+    if file_type == 'windows-pe':
+        score += 20
+        factors.append('pe_executable')
+
+    ioc_count = sum(len(v) for v in iocs.values())
+    if ioc_count >= 12:
+        score += 22
+        factors.append('many_iocs')
+    elif ioc_count >= 5:
+        score += 12
+        factors.append('some_iocs')
+
+    if keyword_hits:
+        score += min(25, len(keyword_hits) * 5)
+        factors.append('suspicious_strings')
+
+    score = int(max(0, min(100, score)))
+    metadata = {
+        'file_type': file_type,
+        'mime_type': mime_type,
+        'suspicious_keywords': keyword_hits,
+        'ioc_total': ioc_count,
+        'printable_strings': len(strings_preview),
+        'risk_factors': factors,
+    }
+
+    return {
+        'file_type': file_type,
+        'entropy': entropy,
+        'risk_score': score,
+        'strings_preview': strings_preview[:30],
+        'iocs': iocs,
+        'ioc_counts': {k: len(v) for k, v in iocs.items()},
+        'metadata': metadata,
+    }
+
+
 @app.route('/api/incidents/<int:case_id>/report', methods=['GET'])
 def ir_case_report_route(case_id: int):
     user_id, err = _get_logged_in_user_id()
@@ -9920,24 +12564,55 @@ def ir_case_report_route(case_id: int):
     conn = None
     try:
         conn = get_db_conn()
-        c = conn.cursor()
-        c.execute("SELECT id, title, severity, status, description, created_at, updated_at FROM incident_cases WHERE id=%s AND user_id=%s", (case_id, user_id))
-        case_row = c.fetchone()
-        if not case_row:
+        report = _ir_build_report_payload(conn, case_id, user_id)
+        if not report:
             return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
-        c.execute("SELECT ioc_type, ioc_value, risk_score, created_at FROM incident_iocs WHERE case_id=%s ORDER BY id DESC", (case_id,))
-        iocs = c.fetchall()
-        report = {
-            "case": {
-                "id": case_row[0], "title": case_row[1], "severity": case_row[2], "status": case_row[3],
-                "description": case_row[4], "created_at": case_row[5], "updated_at": case_row[6]
-            },
-            "iocs": [
-                {"ioc_type": r[0], "ioc_value": r[1], "risk_score": r[2], "created_at": r[3]} for r in iocs
-            ],
-            "generated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
         return jsonify({"success": True, "report": report})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/incidents/<int:case_id>/report.pdf', methods=['GET'])
+def ir_case_report_pdf_route(case_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        report = _ir_build_report_payload(conn, case_id, user_id)
+        if not report:
+            return jsonify({"success": False, "error": "القضية غير موجودة"}), 404
+
+        c = report.get('case', {})
+        m = report.get('metrics', {})
+        lines = [
+            f"Incident Report - Case #{c.get('id', '')}",
+            f"Title: {c.get('title', '')}",
+            f"Severity/Priority: {c.get('severity', '')} / {c.get('priority', '')}",
+            f"Status: {c.get('status', '')}",
+            f"Category: {c.get('category', '')} | Source: {c.get('source', '')}",
+            f"Owner: {c.get('owner', '')}",
+            f"Created: {c.get('created_at', '')} | Updated: {c.get('updated_at', '')}",
+            f"SLA minutes: {c.get('sla_minutes', 0)} | Due: {c.get('due_at', '')}",
+            f"MTTR minutes: {m.get('mttr_minutes', 0)}",
+            f"IOC count: {m.get('ioc_count', 0)} | High-risk IOCs: {m.get('high_risk_iocs', 0)} | Mean IOC risk: {m.get('mean_ioc_risk', 0)}",
+            f"Evidence count: {m.get('evidence_count', 0)} | Notes: {m.get('note_count', 0)}",
+            "",
+            "Description:",
+            str(c.get('description', '')),
+            "",
+            "Generated by TITAN IR",
+            f"Generated at: {report.get('generated_at', '')}",
+        ]
+        pdf_bytes = _build_minimal_pdf_bytes(lines)
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"incident-{case_id}-report.pdf"
+        )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
@@ -9951,19 +12626,298 @@ def forensics_triage_route():
     if 'file' not in request.files:
         return jsonify({"success": False, "error": "يرجى اختيار ملف"}), 400
     file = request.files['file']
+    if not file:
+        return jsonify({"success": False, "error": "يرجى اختيار ملف صالح"}), 400
+
+    try:
+        min_string_len = int(request.form.get('min_string_len', 6) or 6)
+    except Exception:
+        min_string_len = 6
+    min_string_len = max(4, min(32, min_string_len))
+
     raw = file.read()
-    result = {
+    if not raw:
+        return jsonify({"success": False, "error": "الملف فارغ"}), 400
+
+    filename = secure_filename(file.filename or 'artifact.bin')
+    mime_type = (file.mimetype or 'application/octet-stream').strip()
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    analysis = _forensics_build_analysis(raw, filename, mime_type, min_string_len)
+    md5_val = hashlib.md5(raw).hexdigest()
+    sha1_val = hashlib.sha1(raw).hexdigest()
+    sha256_val = hashlib.sha256(raw).hexdigest()
+
+    conn = None
+    session_id = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO forensics_sessions
+            (user_id, filename, file_size, file_type, mime_type, md5, sha1, sha256, entropy, risk_score, summary_json, created_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+            """,
+            (
+                user_id,
+                filename,
+                len(raw),
+                analysis['file_type'],
+                mime_type,
+                md5_val,
+                sha1_val,
+                sha256_val,
+                float(analysis['entropy']),
+                int(analysis['risk_score']),
+                json.dumps(analysis['metadata'], ensure_ascii=False),
+                now,
+            ),
+        )
+        row = c.fetchone()
+        if not row:
+            conn.rollback()
+            return jsonify({"success": False, "error": "فشل حفظ جلسة التحليل"}), 500
+        session_id = int(row[0])
+
+        artifacts = [
+            ('hash_md5', md5_val, 'high'),
+            ('hash_sha1', sha1_val, 'high'),
+            ('hash_sha256', sha256_val, 'high'),
+        ]
+        for ip in analysis['iocs'].get('ipv4', [])[:80]:
+            artifacts.append(('ioc_ipv4', ip, 'high'))
+        for u in analysis['iocs'].get('urls', [])[:80]:
+            artifacts.append(('ioc_url', u, 'high'))
+        for em in analysis['iocs'].get('emails', [])[:80]:
+            artifacts.append(('ioc_email', em, 'medium'))
+        for dm in analysis['iocs'].get('domains', [])[:120]:
+            artifacts.append(('ioc_domain', dm, 'medium'))
+        for hv in analysis['iocs'].get('hashes', [])[:120]:
+            artifacts.append(('ioc_hash', hv, 'high'))
+        for s in analysis['strings_preview'][:25]:
+            artifacts.append(('string', s, 'low'))
+
+        for art in artifacts:
+            c.execute(
+                "INSERT INTO forensics_artifacts (session_id, artifact_type, artifact_value, confidence, created_at) VALUES (%s,%s,%s,%s,%s)",
+                (session_id, art[0], art[1], art[2], now)
+            )
+
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+    add_audit_log("Forensics Triage", f"session#{session_id} {filename} risk={analysis['risk_score']}", username=session.get('username', ''))
+    return jsonify({
         "success": True,
-        "filename": file.filename,
+        "session_id": session_id,
+        "filename": filename,
         "size_bytes": len(raw),
-        "md5": hashlib.md5(raw).hexdigest(),
-        "sha1": hashlib.sha1(raw).hexdigest(),
-        "sha256": hashlib.sha256(raw).hexdigest(),
-        "entropy_hint": round(len(set(raw)) / 256 * 8, 3) if raw else 0,
-        "triaged_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    add_audit_log("Forensics Triage", f"{file.filename} ({len(raw)} bytes)", username=session.get('username', ''))
-    return jsonify(result)
+        "mime_type": mime_type,
+        "file_type": analysis['file_type'],
+        "md5": md5_val,
+        "sha1": sha1_val,
+        "sha256": sha256_val,
+        "entropy": analysis['entropy'],
+        "risk_score": analysis['risk_score'],
+        "ioc_counts": analysis['ioc_counts'],
+        "strings_preview": analysis['strings_preview'],
+        "metadata": analysis['metadata'],
+        "triaged_at": now,
+    })
+
+
+@app.route('/api/forensics/summary', methods=['GET'])
+def forensics_summary_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*), COALESCE(AVG(entropy),0), COALESCE(SUM(CASE WHEN risk_score >= 70 THEN 1 ELSE 0 END),0) FROM forensics_sessions WHERE user_id=%s", (user_id,))
+        row = c.fetchone() or (0, 0, 0)
+
+        c.execute(
+            """
+            SELECT COUNT(*)
+            FROM forensics_artifacts fa
+            JOIN forensics_sessions fs ON fs.id = fa.session_id
+            WHERE fs.user_id=%s
+            """,
+            (user_id,)
+        )
+        art_count = int((c.fetchone() or [0])[0] or 0)
+
+        return jsonify({
+            "success": True,
+            "summary": {
+                "sessions": int(row[0] or 0),
+                "avg_entropy": round(float(row[1] or 0), 3),
+                "high_risk_sessions": int(row[2] or 0),
+                "artifacts": art_count,
+            }
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route('/api/forensics/history', methods=['GET'])
+def forensics_history_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT id, filename, file_size, file_type, mime_type, entropy, risk_score, created_at
+            FROM forensics_sessions
+            WHERE user_id=%s
+            ORDER BY id DESC
+            LIMIT 120
+            """,
+            (user_id,)
+        )
+        rows = c.fetchall() or []
+        sessions = [
+            {
+                "id": int(r[0]),
+                "filename": r[1],
+                "file_size": int(r[2] or 0),
+                "file_type": r[3],
+                "mime_type": r[4],
+                "entropy": float(r[5] or 0),
+                "risk_score": int(r[6] or 0),
+                "created_at": r[7],
+            }
+            for r in rows
+        ]
+        return jsonify({"success": True, "sessions": sessions})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route('/api/forensics/session/<int:session_id>', methods=['GET'])
+def forensics_session_detail_route(session_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT id, filename, file_size, file_type, mime_type, md5, sha1, sha256, entropy, risk_score, summary_json, created_at
+            FROM forensics_sessions
+            WHERE id=%s AND user_id=%s
+            """,
+            (session_id, user_id)
+        )
+        row = c.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "جلسة التحليل غير موجودة"}), 404
+
+        c.execute(
+            "SELECT artifact_type, artifact_value, confidence, created_at FROM forensics_artifacts WHERE session_id=%s ORDER BY id DESC LIMIT 600",
+            (session_id,)
+        )
+        art_rows = c.fetchall() or []
+
+        iocs = {
+            'ipv4': [],
+            'urls': [],
+            'emails': [],
+            'domains': [],
+            'hashes': [],
+        }
+        strings_preview = []
+        artifacts = []
+        for a in art_rows:
+            atype = str(a[0] or '')
+            aval = str(a[1] or '')
+            artifacts.append({
+                'artifact_type': atype,
+                'artifact_value': aval,
+                'confidence': a[2],
+                'created_at': a[3],
+            })
+            if atype == 'ioc_ipv4':
+                iocs['ipv4'].append(aval)
+            elif atype == 'ioc_url':
+                iocs['urls'].append(aval)
+            elif atype == 'ioc_email':
+                iocs['emails'].append(aval)
+            elif atype == 'ioc_domain':
+                iocs['domains'].append(aval)
+            elif atype in ('ioc_hash', 'hash_md5', 'hash_sha1', 'hash_sha256'):
+                iocs['hashes'].append(aval)
+            elif atype == 'string':
+                strings_preview.append(aval)
+
+        iocs = {k: _forensics_unique(v)[:200] for k, v in iocs.items()}
+        strings_preview = _forensics_unique(strings_preview)[:40]
+        ioc_counts = {k: len(v) for k, v in iocs.items()}
+
+        try:
+            summary_meta = json.loads(row[10] or '{}') if row[10] else {}
+        except Exception:
+            summary_meta = {}
+
+        return jsonify({
+            "success": True,
+            "session": {
+                "id": int(row[0]),
+                "filename": row[1],
+                "file_size": int(row[2] or 0),
+                "file_type": row[3],
+                "mime_type": row[4],
+                "md5": row[5],
+                "sha1": row[6],
+                "sha256": row[7],
+                "entropy": float(row[8] or 0),
+                "risk_score": int(row[9] or 0),
+                "created_at": row[11],
+            },
+            "ioc_counts": ioc_counts,
+            "iocs": iocs,
+            "strings_preview": strings_preview,
+            "metadata": summary_meta,
+            "artifacts_count": len(art_rows),
+            "artifacts": artifacts[:200],
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route('/api/forensics/extract-iocs', methods=['POST'])
+def forensics_extract_iocs_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    text = str((request.json or {}).get('text', '') or '').strip()
+    if not text:
+        return jsonify({"success": False, "error": "النص مطلوب"}), 400
+
+    iocs = _forensics_extract_iocs_text(text)
+    counts = {k: len(v) for k, v in iocs.items()}
+    add_audit_log("Forensics IOC Extract", f"len={len(text)} iocs={sum(counts.values())}", username=session.get('username', ''))
+    return jsonify({"success": True, "iocs": iocs, "counts": counts})
 
 
 @app.route('/api/brand/typosquatting', methods=['POST'])
@@ -9978,14 +12932,555 @@ def brand_typosquatting_route():
     return jsonify({"success": True, "domain": domain, "similar_domains": variants})
 
 
+@app.route('/api/brand/analyze-domain', methods=['POST'])
+def brand_analyze_domain_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    domain = str((request.json or {}).get('domain', '') or '').strip().lower()
+    if not domain or '.' not in domain:
+        return jsonify({"success": False, "error": "يرجى إدخال domain صالح"}), 400
+
+    report = _brand_build_domain_analysis(domain)
+    add_audit_log("Brand Domain Analysis", f"{domain} risk={report.get('risk_index', 0)}", username=session.get('username', ''))
+    return jsonify({"success": True, **report})
+
+
+@app.route('/api/brand/analyze-impersonation', methods=['POST'])
+def brand_analyze_impersonation_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    username = str((request.json or {}).get('username', '') or '').strip()
+    if not username:
+        return jsonify({"success": False, "error": "اسم المستخدم مطلوب"}), 400
+
+    report = _brand_build_impersonation_analysis(username)
+    if not report.get('success'):
+        return jsonify(report), 400
+    add_audit_log("Brand Impersonation Analysis", f"{username} risk={report.get('risk_index', 0)}", username=session.get('username', ''))
+    return jsonify(report)
+
+
+@app.route('/api/brand/watchlist', methods=['GET'])
+def brand_watchlist_list_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, asset_type, asset_value, label, created_at FROM brand_watchlist WHERE user_id=%s ORDER BY id DESC",
+            (user_id,)
+        )
+        rows = c.fetchall() or []
+        return jsonify({
+            "success": True,
+            "items": [
+                {"id": int(r[0]), "asset_type": r[1], "asset_value": r[2], "label": r[3], "created_at": r[4]}
+                for r in rows
+            ]
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/brand/watchlist', methods=['POST'])
+def brand_watchlist_add_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    req = request.json or {}
+    asset_type = str(req.get('asset_type', 'domain') or 'domain').strip().lower()
+    asset_value = str(req.get('asset_value', '') or '').strip().lower()
+    label = str(req.get('label', '') or '').strip()
+
+    if asset_type not in ('domain', 'username', 'keyword'):
+        asset_type = 'domain'
+    if not asset_value:
+        return jsonify({"success": False, "error": "قيمة الأصل مطلوبة"}), 400
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            "SELECT id FROM brand_watchlist WHERE user_id=%s AND asset_type=%s AND asset_value=%s",
+            (user_id, asset_type, asset_value)
+        )
+        if c.fetchone():
+            return jsonify({"success": False, "error": "الأصل موجود مسبقاً"}), 409
+
+        c.execute(
+            "INSERT INTO brand_watchlist (user_id, asset_type, asset_value, label, created_at) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+            (user_id, asset_type, asset_value, label, now)
+        )
+        row = c.fetchone()
+        conn.commit()
+        add_audit_log("Brand Watchlist Add", f"{asset_type}:{asset_value}", username=session.get('username', ''))
+        return jsonify({"success": True, "id": int(row[0]) if row else None})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/brand/watchlist/<int:item_id>', methods=['DELETE'])
+def brand_watchlist_delete_route(item_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("DELETE FROM brand_watchlist WHERE id=%s AND user_id=%s", (item_id, user_id))
+        conn.commit()
+        add_audit_log("Brand Watchlist Remove", f"item#{item_id}", username=session.get('username', ''))
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/brand/alerts', methods=['POST'])
+def brand_alerts_create_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    req = request.json or {}
+
+    alert_type = str(req.get('alert_type', 'domain_abuse') or 'domain_abuse').strip().lower()
+    target = str(req.get('target', '') or '').strip()
+    platform = str(req.get('platform', '') or '').strip()
+    severity = str(req.get('severity', '') or '').strip().lower()
+    details = str(req.get('details', '') or '').strip()
+    source_ref = str(req.get('source_ref', '') or '').strip()
+
+    try:
+        risk_score = int(req.get('risk_score', 0) or 0)
+    except Exception:
+        risk_score = 0
+    risk_score = max(0, min(100, risk_score))
+
+    if not target:
+        return jsonify({"success": False, "error": "Target مطلوب"}), 400
+    if alert_type not in ('domain_abuse', 'impersonation', 'fake_campaign', 'brand_leak'):
+        alert_type = 'domain_abuse'
+    if severity not in ('low', 'medium', 'high', 'critical'):
+        severity = _brand_severity_from_risk(risk_score)
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO brand_alerts
+            (user_id, alert_type, target, platform, severity, risk_score, status, details, source_ref, incident_case_id, created_at, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,'open',%s,%s,NULL,%s,%s)
+            RETURNING id
+            """,
+            (user_id, alert_type, target, platform, severity, risk_score, details, source_ref, now, now)
+        )
+        row = c.fetchone()
+        conn.commit()
+        alert_id = int(row[0]) if row else 0
+        add_audit_log("Brand Alert Created", f"alert#{alert_id} {alert_type} {target} sev={severity}", username=session.get('username', ''))
+        return jsonify({"success": True, "alert_id": alert_id})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/brand/alerts', methods=['GET'])
+def brand_alerts_list_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    q = str(request.args.get('q', '') or '').strip().lower()
+    severity = str(request.args.get('severity', 'all') or 'all').strip().lower()
+    status = str(request.args.get('status', 'all') or 'all').strip().lower()
+
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        sql = """
+            SELECT id, alert_type, target, platform, severity, risk_score, status, details, source_ref, incident_case_id, created_at, updated_at
+            FROM brand_alerts
+            WHERE user_id=%s
+        """
+        params: list[object] = [user_id]
+        if q:
+            like_q = f"%{q}%"
+            sql += " AND (LOWER(target) LIKE %s OR LOWER(details) LIKE %s OR LOWER(alert_type) LIKE %s)"
+            params.extend([like_q, like_q, like_q])
+        if severity in ('low', 'medium', 'high', 'critical'):
+            sql += " AND severity=%s"
+            params.append(severity)
+        if status in ('open', 'monitoring', 'mitigated', 'escalated'):
+            sql += " AND status=%s"
+            params.append(status)
+        sql += " ORDER BY id DESC LIMIT 300"
+
+        c.execute(sql, tuple(params))
+        rows = c.fetchall() or []
+        alerts = [
+            {
+                "id": int(r[0]), "alert_type": r[1], "target": r[2], "platform": r[3],
+                "severity": r[4], "risk_score": int(r[5] or 0), "status": r[6],
+                "details": r[7], "source_ref": r[8], "incident_case_id": r[9],
+                "created_at": r[10], "updated_at": r[11]
+            }
+            for r in rows
+        ]
+        return jsonify({"success": True, "alerts": alerts})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/brand/alerts/<int:alert_id>/status', methods=['POST'])
+def brand_alerts_status_route(alert_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    status = str((request.json or {}).get('status', 'open') or 'open').strip().lower()
+    if status not in ('open', 'monitoring', 'mitigated', 'escalated'):
+        return jsonify({"success": False, "error": "status غير صالح"}), 400
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            "UPDATE brand_alerts SET status=%s, updated_at=%s WHERE id=%s AND user_id=%s",
+            (status, now, alert_id, user_id)
+        )
+        conn.commit()
+        add_audit_log("Brand Alert Status", f"alert#{alert_id} -> {status}", username=session.get('username', ''))
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/brand/alerts/<int:alert_id>/promote-incident', methods=['POST'])
+def brand_alerts_promote_incident_route(alert_id: int):
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            "SELECT alert_type, target, platform, severity, risk_score, details, incident_case_id FROM brand_alerts WHERE id=%s AND user_id=%s",
+            (alert_id, user_id)
+        )
+        row = c.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "التنبيه غير موجود"}), 404
+
+        if row[6]:
+            return jsonify({"success": True, "case_id": int(row[6]), "already_linked": True})
+
+        alert_type, target, platform, severity, risk_score, details, _existing_case = row
+        incident_title = f"Brand Alert: {target}"
+        source = 'external_feed'
+        category = 'fraud' if str(alert_type) in ('impersonation', 'fake_campaign') else 'phishing'
+        owner = 'Brand-SOC'
+        sla_minutes = 180 if str(severity) in ('critical', 'high') else 360
+        due_at = (datetime.datetime.now() + datetime.timedelta(minutes=sla_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+        priority = _ir_recommended_priority(str(severity), int(risk_score or 0), False)
+
+        c.execute(
+            """
+            INSERT INTO incident_cases
+            (user_id, title, severity, priority, status, category, source, owner, sla_minutes, due_at, description, created_at, updated_at)
+            VALUES (%s,%s,%s,%s,'open',%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+            """,
+            (
+                user_id,
+                incident_title,
+                str(severity or 'medium'),
+                priority,
+                category,
+                source,
+                owner,
+                sla_minutes,
+                due_at,
+                f"Promoted from brand alert #{alert_id} ({alert_type}/{platform})\n\n{details}",
+                now,
+                now,
+            )
+        )
+        case_row = c.fetchone()
+        if not case_row:
+            conn.rollback()
+            return jsonify({"success": False, "error": "فشل إنشاء Incident"}), 500
+        case_id = int(case_row[0])
+
+        c.execute(
+            "INSERT INTO incident_iocs (case_id, ioc_type, ioc_value, risk_score, created_at) VALUES (%s,%s,%s,%s,%s)",
+            (case_id, 'brand_target', str(target), int(risk_score or 0), now)
+        )
+        c.execute(
+            "INSERT INTO incident_case_notes (case_id, note_type, note, created_by, created_at) VALUES (%s,%s,%s,%s,%s)",
+            (case_id, 'analysis', f"Escalated from Brand Alert #{alert_id}", session.get('username', ''), now)
+        )
+        c.execute(
+            "UPDATE brand_alerts SET status='escalated', incident_case_id=%s, updated_at=%s WHERE id=%s AND user_id=%s",
+            (case_id, now, alert_id, user_id)
+        )
+        conn.commit()
+        add_audit_log("Brand Escalation", f"alert#{alert_id} -> case#{case_id}", username=session.get('username', ''))
+        return jsonify({"success": True, "case_id": case_id, "priority": priority})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/brand/dashboard', methods=['GET'])
+def brand_dashboard_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM brand_watchlist WHERE user_id=%s", (user_id,))
+        watchlist = int((c.fetchone() or [0])[0] or 0)
+
+        c.execute("SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='open' THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN severity='critical' THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN status='escalated' THEN 1 ELSE 0 END),0) FROM brand_alerts WHERE user_id=%s", (user_id,))
+        row = c.fetchone() or (0, 0, 0, 0)
+        alerts = int(row[0] or 0)
+        open_count = int(row[1] or 0)
+        critical = int(row[2] or 0)
+        escalated = int(row[3] or 0)
+
+        return jsonify({
+            "success": True,
+            "summary": {
+                "watchlist": watchlist,
+                "alerts": alerts,
+                "open": open_count,
+                "critical": critical,
+                "escalated": escalated,
+            }
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
 @app.route('/api/social/simulate', methods=['POST'])
 def social_simulate_route():
     user_id, err = _get_logged_in_user_id()
     if err: return err
-    scenario_type = (request.json or {}).get('scenario_type', 'phishing_email')
+    req = request.json or {}
+    scenario_type = req.get('scenario_type', 'phishing_email')
+    sector = (req.get('sector') or '').strip().lower()
+    if scenario_type == 'sector_ar':
+        scenario_type = {
+            'banking': 'banking_ar',
+            'education': 'education_ar',
+            'healthcare': 'healthcare_ar'
+        }.get(sector, 'banking_ar')
     payload = create_social_defense_scenario(scenario_type)
-    add_audit_log("Social Engineering Drill", f"scenario={scenario_type}", username=session.get('username', ''))
+    add_audit_log("Social Engineering Drill", f"scenario={scenario_type} sector={sector or 'general'}", username=session.get('username', ''))
     return jsonify({"success": True, **payload})
+
+
+@app.route('/api/social/quiz/result', methods=['POST'])
+def social_quiz_result_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    req = request.json or {}
+
+    try:
+        question_id = int(req.get('question_id', 0))
+        selected_option = int(req.get('selected_option', -1))
+        correct_option = int(req.get('correct_option', -1))
+        is_correct = 1 if bool(req.get('is_correct', False)) else 0
+        score_after = int(req.get('score_after', 0))
+    except Exception:
+        return jsonify({"success": False, "error": "قيم غير صالحة"}), 400
+
+    if question_id < 0 or selected_option < 0 or correct_option < 0:
+        return jsonify({"success": False, "error": "البيانات ناقصة"}), 400
+
+    conn = None
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO social_quiz_results
+            (user_id, question_id, selected_option, correct_option, is_correct, score_after, answered_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (user_id, question_id, selected_option, correct_option, is_correct, score_after, now)
+        )
+        conn.commit()
+        add_audit_log("SE Quiz", f"q={question_id} correct={is_correct} score={score_after}", username=session.get('username', ''))
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/social/quiz/stats', methods=['GET'])
+def social_quiz_stats_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            "SELECT COUNT(*), COALESCE(SUM(is_correct), 0), COALESCE(MAX(score_after), 0) FROM social_quiz_results WHERE user_id=%s",
+            (user_id,)
+        )
+        total_answers, correct_answers, last_score = c.fetchone() or (0, 0, 0)
+
+        c.execute(
+            """
+            SELECT SUBSTRING(answered_at, 1, 10) AS day, COUNT(*), COALESCE(SUM(is_correct), 0)
+            FROM social_quiz_results
+            WHERE user_id=%s
+            GROUP BY day
+            ORDER BY day DESC
+            LIMIT 10
+            """,
+            (user_id,)
+        )
+        trend_rows = c.fetchall() or []
+        trend = [{"day": r[0], "answers": int(r[1] or 0), "correct": int(r[2] or 0)} for r in trend_rows][::-1]
+
+        accuracy = round((float(correct_answers) / float(total_answers) * 100.0), 2) if total_answers else 0.0
+        return jsonify({
+            "success": True,
+            "total_answers": int(total_answers or 0),
+            "correct_answers": int(correct_answers or 0),
+            "accuracy": accuracy,
+            "last_score": int(last_score or 0),
+            "trend": trend
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/social/risk/snapshot', methods=['POST'])
+def social_risk_snapshot_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    req = request.json or {}
+
+    try:
+        total_items = max(0, int(req.get('total_items', 0)))
+        high_count = max(0, int(req.get('high_count', 0)))
+        medium_count = max(0, int(req.get('medium_count', 0)))
+        low_count = max(0, int(req.get('low_count', 0)))
+        avg_risk = float(req.get('avg_risk', 0.0) or 0.0)
+    except Exception:
+        return jsonify({"success": False, "error": "مدخلات غير صالحة"}), 400
+
+    risk_index = min(100.0, max(0.0, (high_count * 35.0) + (medium_count * 18.0) + (low_count * 6.0)))
+    if total_items > 0:
+        risk_index = round(min(100.0, (risk_index / float(total_items)) + (avg_risk * 0.35)), 2)
+    else:
+        risk_index = 0.0
+
+    conn = None
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO social_risk_snapshots
+            (user_id, total_items, high_count, medium_count, low_count, avg_risk, risk_index, created_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (user_id, total_items, high_count, medium_count, low_count, avg_risk, risk_index, now)
+        )
+        conn.commit()
+        return jsonify({"success": True, "risk_index": risk_index})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+@app.route('/api/social/risk/trend', methods=['GET'])
+def social_risk_trend_route():
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT SUBSTRING(created_at, 1, 10) AS day,
+                   ROUND(AVG(risk_index)::numeric, 2) AS avg_risk_index,
+                   MAX(total_items) AS total_items,
+                   MAX(high_count) AS high_count,
+                   MAX(medium_count) AS medium_count,
+                   MAX(low_count) AS low_count
+            FROM social_risk_snapshots
+            WHERE user_id=%s
+            GROUP BY day
+            ORDER BY day DESC
+            LIMIT 14
+            """,
+            (user_id,)
+        )
+        rows = c.fetchall() or []
+        points = [
+            {
+                "day": r[0],
+                "risk_index": float(r[1] or 0.0),
+                "total_items": int(r[2] or 0),
+                "high_count": int(r[3] or 0),
+                "medium_count": int(r[4] or 0),
+                "low_count": int(r[5] or 0)
+            }
+            for r in rows
+        ][::-1]
+        latest = points[-1] if points else {
+            "day": "",
+            "risk_index": 0.0,
+            "total_items": 0,
+            "high_count": 0,
+            "medium_count": 0,
+            "low_count": 0
+        }
+        return jsonify({"success": True, "points": points, "latest": latest})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
 
 @app.route('/api/network/scan', methods=['GET'])
 def scan_network_route():
