@@ -1449,6 +1449,46 @@ def check_username_presence(username: str, mode: str = 'social') -> dict:
 
     def _probe_instagram(platform: str, url: str):
         """Instagram needs extra handling because web pages may redirect to login or rate-limit bots."""
+        def _ig_profile_lookup() -> dict:
+            api_candidates = [
+                f"https://www.instagram.com/api/v1/users/web_profile_info/?username={urllib.parse.quote(u)}",
+                f"https://i.instagram.com/api/v1/users/web_profile_info/?username={urllib.parse.quote(u)}",
+            ]
+            api_headers = {
+                **headers,
+                "X-IG-App-ID": "936619743392459",
+                "Referer": "https://www.instagram.com/",
+            }
+
+            last_status = 0
+            last_error = "instagram_probe_rate_limited"
+            for api_url in api_candidates:
+                try:
+                    rr = requests.get(api_url, headers=api_headers, timeout=7, allow_redirects=True)
+                    rr_status = int(rr.status_code)
+                    last_status = rr_status
+
+                    if rr_status == 200:
+                        try:
+                            payload = rr.json() if rr.text else {}
+                        except Exception:
+                            payload = {}
+                        user_obj = ((payload or {}).get('data') or {}).get('user')
+                        return {"decided": True, "exists": bool(user_obj), "status_code": rr_status}
+
+                    if rr_status in (404, 410):
+                        return {"decided": True, "exists": False, "status_code": rr_status}
+
+                    if rr_status in (401, 403, 429):
+                        last_error = "instagram_probe_rate_limited"
+                        continue
+
+                    last_error = f"instagram_probe_status_{rr_status}"
+                except Exception:
+                    continue
+
+            return {"decided": False, "exists": False, "status_code": last_status, "error": last_error}
+
         try:
             r = requests.get(url, headers=headers, timeout=7, allow_redirects=True)
             status = int(r.status_code)
@@ -1487,43 +1527,23 @@ def check_username_presence(username: str, mode: str = 'social') -> dict:
             )
 
             if needs_fallback:
-                api_url = f"https://i.instagram.com/api/v1/users/web_profile_info/?username={urllib.parse.quote(u)}"
-                api_headers = {
-                    **headers,
-                    "X-IG-App-ID": "936619743392459",
-                    "Referer": "https://www.instagram.com/",
-                }
-                rr = requests.get(api_url, headers=api_headers, timeout=7, allow_redirects=True)
-                rr_status = int(rr.status_code)
+                lookup = _ig_profile_lookup()
+                if lookup.get("decided"):
+                    return {
+                        "platform": platform,
+                        "url": url,
+                        "final_url": final_url,
+                        "status_code": int(lookup.get("status_code") or 0),
+                        "exists": bool(lookup.get("exists"))
+                    }
 
-                if rr_status == 200:
-                    try:
-                        payload = rr.json() if rr.text else {}
-                    except Exception:
-                        payload = {}
-                    user_obj = ((payload or {}).get('data') or {}).get('user')
-                    return {
-                        "platform": platform,
-                        "url": url,
-                        "final_url": final_url,
-                        "status_code": rr_status,
-                        "exists": bool(user_obj)
-                    }
-                if rr_status in (404, 410):
-                    return {
-                        "platform": platform,
-                        "url": url,
-                        "final_url": final_url,
-                        "status_code": rr_status,
-                        "exists": False
-                    }
                 return {
                     "platform": platform,
                     "url": url,
                     "final_url": final_url,
-                    "status_code": rr_status,
+                    "status_code": int(lookup.get("status_code") or 0),
                     "exists": False,
-                    "error": "instagram_probe_rate_limited"
+                    "error": str(lookup.get("error") or "instagram_probe_rate_limited")
                 }
 
             markers = not_found_markers + per_platform_markers.get(platform, [])
@@ -2580,7 +2600,7 @@ HTML_TEMPLATE = """
                     <button onclick="showTab('filelab')" id="btn-filelab" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span class="inline-block animate-pulse">📝</span> إخفاء نص TXT</button>
                     <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> تشفير الصور</button>
                     <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
-                    <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> فيديو مشفر</button>
+                    <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> اخفاء نص داخل فيديو</button>
                     <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
                     <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
                     <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
@@ -6710,6 +6730,13 @@ HTML_TEMPLATE = """
                             <span class="text-green-300 font-bold">${_osintEscape(r.platform)}</span>
                             <span class="text-[11px] text-gray-300 ml-2 font-mono" dir="ltr">${_osintEscape(r.url)}</span>
                         </a>`).join('') : '<div class="text-gray-500 text-xs">لا توجد حسابات مؤكدة حالياً.</div>'}
+                        ${unknown.length ? `<div class="mt-2 pt-2 border-t border-amber-900/30">
+                            <div class="text-[10px] text-amber-300 uppercase mb-1">Unknown / Rate Limited</div>
+                            ${unknown.map((r) => `<div class="mb-1 p-2 rounded bg-amber-900/10 border border-amber-800/30">
+                                <span class="text-amber-300 font-bold">${_osintEscape(r.platform)}</span>
+                                <span class="text-[11px] text-gray-300 ml-2 font-mono" dir="ltr">${_osintEscape(r.url || '')}</span>
+                            </div>`).join('')}
+                        </div>` : ''}
                     </div>
                 </div>
             `;
