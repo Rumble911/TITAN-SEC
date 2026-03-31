@@ -42,6 +42,7 @@ import smtplib
 from email.mime.text import MIMEText
 import urllib.request
 import json as _json
+import html
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -710,35 +711,6 @@ def init_db():
         )
     ''')
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS brand_watchlist (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            asset_type TEXT NOT NULL,
-            asset_value TEXT NOT NULL,
-            label TEXT DEFAULT '',
-            created_at TEXT NOT NULL
-        )
-    ''')
-
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS brand_alerts (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            alert_type TEXT NOT NULL,
-            target TEXT NOT NULL,
-            platform TEXT DEFAULT '',
-            severity TEXT DEFAULT 'medium',
-            risk_score INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'open',
-            details TEXT DEFAULT '',
-            source_ref TEXT DEFAULT '',
-            incident_case_id INTEGER DEFAULT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )
-    ''')
-
     conn.commit()
     
     # --- Create root user if not exists ---
@@ -876,7 +848,7 @@ def decrypt_data(encrypted_content: bytes, password: str) -> bytes:
         f = Fernet(key)
         return f.decrypt(data)
     except Exception:
-        raise ValueError("كلمة السر خاطئة أو الملف معطوب")
+        raise ValueError("كلمة السر خاطئة")
 
 
 _TXT_HIDE_PREFIX = '\u2063\u2062\u2061'
@@ -1299,45 +1271,6 @@ def video_lsb_decode(video_bytes: bytes) -> str:
     return "لم يتم العثور على بيانات مخفية داخل الفيديو"
 
 
-def scan_video_clip(video_bytes: bytes, original_name: str = '') -> dict:
-    """فحص سريع لخصائص الفيديو وتقدير السعة وإشارة وجود نص مخفي."""
-    try:
-        import cv2  # type: ignore
-    except Exception:
-        return {"success": False, "error": "مكتبات الفيديو غير متاحة"}
-
-    in_path = _save_temp_bytes(video_bytes, '.mp4')
-    cap = cv2.VideoCapture(in_path)
-    if not cap.isOpened():
-        cap.release()
-        os.remove(in_path)
-        return {"success": False, "error": "تعذر فتح ملف الفيديو"}
-
-    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-    duration = (frame_count / fps) if fps > 0 else 0.0
-    cap.release()
-    os.remove(in_path)
-
-    capacity_bits = max(frame_count, 0) * max(width, 0) * max(height, 0)
-    capacity_bytes = capacity_bits // 8
-    hidden_probe = video_lsb_decode(video_bytes)
-    has_hidden_payload = "لم يتم العثور" not in hidden_probe and "تعذر" not in hidden_probe
-
-    return {
-        "success": True,
-        "filename": original_name,
-        "fps": round(fps, 2),
-        "width": width,
-        "height": height,
-        "frame_count": frame_count,
-        "duration_seconds": round(duration, 2),
-        "estimated_capacity_bytes": capacity_bytes,
-        "has_hidden_payload": has_hidden_payload,
-    }
-
 # --- تنظيف ملفات PDF من الميتابيانات ---
 def clean_pdf_metadata(pdf_bytes: bytes) -> bytes:
     """إزالة الميتابيانات وكافة المعلومات الوصفية من ملف PDF"""
@@ -1462,112 +1395,6 @@ def scan_malware_file(file_path: str) -> dict:
     except Exception as e:
         return {"success": False, "message": "فشل رفع الملف", "error": str(e)}
 
-# --- فحص الأجهزة المتصلة بالشبكة المحلية (Network LAN Scanner) ---
-def scan_local_network():
-    devices = []
-    seen_keys = set()
-    local_ip = _dash_local_ip()
-
-    def _safe_decode(raw: bytes) -> str:
-        for enc in ('utf-8', 'cp1256', 'cp1252', 'latin1'):
-            try:
-                return raw.decode(enc)
-            except Exception:
-                continue
-        return raw.decode('latin1', errors='ignore')
-
-    def _classify_device(ip: str):
-        icon = "💻"
-        label = "جهاز مستخدم"
-        if ip.endswith('.1'):
-            icon = "🌐"
-            label = "جهاز التوجيه"
-        elif ip.endswith('.10') or ip.endswith('.20'):
-            icon = "📱"
-            label = "هاتف محمول"
-        return icon, label
-
-    def _reverse_dns(ip: str) -> str:
-        try:
-            name = socket.gethostbyaddr(ip)[0]
-            return (name or '').strip()
-        except Exception:
-            return ''
-
-    def _push_device(ip: str, mac: str, type_: str):
-        if not ip:
-            return
-        if ip.startswith('224.') or ip.startswith('239.') or ip == '255.255.255.255':
-            return
-
-        norm_mac = (mac or '').replace('-', ':').upper()
-        key = (ip, norm_mac)
-        if key in seen_keys:
-            return
-        seen_keys.add(key)
-
-        icon, label = _classify_device(ip)
-        is_self = ip == local_ip
-        if is_self:
-            icon = "🛡️"
-            label = "هذا جهازك"
-        devices.append({
-            "ip": ip,
-            "mac": norm_mac or "غير متاح",
-            "type": (type_ or 'dynamic').strip(),
-            "icon": icon,
-            "label": label,
-            "hostname": _reverse_dns(ip),
-            "is_self": is_self
-        })
-
-    try:
-        cmd = "arp -a"
-        output = _safe_decode(subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT))
-
-        ip_re = re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
-        mac_re = re.compile(r'\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b')
-
-        for raw_line in output.splitlines():
-            line = raw_line.strip()
-            if not line:
-                continue
-            ip_m = ip_re.search(line)
-            mac_m = mac_re.search(line)
-            if ip_m and mac_m:
-                type_guess = 'dynamic' if 'dynamic' in line.lower() else ('static' if 'static' in line.lower() else 'unknown')
-                _push_device(ip_m.group(0), mac_m.group(0), type_guess)
-
-        # Fallback for Linux/macOS-like environments where arp format differs.
-        if not devices:
-            try:
-                neigh_out = _safe_decode(subprocess.check_output("ip neigh", shell=True, stderr=subprocess.STDOUT))
-                for raw_line in neigh_out.splitlines():
-                    line = raw_line.strip()
-                    ip_m = ip_re.search(line)
-                    mac_m = mac_re.search(line)
-                    if ip_m and mac_m:
-                        type_guess = 'reachable' if 'REACHABLE' in line.upper() else 'neighbor'
-                        _push_device(ip_m.group(0), mac_m.group(0), type_guess)
-            except Exception:
-                pass
-
-        devices.sort(key=lambda d: list(map(int, d["ip"].split('.'))))
-        return {
-            "success": True,
-            "devices": devices,
-            "count": len(devices),
-            "local_ip": local_ip
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"فشل الفحص: {str(e)}",
-            "devices": [],
-            "count": 0
-        }
-
-
 def check_username_presence(username: str, mode: str = 'social') -> dict:
     u = (username or '').strip()
     if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', u):
@@ -1620,8 +1447,107 @@ def check_username_presence(username: str, mode: str = 'social') -> dict:
         "Accept-Language": "en-US,en;q=0.9"
     }
 
+    def _probe_instagram(platform: str, url: str):
+        """Instagram needs extra handling because web pages may redirect to login or rate-limit bots."""
+        try:
+            r = requests.get(url, headers=headers, timeout=7, allow_redirects=True)
+            status = int(r.status_code)
+            body = (r.text or '').lower()
+            final_url = str(r.url or '')
+            final_url_l = final_url.lower()
+
+            if status in (404, 410):
+                return {
+                    "platform": platform,
+                    "url": url,
+                    "final_url": final_url,
+                    "status_code": status,
+                    "exists": False
+                }
+
+            # Strong positive signals from web profile response.
+            if status == 200 and (
+                f'"username":"{u.lower()}"' in body
+                or f'https://www.instagram.com/{u.lower()}/' in body
+            ):
+                return {
+                    "platform": platform,
+                    "url": url,
+                    "final_url": final_url,
+                    "status_code": status,
+                    "exists": True
+                }
+
+            # If IG redirects to login/challenge or returns anti-bot response,
+            # use a dedicated profile endpoint before deciding it's not found.
+            needs_fallback = (
+                '/accounts/login' in final_url_l
+                or '/challenge/' in final_url_l
+                or status in (301, 302, 307, 308, 401, 403, 429)
+            )
+
+            if needs_fallback:
+                api_url = f"https://i.instagram.com/api/v1/users/web_profile_info/?username={urllib.parse.quote(u)}"
+                api_headers = {
+                    **headers,
+                    "X-IG-App-ID": "936619743392459",
+                    "Referer": "https://www.instagram.com/",
+                }
+                rr = requests.get(api_url, headers=api_headers, timeout=7, allow_redirects=True)
+                rr_status = int(rr.status_code)
+
+                if rr_status == 200:
+                    try:
+                        payload = rr.json() if rr.text else {}
+                    except Exception:
+                        payload = {}
+                    user_obj = ((payload or {}).get('data') or {}).get('user')
+                    return {
+                        "platform": platform,
+                        "url": url,
+                        "final_url": final_url,
+                        "status_code": rr_status,
+                        "exists": bool(user_obj)
+                    }
+                if rr_status in (404, 410):
+                    return {
+                        "platform": platform,
+                        "url": url,
+                        "final_url": final_url,
+                        "status_code": rr_status,
+                        "exists": False
+                    }
+                return {
+                    "platform": platform,
+                    "url": url,
+                    "final_url": final_url,
+                    "status_code": rr_status,
+                    "exists": False,
+                    "error": "instagram_probe_rate_limited"
+                }
+
+            markers = not_found_markers + per_platform_markers.get(platform, [])
+            exists = not any(m in body for m in markers)
+            return {
+                "platform": platform,
+                "url": url,
+                "final_url": final_url,
+                "status_code": status,
+                "exists": exists
+            }
+        except Exception as e:
+            return {
+                "platform": platform,
+                "url": url,
+                "status_code": 0,
+                "exists": False,
+                "error": str(e)
+            }
+
     def _probe(item):
         platform, url = item
+        if platform == 'instagram':
+            return _probe_instagram(platform, url)
         try:
             r = requests.get(url, headers=headers, timeout=7, allow_redirects=True)
             status = r.status_code
@@ -1631,6 +1557,15 @@ def check_username_presence(username: str, mode: str = 'social') -> dict:
             elif status in (200, 301, 302, 307, 308):
                 markers = not_found_markers + per_platform_markers.get(platform, [])
                 exists = not any(m in body for m in markers)
+            elif status in (401, 403, 429):
+                return {
+                    "platform": platform,
+                    "url": url,
+                    "final_url": str(r.url),
+                    "status_code": status,
+                    "exists": False,
+                    "error": "probe_rate_limited"
+                }
             else:
                 exists = False
             return {
@@ -1671,126 +1606,6 @@ def check_username_presence(username: str, mode: str = 'social') -> dict:
         "unknown": unknown,
         "all_results": rows,
         "checked_at": datetime.datetime.utcnow().isoformat() + 'Z'
-    }
-
-
-def generate_typosquatting_variants(domain: str) -> list[str]:
-    d = (domain or '').strip().lower()
-    if '.' not in d:
-        return []
-    name, ext = d.rsplit('.', 1)
-    variants = set()
-    if len(name) > 2:
-        variants.add(name[:-1] + '.' + ext)
-        variants.add(name[1:] + '.' + ext)
-        variants.add(name[0] + name[0] + name[1:] + '.' + ext)
-    variants.add(name.replace('o', '0') + '.' + ext)
-    variants.add(name.replace('l', '1') + '.' + ext)
-    variants.add(name.replace('e', '3') + '.' + ext)
-    variants.add(name + '-secure.' + ext)
-    variants.add(name + '-login.' + ext)
-    return sorted(v for v in variants if v != d)[:25]
-
-
-def _brand_severity_from_risk(risk_score: int) -> str:
-    n = max(0, min(100, int(risk_score or 0)))
-    if n >= 80:
-        return 'critical'
-    if n >= 60:
-        return 'high'
-    if n >= 35:
-        return 'medium'
-    return 'low'
-
-
-def _brand_rank_variant(base_domain: str, variant: str) -> tuple[int, str]:
-    base = (base_domain or '').strip().lower()
-    cand = (variant or '').strip().lower()
-    if '.' not in base or '.' not in cand:
-        return 0, 'invalid'
-    base_name = base.rsplit('.', 1)[0]
-
-    score = 20
-    reasons = []
-    if '-login' in cand or '-secure' in cand:
-        score += 25
-        reasons.append('credential_lure_pattern')
-    if any(ch.isdigit() for ch in cand):
-        score += 15
-        reasons.append('digit_substitution')
-    if cand.count('-') >= 1:
-        score += 8
-        reasons.append('hyphenation')
-    if cand.endswith(base.split('.')[-1]):
-        score += 10
-        reasons.append('same_tld')
-    if abs(len(cand) - len(base)) <= 2:
-        score += 12
-        reasons.append('near_length')
-    if base_name and base_name[0] in cand[:2]:
-        score += 6
-        reasons.append('visual_similarity')
-
-    return min(100, score), ','.join(reasons) if reasons else 'baseline'
-
-
-def _brand_build_domain_analysis(domain: str) -> dict:
-    d = (domain or '').strip().lower()
-    variants = generate_typosquatting_variants(d)
-    ranked = []
-    for v in variants:
-        sc, reason = _brand_rank_variant(d, v)
-        ranked.append({"domain": v, "risk_score": sc, "reason": reason})
-    ranked.sort(key=lambda x: int(x.get('risk_score', 0)), reverse=True)
-
-    if ranked:
-        top = ranked[:8]
-        risk_index = int(round(sum(int(x.get('risk_score', 0)) for x in top) / max(1, len(top))))
-    else:
-        risk_index = 0
-
-    return {
-        "domain": d,
-        "risk_index": max(0, min(100, risk_index)),
-        "variants": ranked,
-    }
-
-
-def _brand_build_impersonation_analysis(username: str) -> dict:
-    u = (username or '').strip()
-    base = check_username_presence(u, mode='social')
-    if not base.get('success'):
-        return {"success": False, "error": base.get('error', 'فشل فحص الانتحال')}
-
-    found = base.get('found', []) or []
-    found_platforms = {str(x.get('platform', '')).lower() for x in found}
-    priority_platforms = ['twitter', 'instagram', 'facebook', 'linkedin', 'youtube', 'tiktok', 'telegram', 'github']
-    missing_priority = [p for p in priority_platforms if p not in found_platforms]
-
-    checked_count = int(base.get('checked_count', 0) or 0)
-    found_count = int(base.get('found_count', 0) or 0)
-    unknown_count = len(base.get('unknown', []) or [])
-
-    score = 20
-    score += min(35, len(missing_priority) * 5)
-    score += min(20, max(0, checked_count - found_count) // 3)
-    score += min(15, unknown_count * 2)
-    if found_count >= 6:
-        score -= 12
-    if found_count >= 10:
-        score -= 8
-    score = max(0, min(100, int(score)))
-
-    return {
-        "success": True,
-        "username": u,
-        "risk_index": score,
-        "found": found,
-        "missing_priority": missing_priority,
-        "checked_count": checked_count,
-        "found_count": found_count,
-        "unknown_count": unknown_count,
-        "checked_at": base.get('checked_at', ''),
     }
 
 
@@ -2749,11 +2564,10 @@ HTML_TEMPLATE = """
                     <div class="tab-group-title px-1"><span>🧭</span> التحليل والاستقصاء</div>
                     <div class="tab-grid">
                     <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
-                    <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> غرفة الدردشة</button>
+                    <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
                     <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
                     <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
                     <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
-                    <button onclick="showTab('brand')" id="btn-brand" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🛡️</span> حماية العلامة</button>
                     <button onclick="showTab('ctf')" id="btn-ctf" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span class="inline-block animate-pulse">🏁</span> CTF</button>
                     <button onclick="showTab('se')" id="btn-se" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🎭</span> الهندسة الاجتماعية</button>
                 </div>
@@ -3301,13 +3115,7 @@ HTML_TEMPLATE = """
 
                 <!-- ===== VIDEO STEGANOGRAPHY SECTION ===== -->
                 <div id="video-section" class="hidden space-y-6">
-                    <h2 class="text-xl font-bold text-rose-400 border-b border-slate-700 pb-2">🎬 فحص وإخفاء البيانات داخل الفيديو</h2>
-                    <div class="bg-slate-900/50 p-4 rounded-2xl border border-rose-500/20 space-y-3">
-                        <label class="block text-sm text-rose-400 font-bold">🧪 فحص مقطع فيديو:</label>
-                        <input type="file" id="videoScanFile" accept="video/*" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-rose-600/10 file:text-rose-400 hover:file:bg-rose-600/20 border border-slate-700 p-2 rounded-xl">
-                        <button onclick="scanVideoClip()" class="w-full py-2 bg-rose-700/40 hover:bg-rose-700/60 rounded-lg text-sm font-bold border border-rose-700/40">فحص خصائص الفيديو 🔍</button>
-                        <pre id="videoScanResult" class="hidden p-3 bg-black/50 rounded-xl border border-slate-800 text-[11px] text-rose-200 whitespace-pre-wrap overflow-x-auto max-h-44"></pre>
-                    </div>
+                    <h2 class="text-xl font-bold text-rose-400 border-b border-slate-700 pb-2">🎬 اخفاء نص داخل فيديو</h2>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="bg-slate-900/50 p-6 rounded-2xl border border-cyan-500/20">
@@ -3327,18 +3135,6 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
 
-                    <div class="bg-slate-900/50 p-6 rounded-2xl border border-emerald-500/20 space-y-4">
-                        <label class="block text-sm text-emerald-400 font-bold">🔐 تشفير ملف الفيديو بالكامل (وليس النص فقط):</label>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <input type="file" id="videoFileCrypt" accept="video/*,.titan" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-600/10 file:text-emerald-400 hover:file:bg-emerald-600/20 border border-slate-700 p-2 rounded-xl">
-                            <input type="password" id="videoFileCryptPass" placeholder="كلمة سر تشفير/فك ملف الفيديو" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-emerald-500 outline-none">
-                        </div>
-                        <div class="flex flex-col md:flex-row gap-3">
-                            <button onclick="processVideoFile('encrypt')" class="flex-1 py-3 bg-emerald-700/60 hover:bg-emerald-600 rounded-xl font-bold transition-all border border-emerald-700/40">تشفير الملف الكامل 📦</button>
-                            <button onclick="processVideoFile('decrypt')" class="flex-1 py-3 bg-lime-700/60 hover:bg-lime-600 rounded-xl font-bold transition-all border border-lime-700/40">فك تشفير الملف الكامل 📂</button>
-                        </div>
-                        <div class="text-[11px] text-gray-500">ينتج ملف مشفر بامتداد .titan ويمكن استعادته بنفس كلمة السر.</div>
-                    </div>
                 </div>
             <!-- ===== VAULT SECTION ===== -->
             <div id="vault-section" class="hidden space-y-4">
@@ -3584,26 +3380,11 @@ HTML_TEMPLATE = """
                     <div id="phoneResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm"></div>
                 </div>
 
-                <!-- Local LAN Monitor -->
-                <div>
-                    <h2 class="text-xl font-bold text-cyan-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>🌐</span> رادار الشبكة المحلية (LAN Monitor)
-                    </h2>
-                    <p class="text-xs text-gray-400 mb-3">اكتشف جميع الأجهزة المتصلة معك على نفس شبكة Wi-Fi محلياً لاكتشاف المتطفلين.</p>
-                    <button id="btnLanScan" onclick="scanLanNetwork()" class="w-full bg-cyan-900/30 hover:bg-cyan-800 px-6 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-400 flex items-center justify-center gap-2 mb-4">
-                        <span>مسح الشبكة للبحث عن دخلاء</span>
-                        <div id="lanLoader" class="hidden w-4 h-4 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-                    </button>
-                    <button id="btnLanExport" onclick="exportLanCsv()" class="w-full bg-slate-900/60 hover:bg-slate-800 px-5 py-2.5 rounded-xl font-bold border border-slate-700 transition-all text-slate-300 flex items-center justify-center gap-2 mb-3 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        <span>تصدير النتائج CSV</span>
-                    </button>
-                    <div id="lanResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 max-h-60 overflow-y-auto custom-scrollbar"></div>
-                </div>
             </div>
 
             <div id="ghost-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-pink-400 border-b border-slate-700 pb-2 flex items-center gap-2">
-                    <span>🔥</span> قنوات الشبح
+                    <span>🔥</span> قنوات الدردشة والرسائل الأمنة
                 </h2>
                 <p class="text-xs text-gray-400">دمج كامل بين رسائل لمرة واحدة وغرفة دردشة مشفرة ذات تدمير فوري للرسائل.</p>
 
@@ -3972,104 +3753,6 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <div id="brand-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-cyan-400 border-b border-slate-700 pb-2">🛡️ Brand & Social Protection</h2>
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
-                        <h3 class="text-sm font-bold text-cyan-300">Brand Command Dashboard</h3>
-                        <button onclick="brandRefreshDashboard()" class="px-3 py-1 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">تحديث</button>
-                    </div>
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Watchlist</div><div id="brandSumWatchlist" class="text-gray-100 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Alerts</div><div id="brandSumAlerts" class="text-gray-100 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Open Alerts</div><div id="brandSumOpen" class="text-amber-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Critical</div><div id="brandSumCritical" class="text-red-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Escalated</div><div id="brandSumEscalated" class="text-emerald-300 font-bold">0</div></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3 xl:col-span-2">
-                        <h3 class="text-sm font-bold text-cyan-300">Domain Defense Lab</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <input id="brandDomainInput" type="text" placeholder="example.com" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono md:col-span-2" dir="ltr">
-                            <button onclick="brandCheckTypos()" class="py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">تحليل النطاق</button>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <input id="brandWatchlistLabel" type="text" placeholder="Label / Team" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <button onclick="brandAddWatchlist('domain')" class="py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">إضافة للـ Watchlist</button>
-                        </div>
-                        <button onclick="brandCreateAlertFromLastDomain()" class="w-full py-2 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">Create Alert From Domain Analysis</button>
-                        <div id="brandTyposResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-emerald-300">Protected Assets Watchlist</h3>
-                        <div id="brandWatchlist" class="p-2 rounded bg-black/40 border border-slate-700 max-h-72 overflow-y-auto text-xs"></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3 xl:col-span-2">
-                        <h3 class="text-sm font-bold text-indigo-300">Impersonation Intel Lab</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <input id="brandUserInput" type="text" placeholder="brand_username" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono md:col-span-2" dir="ltr">
-                            <button onclick="brandCheckImpersonation()" class="py-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تحليل الانتحال</button>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <input id="brandWatchlistUserLabel" type="text" placeholder="Label / Department" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <button onclick="brandAddWatchlist('username')" class="py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">حماية الحساب في Watchlist</button>
-                        </div>
-                        <button onclick="brandCreateAlertFromLastImpersonation()" class="w-full py-2 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">Create Alert From Impersonation Analysis</button>
-                        <div id="brandUserResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-amber-300">Manual Alert Intake</h3>
-                        <select id="brandAlertType" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="domain_abuse">Domain Abuse</option>
-                            <option value="impersonation">Impersonation</option>
-                            <option value="fake_campaign">Fake Campaign</option>
-                        </select>
-                        <input id="brandAlertTarget" type="text" placeholder="Target (domain / account)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
-                        <input id="brandAlertPlatform" type="text" placeholder="Platform (optional)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
-                        <select id="brandAlertSeverity" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="low">Low</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
-                            <option value="critical">Critical</option>
-                        </select>
-                        <textarea id="brandAlertDetails" rows="5" placeholder="Context, indicators, references..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></textarea>
-                        <button onclick="brandCreateManualAlert()" class="w-full py-2 rounded bg-amber-900/40 border border-amber-800/50 text-amber-300 text-xs font-bold">حفظ التنبيه</button>
-                    </div>
-                </div>
-
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40 space-y-3">
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
-                        <h3 class="text-sm font-bold text-red-300">Alert Board & Escalation Desk</h3>
-                        <button onclick="brandLoadAlerts()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">تحديث</button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                        <input id="brandAlertSearch" type="text" placeholder="search target/details" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                        <select id="brandFilterSeverity" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="all">All Severity</option>
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                            <option value="critical">Critical</option>
-                        </select>
-                        <select id="brandFilterStatus" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="all">All Status</option>
-                            <option value="open">Open</option>
-                            <option value="monitoring">Monitoring</option>
-                            <option value="mitigated">Mitigated</option>
-                            <option value="escalated">Escalated</option>
-                        </select>
-                        <button onclick="brandLoadAlerts()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs font-bold text-gray-300">Apply</button>
-                    </div>
-                    <div id="brandAlertBoard" class="p-2 rounded bg-black/40 border border-slate-700 max-h-96 overflow-y-auto text-xs"></div>
-                </div>
-            </div>
 
             <div id="se-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-pink-400 border-b border-slate-700 pb-2">🎭 Social Engineering Defense</h2>
@@ -5443,7 +5126,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','ctf','ir','forensics','brand','se','audio','video','qr','identity','admin'];
+        const ALL_TABS = ['dash','pass','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','ctf','ir','forensics','se','audio','video','qr','identity','admin'];
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
 
@@ -5836,7 +5519,6 @@ HTML_TEMPLATE = """
             if(type === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if(type === 'ir' && typeof irInitSection === 'function') irInitSection();
             if(type === 'forensics' && typeof forensicsInitSection === 'function') forensicsInitSection();
-            if(type === 'brand' && typeof brandInitSection === 'function') brandInitSection();
             if(type === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
 
@@ -8106,284 +7788,6 @@ HTML_TEMPLATE = """
             if (currentForensicsSessionId) await forensicsLoadSessionDetail(currentForensicsSessionId);
         }
 
-        let brandLastDomainAnalysis = null;
-        let brandLastImpersonationAnalysis = null;
-
-        function _brandSeverityClass(sev) {
-            const s = String(sev || 'medium').toLowerCase();
-            if (s === 'critical') return 'text-red-300 border-red-800/60 bg-red-900/20';
-            if (s === 'high') return 'text-amber-300 border-amber-800/60 bg-amber-900/20';
-            if (s === 'low') return 'text-emerald-300 border-emerald-800/60 bg-emerald-900/20';
-            return 'text-cyan-300 border-cyan-800/60 bg-cyan-900/20';
-        }
-
-        async function brandRefreshDashboard() {
-            try {
-                const res = await fetch('/api/brand/dashboard');
-                const data = await res.json();
-                if (!res.ok || !data.success) return;
-                const s = data.summary || {};
-                const set = (id, v) => {
-                    const el = document.getElementById(id);
-                    if (el) el.textContent = String(v ?? 0);
-                };
-                set('brandSumWatchlist', s.watchlist || 0);
-                set('brandSumAlerts', s.alerts || 0);
-                set('brandSumOpen', s.open || 0);
-                set('brandSumCritical', s.critical || 0);
-                set('brandSumEscalated', s.escalated || 0);
-            } catch (_) {}
-        }
-
-        async function brandAddWatchlist(assetType) {
-            const type = String(assetType || 'domain').toLowerCase();
-            const value = (type === 'username' ? (document.getElementById('brandUserInput')?.value || '') : (document.getElementById('brandDomainInput')?.value || '')).trim();
-            const label = (type === 'username' ? (document.getElementById('brandWatchlistUserLabel')?.value || '') : (document.getElementById('brandWatchlistLabel')?.value || '')).trim();
-            if (!value) return titanAlert('أدخل قيمة الأصل أولاً.');
-            try {
-                const res = await fetch('/api/brand/watchlist', {
-                    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({asset_type: type, asset_value: value, label})
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل الإضافة');
-                titanAlert('✅ تمت إضافة الأصل إلى قائمة الحماية');
-                await Promise.all([brandLoadWatchlist(), brandRefreshDashboard()]);
-            } catch (e) {
-                titanAlert(`فشل الإضافة: ${e.message || e}`);
-            }
-        }
-
-        async function brandRemoveWatchlist(id) {
-            if (!confirm('حذف هذا الأصل من الـ Watchlist؟')) return;
-            try {
-                const res = await fetch(`/api/brand/watchlist/${id}`, { method: 'DELETE' });
-                const data = await res.json();
-                if (!res.ok || !data.success) return titanAlert(data.error || 'فشل الحذف');
-                await Promise.all([brandLoadWatchlist(), brandRefreshDashboard()]);
-            } catch (e) {
-                titanAlert(`فشل الحذف: ${e.message || e}`);
-            }
-        }
-
-        async function brandLoadWatchlist() {
-            const box = document.getElementById('brandWatchlist');
-            if (!box) return;
-            setResultLoading(box, 'Watchlist', 'Loading protected assets...');
-            const res = await fetch('/api/brand/watchlist');
-            const data = await res.json();
-            if (!res.ok || !data.success) {
-                setResultError(box, data.error || 'Load failed');
-                return;
-            }
-            const rows = data.items || [];
-            if (!rows.length) {
-                setResultList(box, 'Watchlist', [], { badge: '0', emptyText: 'لا توجد أصول محمية بعد.' });
-                return;
-            }
-            setResultMarkup(
-                box,
-                'Watchlist',
-                rows.map((r) => `
-                    <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/50">
-                        <div class="flex items-center justify-between gap-2">
-                            <div>
-                                <div class="text-xs text-gray-100 font-bold">${_resultEscape(r.asset_value || '')}</div>
-                                <div class="text-[10px] text-gray-500">${_resultEscape(r.asset_type || '')} | ${_resultEscape(r.label || '-')} | ${_resultEscape(r.created_at || '')}</div>
-                            </div>
-                            <button onclick="brandRemoveWatchlist(${r.id})" class="px-2 py-1 rounded border border-red-800/50 bg-red-900/20 text-red-300 text-[10px]">Remove</button>
-                        </div>
-                    </div>
-                `).join(''),
-                { badge: `${rows.length} Assets` }
-            );
-        }
-
-        async function brandCheckTypos() {
-            const domain = (document.getElementById('brandDomainInput')?.value || '').trim();
-            const out = document.getElementById('brandTyposResult');
-            if (!domain || !out) return titanAlert('اكتب دومين أولاً.');
-            setResultLoading(out, 'Domain Defense', 'Analyzing typosquatting risk...');
-
-            const res = await fetch('/api/brand/analyze-domain', {
-                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({domain})
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) {
-                setResultError(out, data.error || 'Analysis failed');
-                return;
-            }
-            brandLastDomainAnalysis = data;
-            const rows = data.variants || [];
-            setResultMarkup(
-                out,
-                'Domain Defense',
-                `<div class="text-xs mb-2">Risk Index: <span class="font-bold ${data.risk_index >= 70 ? 'text-red-300' : (data.risk_index >= 40 ? 'text-amber-300' : 'text-emerald-300')}">${_resultEscape(data.risk_index || 0)}/100</span></div>
-                 <div class="space-y-2">
-                 ${rows.slice(0, 25).map((r) => `<div class="p-2 rounded border border-slate-700 bg-slate-900/60"><div class="font-mono text-gray-100" dir="ltr">${_resultEscape(r.domain || '')}</div><div class="text-[10px] text-gray-500">score=${_resultEscape(r.risk_score || 0)} | ${_resultEscape(r.reason || '')}</div></div>`).join('')}
-                 </div>`,
-                { badge: `${rows.length} Variants`, riskScore: Number(data.risk_index || 0) }
-            );
-        }
-
-        async function brandCheckImpersonation() {
-            const username = (document.getElementById('brandUserInput')?.value || '').trim();
-            const out = document.getElementById('brandUserResult');
-            if (!username || !out) return titanAlert('اكتب اسم المستخدم.');
-            setResultLoading(out, 'Impersonation Intel', 'Scanning social impersonation surface...');
-
-            const res = await fetch('/api/brand/analyze-impersonation', {
-                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username})
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) {
-                setResultError(out, data.error || 'Failed');
-                return;
-            }
-            brandLastImpersonationAnalysis = data;
-            const found = data.found || [];
-            const missing = data.missing_priority || [];
-            setResultMarkup(
-                out,
-                'Impersonation Intel',
-                `<div class="text-xs mb-2">Risk Index: <span class="font-bold ${data.risk_index >= 70 ? 'text-red-300' : (data.risk_index >= 40 ? 'text-amber-300' : 'text-emerald-300')}">${_resultEscape(data.risk_index || 0)}/100</span></div>
-                <div class="text-[11px] mb-2 text-gray-300">Found profiles: ${_resultEscape(found.length || 0)} | Missing priority platforms: ${_resultEscape(missing.length || 0)}</div>
-                <div class="space-y-2">
-                    ${found.slice(0, 16).map((r) => `<div class="p-2 rounded border border-slate-700 bg-slate-900/60"><a href="${_osintEscape(r.url)}" target="_blank" rel="noopener noreferrer" class="text-cyan-300">${_osintEscape(r.platform)}</a></div>`).join('') || '<div class="text-gray-500">No visible profiles found</div>'}
-                </div>`,
-                { badge: 'Intel', riskScore: Number(data.risk_index || 0) }
-            );
-        }
-
-        async function brandCreateAlert(payload) {
-            const res = await fetch('/api/brand/alerts', {
-                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) {
-                titanAlert(data.error || 'فشل حفظ التنبيه');
-                return false;
-            }
-            await Promise.all([brandLoadAlerts(), brandRefreshDashboard()]);
-            return true;
-        }
-
-        async function brandCreateManualAlert() {
-            const alert_type = (document.getElementById('brandAlertType')?.value || 'domain_abuse').trim();
-            const target = (document.getElementById('brandAlertTarget')?.value || '').trim();
-            const platform = (document.getElementById('brandAlertPlatform')?.value || '').trim();
-            const severity = (document.getElementById('brandAlertSeverity')?.value || 'medium').trim();
-            const details = (document.getElementById('brandAlertDetails')?.value || '').trim();
-            if (!target) return titanAlert('أدخل الهدف أولاً.');
-            const ok = await brandCreateAlert({ alert_type, target, platform, severity, risk_score: 55, details, source_ref: 'manual' });
-            if (ok) titanAlert('✅ تم حفظ التنبيه اليدوي');
-        }
-
-        async function brandCreateAlertFromLastDomain() {
-            if (!brandLastDomainAnalysis) return titanAlert('قم بتحليل نطاق أولاً.');
-            const domain = brandLastDomainAnalysis.domain || (document.getElementById('brandDomainInput')?.value || '').trim();
-            const risk = Number(brandLastDomainAnalysis.risk_index || 0);
-            const severity = risk >= 80 ? 'critical' : (risk >= 60 ? 'high' : (risk >= 35 ? 'medium' : 'low'));
-            const details = `variants=${(brandLastDomainAnalysis.variants || []).length}; top=${(brandLastDomainAnalysis.variants || []).slice(0,3).map(v => v.domain).join(', ')}`;
-            const ok = await brandCreateAlert({ alert_type:'domain_abuse', target: domain, platform:'dns/web', severity, risk_score: risk, details, source_ref:'domain_analysis' });
-            if (ok) titanAlert('✅ تم إنشاء تنبيه من تحليل النطاق');
-        }
-
-        async function brandCreateAlertFromLastImpersonation() {
-            if (!brandLastImpersonationAnalysis) return titanAlert('قم بتحليل الانتحال أولاً.');
-            const username = brandLastImpersonationAnalysis.username || (document.getElementById('brandUserInput')?.value || '').trim();
-            const risk = Number(brandLastImpersonationAnalysis.risk_index || 0);
-            const severity = risk >= 80 ? 'critical' : (risk >= 60 ? 'high' : (risk >= 35 ? 'medium' : 'low'));
-            const details = `found=${(brandLastImpersonationAnalysis.found || []).length}; missing_priority=${(brandLastImpersonationAnalysis.missing_priority || []).join(', ')}`;
-            const ok = await brandCreateAlert({ alert_type:'impersonation', target: username, platform:'social', severity, risk_score: risk, details, source_ref:'impersonation_analysis' });
-            if (ok) titanAlert('✅ تم إنشاء تنبيه من تحليل الانتحال');
-        }
-
-        async function brandSetAlertStatus(alertId, status) {
-            const res = await fetch(`/api/brand/alerts/${alertId}/status`, {
-                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status})
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) return titanAlert(data.error || 'فشل التحديث');
-            await Promise.all([brandLoadAlerts(), brandRefreshDashboard()]);
-        }
-
-        async function brandPromoteAlertIncident(alertId) {
-            const res = await fetch(`/api/brand/alerts/${alertId}/promote-incident`, { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok || !data.success) return titanAlert(data.error || 'فشل التصعيد');
-            titanAlert(`✅ تم التصعيد إلى Incident #${data.case_id}`);
-            await Promise.all([brandLoadAlerts(), brandRefreshDashboard()]);
-            if (typeof irInitSection === 'function') irInitSection();
-        }
-
-        async function brandLoadAlerts() {
-            const box = document.getElementById('brandAlertBoard');
-            if (!box) return;
-            setResultLoading(box, 'Alert Board', 'Loading brand alerts...');
-
-            const q = (document.getElementById('brandAlertSearch')?.value || '').trim();
-            const severity = (document.getElementById('brandFilterSeverity')?.value || 'all').trim();
-            const status = (document.getElementById('brandFilterStatus')?.value || 'all').trim();
-            const qs = new URLSearchParams();
-            if (q) qs.set('q', q);
-            if (severity !== 'all') qs.set('severity', severity);
-            if (status !== 'all') qs.set('status', status);
-            const res = await fetch(`/api/brand/alerts?${qs.toString()}`);
-            const data = await res.json();
-
-            if (!res.ok || !data.success) {
-                setResultError(box, data.error || 'Load failed');
-                return;
-            }
-            const alerts = data.alerts || [];
-            if (!alerts.length) {
-                setResultList(box, 'Alert Board', [], { badge: '0', emptyText: 'لا توجد تنبيهات مطابقة.' });
-                return;
-            }
-            setResultMarkup(
-                box,
-                'Alert Board',
-                alerts.map((a) => {
-                    const sevClass = _brandSeverityClass(a.severity);
-                    return `
-                        <div class="mb-2 p-2 rounded border border-slate-700 bg-slate-900/60">
-                            <div class="flex items-center justify-between gap-2 flex-wrap">
-                                <div class="text-xs text-gray-100 font-bold">${_resultEscape(a.target || '')}</div>
-                                <span class="px-2 py-0.5 rounded border text-[10px] ${sevClass}">${_resultEscape(String(a.severity || '').toUpperCase())}</span>
-                            </div>
-                            <div class="text-[10px] text-gray-500 mt-1">type=${_resultEscape(a.alert_type || '')} | status=${_resultEscape(a.status || '')} | risk=${_resultEscape(a.risk_score || 0)} | ${_resultEscape(a.created_at || '')}</div>
-                            <div class="text-[11px] text-gray-300 mt-1">${_resultEscape(a.details || '')}</div>
-                            <div class="mt-2 grid grid-cols-2 md:grid-cols-5 gap-1">
-                                <button onclick="brandSetAlertStatus(${a.id}, 'monitoring')" class="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-[10px]">Monitoring</button>
-                                <button onclick="brandSetAlertStatus(${a.id}, 'mitigated')" class="px-2 py-1 rounded bg-emerald-900/30 border border-emerald-800/50 text-[10px] text-emerald-300">Mitigated</button>
-                                <button onclick="brandSetAlertStatus(${a.id}, 'open')" class="px-2 py-1 rounded bg-cyan-900/30 border border-cyan-800/50 text-[10px] text-cyan-300">Reopen</button>
-                                <button onclick="brandSetAlertStatus(${a.id}, 'escalated')" class="px-2 py-1 rounded bg-amber-900/30 border border-amber-800/50 text-[10px] text-amber-300">Escalate Tag</button>
-                                <button onclick="brandPromoteAlertIncident(${a.id})" class="px-2 py-1 rounded bg-red-900/30 border border-red-800/50 text-[10px] text-red-300">Create Incident</button>
-                            </div>
-                        </div>
-                    `;
-                }).join(''),
-                { badge: `${alerts.length} Alerts` }
-            );
-        }
-
-        function brandBindFilters() {
-            if (window.__brandFiltersBound) return;
-            window.__brandFiltersBound = true;
-            const ids = ['brandAlertSearch', 'brandFilterSeverity', 'brandFilterStatus'];
-            ids.forEach((id) => {
-                const el = document.getElementById(id);
-                if (!el) return;
-                const evt = id === 'brandAlertSearch' ? 'input' : 'change';
-                el.addEventListener(evt, () => brandLoadAlerts());
-            });
-        }
-
-        async function brandInitSection() {
-            brandBindFilters();
-            await Promise.all([brandRefreshDashboard(), brandLoadWatchlist(), brandLoadAlerts()]);
-        }
-
         const SE_INTEL_STORAGE_KEY = 'titan_se_intel_board';
         const SE_PLAYBOOK_STORAGE_KEY = 'titan_se_playbook';
         const SE_QUIZ_STORAGE_KEY = 'titan_se_quiz_state';
@@ -9084,94 +8488,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        async function scanLanNetwork() {
-            const loader = document.getElementById('lanLoader');
-            const resBox = document.getElementById('lanResult');
-            const btn = document.getElementById('btnLanScan');
-            const exportBtn = document.getElementById('btnLanExport');
-            
-            btn.disabled = true;
-            loader.classList.remove('hidden');
-            resBox.classList.remove('hidden');
-            if(exportBtn) exportBtn.disabled = true;
-            setResultLoading(resBox, 'LAN Discovery', 'جاري إرسال حزم استكشافية للشبكة (ARP Sweep)...');
-            soundManager.terminalType();
-            
-            try {
-                const res = await fetch('/api/network/scan');
-                const data = await res.json();
-
-                if(!res.ok || !data.success) {
-                    const errMsg = data && data.error ? data.error : 'تعذر تنفيذ فحص الشبكة حالياً.';
-                    setResultError(resBox, errMsg);
-                    soundManager.error();
-                    return;
-                }
-
-                const devices = Array.isArray(data.devices) ? data.devices : [];
-                window.__lanLastDevices = devices;
-                const routerCount = devices.filter(d => (d.label || '').includes('التوجيه')).length;
-                const unknownCount = devices.filter(d => !d.hostname || d.hostname === '').length;
-                const selfCount = devices.filter(d => d.is_self).length;
-                const selfIp = data.local_ip || (devices.find(d => d.is_self) || {}).ip || 'غير متاح';
-
-                if(exportBtn && devices.length > 0) exportBtn.disabled = false;
-
-                if(devices.length === 0) {
-                    setResultList(resBox, 'LAN Discovery', [], { badge: '0 Devices', emptyText: 'لم يتم العثور على أجهزة (أو الشبكة تمنع الفحص).' });
-                } else {
-                    const rows = devices.map((d) => `${_resultEscape(d.icon || '💻')} <span class="font-mono text-cyan-300" dir="ltr">${_resultEscape(d.ip)}</span> | ${_resultEscape(d.label || d.type || 'Unknown')} | ${_resultEscape(d.hostname || 'Hostname غير متاح')} | MAC: <span class="font-mono" dir="ltr">${_resultEscape(d.mac || 'N/A')}</span> ${d.is_self ? '<span class="text-emerald-300">(THIS DEVICE)</span>' : ''}`);
-                    setResultList(resBox, 'LAN Discovery', rows, { badge: `${devices.length} Devices`, riskScore: unknownCount > 0 ? 35 : 10 });
-                }
-                soundManager.success();
-            } catch(e) {
-                setResultError(resBox, 'فشل في جلب أجهزة الشبكة.');
-                soundManager.error();
-            } finally {
-                loader.classList.add('hidden');
-                btn.disabled = false;
-            }
-        }
-
-        function exportLanCsv() {
-            const devices = Array.isArray(window.__lanLastDevices) ? window.__lanLastDevices : [];
-            if(!devices.length) {
-                titanAlert('لا توجد نتائج متاحة للتصدير. نفّذ فحص الشبكة أولاً.');
-                return;
-            }
-
-            const header = ['ip', 'mac', 'hostname', 'label', 'type', 'is_self'];
-            const rows = devices.map(d => [
-                d.ip || '',
-                d.mac || '',
-                d.hostname || '',
-                d.label || '',
-                d.type || '',
-                d.is_self ? 'yes' : 'no'
-            ]);
-
-            const escapeCsv = (value) => {
-                const text = String(value ?? '');
-                if(/[",\\n\\r]/.test(text)) {
-                    return `"${text.replace(/"/g, '""')}"`;
-                }
-                return text;
-            };
-
-            const csv = [header, ...rows].map(row => row.map(escapeCsv).join(',')).join('\\r\\n');
-            const bom = '\uFEFF';
-            const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const ts = new Date().toISOString().replace(/[:.]/g, '-');
-            link.href = URL.createObjectURL(blob);
-            link.download = `titan-lan-scan-${ts}.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
-            soundManager.success();
-        }
-
         async function createBurnNote() {
             const text = document.getElementById('burnNoteText').value;
             if(!text) return titanAlert("يرجى كتابة رسالة الصندوق قبل التوليد!");
@@ -9220,19 +8536,29 @@ HTML_TEMPLATE = """
                 fileInput.type = 'file';
                 fileInput.accept = 'image/*';
                 fileInput.onchange = async () => {
+                    const pickedFile = fileInput.files && fileInput.files[0];
+                    if (!pickedFile) return;
                     const formData = new FormData();
-                    formData.append('file', fileInput.files[0]);
+                    formData.append('file', pickedFile);
                     formData.append('text', text);
-                    const res = await fetch('/api/steganography/encode', { method: 'POST', body: formData });
-                    if(res.ok) {
-                        const blob = await res.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url; a.download = "stego_img.png"; a.click();
-                        refreshLogs();
-                    } else { 
-                        const errData = await res.json();
-                        titanAlert("خطأ في تشفير الصورة: " + (errData.error || "خطأ غير معروف")); 
+                    try {
+                        const res = await fetch('/api/steganography/encode', { method: 'POST', body: formData });
+                        if (res.ok) {
+                            const blob = await res.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `stego_${(pickedFile.name || 'image').replace(/[.][^.]+$/, '')}.png`;
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            titanAlert('✅ تم تشفير الصورة وتحميلها');
+                            refreshLogs();
+                        } else {
+                            const errData = await res.json();
+                            titanAlert("خطأ في تشفير الصورة: " + (errData.error || "خطأ غير معروف"));
+                        }
+                    } catch (e) {
+                        titanAlert("تعذر الاتصال بالخادم أثناء تشفير الصورة");
                     }
                 };
                 fileInput.click();
@@ -9241,12 +8567,22 @@ HTML_TEMPLATE = """
                 fileInput.type = 'file';
                 fileInput.accept = 'image/*';
                 fileInput.onchange = async () => {
+                    const pickedFile = fileInput.files && fileInput.files[0];
+                    if (!pickedFile) return;
                     const formData = new FormData();
-                    formData.append('file', fileInput.files[0]);
-                    const res = await fetch('/api/steganography/decode', { method: 'POST', body: formData });
-                    const data = await res.json();
-                    titanAlert("النص المستخرج: " + (data.result || "لا توجد بيانات"));
-                    refreshLogs();
+                    formData.append('file', pickedFile);
+                    try {
+                        const res = await fetch('/api/steganography/decode', { method: 'POST', body: formData });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            titanAlert("فشل استخراج النص: " + (data.error || "خطأ غير معروف"));
+                            return;
+                        }
+                        titanAlert("النص المستخرج: " + (data.result || "لا توجد بيانات"));
+                        refreshLogs();
+                    } catch (e) {
+                        titanAlert("تعذر الاتصال بالخادم أثناء استخراج النص");
+                    }
                 };
                 fileInput.click();
             }
@@ -10451,39 +9787,6 @@ UUID: ${getVal('idUuid')}
             return new TextDecoder().decode(plainBuf);
         }
 
-        async function scanVideoClip() {
-            const file = document.getElementById('videoScanFile').files[0];
-            if (!file) return titanAlert('اختر فيديو أولاً لفحصه.');
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const box = document.getElementById('videoScanResult');
-            box.classList.remove('hidden');
-            box.innerText = 'جاري فحص الفيديو...';
-
-            try {
-                const res = await fetch('/api/video/scan', { method: 'POST', body: formData });
-                const data = await res.json();
-                if (!res.ok || data.error) throw new Error(data.error || 'فشل فحص الفيديو');
-
-                const lines = [
-                    `الاسم: ${data.filename || file.name}`,
-                    `الدقة: ${data.width}x${data.height}`,
-                    `عدد الإطارات: ${data.frame_count}`,
-                    `FPS: ${data.fps}`,
-                    `المدة (ثانية): ${data.duration_seconds}`,
-                    `السعة التقريبية للنص (بايت): ${data.estimated_capacity_bytes}`,
-                    `تم رصد بيانات مخفية سابقاً: ${data.has_hidden_payload ? 'نعم' : 'لا'}`
-                ];
-                box.innerText = lines.join('\\n');
-                soundManager.success();
-            } catch (e) {
-                box.innerText = 'خطأ: ' + e.message;
-                soundManager.error();
-            }
-        }
-
         async function processVideo(action) {
             const formData = new FormData();
             if (action === 'encode') {
@@ -10570,47 +9873,6 @@ UUID: ${getVal('idUuid')}
                     titanAlert('خطأ في الاتصال بالخادم.');
                     soundManager.error();
                 }
-            }
-        }
-
-        async function processVideoFile(action) {
-            const file = document.getElementById('videoFileCrypt').files[0];
-            const key = document.getElementById('videoFileCryptPass').value.trim();
-            if (!file) return titanAlert('يرجى اختيار ملف فيديو أو ملف مشفر.');
-            if (!key) return titanAlert('يرجى إدخال كلمة السر أولاً.');
-
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('key', key);
-
-            const endpoint = action === 'encrypt' ? '/api/video/file/encrypt' : '/api/video/file/decrypt';
-
-            try {
-                const res = await fetch(endpoint, { method: 'POST', body: formData });
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.error || 'فشل عملية تشفير/فك الفيديو');
-                }
-
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                const cleanBase = file.name.replace(/\\.titan$/i, '').replace(/\\.[^/.]+$/, '');
-                a.href = url;
-                a.download = action === 'encrypt' ? (cleanBase + '.mp4.titan') : (cleanBase + '_decrypted.mp4');
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                }, 500);
-
-                titanAlert(action === 'encrypt' ? '✅ تم تشفير ملف الفيديو بالكامل' : '✅ تم فك تشفير ملف الفيديو بنجاح');
-                soundManager.success();
-                refreshLogs();
-            } catch (e) {
-                titanAlert('خطأ: ' + e.message);
-                soundManager.error();
             }
         }
 
@@ -10762,27 +10024,40 @@ def metadata_remove_route():
 
 @app.route('/api/steganography/encode', methods=['POST'])
 def stego_encode_route():
-    file = request.files['file']
+    file = request.files.get('file')
+    text = (request.form.get('text') or '').strip()
+    if not file:
+        return jsonify({"error": "يرجى اختيار صورة أولاً"}), 400
+    if not text:
+        return jsonify({"error": "النص المراد إخفاؤه مطلوب"}), 400
     filename = file.filename or 'image.png'
-    text = request.form['text']
     try:
-        processed_data = lsb_encode(file.read(), text)
+        raw = file.read()
+        if not _looks_like_image_bytes(raw):
+            return jsonify({"error": "الملف المرفوع ليس صورة صالحة"}), 400
+        processed_data = lsb_encode(raw, text)
+        base_name = os.path.splitext(secure_filename(filename))[0] or 'image'
         add_audit_log("تشفير إخفاء (Stego)", f"إخفاء نص في {filename}")
         return send_file(
             io.BytesIO(processed_data),
             mimetype='image/png',
             as_attachment=True,
-            download_name="stego_" + filename
+            download_name=f"stego_{base_name}.png"
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 @app.route('/api/steganography/decode', methods=['POST'])
 def stego_decode_route():
-    file = request.files['file']
+    file = request.files.get('file')
+    if not file:
+        return jsonify({"error": "يرجى اختيار صورة أولاً"}), 400
     filename = file.filename or 'image.png'
     try:
-        decoded_text = lsb_decode(file.read())
+        raw = file.read()
+        if not _looks_like_image_bytes(raw):
+            return jsonify({"error": "الملف المرفوع ليس صورة صالحة"}), 400
+        decoded_text = lsb_decode(raw)
         add_audit_log("فك إخفاء (Stego)", f"محاولة استخراج نص من {filename}")
         return jsonify({"result": decoded_text})
     except Exception as e:
@@ -10825,22 +10100,6 @@ def audio_stego_decode_route():
         return jsonify({"error": str(e)}), 400
 
 
-@app.route('/api/video/scan', methods=['POST'])
-def video_scan_route():
-    if 'file' not in request.files:
-        return jsonify({"error": "يرجى اختيار ملف فيديو"}), 400
-    file = request.files['file']
-    filename = file.filename or 'video.mp4'
-    try:
-        result = scan_video_clip(file.read(), filename)
-        if not result.get('success'):
-            return jsonify({"error": result.get('error', 'فشل الفحص')}) , 400
-        add_audit_log("فحص فيديو", f"تحليل خصائص {filename}")
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
 @app.route('/api/video/stego/encode', methods=['POST'])
 def video_stego_encode_route():
     if 'file' not in request.files or 'text' not in request.form:
@@ -10876,54 +10135,6 @@ def video_stego_decode_route():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-
-@app.route('/api/video/file/encrypt', methods=['POST'])
-def video_file_encrypt_route():
-    if 'file' not in request.files:
-        return jsonify({"error": "يرجى اختيار ملف فيديو"}), 400
-    key = (request.form.get('key') or '').strip()
-    if not key:
-        return jsonify({"error": "كلمة السر مطلوبة"}), 400
-
-    file = request.files['file']
-    filename = file.filename or 'video.mp4'
-
-    try:
-        encrypted = encrypt_data(file.read(), key)
-        add_audit_log("تشفير ملف فيديو", f"تشفير كامل للملف: {filename}")
-        return send_file(
-            io.BytesIO(encrypted),
-            mimetype='application/octet-stream',
-            as_attachment=True,
-            download_name=filename + '.titan'
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-@app.route('/api/video/file/decrypt', methods=['POST'])
-def video_file_decrypt_route():
-    if 'file' not in request.files:
-        return jsonify({"error": "يرجى اختيار ملف مشفر"}), 400
-    key = (request.form.get('key') or '').strip()
-    if not key:
-        return jsonify({"error": "كلمة السر مطلوبة"}), 400
-
-    file = request.files['file']
-    filename = file.filename or 'video.mp4.titan'
-
-    try:
-        decrypted = decrypt_data(file.read(), key)
-        out_name = filename[:-6] if filename.lower().endswith('.titan') else ('decrypted_' + filename)
-        add_audit_log("فك تشفير ملف فيديو", f"فك كامل للملف: {filename}")
-        return send_file(
-            io.BytesIO(decrypted),
-            mimetype='video/mp4',
-            as_attachment=True,
-            download_name=out_name
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
 
 @app.route('/api/audit-logs', methods=['GET'])
 def get_audit_logs():
@@ -11210,7 +10421,7 @@ def load_vault():
         return jsonify({"vault": vault_data})
     except Exception:
         add_audit_log("فشل فتح القبو 🚨", f"خطأ في فك التشفير للمستخدم #{user_id}")
-        return jsonify({"error": "كلمة السر الرئيسية غير صحيحة أو الملف معطوب."}), 401
+        return jsonify({"error": "كلمة السر الرئيسية غير صحيحة  ."}), 401
 
 @app.route('/api/vault/save', methods=['POST'])
 def save_vault():
@@ -11602,7 +10813,8 @@ def create_burn_note():
 def view_burn_note(note_id):
     if note_id in BURN_NOTES:
         # قرأناها ودمّرناها فوراً من المتغير (RAM)
-        text = BURN_NOTES.pop(note_id) 
+        text = BURN_NOTES.pop(note_id)
+        safe_text = html.escape(text).replace('\n', '<br>')
         add_audit_log("رسالة مدمرة 💣", f"تم فتح الرسالة وتدميرها للأبد")
         
         return f'''
@@ -11651,17 +10863,36 @@ def view_burn_note(note_id):
                     animation: antiCam 0.125s steps(1) infinite;
                     margin-bottom: 10px;
                 }}
+                .secure-text.locked {{
+                    filter: blur(14px);
+                    opacity: 0.2;
+                }}
+                .hold-btn {{
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    border: 1px solid #ef4444;
+                    color: #fecaca;
+                    background: rgba(239, 68, 68, 0.14);
+                    border-radius: 10px;
+                    padding: 10px 16px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    margin-bottom: 12px;
+                }}
             </style>
         </head>
         <body oncontextmenu="return false;" onkeydown="return disableCopyKeys(event);">
             <div class="container" id="secureContainer">
                 <div style="font-size: 60px; margin-bottom: 20px; animation: pulse-icon 2s infinite;">💣</div>
-                <h1>هذه الرسالة دُمّرت للتو!</h1>
-                <p class="subtitle" id="topSubtitle">لقد تم مسح هذه الرسالة نهائياً من الذاكرة الحية للخادم بمجرد فتحك لها.<br>لن يمكنك أنت أو غيرك قراءة محتواها مرة أخرى، قم بنسخها الآن إذا احتجت لذلك.</p>
+                <h1>تم فتح الرسالة بنجاح</h1>
+                <p class="subtitle" id="topSubtitle">هذه رسالة لمرة واحدة فقط، وبعد إغلاق الصفحة لن تكون متاحة مجددًا.</p>
+                <button id="holdRevealBtn" class="hold-btn">👆 اضغط مطولاً لعرض المحتوى</button>
                 <!-- Full Arabic text - browser handles letter joining natively -->
-                <div class="secure-text" id="secureText">{text}</div>
-                <p style="color:#6b7280; font-size:10px; margin:0 0 10px 0; letter-spacing:1px;">🔒 CAMERA-RESISTANT DISPLAY</p>
-                <div class="warning" id="timerWarning">⚠️ تدمير ذاتي إضافي للشاشة خلال <span id="countdown">10</span> ثواني...</div>
+                <div class="secure-text locked" id="secureText">{safe_text}</div>
+                <p style="color:#6b7280; font-size:10px; margin:0 0 10px 0; letter-spacing:1px;">🔒 Secure View Enabled</p>
+                <div class="warning" id="timerWarning">⚠️ سيتم إخفاء المحتوى تلقائيًا خلال <span id="countdown">10</span> ثوانٍ</div>
             </div>
             
             <script>
@@ -11670,7 +10901,22 @@ def view_burn_note(note_id):
                 const warningBox = document.getElementById('timerWarning');
                 const topSubs = document.getElementById('topSubtitle');
                 const secureTextEl = document.getElementById('secureText');
+                const holdBtn = document.getElementById('holdRevealBtn');
                 let destroyed = false;
+
+                function lockView() {{
+                    secureTextEl.classList.add('locked');
+                }}
+
+                function unlockView() {{
+                    if (!destroyed) secureTextEl.classList.remove('locked');
+                }}
+
+                holdBtn.addEventListener('mousedown', unlockView);
+                holdBtn.addEventListener('mouseup', lockView);
+                holdBtn.addEventListener('mouseleave', lockView);
+                holdBtn.addEventListener('touchstart', (e) => {{ e.preventDefault(); unlockView(); }}, {{ passive: false }});
+                holdBtn.addEventListener('touchend', lockView);
 
                 const timer = setInterval(() => {{
                     timeLeft--;
@@ -11683,10 +10929,13 @@ def view_burn_note(note_id):
                     
                     if(timeLeft <= 0) {{
                         clearInterval(timer);
+                        destroyed = true;
+                        holdBtn.remove();
                         // Stop the CSS animation and replace text with destroyed message
                         secureTextEl.style.animation = 'none';
                         secureTextEl.style.color = '#ef4444';
                         secureTextEl.style.textAlign = 'center';
+                        secureTextEl.classList.remove('locked');
                         secureTextEl.textContent = '💥 تم تدمير الرسالة نهائياً';
                         warningBox.innerText = 'SECURE BURN COMPLETE // SYSTEM LOGGED';
                         topSubs.innerText = 'تم التخلص من الرسالة بالكامل من الشاشة.';
@@ -11705,16 +10954,36 @@ def view_burn_note(note_id):
                 document.addEventListener('keyup', (e) => {{
                     if(e.key === 'PrintScreen') navigator.clipboard.writeText('محاولة التقاط شاشة مرفوضة.');
                 }});
+
+                ['copy','cut','paste','selectstart','dragstart'].forEach((evt) => {{
+                    document.addEventListener(evt, (e) => e.preventDefault());
+                }});
                 
                 // Hide content when window loses focus to prevent screenshots/recording
                 const secContainer = document.getElementById('secureContainer');
                 window.addEventListener('blur', () => {{
+                    lockView();
                     secContainer.style.filter = 'blur(30px)';
-                    secContainer.style.opacity = '0';
+                    secContainer.style.opacity = '0.05';
                 }});
                 window.addEventListener('focus', () => {{
                     secContainer.style.filter = 'none';
                     secContainer.style.opacity = '1';
+                }});
+
+                document.addEventListener('visibilitychange', () => {{
+                    if (document.hidden && !destroyed) {{
+                        destroyed = true;
+                        clearInterval(timer);
+                        holdBtn.remove();
+                        secureTextEl.style.animation = 'none';
+                        secureTextEl.classList.remove('locked');
+                        secureTextEl.style.color = '#ef4444';
+                        secureTextEl.style.textAlign = 'center';
+                        secureTextEl.textContent = '💥 تم تدمير الرسالة بسبب مغادرة الصفحة';
+                        warningBox.innerText = 'SECURE BURN COMPLETE // HIDDEN TAB DETECTED';
+                        topSubs.innerText = 'تم الإخفاء الذاتي بعد مغادرة الصفحة.';
+                    }}
                 }});
             </script>
         </body>
@@ -12920,373 +12189,6 @@ def forensics_extract_iocs_route():
     return jsonify({"success": True, "iocs": iocs, "counts": counts})
 
 
-@app.route('/api/brand/typosquatting', methods=['POST'])
-def brand_typosquatting_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    domain = (request.json or {}).get('domain', '').strip().lower()
-    if not domain or '.' not in domain:
-        return jsonify({"success": False, "error": "يرجى إدخال domain صالح"}), 400
-    variants = generate_typosquatting_variants(domain)
-    add_audit_log("Brand Typosquatting", f"{domain} -> {len(variants)} variants", username=session.get('username', ''))
-    return jsonify({"success": True, "domain": domain, "similar_domains": variants})
-
-
-@app.route('/api/brand/analyze-domain', methods=['POST'])
-def brand_analyze_domain_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    domain = str((request.json or {}).get('domain', '') or '').strip().lower()
-    if not domain or '.' not in domain:
-        return jsonify({"success": False, "error": "يرجى إدخال domain صالح"}), 400
-
-    report = _brand_build_domain_analysis(domain)
-    add_audit_log("Brand Domain Analysis", f"{domain} risk={report.get('risk_index', 0)}", username=session.get('username', ''))
-    return jsonify({"success": True, **report})
-
-
-@app.route('/api/brand/analyze-impersonation', methods=['POST'])
-def brand_analyze_impersonation_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    username = str((request.json or {}).get('username', '') or '').strip()
-    if not username:
-        return jsonify({"success": False, "error": "اسم المستخدم مطلوب"}), 400
-
-    report = _brand_build_impersonation_analysis(username)
-    if not report.get('success'):
-        return jsonify(report), 400
-    add_audit_log("Brand Impersonation Analysis", f"{username} risk={report.get('risk_index', 0)}", username=session.get('username', ''))
-    return jsonify(report)
-
-
-@app.route('/api/brand/watchlist', methods=['GET'])
-def brand_watchlist_list_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute(
-            "SELECT id, asset_type, asset_value, label, created_at FROM brand_watchlist WHERE user_id=%s ORDER BY id DESC",
-            (user_id,)
-        )
-        rows = c.fetchall() or []
-        return jsonify({
-            "success": True,
-            "items": [
-                {"id": int(r[0]), "asset_type": r[1], "asset_value": r[2], "label": r[3], "created_at": r[4]}
-                for r in rows
-            ]
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
-@app.route('/api/brand/watchlist', methods=['POST'])
-def brand_watchlist_add_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    req = request.json or {}
-    asset_type = str(req.get('asset_type', 'domain') or 'domain').strip().lower()
-    asset_value = str(req.get('asset_value', '') or '').strip().lower()
-    label = str(req.get('label', '') or '').strip()
-
-    if asset_type not in ('domain', 'username', 'keyword'):
-        asset_type = 'domain'
-    if not asset_value:
-        return jsonify({"success": False, "error": "قيمة الأصل مطلوبة"}), 400
-
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute(
-            "SELECT id FROM brand_watchlist WHERE user_id=%s AND asset_type=%s AND asset_value=%s",
-            (user_id, asset_type, asset_value)
-        )
-        if c.fetchone():
-            return jsonify({"success": False, "error": "الأصل موجود مسبقاً"}), 409
-
-        c.execute(
-            "INSERT INTO brand_watchlist (user_id, asset_type, asset_value, label, created_at) VALUES (%s,%s,%s,%s,%s) RETURNING id",
-            (user_id, asset_type, asset_value, label, now)
-        )
-        row = c.fetchone()
-        conn.commit()
-        add_audit_log("Brand Watchlist Add", f"{asset_type}:{asset_value}", username=session.get('username', ''))
-        return jsonify({"success": True, "id": int(row[0]) if row else None})
-    except Exception as e:
-        if conn: conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
-@app.route('/api/brand/watchlist/<int:item_id>', methods=['DELETE'])
-def brand_watchlist_delete_route(item_id: int):
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute("DELETE FROM brand_watchlist WHERE id=%s AND user_id=%s", (item_id, user_id))
-        conn.commit()
-        add_audit_log("Brand Watchlist Remove", f"item#{item_id}", username=session.get('username', ''))
-        return jsonify({"success": True})
-    except Exception as e:
-        if conn: conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
-@app.route('/api/brand/alerts', methods=['POST'])
-def brand_alerts_create_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    req = request.json or {}
-
-    alert_type = str(req.get('alert_type', 'domain_abuse') or 'domain_abuse').strip().lower()
-    target = str(req.get('target', '') or '').strip()
-    platform = str(req.get('platform', '') or '').strip()
-    severity = str(req.get('severity', '') or '').strip().lower()
-    details = str(req.get('details', '') or '').strip()
-    source_ref = str(req.get('source_ref', '') or '').strip()
-
-    try:
-        risk_score = int(req.get('risk_score', 0) or 0)
-    except Exception:
-        risk_score = 0
-    risk_score = max(0, min(100, risk_score))
-
-    if not target:
-        return jsonify({"success": False, "error": "Target مطلوب"}), 400
-    if alert_type not in ('domain_abuse', 'impersonation', 'fake_campaign', 'brand_leak'):
-        alert_type = 'domain_abuse'
-    if severity not in ('low', 'medium', 'high', 'critical'):
-        severity = _brand_severity_from_risk(risk_score)
-
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute(
-            """
-            INSERT INTO brand_alerts
-            (user_id, alert_type, target, platform, severity, risk_score, status, details, source_ref, incident_case_id, created_at, updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,'open',%s,%s,NULL,%s,%s)
-            RETURNING id
-            """,
-            (user_id, alert_type, target, platform, severity, risk_score, details, source_ref, now, now)
-        )
-        row = c.fetchone()
-        conn.commit()
-        alert_id = int(row[0]) if row else 0
-        add_audit_log("Brand Alert Created", f"alert#{alert_id} {alert_type} {target} sev={severity}", username=session.get('username', ''))
-        return jsonify({"success": True, "alert_id": alert_id})
-    except Exception as e:
-        if conn: conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
-@app.route('/api/brand/alerts', methods=['GET'])
-def brand_alerts_list_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    q = str(request.args.get('q', '') or '').strip().lower()
-    severity = str(request.args.get('severity', 'all') or 'all').strip().lower()
-    status = str(request.args.get('status', 'all') or 'all').strip().lower()
-
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        sql = """
-            SELECT id, alert_type, target, platform, severity, risk_score, status, details, source_ref, incident_case_id, created_at, updated_at
-            FROM brand_alerts
-            WHERE user_id=%s
-        """
-        params: list[object] = [user_id]
-        if q:
-            like_q = f"%{q}%"
-            sql += " AND (LOWER(target) LIKE %s OR LOWER(details) LIKE %s OR LOWER(alert_type) LIKE %s)"
-            params.extend([like_q, like_q, like_q])
-        if severity in ('low', 'medium', 'high', 'critical'):
-            sql += " AND severity=%s"
-            params.append(severity)
-        if status in ('open', 'monitoring', 'mitigated', 'escalated'):
-            sql += " AND status=%s"
-            params.append(status)
-        sql += " ORDER BY id DESC LIMIT 300"
-
-        c.execute(sql, tuple(params))
-        rows = c.fetchall() or []
-        alerts = [
-            {
-                "id": int(r[0]), "alert_type": r[1], "target": r[2], "platform": r[3],
-                "severity": r[4], "risk_score": int(r[5] or 0), "status": r[6],
-                "details": r[7], "source_ref": r[8], "incident_case_id": r[9],
-                "created_at": r[10], "updated_at": r[11]
-            }
-            for r in rows
-        ]
-        return jsonify({"success": True, "alerts": alerts})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
-@app.route('/api/brand/alerts/<int:alert_id>/status', methods=['POST'])
-def brand_alerts_status_route(alert_id: int):
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    status = str((request.json or {}).get('status', 'open') or 'open').strip().lower()
-    if status not in ('open', 'monitoring', 'mitigated', 'escalated'):
-        return jsonify({"success": False, "error": "status غير صالح"}), 400
-
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute(
-            "UPDATE brand_alerts SET status=%s, updated_at=%s WHERE id=%s AND user_id=%s",
-            (status, now, alert_id, user_id)
-        )
-        conn.commit()
-        add_audit_log("Brand Alert Status", f"alert#{alert_id} -> {status}", username=session.get('username', ''))
-        return jsonify({"success": True})
-    except Exception as e:
-        if conn: conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
-@app.route('/api/brand/alerts/<int:alert_id>/promote-incident', methods=['POST'])
-def brand_alerts_promote_incident_route(alert_id: int):
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute(
-            "SELECT alert_type, target, platform, severity, risk_score, details, incident_case_id FROM brand_alerts WHERE id=%s AND user_id=%s",
-            (alert_id, user_id)
-        )
-        row = c.fetchone()
-        if not row:
-            return jsonify({"success": False, "error": "التنبيه غير موجود"}), 404
-
-        if row[6]:
-            return jsonify({"success": True, "case_id": int(row[6]), "already_linked": True})
-
-        alert_type, target, platform, severity, risk_score, details, _existing_case = row
-        incident_title = f"Brand Alert: {target}"
-        source = 'external_feed'
-        category = 'fraud' if str(alert_type) in ('impersonation', 'fake_campaign') else 'phishing'
-        owner = 'Brand-SOC'
-        sla_minutes = 180 if str(severity) in ('critical', 'high') else 360
-        due_at = (datetime.datetime.now() + datetime.timedelta(minutes=sla_minutes)).strftime("%Y-%m-%d %H:%M:%S")
-        priority = _ir_recommended_priority(str(severity), int(risk_score or 0), False)
-
-        c.execute(
-            """
-            INSERT INTO incident_cases
-            (user_id, title, severity, priority, status, category, source, owner, sla_minutes, due_at, description, created_at, updated_at)
-            VALUES (%s,%s,%s,%s,'open',%s,%s,%s,%s,%s,%s,%s,%s)
-            RETURNING id
-            """,
-            (
-                user_id,
-                incident_title,
-                str(severity or 'medium'),
-                priority,
-                category,
-                source,
-                owner,
-                sla_minutes,
-                due_at,
-                f"Promoted from brand alert #{alert_id} ({alert_type}/{platform})\n\n{details}",
-                now,
-                now,
-            )
-        )
-        case_row = c.fetchone()
-        if not case_row:
-            conn.rollback()
-            return jsonify({"success": False, "error": "فشل إنشاء Incident"}), 500
-        case_id = int(case_row[0])
-
-        c.execute(
-            "INSERT INTO incident_iocs (case_id, ioc_type, ioc_value, risk_score, created_at) VALUES (%s,%s,%s,%s,%s)",
-            (case_id, 'brand_target', str(target), int(risk_score or 0), now)
-        )
-        c.execute(
-            "INSERT INTO incident_case_notes (case_id, note_type, note, created_by, created_at) VALUES (%s,%s,%s,%s,%s)",
-            (case_id, 'analysis', f"Escalated from Brand Alert #{alert_id}", session.get('username', ''), now)
-        )
-        c.execute(
-            "UPDATE brand_alerts SET status='escalated', incident_case_id=%s, updated_at=%s WHERE id=%s AND user_id=%s",
-            (case_id, now, alert_id, user_id)
-        )
-        conn.commit()
-        add_audit_log("Brand Escalation", f"alert#{alert_id} -> case#{case_id}", username=session.get('username', ''))
-        return jsonify({"success": True, "case_id": case_id, "priority": priority})
-    except Exception as e:
-        if conn: conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
-@app.route('/api/brand/dashboard', methods=['GET'])
-def brand_dashboard_route():
-    user_id, err = _get_logged_in_user_id()
-    if err: return err
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM brand_watchlist WHERE user_id=%s", (user_id,))
-        watchlist = int((c.fetchone() or [0])[0] or 0)
-
-        c.execute("SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='open' THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN severity='critical' THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN status='escalated' THEN 1 ELSE 0 END),0) FROM brand_alerts WHERE user_id=%s", (user_id,))
-        row = c.fetchone() or (0, 0, 0, 0)
-        alerts = int(row[0] or 0)
-        open_count = int(row[1] or 0)
-        critical = int(row[2] or 0)
-        escalated = int(row[3] or 0)
-
-        return jsonify({
-            "success": True,
-            "summary": {
-                "watchlist": watchlist,
-                "alerts": alerts,
-                "open": open_count,
-                "critical": critical,
-                "escalated": escalated,
-            }
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if conn: conn.close()
-
-
 @app.route('/api/social/simulate', methods=['POST'])
 def social_simulate_route():
     user_id, err = _get_logged_in_user_id()
@@ -13481,12 +12383,6 @@ def social_risk_trend_route():
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         if conn: conn.close()
-
-@app.route('/api/network/scan', methods=['GET'])
-def scan_network_route():
-    result = scan_local_network()
-    add_audit_log("رادار الشبكة المحلية", f"تم العثور على {result.get('count', 0)} جهاز متصل")
-    return jsonify(result)
 
 # --- مسارات الإضافات للحزمة الرابعة المتقدمة (Phase 4: Defense & Comms) ---
 
@@ -14669,7 +13565,7 @@ def vault_timelocked_download():
         add_audit_log("تحميل ملف زمني", f"تم تحميل: {filename}", username=session.get('username',''))
         return send_file(buf, as_attachment=True, download_name=filename)
     except ValueError:
-        return jsonify({"error": "كلمة السر خاطئة أو الملف معطوب"}), 401
+        return jsonify({"error": "كلمة السر خاطئة"}), 401
     except Exception as e:
         print(f"[TITAN] Vault download error: {e}")
         return jsonify({"error": str(e)}), 500
