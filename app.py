@@ -499,6 +499,75 @@ def _ensure_ai_chat_tables(c) -> None:
     ''')
 
 
+def _ensure_burn_notes_table(c) -> None:
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS burn_notes_once (
+            note_id TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL,
+            consumed BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TEXT NOT NULL,
+            consumed_at TEXT
+        )
+    ''')
+
+
+def _burn_note_store_db(note_id: str, payload: dict) -> None:
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        _ensure_burn_notes_table(c)
+        c.execute(
+            """
+            INSERT INTO burn_notes_once (note_id, payload_json, consumed, created_at)
+            VALUES (%s,%s,FALSE,%s)
+            ON CONFLICT (note_id) DO UPDATE SET
+                payload_json=EXCLUDED.payload_json,
+                consumed=FALSE,
+                created_at=EXCLUDED.created_at,
+                consumed_at=NULL
+            """,
+            (note_id, json.dumps(payload, ensure_ascii=False), datetime.datetime.now().isoformat())
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[TITAN] Burn note DB store error: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def _burn_note_pop_db(note_id: str):
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        _ensure_burn_notes_table(c)
+        c.execute(
+            """
+            UPDATE burn_notes_once
+            SET consumed=TRUE, consumed_at=%s
+            WHERE note_id=%s AND consumed=FALSE
+            RETURNING payload_json
+            """,
+            (datetime.datetime.now().isoformat(), note_id)
+        )
+        row = c.fetchone()
+        conn.commit()
+        if not row:
+            return None
+        raw = row[0]
+        if isinstance(raw, str):
+            return json.loads(raw)
+        return raw if isinstance(raw, dict) else None
+    except Exception as e:
+        print(f"[TITAN] Burn note DB consume error: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
 def _ctf_normalize_newlines(value):
     """Normalize escaped/newline-like tokens so challenge text renders correctly in UI."""
     if isinstance(value, str):
@@ -3969,8 +4038,11 @@ HTML_TEMPLATE = """
                         <div class="flex gap-2 items-center flex-wrap">
                             <input type="text" id="burnChatInput" placeholder="اكتب رسالتك السرية هنا..." class="flex-1 p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-pink-500 outline-none" disabled>
                             <button id="burnChatSendBtn" onclick="sendBurnChat()" class="bg-slate-800 text-gray-500 px-8 rounded-lg font-bold transition-all border border-slate-700" disabled>إرسال</button>
-                            <input id="burnChatMediaInput" type="file" accept="image/*,audio/*" class="hidden" disabled>
-                            <button id="burnChatMediaBtn" onclick="document.getElementById('burnChatMediaInput').click()" class="bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700" disabled>📎 صورة/صوت</button>
+                            <input id="burnChatMediaInput" type="file" accept="image/*,audio/*,video/*" class="hidden" disabled>
+                            <button id="burnChatMediaBtn" onclick="document.getElementById('burnChatMediaInput').click()" class="bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700" disabled>📎 صورة/صوت/فيديو</button>
+                            <button id="burnChatRecStartBtn" onclick="startBurnChatRecording()" class="bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700" disabled>🎙️ بدء تسجيل</button>
+                            <button id="burnChatRecStopBtn" onclick="stopBurnChatRecording()" class="bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700" disabled>⏹️ إيقاف</button>
+                            <span id="burnChatRecState" class="text-[10px] text-gray-500">تسجيل مباشر غير مفعل</span>
                         </div>
                     </div>
                 </div>
@@ -9382,6 +9454,16 @@ HTML_TEMPLATE = """
         let burnChatTimer = null;
         let currentRoomId = null;
         let currentUser = null;
+        let burnChatRecorder = null;
+        let burnChatRecordStream = null;
+        let burnChatRecordChunks = [];
+
+        function _burnCipherPreview(cipherText) {
+            const raw = String(cipherText || '');
+            if (raw.length <= 120) return _osintEscape(raw);
+            const compact = raw.slice(0, 60) + ' ... ' + raw.slice(-28);
+            return _osintEscape(compact);
+        }
 
         function _setBurnChatUiConnected(isConnected) {
             const input = document.getElementById('burnChatInput');
@@ -9389,6 +9471,9 @@ HTML_TEMPLATE = """
             const mediaInput = document.getElementById('burnChatMediaInput');
             const mediaBtn = document.getElementById('burnChatMediaBtn');
             const destroyBtn = document.getElementById('burnChatDestroyBtn');
+            const recStartBtn = document.getElementById('burnChatRecStartBtn');
+            const recStopBtn = document.getElementById('burnChatRecStopBtn');
+            const recState = document.getElementById('burnChatRecState');
 
             if (input) input.disabled = !isConnected;
             if (sendBtn) {
@@ -9404,7 +9489,131 @@ HTML_TEMPLATE = """
                     ? 'bg-pink-900/40 hover:bg-pink-800 text-pink-300 px-4 py-2 rounded-lg font-bold transition-all border border-pink-800/50'
                     : 'bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700';
             }
+            if (recStartBtn) {
+                recStartBtn.disabled = !isConnected;
+                recStartBtn.className = isConnected
+                    ? 'bg-emerald-900/40 hover:bg-emerald-800 text-emerald-300 px-4 py-2 rounded-lg font-bold transition-all border border-emerald-800/50'
+                    : 'bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700';
+            }
+            if (recStopBtn) {
+                recStopBtn.disabled = true;
+                recStopBtn.className = isConnected
+                    ? 'bg-amber-900/40 hover:bg-amber-800 text-amber-300 px-4 py-2 rounded-lg font-bold transition-all border border-amber-800/50'
+                    : 'bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700';
+            }
+            if (recState) recState.textContent = isConnected ? 'جاهز لتسجيل الصوت داخل الغرفة' : 'تسجيل مباشر غير مفعل';
             if (destroyBtn) destroyBtn.disabled = !isConnected;
+        }
+
+        async function _sendBurnChatMediaDataUrl(dataUrl, mime, fileName) {
+            if (!currentRoomId || !dataUrl) return;
+
+            const encryptKey = prompt("🔐 أدخل مفتاح التشفير الخاص بهذه الوسائط:");
+            if (!encryptKey) return;
+
+            const payload = JSON.stringify({
+                kind: 'media',
+                mime: mime || 'application/octet-stream',
+                name: fileName || 'file',
+                data: dataUrl
+            });
+            const encryptedMsg = e2eEncrypt(payload, encryptKey);
+
+            const display = document.getElementById('burnChatDisplay');
+            const type = String(mime || '');
+            if (type.startsWith('image/')) {
+                display.innerHTML += `
+                    <div class="flex justify-start mt-4">
+                        <div class="bg-indigo-900/40 border border-indigo-700/50 text-indigo-200 px-4 py-3 rounded-lg text-sm max-w-[85%] break-y relative">
+                            <span class="text-[10px] text-indigo-400 font-bold mb-1 block">أنت (${currentUser}) <span class="text-indigo-600 bg-indigo-950 px-1 rounded ml-2">🔒 صورة مشفرة</span></span>
+                            <img src="${dataUrl}" alt="sent image" class="rounded border border-indigo-700/40 max-h-48 object-contain mt-2" />
+                        </div>
+                    </div>
+                `;
+            } else if (type.startsWith('video/')) {
+                display.innerHTML += `
+                    <div class="flex justify-start mt-4">
+                        <div class="bg-indigo-900/40 border border-indigo-700/50 text-indigo-200 px-4 py-3 rounded-lg text-sm max-w-[85%] break-y relative">
+                            <span class="text-[10px] text-indigo-400 font-bold mb-1 block">أنت (${currentUser}) <span class="text-indigo-600 bg-indigo-950 px-1 rounded ml-2">🔒 فيديو مشفر</span></span>
+                            <video controls controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false;" class="w-full max-h-56 rounded border border-indigo-700/40 mt-2"><source src="${dataUrl}"></video>
+                        </div>
+                    </div>
+                `;
+            } else {
+                display.innerHTML += `
+                    <div class="flex justify-start mt-4">
+                        <div class="bg-indigo-900/40 border border-indigo-700/50 text-indigo-200 px-4 py-3 rounded-lg text-sm max-w-[85%] break-y relative">
+                            <span class="text-[10px] text-indigo-400 font-bold mb-1 block">أنت (${currentUser}) <span class="text-indigo-600 bg-indigo-950 px-1 rounded ml-2">🔒 صوت مشفر</span></span>
+                            <audio controls controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false;" class="w-full mt-2"><source src="${dataUrl}"></audio>
+                        </div>
+                    </div>
+                `;
+            }
+            display.scrollTop = display.scrollHeight;
+
+            await fetch('/api/chat/send', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({room_id: currentRoomId, sender: currentUser, msg: encryptedMsg})
+            });
+            soundManager.success();
+        }
+
+        async function startBurnChatRecording() {
+            if (!currentRoomId) return titanAlert('انضم للغرفة أولاً', 'warning');
+            const recStartBtn = document.getElementById('burnChatRecStartBtn');
+            const recStopBtn = document.getElementById('burnChatRecStopBtn');
+            const recState = document.getElementById('burnChatRecState');
+
+            try {
+                burnChatRecordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                burnChatRecordChunks = [];
+                burnChatRecorder = new MediaRecorder(burnChatRecordStream);
+
+                burnChatRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) burnChatRecordChunks.push(e.data);
+                };
+
+                burnChatRecorder.onstop = async () => {
+                    const mime = burnChatRecorder?.mimeType || 'audio/webm';
+                    const blob = new Blob(burnChatRecordChunks, { type: mime });
+
+                    if (burnChatRecordStream) {
+                        burnChatRecordStream.getTracks().forEach(t => t.stop());
+                        burnChatRecordStream = null;
+                    }
+
+                    if (recStartBtn) recStartBtn.disabled = false;
+                    if (recStopBtn) recStopBtn.disabled = true;
+                    if (recState) recState.textContent = 'تم إيقاف التسجيل، جاري الإرسال...';
+
+                    try {
+                        const dataUrl = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(String(reader.result || ''));
+                            reader.onerror = () => reject(new Error('read_failed'));
+                            reader.readAsDataURL(blob);
+                        });
+                        await _sendBurnChatMediaDataUrl(String(dataUrl), mime, 'burn-chat-recording.webm');
+                        if (recState) recState.textContent = 'تم إرسال التسجيل المشفّر ✅';
+                    } catch (e) {
+                        if (recState) recState.textContent = 'فشل إرسال التسجيل';
+                        titanAlert('فشل إرسال التسجيل الصوتي', 'error');
+                    }
+                };
+
+                burnChatRecorder.start();
+                if (recStartBtn) recStartBtn.disabled = true;
+                if (recStopBtn) recStopBtn.disabled = false;
+                if (recState) recState.textContent = '🔴 جاري التسجيل... اضغط إيقاف للإرسال';
+            } catch (e) {
+                titanAlert('تعذر الوصول إلى الميكروفون. اسمح بصلاحية الميكروفون.', 'error');
+            }
+        }
+
+        function stopBurnChatRecording() {
+            if (burnChatRecorder && burnChatRecorder.state !== 'inactive') {
+                burnChatRecorder.stop();
+            }
         }
 
         // Custom E2E Encryption (XOR + Base64 Safe) with Signature
@@ -9504,19 +9713,13 @@ HTML_TEMPLATE = """
 
             const file = mediaInput.files[0];
             if (!file) return;
-            if (!(file.type || '').startsWith('image/') && !(file.type || '').startsWith('audio/')) {
-                titanAlert('الملف غير مدعوم. مسموح فقط صورة أو صوت.', 'error');
+            if (!(file.type || '').startsWith('image/') && !(file.type || '').startsWith('audio/') && !(file.type || '').startsWith('video/')) {
+                titanAlert('الملف غير مدعوم. مسموح فقط صورة أو صوت أو فيديو.', 'error');
                 mediaInput.value = '';
                 return;
             }
-            if (file.size > 6 * 1024 * 1024) {
-                titanAlert('حجم الملف كبير جداً (الحد 6MB).', 'warning');
-                mediaInput.value = '';
-                return;
-            }
-
-            const encryptKey = prompt("🔐 أدخل مفتاح التشفير الخاص بهذه الوسائط:");
-            if (!encryptKey) {
+            if (file.size > 12 * 1024 * 1024) {
+                titanAlert('حجم الملف كبير جداً (الحد 12MB).', 'warning');
                 mediaInput.value = '';
                 return;
             }
@@ -9528,42 +9731,7 @@ HTML_TEMPLATE = """
                     reader.onerror = () => reject(new Error('read_failed'));
                     reader.readAsDataURL(file);
                 });
-
-                const payload = JSON.stringify({
-                    kind: 'media',
-                    mime: file.type || 'application/octet-stream',
-                    name: file.name || 'file',
-                    data: dataUrl
-                });
-                const encryptedMsg = e2eEncrypt(payload, encryptKey);
-
-                const display = document.getElementById('burnChatDisplay');
-                if ((file.type || '').startsWith('image/')) {
-                    display.innerHTML += `
-                        <div class="flex justify-start mt-4">
-                            <div class="bg-indigo-900/40 border border-indigo-700/50 text-indigo-200 px-4 py-3 rounded-lg text-sm max-w-[85%] break-y relative">
-                                <span class="text-[10px] text-indigo-400 font-bold mb-1 block">أنت (${currentUser}) <span class="text-indigo-600 bg-indigo-950 px-1 rounded ml-2">🔒 صورة مشفرة</span></span>
-                                <img src="${dataUrl}" alt="sent image" class="rounded border border-indigo-700/40 max-h-48 object-contain mt-2" />
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    display.innerHTML += `
-                        <div class="flex justify-start mt-4">
-                            <div class="bg-indigo-900/40 border border-indigo-700/50 text-indigo-200 px-4 py-3 rounded-lg text-sm max-w-[85%] break-y relative">
-                                <span class="text-[10px] text-indigo-400 font-bold mb-1 block">أنت (${currentUser}) <span class="text-indigo-600 bg-indigo-950 px-1 rounded ml-2">🔒 صوت مشفر</span></span>
-                                <audio controls class="w-full mt-2"><source src="${dataUrl}"></audio>
-                            </div>
-                        </div>
-                    `;
-                }
-                display.scrollTop = display.scrollHeight;
-
-                await fetch('/api/chat/send', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({room_id: currentRoomId, sender: currentUser, msg: encryptedMsg})
-                });
-                soundManager.success();
+                await _sendBurnChatMediaDataUrl(String(dataUrl), file.type || 'application/octet-stream', file.name || 'file');
             } catch (e) {
                 titanAlert('فشل إرسال الوسائط المشفرة', 'error');
             } finally {
@@ -9572,6 +9740,13 @@ HTML_TEMPLATE = """
         }
 
         function _handleBurnRoomDestroyed(byUser) {
+            if (burnChatRecorder && burnChatRecorder.state !== 'inactive') {
+                burnChatRecorder.stop();
+            }
+            if (burnChatRecordStream) {
+                burnChatRecordStream.getTracks().forEach(t => t.stop());
+                burnChatRecordStream = null;
+            }
             if (burnChatTimer) {
                 clearInterval(burnChatTimer);
                 burnChatTimer = null;
@@ -9628,6 +9803,8 @@ HTML_TEMPLATE = """
                     data.messages.forEach(m => {
                         // Generate a unique ID for this message block
                         const msgId = 'msg-' + Math.random().toString(36).substr(2, 9);
+                        const cipherRaw = String(m.msg || '');
+                        const cipherPreview = _burnCipherPreview(cipherRaw);
                         
                         display.innerHTML += `
                             <div class="flex justify-end mt-4 mb-2">
@@ -9638,7 +9815,8 @@ HTML_TEMPLATE = """
                                     </div>
                                     <!-- Ciphertext -->
                                     <div class="mb-3 p-2 bg-black/80 rounded border border-pink-900/50">
-                                        <div class="text-[10px] font-mono text-pink-700 break-all select-all">${m.msg}</div>
+                                        <div class="text-[10px] font-mono text-pink-700/70 break-all">${cipherPreview}</div>
+                                        <div class="text-[9px] text-pink-800 mt-1">cipher length: ${cipherRaw.length} chars</div>
                                     </div>
                                     
                                     <!-- Action Button & Output Area -->
@@ -9680,34 +9858,9 @@ HTML_TEMPLATE = """
                     badge.className = "text-[9px] text-red-500 ml-3 uppercase bg-red-900/30 border border-red-800/50 px-2 py-0.5 rounded animate-pulse";
                     badge.innerText = "❌ مفتاح خاطئ";
                 }
-                
-                // Alert slightly, then enforce FULL SYSTEM LOCKDOWN after 3 seconds
+
+                // Keep chat state; don't wipe entire app on single wrong key attempt.
                 soundManager.error();
-                setTimeout(() => {
-                    clearInterval(burnChatTimer);
-                    burnChatTimer = null;
-                    
-                    // Completely destroy the page UI
-                    document.body.innerHTML = `
-                        <div class="h-screen w-screen bg-black flex flex-col items-center justify-center text-center p-8 fixed top-0 left-0 z-50">
-                            <div class="text-9xl mb-8 animate-bounce">💀</div>
-                            <h1 class="text-red-600 font-black text-6xl mb-4 tracking-widest animate-pulse">SYSTEM LOCKED</h1>
-                            <h2 class="text-red-500 font-bold text-2xl mb-8">SECURE COMM COMPROMISED</h2>
-                            <p class="text-red-400 text-lg max-w-2xl mx-auto mb-10 leading-relaxed border border-red-900/50 bg-red-950/30 p-6 rounded-xl">
-                                تم إدخال مفتاح تشفير عالي السرية بشكل خاطئ. للحماية القصوى من محاولات التخمين والاختراق، تم تفعيل بروتوكول التدمير الذاتي وتجميد واجهة النظام بالكامل.
-                            </p>
-                            <div class="text-gray-600 font-mono text-xs opacity-50 mb-10">
-                                ERASING SESSION CACHE... [DONE]<br>
-                                WIPING LOCAL TOKENS... [DONE]<br>
-                                CONNECTION TERMINATED PERMANENTLY
-                            </div>
-                            <div class="text-red-500 font-black text-xl animate-pulse border-t border-b border-red-900/50 py-4 w-full max-w-md">
-                                يُرجى إغلاق المتصفح أو علامة التبويب فوراً.
-                            </div>
-                        </div>
-                    `;
-                    soundManager.alarm();
-                }, 2500);
                 return;
             }
             
@@ -9718,8 +9871,10 @@ HTML_TEMPLATE = """
                 if (parsed && parsed.kind === 'media' && parsed.data) {
                     if (String(parsed.mime || '').startsWith('image/')) {
                         rendered = `<div class="bg-green-900/20 p-3 rounded border border-green-800/30"><div class="text-[10px] text-green-300 mb-2">📷 صورة مفكوكة التشفير</div><img src="${parsed.data}" alt="decrypted image" class="rounded border border-green-700/40 max-h-56 object-contain" /></div>`;
+                    } else if (String(parsed.mime || '').startsWith('video/')) {
+                        rendered = `<div class="bg-green-900/20 p-3 rounded border border-green-800/30"><div class="text-[10px] text-green-300 mb-2">🎬 فيديو مفكوك التشفير</div><video controls controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false;" class="w-full max-h-56 rounded border border-green-700/40"><source src="${parsed.data}"></video></div>`;
                     } else if (String(parsed.mime || '').startsWith('audio/')) {
-                        rendered = `<div class="bg-green-900/20 p-3 rounded border border-green-800/30"><div class="text-[10px] text-green-300 mb-2">🎧 ملف صوتي مفكوك التشفير</div><audio controls class="w-full"><source src="${parsed.data}"></audio></div>`;
+                        rendered = `<div class="bg-green-900/20 p-3 rounded border border-green-800/30"><div class="text-[10px] text-green-300 mb-2">🎧 ملف صوتي مفكوك التشفير</div><audio controls controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false;" class="w-full"><source src="${parsed.data}"></audio></div>`;
                     }
                 }
             } catch (e) {
@@ -12217,6 +12372,7 @@ def create_burn_note():
     
     note_id = str(uuid.uuid4())
     BURN_NOTES[note_id] = note_payload
+    _burn_note_store_db(note_id, note_payload)
     add_audit_log("رسالة تدمير ذاتي 🔥", f"تم توليد رابط رسالة جديدة")
     
     # Generate full access URL
@@ -12225,9 +12381,15 @@ def create_burn_note():
 
 @app.route('/burn/<note_id>', methods=['GET'])
 def view_burn_note(note_id):
-    if note_id in BURN_NOTES:
-        # قرأناها ودمّرناها فوراً من المتغير (RAM)
-        payload = BURN_NOTES.pop(note_id)
+    # Strict one-time read: consume DB first (atomic), then clear any RAM mirror copy.
+    payload = _burn_note_pop_db(note_id)
+    if payload is not None:
+        BURN_NOTES.pop(note_id, None)
+    else:
+        # Fallback when DB is unavailable: use RAM once.
+        payload = BURN_NOTES.pop(note_id, None)
+
+    if payload is not None:
         note_type = 'text'
         media_mime = ''
         media_b64 = ''
