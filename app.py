@@ -276,6 +276,117 @@ def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prom
     return _sanitize_ai_reply("\n".join(chunks).strip())
 
 
+AI_CHAT_SESSIONS: dict[str, dict[str, object]] = {}
+
+
+def _classify_ai_topic(text: str) -> str:
+    t = (text or '').lower()
+    rules = [
+        ('incident_response', ['incident', 'ir', 'triage', 'contain', 'forensic', 'soc', 'alert', 'حادث', 'استجابة', 'احتواء', 'تحقيق']),
+        ('malware_analysis', ['malware', 'ransomware', 'trojan', 'payload', 'yara', 'برمجية', 'خبيث', 'فيروس', 'تحليل عينة']),
+        ('network_security', ['network', 'firewall', 'ids', 'ips', 'wireshark', 'port', 'شبكة', 'جدار', 'منفذ', 'حزم']),
+        ('osint', ['osint', 'username', 'domain', 'ip', 'social', 'اوسنت', 'استخبارات', 'اسم مستخدم', 'دومين']),
+        ('secure_coding', ['code', 'python', 'javascript', 'sql', 'xss', 'sqli', 'csrf', 'coding', 'برمجة', 'كود', 'ثغرة']),
+        ('learning_path', ['learn', 'roadmap', 'course', 'certificate', 'ceh', 'cissp', 'security+', 'تعلم', 'مسار', 'شهادة', 'دورة']),
+    ]
+    for label, keywords in rules:
+        if any(k in t for k in keywords):
+            return label
+    return 'general_support'
+
+
+def _build_ai_system_prompt(topic: str) -> str:
+    return (
+        AI_SYSTEM_PROMPT
+        + "\n\n"
+        + "تنسيق الرد إلزامي:\n"
+        + "- ابدأ بسطر عنوان واضح مناسب للطلب.\n"
+        + "- ثم قدم ملخص سريع من 1-2 سطر.\n"
+        + "- ثم قدم خطوات عملية مرقمة (1. 2. 3.).\n"
+        + "- أضف قسم \"ملاحظات مهمة\" بنقاط قصيرة عند الحاجة.\n"
+        + "- اجعل الخطاب مرتباً وواضحاً وقابل للتنفيذ، وتجنب الفقرات الطويلة.\n"
+        + f"- تصنيف الموضوع الحالي: {topic}. حافظ على الاستمرارية مع نفس سياق المحادثة."
+    )
+
+
+def _call_do_ai_with_history(history_messages: list[dict[str, object]], system_prompt: str | None = None) -> str:
+    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
+    messages: list[dict[str, object]] = [{"role": "system", "content": sys_prompt}]
+    for m in (history_messages or []):
+        role = str(m.get('role') or '').strip()
+        content = str(m.get('content') or '')
+        if role in ('user', 'assistant') and content:
+            messages.append({"role": role, "content": content})
+
+    chunks: list[str] = []
+    for _ in range(3):
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1600)
+        if chunk:
+            chunks.append(chunk)
+            messages.append({"role": "assistant", "content": chunk})
+
+        if finish_reason != 'length':
+            break
+
+        messages.append({
+            "role": "user",
+            "content": "Continue from the exact last sentence without repeating, and complete the answer to the end."
+        })
+
+    return _sanitize_ai_reply("\n".join(chunks).strip())
+
+
+def _ai_trim_title(text: str, max_len: int = 72) -> str:
+    t = re.sub(r'\s+', ' ', (text or '').strip())
+    if not t:
+        return 'محادثة جديدة'
+    return (t[:max_len] + '...') if len(t) > max_len else t
+
+
+def _ai_load_history_db(c, user_id: int, conversation_id: str, limit: int = 14) -> list[dict[str, object]]:
+    c.execute(
+        """
+        SELECT role, content
+        FROM ai_chat_messages
+        WHERE user_id=%s AND conversation_id=%s
+        ORDER BY id DESC
+        LIMIT %s
+        """,
+        (user_id, conversation_id, max(1, int(limit)))
+    )
+    rows = c.fetchall() or []
+    rows = rows[::-1]
+    out: list[dict[str, object]] = []
+    for role, content in rows:
+        r = str(role or '').strip()
+        txt = str(content or '')
+        if r in ('user', 'assistant') and txt:
+            out.append({"role": r, "content": txt})
+    return out
+
+
+def _ai_upsert_thread_db(c, user_id: int, conversation_id: str, title: str, classification: str, model: str, updated_at: str, preview: str) -> None:
+    c.execute(
+        """
+        INSERT INTO ai_chat_threads (user_id, conversation_id, title, classification, model, created_at, updated_at, last_message_preview)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (user_id, conversation_id) DO UPDATE SET
+            classification=EXCLUDED.classification,
+            model=EXCLUDED.model,
+            updated_at=EXCLUDED.updated_at,
+            last_message_preview=EXCLUDED.last_message_preview
+        """,
+        (user_id, conversation_id, title, classification, model, updated_at, updated_at, preview)
+    )
+
+
+def _ai_append_message_db(c, user_id: int, conversation_id: str, role: str, content: str, created_at: str) -> None:
+    c.execute(
+        "INSERT INTO ai_chat_messages (user_id, conversation_id, role, content, created_at) VALUES (%s,%s,%s,%s,%s)",
+        (user_id, conversation_id, role, content, created_at)
+    )
+
+
 def _ctf_normalize_newlines(value):
     """Normalize escaped/newline-like tokens so challenge text renders correctly in UI."""
     if isinstance(value, str):
@@ -634,6 +745,32 @@ def init_db():
             admin_note TEXT DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS ai_chat_threads (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            conversation_id TEXT NOT NULL,
+            title TEXT DEFAULT 'محادثة جديدة',
+            classification TEXT DEFAULT 'general_support',
+            model TEXT DEFAULT 'titan_ultimate',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_message_preview TEXT DEFAULT '',
+            UNIQUE (user_id, conversation_id)
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS ai_chat_messages (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            conversation_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL
         )
     ''')
 
@@ -2003,6 +2140,28 @@ HTML_TEMPLATE = """
         @keyframes radar-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes target-ping { 0%, 100% { transform: scale(1); opacity: 0; } 50% { transform: scale(1.5); opacity: 1; } }
 
+        /* Auth overlay must remain scrollable on short/mobile screens so register fields are reachable. */
+        #auth-overlay {
+            overflow: hidden !important;
+        }
+        #auth-card-wrapper {
+            height: 100% !important;
+            min-height: 100% !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            touch-action: pan-y;
+            padding-top: 1.25rem !important;
+            padding-bottom: 1.75rem !important;
+        }
+        @media (max-width: 768px), (max-height: 780px) {
+            #auth-card-wrapper {
+                align-items: flex-start !important;
+                justify-content: center !important;
+            }
+        }
+
     </style>
 </head>
 <body class="min-h-screen relative">
@@ -2016,7 +2175,7 @@ HTML_TEMPLATE = """
         <div style="position:absolute;width:40vw;height:40vw;border-radius:50%;background:radial-gradient(circle,rgba(168,85,247,0.14) 0%,transparent 70%);bottom:-15%;right:5%;filter:blur(80px);animation:orbFloat 14s ease-in-out infinite alternate-reverse;pointer-events:none;z-index:1;"></div>
 
         <!-- Auth Card -->
-        <div style="position:relative;z-index:10;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1.5rem;" id="auth-card-wrapper">
+        <div style="position:relative;z-index:10;display:flex;align-items:center;justify-content:center;min-height:100%;height:100%;padding:1.5rem;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y;" id="auth-card-wrapper">
             <div style="width:100%;max-width:420px;background:rgba(10,10,30,0.85);border:1px solid rgba(139,92,246,0.35);border-radius:24px;padding:2.5rem 2rem;box-shadow:0 0 80px rgba(139,92,246,0.25),0 25px 60px rgba(0,0,0,0.6);backdrop-filter:blur(24px);">
 
                 <!-- Logo -->
@@ -2632,10 +2791,19 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div id="ai-sub-content-chat" class="space-y-4">
-                <div id="ai-chat-shell" class="bg-slate-900/70 rounded-2xl border border-purple-900/30 overflow-hidden h-[34rem] flex flex-col">
-                    <div class="p-3 border-b border-slate-700">
-                        <span class="text-purple-300 text-sm font-bold">&#128172; محادثة مع AI</span>
+                <div class="bg-slate-900/60 rounded-xl border border-purple-900/30 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-xs font-bold text-purple-300">المحادثات السابقة</div>
+                        <button type="button" onclick="loadAiConversations()" class="text-[11px] px-2 py-1 rounded border border-slate-700 text-gray-300 hover:bg-slate-800">تحديث</button>
                     </div>
+                    <div id="ai-conv-list" class="max-h-28 overflow-y-auto space-y-1 text-xs text-gray-300"></div>
+                </div>
+                <div id="ai-chat-shell" class="bg-slate-900/70 rounded-2xl border border-purple-900/30 overflow-hidden h-[34rem] flex flex-col">
+                    <div class="p-3 border-b border-slate-700 flex items-center justify-between gap-2">
+                        <span class="text-purple-300 text-sm font-bold">&#128172; محادثة مع AI</span>
+                        <button type="button" onclick="startNewAiConversation()" class="text-xs px-2.5 py-1 rounded-lg border border-purple-800/50 bg-purple-900/20 text-purple-300 hover:bg-purple-800/30">+ محادثة جديدة</button>
+                    </div>
+                    <div id="ai-chat-meta" class="px-3 py-2 text-[11px] text-purple-200/90 bg-slate-950/70 border-b border-slate-800">الموضوع: عام • الذاكرة: فعالة</div>
                     <div id="ai-chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-slate-950/40 to-slate-900/20">
                         <div class="min-h-full flex flex-col justify-end gap-3" id="ai-chat-flow">
                             <div class="flex justify-start items-end gap-2">
@@ -3416,6 +3584,21 @@ HTML_TEMPLATE = """
                     </div>
                     <p class="text-xs text-gray-400 mb-3 relative z-10">رسالة سرية لمرة واحدة، تُحذف فور قراءتها.</p>
                     <textarea id="burnNoteText" rows="3" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-600 focus:ring-1 focus:ring-orange-500 outline-none text-sm mb-3 relative z-10" placeholder="اكتب رسالتك السرية هنا..."></textarea>
+                    <input id="burnNoteMedia" type="file" accept="image/*" class="hidden">
+                    <div class="bg-slate-900/40 border border-slate-700/60 rounded-xl p-3 mb-2 relative z-10">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                            <button type="button" onclick="triggerBurnNoteImagePicker()" class="w-full py-2 rounded-lg border border-orange-700/50 bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 text-xs font-bold">🖼️ اختيار صورة</button>
+                            <div class="flex gap-2">
+                                <button type="button" id="burnNoteRecStartBtn" onclick="startBurnNoteAudioRecording()" class="flex-1 py-2 rounded-lg border border-emerald-700/50 bg-emerald-900/20 hover:bg-emerald-800/30 text-emerald-300 text-xs font-bold">🎙️ بدء التسجيل</button>
+                                <button type="button" id="burnNoteRecStopBtn" onclick="stopBurnNoteAudioRecording()" class="flex-1 py-2 rounded-lg border border-amber-700/50 bg-amber-900/20 hover:bg-amber-800/30 text-amber-300 text-xs font-bold" disabled>⏹️ إيقاف</button>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <div id="burnNoteMediaState" class="text-[11px] text-gray-400 truncate">لم يتم اختيار صورة أو تسجيل صوت بعد.</div>
+                            <button type="button" onclick="clearBurnNoteSelectedMedia()" class="text-[11px] px-2 py-1 rounded border border-slate-700 text-gray-300 hover:bg-slate-800">مسح</button>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-gray-500 mb-3 relative z-10">اختياري: أرسل نص فقط، أو صورة، أو سجّل صوتك مباشرة من الميكروفون.</p>
                     <button onclick="createBurnNote()" class="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold px-4 py-2 rounded-xl transition-all text-sm shadow-[0_0_15px_rgba(234,88,12,0.35)] flex items-center justify-center gap-2 relative z-10">
                         توليد رابط التدمير السري 🔥
                     </button>
@@ -3437,15 +3620,18 @@ HTML_TEMPLATE = """
                             <input type="password" id="burnChatKey" placeholder="كلمة مرور الغرفة..." class="flex-1 p-2 rounded bg-slate-900 border border-slate-700 focus:border-pink-500 outline-none text-center font-mono" title="كلمة السر الخاصة بدخول الغرفة">
                             <input type="text" id="burnChatUser" placeholder="اسمك الرمزي (Ghost)" class="w-full md:w-1/4 p-2 rounded bg-slate-900 border border-slate-700 focus:border-pink-500 outline-none text-center">
                             <button onclick="joinBurnChat()" class="bg-pink-900/40 hover:bg-pink-800 text-pink-300 px-6 py-2 rounded border border-pink-800/50 transition-all font-bold">انضمام</button>
+                            <button id="burnChatDestroyBtn" onclick="destroyBurnChatRoom()" class="bg-rose-900/30 hover:bg-rose-800/40 text-rose-300 px-5 py-2 rounded border border-rose-800/50 transition-all font-bold" disabled>تدمير الغرفة</button>
                         </div>
 
                         <div id="burnChatDisplay" class="h-64 bg-black rounded-lg border border-pink-900/30 mb-4 p-4 overflow-y-auto flex flex-col gap-2 shadow-inner">
                             <div class="text-center text-gray-600 text-[10px] tracking-widest uppercase mt-auto">-- Secure RAM Storage Only --</div>
                         </div>
 
-                        <div class="flex gap-2">
+                        <div class="flex gap-2 items-center flex-wrap">
                             <input type="text" id="burnChatInput" placeholder="اكتب رسالتك السرية هنا..." class="flex-1 p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-pink-500 outline-none" disabled>
                             <button id="burnChatSendBtn" onclick="sendBurnChat()" class="bg-slate-800 text-gray-500 px-8 rounded-lg font-bold transition-all border border-slate-700" disabled>إرسال</button>
+                            <input id="burnChatMediaInput" type="file" accept="image/*,audio/*" class="hidden" disabled>
+                            <button id="burnChatMediaBtn" onclick="document.getElementById('burnChatMediaInput').click()" class="bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700" disabled>📎 صورة/صوت</button>
                         </div>
                     </div>
                 </div>
@@ -8515,27 +8701,132 @@ HTML_TEMPLATE = """
             }
         }
 
+        let burnNoteRecorder = null;
+        let burnNoteRecordChunks = [];
+        let burnNoteRecordStream = null;
+        window.__burnNoteRecordedBlob = null;
+
         async function createBurnNote() {
-            const text = document.getElementById('burnNoteText').value;
-            if(!text) return titanAlert("يرجى كتابة رسالة الصندوق قبل التوليد!");
+            const textEl = document.getElementById('burnNoteText');
+            const mediaEl = document.getElementById('burnNoteMedia');
+            const text = (textEl.value || '').trim();
+            const media = mediaEl.files && mediaEl.files[0] ? mediaEl.files[0] : null;
+            const recordedBlob = window.__burnNoteRecordedBlob || null;
+            if(!text && !media && !recordedBlob) return titanAlert("يرجى كتابة رسالة أو اختيار صورة أو تسجيل صوت قبل التوليد!");
+            
+            const formData = new FormData();
+            if (text) formData.append('text', text);
+            if (media) {
+                formData.append('media', media);
+            } else if (recordedBlob) {
+                const voiceFile = new File([recordedBlob], 'burn-note-voice.webm', { type: recordedBlob.type || 'audio/webm' });
+                formData.append('media', voiceFile);
+            }
             
             try {
                 const res = await fetch('/api/burn-note/create', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({text})
+                    method: 'POST',
+                    body: formData
                 });
                 const data = await res.json();
                 if(data.error) throw new Error(data.error);
                 
                 document.getElementById('burnNoteResult').classList.remove('hidden');
                 document.getElementById('burnNoteLink').value = data.link;
-                document.getElementById('burnNoteText').value = "";
+                textEl.value = "";
+                if (mediaEl) mediaEl.value = "";
+                clearBurnNoteSelectedMedia(false);
                 soundManager.success();
                 refreshLogs();
             } catch (e) {
                 titanAlert("خطأ: " + e.message);
                 soundManager.error();
             }
+        }
+
+        function _setBurnNoteMediaStateLabel(text, tone) {
+            const el = document.getElementById('burnNoteMediaState');
+            if (!el) return;
+            el.className = 'text-[11px] truncate ' + (tone || 'text-gray-400');
+            el.textContent = text;
+        }
+
+        function triggerBurnNoteImagePicker() {
+            const mediaEl = document.getElementById('burnNoteMedia');
+            if (!mediaEl) return;
+            mediaEl.onchange = () => {
+                if (mediaEl.files && mediaEl.files[0]) {
+                    window.__burnNoteRecordedBlob = null;
+                    _setBurnNoteMediaStateLabel('🖼️ تم اختيار صورة: ' + mediaEl.files[0].name, 'text-orange-300');
+                }
+            };
+            mediaEl.click();
+        }
+
+        async function startBurnNoteAudioRecording() {
+            try {
+                const mediaEl = document.getElementById('burnNoteMedia');
+                if (mediaEl) mediaEl.value = '';
+                window.__burnNoteRecordedBlob = null;
+
+                burnNoteRecordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                burnNoteRecordChunks = [];
+                burnNoteRecorder = new MediaRecorder(burnNoteRecordStream);
+
+                burnNoteRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) burnNoteRecordChunks.push(e.data);
+                };
+
+                burnNoteRecorder.onstop = () => {
+                    if (burnNoteRecordChunks.length > 0) {
+                        window.__burnNoteRecordedBlob = new Blob(burnNoteRecordChunks, { type: 'audio/webm' });
+                        _setBurnNoteMediaStateLabel('🎤 تم تسجيل الصوت وجاهز للإرسال', 'text-emerald-300');
+                    }
+                    if (burnNoteRecordStream) {
+                        burnNoteRecordStream.getTracks().forEach(t => t.stop());
+                        burnNoteRecordStream = null;
+                    }
+                    const startBtn = document.getElementById('burnNoteRecStartBtn');
+                    const stopBtn = document.getElementById('burnNoteRecStopBtn');
+                    if (startBtn) startBtn.disabled = false;
+                    if (stopBtn) stopBtn.disabled = true;
+                };
+
+                burnNoteRecorder.start();
+                const startBtn = document.getElementById('burnNoteRecStartBtn');
+                const stopBtn = document.getElementById('burnNoteRecStopBtn');
+                if (startBtn) startBtn.disabled = true;
+                if (stopBtn) stopBtn.disabled = false;
+                _setBurnNoteMediaStateLabel('🔴 جاري تسجيل الصوت...', 'text-rose-300');
+            } catch (e) {
+                titanAlert('تعذر الوصول للميكروفون. اسمح بصلاحية الميكروفون أولاً.', 'error');
+            }
+        }
+
+        function stopBurnNoteAudioRecording() {
+            if (burnNoteRecorder && burnNoteRecorder.state === 'recording') {
+                burnNoteRecorder.stop();
+            }
+        }
+
+        function clearBurnNoteSelectedMedia(showToast = true) {
+            const mediaEl = document.getElementById('burnNoteMedia');
+            if (mediaEl) mediaEl.value = '';
+            window.__burnNoteRecordedBlob = null;
+            burnNoteRecordChunks = [];
+            if (burnNoteRecorder && burnNoteRecorder.state === 'recording') {
+                burnNoteRecorder.stop();
+            }
+            if (burnNoteRecordStream) {
+                burnNoteRecordStream.getTracks().forEach(t => t.stop());
+                burnNoteRecordStream = null;
+            }
+            const startBtn = document.getElementById('burnNoteRecStartBtn');
+            const stopBtn = document.getElementById('burnNoteRecStopBtn');
+            if (startBtn) startBtn.disabled = false;
+            if (stopBtn) stopBtn.disabled = true;
+            _setBurnNoteMediaStateLabel('لم يتم اختيار صورة أو تسجيل صوت بعد.', 'text-gray-400');
+            if (showToast) titanAlert('تم مسح الوسيط المحدد', 'info');
         }
 
         function copyBurnNoteLink() {
@@ -8620,6 +8911,30 @@ HTML_TEMPLATE = """
         let currentRoomId = null;
         let currentUser = null;
 
+        function _setBurnChatUiConnected(isConnected) {
+            const input = document.getElementById('burnChatInput');
+            const sendBtn = document.getElementById('burnChatSendBtn');
+            const mediaInput = document.getElementById('burnChatMediaInput');
+            const mediaBtn = document.getElementById('burnChatMediaBtn');
+            const destroyBtn = document.getElementById('burnChatDestroyBtn');
+
+            if (input) input.disabled = !isConnected;
+            if (sendBtn) {
+                sendBtn.disabled = !isConnected;
+                sendBtn.className = isConnected
+                    ? 'bg-pink-600 hover:bg-pink-500 text-white px-8 rounded-lg font-bold transition-all border border-pink-500/50 shadow-[0_0_15px_rgba(236,72,153,0.3)]'
+                    : 'bg-slate-800 text-gray-500 px-8 rounded-lg font-bold transition-all border border-slate-700';
+            }
+            if (mediaInput) mediaInput.disabled = !isConnected;
+            if (mediaBtn) {
+                mediaBtn.disabled = !isConnected;
+                mediaBtn.className = isConnected
+                    ? 'bg-pink-900/40 hover:bg-pink-800 text-pink-300 px-4 py-2 rounded-lg font-bold transition-all border border-pink-800/50'
+                    : 'bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700';
+            }
+            if (destroyBtn) destroyBtn.disabled = !isConnected;
+        }
+
         // Custom E2E Encryption (XOR + Base64 Safe) with Signature
         function e2eEncrypt(str, key) {
             let encodedStr = encodeURIComponent(str + "||TITAN_OK||"); // Append verification signature
@@ -8658,12 +8973,16 @@ HTML_TEMPLATE = """
             
             currentRoomId = roomId;
             currentUser = user;
-            
-            document.getElementById('burnChatInput').disabled = false;
-            document.getElementById('burnChatSendBtn').disabled = false;
-            document.getElementById('burnChatSendBtn').className = "bg-pink-600 hover:bg-pink-500 text-white px-8 rounded-lg font-bold transition-all border border-pink-500/50 shadow-[0_0_15px_rgba(236,72,153,0.3)] flex-shrink-0";
+
+            _setBurnChatUiConnected(true);
             document.getElementById('burnChatDisplay').innerHTML = '<div class="text-center text-pink-500 font-bold tracking-widest text-xs uppercase mt-auto mb-2 animate-pulse">-- 🔒 تم الاتصال بنفق مشفر (End-to-End) --</div><div class="text-center text-gray-500 tracking-widest text-[10px] uppercase">يتم تشفير/فك تشفير الرسائل محلياً داخل متصفحك فقط</div>';
-            
+
+            const mediaInput = document.getElementById('burnChatMediaInput');
+            if (mediaInput) {
+                mediaInput.value = '';
+                mediaInput.onchange = sendBurnChatMedia;
+            }
+
             soundManager.success();
             
             if(burnChatTimer) clearInterval(burnChatTimer);
@@ -8707,12 +9026,130 @@ HTML_TEMPLATE = """
             }
         }
 
+        async function sendBurnChatMedia() {
+            const mediaInput = document.getElementById('burnChatMediaInput');
+            if (!mediaInput || !mediaInput.files || !mediaInput.files.length || !currentRoomId) return;
+
+            const file = mediaInput.files[0];
+            if (!file) return;
+            if (!(file.type || '').startsWith('image/') && !(file.type || '').startsWith('audio/')) {
+                titanAlert('الملف غير مدعوم. مسموح فقط صورة أو صوت.', 'error');
+                mediaInput.value = '';
+                return;
+            }
+            if (file.size > 6 * 1024 * 1024) {
+                titanAlert('حجم الملف كبير جداً (الحد 6MB).', 'warning');
+                mediaInput.value = '';
+                return;
+            }
+
+            const encryptKey = prompt("🔐 أدخل مفتاح التشفير الخاص بهذه الوسائط:");
+            if (!encryptKey) {
+                mediaInput.value = '';
+                return;
+            }
+
+            try {
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result || ''));
+                    reader.onerror = () => reject(new Error('read_failed'));
+                    reader.readAsDataURL(file);
+                });
+
+                const payload = JSON.stringify({
+                    kind: 'media',
+                    mime: file.type || 'application/octet-stream',
+                    name: file.name || 'file',
+                    data: dataUrl
+                });
+                const encryptedMsg = e2eEncrypt(payload, encryptKey);
+
+                const display = document.getElementById('burnChatDisplay');
+                if ((file.type || '').startsWith('image/')) {
+                    display.innerHTML += `
+                        <div class="flex justify-start mt-4">
+                            <div class="bg-indigo-900/40 border border-indigo-700/50 text-indigo-200 px-4 py-3 rounded-lg text-sm max-w-[85%] break-y relative">
+                                <span class="text-[10px] text-indigo-400 font-bold mb-1 block">أنت (${currentUser}) <span class="text-indigo-600 bg-indigo-950 px-1 rounded ml-2">🔒 صورة مشفرة</span></span>
+                                <img src="${dataUrl}" alt="sent image" class="rounded border border-indigo-700/40 max-h-48 object-contain mt-2" />
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    display.innerHTML += `
+                        <div class="flex justify-start mt-4">
+                            <div class="bg-indigo-900/40 border border-indigo-700/50 text-indigo-200 px-4 py-3 rounded-lg text-sm max-w-[85%] break-y relative">
+                                <span class="text-[10px] text-indigo-400 font-bold mb-1 block">أنت (${currentUser}) <span class="text-indigo-600 bg-indigo-950 px-1 rounded ml-2">🔒 صوت مشفر</span></span>
+                                <audio controls class="w-full mt-2"><source src="${dataUrl}"></audio>
+                            </div>
+                        </div>
+                    `;
+                }
+                display.scrollTop = display.scrollHeight;
+
+                await fetch('/api/chat/send', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({room_id: currentRoomId, sender: currentUser, msg: encryptedMsg})
+                });
+                soundManager.success();
+            } catch (e) {
+                titanAlert('فشل إرسال الوسائط المشفرة', 'error');
+            } finally {
+                mediaInput.value = '';
+            }
+        }
+
+        function _handleBurnRoomDestroyed(byUser) {
+            if (burnChatTimer) {
+                clearInterval(burnChatTimer);
+                burnChatTimer = null;
+            }
+            _setBurnChatUiConnected(false);
+            currentRoomId = null;
+            const display = document.getElementById('burnChatDisplay');
+            if (display) {
+                display.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-center">
+                        <div class="text-4xl mb-2">💥</div>
+                        <div class="text-rose-400 font-black">تم تدمير الغرفة بالكامل</div>
+                        <div class="text-xs text-gray-500 mt-2">${byUser ? ('تم التدمير بواسطة: ' + byUser) : 'تم حذف كامل الجلسة والرسائل'}.</div>
+                    </div>
+                `;
+            }
+            titanAlert('💥 تم تدمير غرفة الدردشة وحذف جميع الرسائل', 'warning');
+        }
+
+        async function destroyBurnChatRoom() {
+            if (!currentRoomId) return titanAlert('لا توجد غرفة نشطة حالياً', 'warning');
+            const ok = await titanConfirm('هل أنت متأكد من تدمير الغرفة؟ سيتم حذف جميع الرسائل وإخراج جميع الأطراف.');
+            if (!ok) return;
+            try {
+                const res = await fetch('/api/chat/destroy', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({room_id: currentRoomId, requester: currentUser || 'Unknown'})
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    return titanAlert(data.error || 'فشل تدمير الغرفة', 'error');
+                }
+                _handleBurnRoomDestroyed(currentUser || 'You');
+            } catch (e) {
+                titanAlert('فشل الاتصال بالخادم أثناء التدمير', 'error');
+            }
+        }
+
         async function pollBurnChat() {
             if(!currentRoomId) return;
             
             try {
                 const res = await fetch(`/api/chat/receive?room_id=${currentRoomId}&requester=${currentUser}`);
                 const data = await res.json();
+
+                if (data.destroyed) {
+                    _handleBurnRoomDestroyed(data.by || 'Peer');
+                    return;
+                }
                 
                 if(data.messages && data.messages.length > 0) {
                     const display = document.getElementById('burnChatDisplay');
@@ -8803,9 +9240,22 @@ HTML_TEMPLATE = """
             }
             
             // Success: Replace the button area with the decrypted result
+            let rendered = `<div class="text-white font-bold text-lg leading-relaxed bg-green-900/20 p-3 rounded border border-green-800/30">${result.text}</div>`;
+            try {
+                const parsed = JSON.parse(result.text);
+                if (parsed && parsed.kind === 'media' && parsed.data) {
+                    if (String(parsed.mime || '').startsWith('image/')) {
+                        rendered = `<div class="bg-green-900/20 p-3 rounded border border-green-800/30"><div class="text-[10px] text-green-300 mb-2">📷 صورة مفكوكة التشفير</div><img src="${parsed.data}" alt="decrypted image" class="rounded border border-green-700/40 max-h-56 object-contain" /></div>`;
+                    } else if (String(parsed.mime || '').startsWith('audio/')) {
+                        rendered = `<div class="bg-green-900/20 p-3 rounded border border-green-800/30"><div class="text-[10px] text-green-300 mb-2">🎧 ملف صوتي مفكوك التشفير</div><audio controls class="w-full"><source src="${parsed.data}"></audio></div>`;
+                    }
+                }
+            } catch (e) {
+                // plain text message; keep default rendering
+            }
             actionArea.innerHTML = `
                 <div class="text-[9px] text-green-400 mb-1">تم فك التشفير محلياً بنجاح باستخدام المفتاح المقدم:</div>
-                <div class="text-white font-bold text-lg leading-relaxed bg-green-900/20 p-3 rounded border border-green-800/30">${result.text}</div>
+                ${rendered}
             `;
             
             // Update the badge
@@ -9187,17 +9637,131 @@ HTML_TEMPLATE = """
                     if (e.key === 'Enter') sendAiMessage();
                 });
             }
+            loadAiConversations();
         });
+
+        function aiTopicLabel(v) {
+            var map = {
+                general_support: 'عام',
+                incident_response: 'استجابة حوادث',
+                malware_analysis: 'تحليل برمجيات خبيثة',
+                network_security: 'أمن الشبكات',
+                osint: 'OSINT',
+                secure_coding: 'برمجة آمنة',
+                learning_path: 'مسار تعلّم'
+            };
+            return map[v] || 'عام';
+        }
+
+        function renderAiBubble(flow, role, content) {
+            var row = document.createElement('div');
+            if (role === 'assistant') {
+                row.className = 'flex justify-start items-end gap-2';
+                row.innerHTML = '<div class="w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs">🤖</div>' +
+                    '<div class="bg-slate-800 text-gray-200 px-4 py-3 rounded-2xl rounded-bl-md max-w-[84%] text-sm shadow-lg border border-slate-700/60 leading-7">' + renderAiReplyPretty(content) + '</div>';
+            } else {
+                row.className = 'flex justify-end items-end gap-2';
+                row.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] text-sm shadow-lg border border-purple-600/40">' +
+                    _osintEscape(String(content || '')).replace(/\\n/g, '<br>') +
+                    '</div><div class="w-7 h-7 rounded-full bg-purple-800/40 border border-purple-700/50 flex items-center justify-center text-xs">👤</div>';
+            }
+            flow.appendChild(row);
+        }
+
+        async function loadAiConversations() {
+            const box = document.getElementById('ai-conv-list');
+            if (!box) return;
+            box.innerHTML = '<div class="text-gray-500">...loading</div>';
+            try {
+                const res = await fetch('/api/ai/conversations');
+                const data = await res.json();
+                if (!data.success) {
+                    box.innerHTML = '<div class="text-rose-300">تعذر تحميل المحادثات</div>';
+                    return;
+                }
+                const rows = data.conversations || [];
+                if (!rows.length) {
+                    box.innerHTML = '<div class="text-gray-500">لا توجد محادثات بعد</div>';
+                    return;
+                }
+                box.innerHTML = rows.map(r => {
+                    const active = (window.__titanAiConversationId && window.__titanAiConversationId === r.conversation_id) ? 'border-purple-500/70 bg-purple-900/25' : 'border-slate-700 bg-slate-900/40';
+                    return '<div class="w-full p-2 rounded border ' + active + ' transition-all">' +
+                        '<div class="flex items-start gap-2">' +
+                            '<button onclick="openAiConversation(' + "'" + _osintEscape(r.conversation_id) + "'" + ')" class="flex-1 text-right hover:text-white transition-colors">' +
+                                '<div class="font-bold text-gray-200 truncate">' + _osintEscape(r.title || 'محادثة جديدة') + '</div>' +
+                                '<div class="text-[10px] text-purple-300">' + _osintEscape(aiTopicLabel(r.classification)) + '</div>' +
+                                '<div class="text-[10px] text-gray-500 truncate">' + _osintEscape(r.last_message_preview || '') + '</div>' +
+                            '</button>' +
+                            '<button onclick="deleteAiConversation(' + "'" + _osintEscape(r.conversation_id) + "'" + ')" title="حذف المحادثة" class="shrink-0 px-2 py-1 text-[10px] rounded border border-rose-700/60 bg-rose-900/20 text-rose-300 hover:bg-rose-800/30">حذف</button>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="text-rose-300">فشل الاتصال بالخادم</div>';
+            }
+        }
+
+        async function deleteAiConversation(conversationId) {
+            if (!conversationId) return;
+            const ok = await titanConfirm('هل أنت متأكد من حذف هذه المحادثة نهائياً؟');
+            if (!ok) return;
+            try {
+                const res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId), { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.success) {
+                    titanAlert(data.error || 'فشل حذف المحادثة', 'error');
+                    return;
+                }
+
+                if (window.__titanAiConversationId === conversationId) {
+                    startNewAiConversation();
+                }
+                titanAlert('✅ تم حذف المحادثة', 'success');
+                loadAiConversations();
+            } catch (e) {
+                titanAlert('فشل الاتصال بالخادم أثناء الحذف', 'error');
+            }
+        }
+
+        async function openAiConversation(conversationId) {
+            if (!conversationId) return;
+            const flow = document.getElementById('ai-chat-flow');
+            const meta = document.getElementById('ai-chat-meta');
+            if (!flow) return;
+            flow.innerHTML = '<div class="text-gray-500 text-xs">...loading chat</div>';
+            try {
+                const res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId));
+                const data = await res.json();
+                if (!data.success) {
+                    flow.innerHTML = '<div class="text-rose-300 text-xs">تعذر تحميل المحادثة</div>';
+                    return;
+                }
+                window.__titanAiConversationId = conversationId;
+                flow.innerHTML = '';
+                (data.messages || []).forEach(m => renderAiBubble(flow, m.role, m.content));
+                if (meta) {
+                    meta.textContent = 'الموضوع: ' + aiTopicLabel(data.classification) + ' • الذاكرة: فعالة • Conversation: ' + conversationId;
+                }
+                scrollAiChatToBottom();
+                loadAiConversations();
+            } catch (e) {
+                flow.innerHTML = '<div class="text-rose-300 text-xs">فشل الاتصال بالخادم</div>';
+            }
+        }
 
         async function sendAiMessage() {
             var input = document.getElementById('ai-chat-input');
             var messages = document.getElementById('ai-chat-messages');
             var flow = document.getElementById('ai-chat-flow') || messages;
             var btn = document.getElementById('ai-send-btn');
+            var meta = document.getElementById('ai-chat-meta');
             var modelEl = document.getElementById('ai-model-select');
             var model = modelEl ? modelEl.value : 'titan_ultimate';
             var msg = input.value.trim();
             if (!msg) return;
+
+            window.__titanAiConversationId = window.__titanAiConversationId || null;
 
             var userDiv = document.createElement('div');
             userDiv.className = 'flex justify-end items-end gap-2';
@@ -9216,7 +9780,7 @@ HTML_TEMPLATE = """
             botAvatar.className = 'w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs';
             botAvatar.textContent = '🤖';
             var replyInner = document.createElement('div');
-            replyInner.className = 'bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm shadow-lg border border-slate-700/60';
+            replyInner.className = 'bg-slate-800 text-gray-200 px-4 py-3 rounded-2xl rounded-bl-md max-w-[84%] text-sm shadow-lg border border-slate-700/60 leading-7';
             replyInner.textContent = '...';
             replyDiv.appendChild(botAvatar);
             replyDiv.appendChild(replyInner);
@@ -9227,11 +9791,21 @@ HTML_TEMPLATE = """
                 const res = await fetch('/api/ai/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: msg, model: model})
+                    body: JSON.stringify({
+                        message: msg,
+                        model: model,
+                        conversation_id: window.__titanAiConversationId
+                    })
                 });
                 var data = await res.json();
                 if (data.reply) {
-                    replyInner.textContent = data.reply;
+                    window.__titanAiConversationId = data.conversation_id || window.__titanAiConversationId;
+                    if (meta) {
+                        var lbl = aiTopicLabel(data.classification);
+                        meta.textContent = 'الموضوع: ' + lbl + ' • الذاكرة: فعالة • Conversation: ' + (window.__titanAiConversationId || '-');
+                    }
+                    replyInner.innerHTML = renderAiReplyPretty(data.reply);
+                    loadAiConversations();
                 } else {
                     replyInner.textContent = data.error || 'حدث خطأ';
                 }
@@ -9241,6 +9815,76 @@ HTML_TEMPLATE = """
             btn.disabled = false;
             btn.textContent = 'إرسال';
             messages.scrollTop = messages.scrollHeight;
+        }
+
+        function renderAiReplyPretty(text) {
+            const src = String(text || '');
+            const esc = _osintEscape(src);
+            const lines = esc.split(/\\n+/);
+            let out = [];
+            let openedList = false;
+
+            function closeListIfOpen() {
+                if (openedList) {
+                    out.push('</ol>');
+                    openedList = false;
+                }
+            }
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = (lines[i] || '').trim();
+                if (!line) {
+                    closeListIfOpen();
+                    continue;
+                }
+
+                if (line.startsWith('### ') || line.startsWith('## ') || line.startsWith('# ')) {
+                    closeListIfOpen();
+                    const title = line.replace(/^#+\\s*/, '');
+                    out.push('<div class="text-purple-300 font-black text-[15px] mt-2 mb-1 tracking-wide">' + title + '</div>');
+                    continue;
+                }
+
+                if (/^\\d+\\.\\s+/.test(line)) {
+                    if (!openedList) {
+                        out.push('<ol class="list-decimal mr-5 space-y-1 text-gray-100">');
+                        openedList = true;
+                    }
+                    out.push('<li>' + line.replace(/^\\d+\\.\\s+/, '') + '</li>');
+                    continue;
+                }
+
+                if (/^[-*]\\s+/.test(line)) {
+                    closeListIfOpen();
+                    out.push('<div class="text-gray-100">• ' + line.replace(/^[-*]\\s+/, '') + '</div>');
+                    continue;
+                }
+
+                closeListIfOpen();
+                out.push('<div class="text-gray-100">' + line + '</div>');
+            }
+            closeListIfOpen();
+            return out.join('');
+        }
+
+        function startNewAiConversation() {
+            window.__titanAiConversationId = null;
+            const flow = document.getElementById('ai-chat-flow');
+            const meta = document.getElementById('ai-chat-meta');
+            if (!flow) return;
+            flow.innerHTML = `
+                <div class="flex justify-start items-end gap-2">
+                    <div class="w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs">🤖</div>
+                    <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm shadow-lg border border-slate-700/60">
+                        بدأت محادثة جديدة ✅ اكتب سؤالك الأول وسأبني عليه سياق كامل.
+                    </div>
+                </div>
+            `;
+            if (meta) meta.textContent = 'الموضوع: عام • الذاكرة: فعالة';
+            scrollAiChatToBottom();
+            const input = document.getElementById('ai-chat-input');
+            if (input) input.focus();
+            loadAiConversations();
         }
 
         async function createSupportTicket() {
@@ -10824,12 +11468,46 @@ def admin_support_tickets_update(ticket_id):
 
 @app.route('/api/burn-note/create', methods=['POST'])
 def create_burn_note():
-    text = request.json.get('text')
-    if not text:
+    payload = request.get_json(silent=True) or {}
+    text = (request.form.get('text') or payload.get('text') or '').strip()
+    media = request.files.get('media')
+
+    note_payload = None
+
+    if media and (media.filename or '').strip():
+        raw = media.read()
+        if not raw:
+            return jsonify({"error": "الملف المرفوع فارغ"}), 400
+        if len(raw) > (8 * 1024 * 1024):
+            return jsonify({"error": "حجم الملف كبير جداً (الحد 8MB)"}), 400
+
+        mime = (media.mimetype or '').lower().strip()
+        if mime.startswith('image/'):
+            note_payload = {
+                "type": "image",
+                "mime": mime,
+                "data_b64": base64.b64encode(raw).decode('ascii')
+            }
+        elif mime.startswith('audio/'):
+            note_payload = {
+                "type": "audio",
+                "mime": mime,
+                "data_b64": base64.b64encode(raw).decode('ascii')
+            }
+        else:
+            return jsonify({"error": "نوع الملف غير مدعوم. مسموح فقط صورة أو صوت."}), 400
+
+    if text:
+        if note_payload is None:
+            note_payload = {"type": "text", "text": text}
+        else:
+            note_payload["text"] = text
+
+    if note_payload is None:
         return jsonify({"error": "نص فارغ"}), 400
     
     note_id = str(uuid.uuid4())
-    BURN_NOTES[note_id] = text
+    BURN_NOTES[note_id] = note_payload
     add_audit_log("رسالة تدمير ذاتي 🔥", f"تم توليد رابط رسالة جديدة")
     
     # Generate full access URL
@@ -10840,7 +11518,170 @@ def create_burn_note():
 def view_burn_note(note_id):
     if note_id in BURN_NOTES:
         # قرأناها ودمّرناها فوراً من المتغير (RAM)
-        text = BURN_NOTES.pop(note_id)
+        payload = BURN_NOTES.pop(note_id)
+        note_type = 'text'
+        media_mime = ''
+        media_b64 = ''
+        text = ''
+
+        if isinstance(payload, dict):
+            note_type = str(payload.get('type') or 'text')
+            media_mime = str(payload.get('mime') or '')
+            media_b64 = str(payload.get('data_b64') or '')
+            text = str(payload.get('text') or '')
+        else:
+            text = str(payload or '')
+
+        if note_type in ('image', 'audio') and media_b64:
+            safe_mime = html.escape(media_mime, quote=True)
+            safe_b64 = html.escape(media_b64, quote=True)
+            safe_caption = html.escape(text).replace('\n', '<br>') if text else ''
+            is_audio = note_type == 'audio'
+            media_html = ''
+            if note_type == 'image':
+                media_html = f'<img id="secureMedia" src="data:{safe_mime};base64,{safe_b64}" alt="burn image" style="max-width:100%;max-height:52vh;border-radius:10px;border:1px solid #374151;object-fit:contain;" />'
+            else:
+                media_html = f'<audio id="secureMedia" autoplay preload="auto" playsinline controlsList="nodownload noplaybackrate" style="width:100%;pointer-events:none;" src="data:{safe_mime};base64,{safe_b64}"></audio>'
+
+            hold_btn_html = '' if is_audio else '<button id="holdRevealBtn" class="hold-btn">👆 اضغط مطولاً لعرض المحتوى</button>'
+            wrap_class = 'secure-media' if is_audio else 'secure-media locked'
+            warning_html = '🎧 سيتم تدمير الرسالة بعد انتهاء تشغيل التسجيل كاملاً. المتبقي التقريبي: <span id="countdown">--</span> ثانية' if is_audio else '⚠️ سيتم إخفاء المحتوى تلقائيًا خلال <span id="countdown">10</span> ثوانٍ'
+
+            add_audit_log("رسالة مدمرة 💣", f"تم فتح رسالة {note_type} وتدميرها للأبد")
+            return f'''
+            <!DOCTYPE html>
+            <html lang="ar" dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>وسيط ذاتي التدمير | TITAN</title>
+                <style>
+                    body {{ background: #050505; color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background-image: radial-gradient(circle at center, #2e0909 0%, #050505 100%); user-select: none; -webkit-user-select: none; }}
+                    .container {{ background: #0a0a0a; border: 1px solid #ef4444; border-radius: 12px; padding: 28px; box-shadow: 0 0 50px rgba(239, 68, 68, 0.2); max-width: 720px; text-align: center; position: relative; overflow: hidden; width: 94%; transition: filter 0.2s, opacity 0.2s; }}
+                    .container::before {{ content:""; position:absolute; top:0; left:0; right:0; height:4px; background:linear-gradient(90deg, #ef4444, #f97316); }}
+                    .warning {{ margin-top: 20px; font-size: 14px; color: #ef4444; opacity: 0.9; font-weight: bold; letter-spacing: 1px; }}
+                    .secure-media {{ background:#000; border:1px dashed #ef4444; border-radius:10px; padding:14px; }}
+                    .secure-media.locked {{ filter: blur(20px); opacity: 0.2; pointer-events: none; }}
+                    .caption {{ margin-top: 10px; color: #d1d5db; line-height: 1.8; text-align: right; }}
+                    .hold-btn {{ display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #ef4444; color: #fecaca; background: rgba(239, 68, 68, 0.14); border-radius: 10px; padding: 10px 16px; font-weight: 700; cursor: pointer; margin-bottom: 12px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container" id="secureContainer">
+                    <div style="font-size: 52px; margin-bottom: 12px;">💣</div>
+                    <h1 style="color:#ef4444;margin:0 0 8px 0;">تم فتح الرسالة بنجاح</h1>
+                    <p style="color:#9ca3af;font-size:14px;line-height:1.6;margin-bottom:14px;">هذه رسالة لمرة واحدة فقط، وبعد إغلاق الصفحة لن تكون متاحة مجددًا.</p>
+                    {hold_btn_html}
+                    <div class="{wrap_class}" id="secureMediaWrap">{media_html}</div>
+                    <div class="caption">{safe_caption}</div>
+                    <div class="warning" id="timerWarning">{warning_html}</div>
+                </div>
+                <script>
+                    let timeLeft = 10;
+                    const isAudio = {str(is_audio).lower()};
+                    const countdownEl = document.getElementById('countdown');
+                    const warningBox = document.getElementById('timerWarning');
+                    const holdBtn = document.getElementById('holdRevealBtn');
+                    const wrap = document.getElementById('secureMediaWrap');
+                    const audioEl = document.getElementById('secureMedia');
+                    let destroyed = false;
+                    let timer = null;
+                    let maxAllowedTime = 0;
+
+                    function destroyNow() {{
+                        if (destroyed) return;
+                        destroyed = true;
+                        if (timer) clearInterval(timer);
+                        if (holdBtn) holdBtn.remove();
+                        wrap.classList.remove('locked');
+                        wrap.innerHTML = '<div style="color:#ef4444;font-weight:900;font-size:22px;padding:20px;">💥 تم تدمير المحتوى نهائياً</div>';
+                        warningBox.innerText = 'SECURE BURN COMPLETE // SYSTEM LOGGED';
+                    }}
+
+                    function lockView() {{ if (!isAudio) wrap.classList.add('locked'); }}
+                    function unlockView() {{ if (!destroyed && !isAudio) wrap.classList.remove('locked'); }}
+
+                    if (holdBtn) {{
+                        holdBtn.addEventListener('mousedown', unlockView);
+                        holdBtn.addEventListener('mouseup', lockView);
+                        holdBtn.addEventListener('mouseleave', lockView);
+                        holdBtn.addEventListener('touchstart', (e) => {{ e.preventDefault(); unlockView(); }}, {{ passive: false }});
+                        holdBtn.addEventListener('touchend', lockView);
+                    }}
+
+                    if (isAudio && audioEl) {{
+                        audioEl.controls = false;
+                        audioEl.loop = false;
+
+                        const forcePlay = () => {{
+                            if (destroyed) return;
+                            audioEl.play().catch(() => {{
+                                warningBox.innerText = 'اضغط مرة واحدة على الشاشة لبدء التشغيل التلقائي ثم انتظر حتى النهاية...';
+                            }});
+                        }};
+
+                        const updateRemaining = () => {{
+                            if (!countdownEl) return;
+                            const dur = Number(audioEl.duration || 0);
+                            const cur = Number(audioEl.currentTime || 0);
+                            if (cur > maxAllowedTime) maxAllowedTime = cur;
+                            if (dur > 0) {{
+                                const rem = Math.max(0, Math.ceil(dur - cur));
+                                countdownEl.innerText = String(rem);
+                            }}
+                        }};
+
+                        audioEl.addEventListener('loadedmetadata', () => {{
+                            maxAllowedTime = 0;
+                            forcePlay();
+                            updateRemaining();
+                        }});
+                        audioEl.addEventListener('loadedmetadata', updateRemaining);
+                        audioEl.addEventListener('timeupdate', updateRemaining);
+                        audioEl.addEventListener('pause', () => {{
+                            if (!destroyed && !audioEl.ended) forcePlay();
+                        }});
+                        audioEl.addEventListener('seeking', () => {{
+                            const target = Number(audioEl.currentTime || 0);
+                            if (target < (maxAllowedTime - 0.25) || target > (maxAllowedTime + 1.0)) {{
+                                audioEl.currentTime = maxAllowedTime;
+                            }}
+                        }});
+                        audioEl.addEventListener('ratechange', () => {{
+                            if (audioEl.playbackRate !== 1) audioEl.playbackRate = 1;
+                        }});
+                        audioEl.addEventListener('ended', destroyNow);
+
+                        // Fallback for autoplay policy: first user interaction starts playback once.
+                        window.addEventListener('pointerdown', forcePlay, {{ once: true }});
+                        forcePlay();
+                    }} else {{
+                        timer = setInterval(() => {{
+                            timeLeft--;
+                            if (countdownEl) countdownEl.innerText = timeLeft;
+                            if (timeLeft <= 0) destroyNow();
+                        }}, 1000);
+                    }}
+
+                    ['copy','cut','paste','selectstart','dragstart','contextmenu'].forEach((evt) => {{
+                        document.addEventListener(evt, (e) => e.preventDefault());
+                    }});
+
+                    const secContainer = document.getElementById('secureContainer');
+                    window.addEventListener('blur', () => {{
+                        lockView();
+                        secContainer.style.filter = 'blur(30px)';
+                        secContainer.style.opacity = '0.05';
+                    }});
+                    window.addEventListener('focus', () => {{
+                        secContainer.style.filter = 'none';
+                        secContainer.style.opacity = '1';
+                    }});
+                </script>
+            </body>
+            </html>
+            '''
+
         safe_text = html.escape(text).replace('\n', '<br>')
         add_audit_log("رسالة مدمرة 💣", f"تم فتح الرسالة وتدميرها للأبد")
         
@@ -12526,6 +13367,7 @@ def toggle_fim():
 # 3. Secure Comms: P2P Burn Chat
 # In-memory only storage. Structure: { "room_id": [ {"sender": "A", "msg": "hello", "timestamp": ...} ] }
 BURN_CHAT_ROOMS = {}
+BURN_CHAT_DESTROYED: dict[str, dict[str, str]] = {}
 
 @app.route('/api/chat/send', methods=['POST'])
 def chat_send():
@@ -12536,6 +13378,8 @@ def chat_send():
     
     if not room_id or not msg:
         return jsonify({"error": "بيانات مفقودة"}), 400
+    if room_id in BURN_CHAT_DESTROYED:
+        return jsonify({"error": "تم تدمير هذه الغرفة"}), 410
         
     if room_id not in BURN_CHAT_ROOMS:
         BURN_CHAT_ROOMS[room_id] = []
@@ -12547,6 +13391,10 @@ def chat_send():
 def chat_receive():
     room_id = request.args.get('room_id')
     requester = request.args.get('requester', '')
+
+    destroyed_meta = BURN_CHAT_DESTROYED.get(room_id or '')
+    if destroyed_meta:
+        return jsonify({"destroyed": True, "by": destroyed_meta.get('by', '')})
     
     if not room_id or room_id not in BURN_CHAT_ROOMS:
         return jsonify({"messages": []})
@@ -12568,6 +13416,23 @@ def chat_receive():
         add_audit_log("Burn Chat 🔥", f"تم قراءة وتدمير {len(to_deliver)} رسالة سرية في الغرفة [{room_id}]")
         
     return jsonify({"messages": to_deliver})
+
+
+@app.route('/api/chat/destroy', methods=['POST'])
+def chat_destroy():
+    data = request.json or {}
+    room_id = (data.get('room_id') or '').strip()
+    requester = (data.get('requester') or '').strip() or 'Unknown'
+    if not room_id:
+        return jsonify({"success": False, "error": "room_id مطلوب"}), 400
+
+    BURN_CHAT_ROOMS.pop(room_id, None)
+    BURN_CHAT_DESTROYED[room_id] = {
+        'by': requester,
+        'at': datetime.datetime.now().isoformat()
+    }
+    add_audit_log("Burn Chat 💥", f"تم تدمير الغرفة [{room_id}] بواسطة {requester}")
+    return jsonify({"success": True, "room_id": room_id})
 
 
 # =====================================================================
@@ -14223,6 +15088,7 @@ def ai_chat():
     data = request.get_json(silent=True) or {}
     message = (data.get('message') or '').strip()
     model = (data.get('model') or 'titan_ultimate').strip()
+    conversation_id = (data.get('conversation_id') or '').strip()
 
     if not message:
         return jsonify({"error": "الرسالة مطلوبة"}), 400
@@ -14230,12 +15096,184 @@ def ai_chat():
         return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
 
     try:
-        reply = _call_do_ai(message, system_prompt=AI_SYSTEM_PROMPT)
-        add_audit_log("AI Chat 🤖", f"AI: {message[:50]} | files=0 | model={model}", username=session.get('username', ''))
-        return jsonify({"success": True, "reply": reply})
+        if not conversation_id:
+            conversation_id = secrets.token_urlsafe(10)
+
+        user_id = int(session['user_id'])
+        conn = get_db_conn()
+        c = conn.cursor()
+        history = _ai_load_history_db(c, user_id, conversation_id, limit=14)
+
+        topic = _classify_ai_topic(message)
+        context_messages = list(history)
+        context_messages.append({"role": "user", "content": message})
+
+        system_prompt = _build_ai_system_prompt(topic)
+        reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt)
+
+        now = datetime.datetime.now().isoformat()
+        preview = _ai_trim_title(reply, 120)
+        title_seed = ''
+        for h in history:
+            if str(h.get('role') or '') == 'user':
+                title_seed = str(h.get('content') or '').strip()
+                if title_seed:
+                    break
+        if not title_seed:
+            title_seed = message
+
+        _ai_upsert_thread_db(
+            c,
+            user_id,
+            conversation_id,
+            _ai_trim_title(title_seed, 72),
+            topic,
+            model,
+            now,
+            preview
+        )
+        _ai_append_message_db(c, user_id, conversation_id, 'user', message, now)
+        _ai_append_message_db(c, user_id, conversation_id, 'assistant', reply, now)
+        conn.commit()
+        conn.close()
+
+        add_audit_log("AI Chat 🤖", f"AI: {message[:50]} | files=0 | model={model} | topic={topic}", username=session.get('username', ''))
+        return jsonify({
+            "success": True,
+            "reply": reply,
+            "conversation_id": conversation_id,
+            "classification": topic
+        })
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
         return jsonify({"error": f"فشل الاتصال بـ TITAN AI: {str(e)}"}), 500
+
+
+@app.route('/api/ai/conversations', methods=['GET'])
+def ai_conversations_route():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT conversation_id, title, classification, model, updated_at, last_message_preview
+            FROM ai_chat_threads
+            WHERE user_id=%s
+            ORDER BY updated_at DESC
+            LIMIT 40
+            """,
+            (session['user_id'],)
+        )
+        rows = c.fetchall() or []
+        return jsonify({
+            "success": True,
+            "conversations": [
+                {
+                    "conversation_id": str(r[0]),
+                    "title": str(r[1] or ''),
+                    "classification": str(r[2] or 'general_support'),
+                    "model": str(r[3] or 'titan_ultimate'),
+                    "updated_at": str(r[4] or ''),
+                    "last_message_preview": str(r[5] or '')
+                }
+                for r in rows
+            ]
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route('/api/ai/conversations/<conversation_id>', methods=['GET'])
+def ai_conversation_messages_route(conversation_id):
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT title, classification, model
+            FROM ai_chat_threads
+            WHERE user_id=%s AND conversation_id=%s
+            LIMIT 1
+            """,
+            (session['user_id'], conversation_id)
+        )
+        thread = c.fetchone()
+        if not thread:
+            return jsonify({"success": False, "error": "conversation not found"}), 404
+
+        c.execute(
+            """
+            SELECT role, content, created_at
+            FROM ai_chat_messages
+            WHERE user_id=%s AND conversation_id=%s
+            ORDER BY id ASC
+            LIMIT 120
+            """,
+            (session['user_id'], conversation_id)
+        )
+        rows = c.fetchall() or []
+        return jsonify({
+            "success": True,
+            "conversation_id": conversation_id,
+            "title": str(thread[0] or ''),
+            "classification": str(thread[1] or 'general_support'),
+            "model": str(thread[2] or 'titan_ultimate'),
+            "messages": [
+                {"role": str(r[0] or ''), "content": str(r[1] or ''), "created_at": str(r[2] or '')}
+                for r in rows
+                if str(r[0] or '') in ('user', 'assistant')
+            ]
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route('/api/ai/conversations/<conversation_id>', methods=['DELETE'])
+def ai_conversation_delete_route(conversation_id):
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        c.execute(
+            "SELECT 1 FROM ai_chat_threads WHERE user_id=%s AND conversation_id=%s LIMIT 1",
+            (session['user_id'], conversation_id)
+        )
+        if not c.fetchone():
+            return jsonify({"success": False, "error": "conversation not found"}), 404
+
+        c.execute(
+            "DELETE FROM ai_chat_messages WHERE user_id=%s AND conversation_id=%s",
+            (session['user_id'], conversation_id)
+        )
+        c.execute(
+            "DELETE FROM ai_chat_threads WHERE user_id=%s AND conversation_id=%s",
+            (session['user_id'], conversation_id)
+        )
+        conn.commit()
+        add_audit_log("AI Chat Delete 🗑️", f"conversation={conversation_id}", username=session.get('username', ''))
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route('/api/ai/analyze', methods=['POST'])
