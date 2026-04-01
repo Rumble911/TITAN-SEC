@@ -86,6 +86,7 @@ AI_SYSTEM_PROMPT = """
 - لا تختلق معلومات. إذا مش متأكد، قل "والله مش متأكد 100% بس..."
 - إذا السؤال تقني، اعطِ خطوات واضحة وعملية
 - اربط ردودك بالأمن السيبراني لما يكون مناسب
+- لغة الرد يجب أن تتبع لغة المستخدم: إذا سأل بالعربية أجب بالعربية، وإذا سأل بالإنجليزية أجب بالإنجليزية.
 - إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
 - لا تنهِ الرد بشكل مقطوع؛ اختم دائماً بخطوة عملية تالية واضحة.
 
@@ -144,7 +145,7 @@ def _sanitize_ai_reply(text: str) -> str:
     reply = _CTRL_CHARS_RE.sub('', reply)
 
     cjk_count = len(_CJK_CHARS_RE.findall(reply))
-    if cjk_count >= 6:
+    if cjk_count >= 1:
         reply = _CJK_CHARS_RE.sub('', reply)
         reply = re.sub(r'\s{2,}', ' ', reply).strip()
 
@@ -176,6 +177,16 @@ def _looks_garbled_ai_text(text: str) -> bool:
         return True
 
     return False
+
+
+def _detect_user_lang(text: str) -> str:
+    t = text or ''
+    ar = len(_AR_CHARS_RE.findall(t))
+    en = len(_LATIN_CHARS_RE.findall(t))
+    # Prefer English when it clearly dominates, otherwise Arabic by default.
+    if en >= 8 and en > (ar * 1.3):
+        return 'en'
+    return 'ar'
 
 
 def _repair_garbled_ai_reply(raw_reply: str, context_hint: str = '') -> str:
@@ -357,11 +368,18 @@ def _classify_ai_topic(text: str) -> str:
     return 'general_support'
 
 
-def _build_ai_system_prompt(topic: str) -> str:
+def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
+    lang = _detect_user_lang(user_text)
+    lang_rule = (
+        "- Reply strictly in English for this request (no Arabic).\n"
+        if lang == 'en' else
+        "- أجب بالعربية الواضحة لهذا الطلب (بدون تحويل الرد للإنجليزية).\n"
+    )
     return (
         AI_SYSTEM_PROMPT
         + "\n\n"
         + "تنسيق الرد إلزامي:\n"
+        + lang_rule
         + "- حافظ على أسلوب طبيعي وودّي، واستخدم إيموجي بشكل طبيعي في الرد.\n"
         + "- ابدأ بجواب مباشر، ثم رتب النقاط عندما يكون ذلك مفيداً.\n"
         + "- اجعل الخطاب واضحاً وقابلاً للتنفيذ دون تعقيد.\n"
@@ -15203,7 +15221,7 @@ def ai_chat():
         context_messages = list(history)
         context_messages.append({"role": "user", "content": message})
 
-        system_prompt = _build_ai_system_prompt(topic)
+        system_prompt = _build_ai_system_prompt(topic, user_text=message)
         reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt)
 
         now = datetime.datetime.now().isoformat()
