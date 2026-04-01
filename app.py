@@ -3531,8 +3531,7 @@ HTML_TEMPLATE = """
                         </div>
 
                         <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-cyan-950/20 p-4 space-y-3">
-                            <h3 class="text-sm font-black text-cyan-300">اقتراح AI قبل التشفير</h3>
-                            <textarea id="cryptAudience" rows="2" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 text-sm outline-none focus:ring-2 focus:ring-cyan-600/50" placeholder="مثال: بدي أرسل الرسالة لشريك عمل عبر واتساب والمحتوى حساس جدًا..."></textarea>
+                            <h3 class="text-sm font-black text-cyan-300">محادثة AI لتوصية التشفير</h3>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
                                 <select id="cryptSensitivity" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none">
                                     <option value="normal">حساسية عادية</option>
@@ -3540,9 +3539,17 @@ HTML_TEMPLATE = """
                                     <option value="critical">حساسية حرجة</option>
                                 </select>
                                 <input id="cryptPurpose" type="text" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none" placeholder="الغرض: قانوني / مالي / شخصي...">
-                                <button onclick="processCryptRecommendation()" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">اقتراح ذكي</button>
+                                <button onclick="startCryptAdvisorChat(true)" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">بدء/تحديث السياق</button>
                             </div>
-                            <div id="cryptRecommendationBox" class="hidden rounded-xl border border-cyan-800/50 bg-black/40 p-3 text-xs"></div>
+                            <textarea id="cryptAudience" rows="2" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 text-sm outline-none focus:ring-2 focus:ring-cyan-600/50" placeholder="اكتب لمن سترسل النص ولماذا (كل التفاصيل)..."></textarea>
+
+                            <div id="cryptAiChatFlow" class="h-44 overflow-y-auto rounded-xl border border-cyan-900/40 bg-black/35 p-3 space-y-2 text-sm"></div>
+
+                            <div class="flex gap-2">
+                                <input id="cryptAiChatInput" type="text" class="flex-1 p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-sm outline-none" placeholder="اكتب رسالتك لـ AI...">
+                                <button id="cryptAiSendBtn" onclick="sendCryptAdvisorMessage()" class="px-4 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">إرسال</button>
+                                <button onclick="startCryptAdvisorChat(true)" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold border border-slate-600">محادثة جديدة</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -6061,6 +6068,7 @@ HTML_TEMPLATE = """
             if(type === 'forensics' && typeof forensicsInitSection === 'function') forensicsInitSection();
             if(type === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
+            if(type === 'crypt' && typeof startCryptAdvisorChat === 'function') startCryptAdvisorChat(false);
 
             const activeBtn = document.getElementById('btn-' + type);
             if (activeBtn && typeof activeBtn.scrollIntoView === 'function') {
@@ -6291,45 +6299,85 @@ HTML_TEMPLATE = """
             if(data.error) titanAlert(data.error); else document.getElementById('cryptText').value = data.result;
         }
 
-        async function processCryptRecommendation() {
+        function _cryptAdvisorRenderBubble(role, text) {
+            const flow = document.getElementById('cryptAiChatFlow');
+            if (!flow) return;
+            const row = document.createElement('div');
+            if (role === 'assistant') {
+                row.className = 'flex justify-start items-end gap-2';
+                row.innerHTML = '<div class="w-6 h-6 rounded-full bg-cyan-900/50 border border-cyan-700/50 flex items-center justify-center text-[10px]">🤖</div>' +
+                    '<div class="bg-slate-800/90 text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] text-xs border border-slate-700/60 leading-6">' + renderAiReplyPretty(text) + '</div>';
+            } else {
+                row.className = 'flex justify-end items-end gap-2';
+                row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border border-cyan-600/50">' +
+                    _osintEscape(String(text || '')).replace(/\\n/g, '<br>') +
+                    '</div><div class="w-6 h-6 rounded-full bg-cyan-900/40 border border-cyan-700/40 flex items-center justify-center text-[10px]">👤</div>';
+            }
+            flow.appendChild(row);
+            flow.scrollTop = flow.scrollHeight;
+        }
+
+        function startCryptAdvisorChat(reset) {
+            const flow = document.getElementById('cryptAiChatFlow');
+            if (!flow) return;
+
+            if (reset || !window.__cryptAiStarted) {
+                window.__cryptAdvisorConversationId = null;
+                window.__cryptAiStarted = true;
+                flow.innerHTML = '';
+                const sensitivity = document.getElementById('cryptSensitivity')?.value || 'high';
+                const purpose = (document.getElementById('cryptPurpose')?.value || '').trim() || 'عام';
+                _cryptAdvisorRenderBubble('assistant',
+                    'اكتب تفاصيل الحالة وسأعطيك توصية تشفير مخصصة.\\n' +
+                    'الحساسية الحالية: ' + sensitivity + ' | الغرض: ' + purpose + '\\n' +
+                    'بعد كل رد، أقدر أطبق الإعدادات تلقائيًا على خيارات التشفير.'
+                );
+            }
+        }
+
+        async function sendCryptAdvisorMessage() {
+            const input = document.getElementById('cryptAiChatInput');
+            const btn = document.getElementById('cryptAiSendBtn');
             const audience = (document.getElementById('cryptAudience')?.value || '').trim();
             const sensitivity = document.getElementById('cryptSensitivity')?.value || 'high';
             const purpose = (document.getElementById('cryptPurpose')?.value || '').trim();
-            if (!audience) return titanAlert('اكتب لمن تريد إرسال النص المشفّر أولاً.');
+            const message = (input?.value || '').trim();
 
-            const box = document.getElementById('cryptRecommendationBox');
-            if (box) {
-                box.classList.remove('hidden');
-                box.innerHTML = '<div class="text-cyan-300">جاري توليد توصية ذكية...</div>';
-            }
+            if (!message) return;
+            if (!window.__cryptAiStarted) startCryptAdvisorChat(false);
+
+            _cryptAdvisorRenderBubble('user', message);
+            input.value = '';
+            if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
             try {
-                const res = await fetch('/api/crypt/recommend', {
+                const res = await fetch('/api/crypt/recommend/chat', {
                     method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ audience, sensitivity, purpose })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        message,
+                        conversation_id: window.__cryptAdvisorConversationId,
+                        context: { audience, sensitivity, purpose }
+                    })
                 });
                 const data = await res.json();
-                if (!res.ok || data.error) {
-                    throw new Error(data.error || 'فشل التوصية');
-                }
+                if (!res.ok || !data.success) throw new Error(data.error || 'تعذر فتح الدردشة');
 
+                window.__cryptAdvisorConversationId = data.conversation_id || window.__cryptAdvisorConversationId;
                 window.__cryptRec = data.recommendation || null;
+                _cryptAdvisorRenderBubble('assistant', data.reply || 'تم توليد توصية.');
+
                 const rec = window.__cryptRec || {};
-                if (box) {
-                    box.innerHTML = `
-                        <div class="text-cyan-300 font-bold mb-1">اقتراح TITAN AI:</div>
-                        <div class="text-gray-200 mb-1">الخوارزمية: <b>${rec.method || 'fernet'}</b></div>
-                        <div class="text-gray-200 mb-1">KDF: <b>${rec.kdf_profile || 'strong'}</b> | Format: <b>${rec.output_format || 'b64'}</b></div>
-                        <div class="text-gray-300 mb-2">${rec.reason || 'تم اقتراح إعداد متوازن وآمن.'}</div>
-                        ${rec.warning ? `<div class="text-yellow-300 mb-2">⚠ ${rec.warning}</div>` : ''}
-                        <button onclick="applyCryptRecommendation()" class="px-3 py-1.5 rounded bg-cyan-700 hover:bg-cyan-600 text-xs font-bold">تطبيق الاقتراح</button>
-                    `;
-                }
-                soundManager.success();
+                const method = document.getElementById('cryptMethod');
+                const kdf = document.getElementById('cryptKdfProfile');
+                const out = document.getElementById('cryptOutputFormat');
+                if (method && rec.method) method.value = rec.method;
+                if (kdf && rec.kdf_profile) kdf.value = rec.kdf_profile;
+                if (out && rec.output_format) out.value = rec.output_format;
             } catch (e) {
-                if (box) box.innerHTML = `<div class="text-red-300">${(e && e.message) ? e.message : 'تعذر جلب التوصية'}</div>`;
-                soundManager.error();
+                _cryptAdvisorRenderBubble('assistant', 'تعذر فتح الدردشة الآن. ' + ((e && e.message) ? e.message : ''));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'إرسال'; }
             }
         }
 
@@ -10131,10 +10179,13 @@ HTML_TEMPLATE = """
             const ok = await titanConfirm('هل أنت متأكد من حذف هذه المحادثة نهائياً؟');
             if (!ok) return;
             try {
-                const res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId), { method: 'DELETE' });
+                let res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId), { method: 'DELETE' });
+                if (res.status === 405) {
+                    res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId) + '/delete', { method: 'POST' });
+                }
                 const data = await res.json();
                 if (!data.success) {
-                    titanAlert(data.error || 'فشل حذف المحادثة', 'error');
+                    titanAlert(data.error || 'تعذر المسح', 'error');
                     return;
                 }
 
@@ -10144,7 +10195,7 @@ HTML_TEMPLATE = """
                 titanAlert('✅ تم حذف المحادثة', 'success');
                 loadAiConversations();
             } catch (e) {
-                titanAlert('فشل الاتصال بالخادم أثناء الحذف', 'error');
+                titanAlert('تعذر المسح: فشل الاتصال بالخادم', 'error');
             }
         }
 
@@ -10158,7 +10209,8 @@ HTML_TEMPLATE = """
                 const res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId));
                 const data = await res.json();
                 if (!data.success) {
-                    flow.innerHTML = '<div class="text-rose-300 text-xs">تعذر تحميل المحادثة</div>';
+                    flow.innerHTML = '<div class="text-rose-300 text-xs">تعذر فتح الدردشة: ' + _osintEscape(data.error || 'unknown error') + '</div>';
+                    if (res.status === 404) loadAiConversations();
                     return;
                 }
                 window.__titanAiConversationId = conversationId;
@@ -11347,6 +11399,98 @@ def crypt_recommend_route():
         return jsonify({"success": True, "recommendation": rec, "source": "ai"})
     except Exception:
         return jsonify({"success": True, "recommendation": fallback, "source": "fallback"})
+
+
+@app.route('/api/crypt/recommend/chat', methods=['POST'])
+def crypt_recommend_chat_route():
+    data = request.get_json(silent=True) or {}
+    message = str(data.get('message') or '').strip()
+    context = data.get('context') or {}
+    audience = str(context.get('audience') or '').strip()
+    sensitivity = str(context.get('sensitivity') or 'high').strip().lower()
+    purpose = str(context.get('purpose') or '').strip()
+    conversation_id = str(data.get('conversation_id') or '').strip()
+
+    if not message:
+        return jsonify({"success": False, "error": "message required"}), 400
+    if not conversation_id:
+        conversation_id = secrets.token_urlsafe(10)
+
+    user_key = str(session.get('user_id') or 'guest')
+    session_key = f"crypt_adv::{user_key}::{conversation_id}"
+    state = AI_CHAT_SESSIONS.get(session_key) or {"messages": []}
+    raw_messages = state.get('messages') if isinstance(state, dict) else []
+    history = list(raw_messages) if isinstance(raw_messages, list) else []
+
+    fallback = _fallback_crypt_recommendation(audience or message, sensitivity, purpose)
+    default_reply = (
+        "هذه توصية أولية حسب التفاصيل الحالية. "
+        f"استخدم {fallback['method']} مع {fallback['kdf_profile']} و {fallback['output_format']}."
+    )
+
+    if not DO_AI_KEY:
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": default_reply})
+        AI_CHAT_SESSIONS[session_key] = {"messages": history[-16:]}
+        return jsonify({
+            "success": True,
+            "conversation_id": conversation_id,
+            "reply": default_reply,
+            "recommendation": fallback,
+            "source": "fallback"
+        })
+
+    crypt_system = (
+        "You are TITAN encryption advisor in Arabic. "
+        "Return strict JSON only with keys: reply, recommendation. "
+        "recommendation must contain method, kdf_profile, output_format, reason, warning. "
+        "method: fernet|aes-cbc|chacha20|xor-stream. "
+        "kdf_profile: balanced|strong|paranoid. "
+        "output_format: b64|b64url. "
+        "Be practical, ask follow-up briefly when needed, and avoid repeating same recommendation blindly."
+    )
+
+    user_msg = (
+        f"Context audience: {audience or '(not provided)'}\n"
+        f"Context sensitivity: {sensitivity}\n"
+        f"Context purpose: {purpose or 'general'}\n"
+        f"User message: {message}"
+    )
+
+    history_for_ai = history[-12:] + [{"role": "user", "content": user_msg}]
+    try:
+        ai_raw = _call_do_ai_with_history(history_for_ai, system_prompt=crypt_system)
+        payload_text = ai_raw.strip()
+        m = re.search(r'\{[\s\S]*\}', payload_text)
+        if m:
+            payload_text = m.group(0)
+
+        parsed = json.loads(payload_text)
+        reply = str(parsed.get('reply') or '').strip() or default_reply
+        recommendation = _normalize_crypt_recommendation(parsed.get('recommendation') or {})
+
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": reply})
+        AI_CHAT_SESSIONS[session_key] = {"messages": history[-16:]}
+
+        return jsonify({
+            "success": True,
+            "conversation_id": conversation_id,
+            "reply": reply,
+            "recommendation": recommendation,
+            "source": "ai"
+        })
+    except Exception:
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": default_reply})
+        AI_CHAT_SESSIONS[session_key] = {"messages": history[-16:]}
+        return jsonify({
+            "success": True,
+            "conversation_id": conversation_id,
+            "reply": default_reply,
+            "recommendation": fallback,
+            "source": "fallback"
+        })
 
 @app.route('/crypt-text', methods=['POST'])
 def crypt_text_route():
@@ -14117,6 +14261,7 @@ def _contains_arabic_text(value: str) -> bool:
 
 def _arabic_name_to_english(value: str) -> str:
     raw = re.sub(r'[\u064B-\u065F\u0670\u0640]', '', (value or '').strip())
+    raw = raw.replace('ٱ', 'ا').replace('ﺍ', 'ا').replace('ﻻ', 'لا')
     raw = re.sub(r'\s+', ' ', raw).strip()
 
     phrase_map = {
@@ -14136,7 +14281,7 @@ def _arabic_name_to_english(value: str) -> str:
         'محمد': 'Mohammad', 'أحمد': 'Ahmad', 'احمد': 'Ahmad', 'خالد': 'Khaled', 'عمر': 'Omar',
         'يوسف': 'Yousef', 'علي': 'Ali', 'حسن': 'Hasan', 'ماجد': 'Majed', 'فيصل': 'Faisal',
         'سامي': 'Sami', 'ليث': 'Laith', 'زيد': 'Zaid', 'يزن': 'Yazan', 'حمزة': 'Hamza',
-        'عبدالله': 'Abdullah', 'عبد': 'Abd',
+        'عبدالله': 'Abdullah', 'عبد': 'Abd', 'الله': 'Allah', 'اللة': 'Allah',
 
         # Common first names (female)
         'فاطمة': 'Fatimah', 'مريم': 'Maryam', 'سارة': 'Sarah', 'نور': 'Noor', 'لينا': 'Lina',
@@ -14175,6 +14320,11 @@ def _arabic_name_to_english(value: str) -> str:
         return out[0].upper() + out[1:]
 
     parts = [translit_token(p) for p in raw.split(' ') if p.strip()]
+
+    # Merge common compounds for accurate canonical spelling.
+    if len(parts) >= 2 and parts[0] == 'Abd' and parts[1] in ('Allah', 'Alah', 'Al-lah', 'Al-Lah'):
+        parts = ['Abdullah'] + parts[2:]
+
     return ' '.join(p for p in parts if p).strip()
 
 
@@ -15891,6 +16041,11 @@ def ai_conversation_delete_route(conversation_id):
     finally:
         if conn:
             conn.close()
+
+
+@app.route('/api/ai/conversations/<conversation_id>/delete', methods=['POST'])
+def ai_conversation_delete_route_post(conversation_id):
+    return ai_conversation_delete_route(conversation_id)
 
 
 @app.route('/api/ai/analyze', methods=['POST'])
