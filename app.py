@@ -387,6 +387,34 @@ def _ai_append_message_db(c, user_id: int, conversation_id: str, role: str, cont
     )
 
 
+def _ensure_ai_chat_tables(c) -> None:
+    """Runtime-safe bootstrap for AI chat tables in case migration/init wasn't applied yet."""
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS ai_chat_threads (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            conversation_id TEXT NOT NULL,
+            title TEXT DEFAULT 'محادثة جديدة',
+            classification TEXT DEFAULT 'general_support',
+            model TEXT DEFAULT 'titan_ultimate',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_message_preview TEXT DEFAULT '',
+            UNIQUE (user_id, conversation_id)
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS ai_chat_messages (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            conversation_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+
 def _ctf_normalize_newlines(value):
     """Normalize escaped/newline-like tokens so challenge text renders correctly in UI."""
     if isinstance(value, str):
@@ -15102,6 +15130,7 @@ def ai_chat():
         user_id = int(session['user_id'])
         conn = get_db_conn()
         c = conn.cursor()
+        _ensure_ai_chat_tables(c)
         history = _ai_load_history_db(c, user_id, conversation_id, limit=14)
 
         topic = _classify_ai_topic(message)
@@ -15157,6 +15186,7 @@ def ai_conversations_route():
     try:
         conn = get_db_conn()
         c = conn.cursor()
+        _ensure_ai_chat_tables(c)
         c.execute(
             """
             SELECT conversation_id, title, classification, model, updated_at, last_message_preview
@@ -15197,6 +15227,7 @@ def ai_conversation_messages_route(conversation_id):
     try:
         conn = get_db_conn()
         c = conn.cursor()
+        _ensure_ai_chat_tables(c)
         c.execute(
             """
             SELECT title, classification, model
@@ -15248,6 +15279,7 @@ def ai_conversation_delete_route(conversation_id):
     try:
         conn = get_db_conn()
         c = conn.cursor()
+        _ensure_ai_chat_tables(c)
 
         c.execute(
             "SELECT 1 FROM ai_chat_threads WHERE user_id=%s AND conversation_id=%s LIMIT 1",
