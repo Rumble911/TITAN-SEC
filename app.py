@@ -129,6 +129,9 @@ def _looks_like_image_bytes(raw: bytes) -> bool:
 
 _CJK_CHARS_RE = re.compile(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]')
 _CTRL_CHARS_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+_AR_CHARS_RE = re.compile(r'[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]')
+_LATIN_CHARS_RE = re.compile(r'[A-Za-z]')
+_MOJIBAKE_RE = re.compile(r'[�]|[\u2500-\u257f\u2580-\u259f\u0370-\u03ff\u0400-\u04ff]')
 
 
 def _sanitize_ai_reply(text: str) -> str:
@@ -145,9 +148,68 @@ def _sanitize_ai_reply(text: str) -> str:
         reply = _CJK_CHARS_RE.sub('', reply)
         reply = re.sub(r'\s{2,}', ' ', reply).strip()
 
+    # Normalize noisy spacing/newline artifacts.
+    reply = re.sub(r'\r\n?', '\n', reply)
+    reply = re.sub(r'\n{3,}', '\n\n', reply)
+    reply = re.sub(r'[ \t]{2,}', ' ', reply).strip()
+
     if not reply:
         return "تم اكتشاف ناتج غير واضح من النموذج. أرسل سؤالك مرة ثانية وسأعطيك إجابة عربية دقيقة."
     return reply
+
+
+def _looks_garbled_ai_text(text: str) -> bool:
+    t = (text or '').strip()
+    if not t:
+        return True
+    if _MOJIBAKE_RE.search(t):
+        return True
+
+    printable = len([ch for ch in t if not ch.isspace()])
+    if printable < 18:
+        return False
+
+    ar_count = len(_AR_CHARS_RE.findall(t))
+    latin_count = len(_LATIN_CHARS_RE.findall(t))
+    readable_ratio = (ar_count + latin_count) / max(1, printable)
+    if readable_ratio < 0.45:
+        return True
+
+    return False
+
+
+def _repair_garbled_ai_reply(raw_reply: str, context_hint: str = '') -> str:
+    cleaned = _sanitize_ai_reply(raw_reply)
+    if not _looks_garbled_ai_text(cleaned):
+        return cleaned
+
+    # Ask model to rewrite only language quality (no meaning drift) when output is garbled.
+    repair_messages: list[dict[str, object]] = [
+        {
+            "role": "system",
+            "content": (
+                "أنت مدقق لغوي عربي تقني. أعد كتابة النص التالي بلغة عربية صحيحة وواضحة دون تغيير المعنى. "
+                "ممنوع أي حروف مشوّهة أو رموز غير مفهومة. حافظ على المصطلحات الأمنية التقنية."
+            )
+        },
+        {
+            "role": "user",
+            "content": (
+                f"السياق: {context_hint or 'إجابة أمن سيبراني للمستخدم'}\n\n"
+                f"النص الخام:\n{cleaned}"
+            )
+        },
+    ]
+    try:
+        fixed, _ = _do_ai_chat_completion(repair_messages, timeout_seconds=25, max_tokens=1200)
+        fixed_clean = _sanitize_ai_reply(fixed)
+        if fixed_clean and not _looks_garbled_ai_text(fixed_clean):
+            return fixed_clean
+    except Exception:
+        pass
+
+    # Last-safe fallback.
+    return "أعتذر، حدث تشويش في توليد النص. أعد إرسال سؤالك وسأجيبك بصياغة عربية سليمة وواضحة."
 
 _dash_metrics_lock = threading.Lock()
 _dash_prev_net = None
@@ -242,7 +304,7 @@ def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
         })
 
     full_reply = "\n".join(chunks).strip()
-    return _sanitize_ai_reply(full_reply)
+    return _repair_garbled_ai_reply(full_reply, context_hint=message[:200])
 
 
 def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prompt: str | None = None) -> str:
@@ -273,7 +335,7 @@ def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prom
             break
         messages.append({"role": "user", "content": "Continue without repeating."})
 
-    return _sanitize_ai_reply("\n".join(chunks).strip())
+    return _repair_garbled_ai_reply("\n".join(chunks).strip(), context_hint=message[:200])
 
 
 AI_CHAT_SESSIONS: dict[str, dict[str, object]] = {}
@@ -300,11 +362,9 @@ def _build_ai_system_prompt(topic: str) -> str:
         AI_SYSTEM_PROMPT
         + "\n\n"
         + "تنسيق الرد إلزامي:\n"
-        + "- ابدأ بسطر عنوان واضح مناسب للطلب.\n"
-        + "- ثم قدم ملخص سريع من 1-2 سطر.\n"
-        + "- ثم قدم خطوات عملية مرقمة (1. 2. 3.).\n"
-        + "- أضف قسم \"ملاحظات مهمة\" بنقاط قصيرة عند الحاجة.\n"
-        + "- اجعل الخطاب مرتباً وواضحاً وقابل للتنفيذ، وتجنب الفقرات الطويلة.\n"
+        + "- حافظ على أسلوب طبيعي وودّي، واستخدم إيموجي بشكل طبيعي في الرد.\n"
+        + "- ابدأ بجواب مباشر، ثم رتب النقاط عندما يكون ذلك مفيداً.\n"
+        + "- اجعل الخطاب واضحاً وقابلاً للتنفيذ دون تعقيد.\n"
         + f"- تصنيف الموضوع الحالي: {topic}. حافظ على الاستمرارية مع نفس سياق المحادثة."
     )
 
@@ -333,7 +393,13 @@ def _call_do_ai_with_history(history_messages: list[dict[str, object]], system_p
             "content": "Continue from the exact last sentence without repeating, and complete the answer to the end."
         })
 
-    return _sanitize_ai_reply("\n".join(chunks).strip())
+    last_user = ''
+    for m in reversed(history_messages or []):
+        if str(m.get('role') or '') == 'user':
+            last_user = str(m.get('content') or '')
+            if last_user:
+                break
+    return _repair_garbled_ai_reply("\n".join(chunks).strip(), context_hint=last_user[:200])
 
 
 def _ai_trim_title(text: str, max_len: int = 72) -> str:
