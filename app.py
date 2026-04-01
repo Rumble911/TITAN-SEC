@@ -1100,6 +1100,180 @@ def decrypt_data(encrypted_content: bytes, password: str) -> bytes:
         raise ValueError("كلمة السر خاطئة")
 
 
+def derive_raw_key_with_iterations(password: str, salt: bytes, iterations: int) -> bytes:
+    safe_iterations = max(50000, min(int(iterations or 300000), 1000000))
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=safe_iterations,
+    )
+    return kdf.derive(password.encode())
+
+
+def _pkcs7_pad(data: bytes, block_size: int = 16) -> bytes:
+    pad_len = block_size - (len(data) % block_size)
+    return data + bytes([pad_len]) * pad_len
+
+
+def _pkcs7_unpad(data: bytes, block_size: int = 16) -> bytes:
+    if not data or len(data) % block_size != 0:
+        raise ValueError("بيانات غير صالحة")
+    pad_len = data[-1]
+    if pad_len < 1 or pad_len > block_size:
+        raise ValueError("بيانات غير صالحة")
+    if data[-pad_len:] != bytes([pad_len]) * pad_len:
+        raise ValueError("بيانات غير صالحة")
+    return data[:-pad_len]
+
+
+def _xor_keystream(password: str, salt: bytes, length: int, rounds: int = 1) -> bytes:
+    safe_rounds = max(1, min(int(rounds or 1), 8))
+    stream = bytearray()
+    counter = 0
+    seed = password.encode('utf-8') + salt
+    while len(stream) < length:
+        block = seed + counter.to_bytes(8, 'big')
+        digest = hashlib.sha256(block).digest()
+        for _ in range(safe_rounds - 1):
+            digest = hashlib.sha256(digest + seed).digest()
+        stream.extend(digest)
+        counter += 1
+    return bytes(stream[:length])
+
+
+def _b64e(raw: bytes) -> str:
+    return base64.b64encode(raw).decode('ascii')
+
+
+def _b64d(text: str) -> bytes:
+    return base64.b64decode(text.encode('ascii'))
+
+
+def _kdf_iterations_from_profile(profile: str) -> int:
+    p = (profile or 'strong').lower()
+    if p == 'balanced':
+        return 120000
+    if p == 'paranoid':
+        return 600000
+    return 300000
+
+
+def encrypt_text_with_method(plain_text: str, password: str, method: str, options: dict) -> str:
+    algo = (method or 'fernet').lower()
+    opts = options or {}
+    out_fmt = (opts.get('output_format') or 'b64').lower()
+    if out_fmt not in ('b64', 'b64url'):
+        out_fmt = 'b64'
+    iterations = _kdf_iterations_from_profile(opts.get('kdf_profile') or 'strong')
+
+    raw_plain = plain_text.encode('utf-8')
+    payload_bytes: bytes
+
+    if algo == 'fernet':
+        payload_bytes = encrypt_data(raw_plain, password)
+    elif algo == 'aes-cbc':
+        salt = os.urandom(16)
+        iv = os.urandom(16)
+        key = derive_raw_key_with_iterations(password, salt, iterations)
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+        enc = cipher.encryptor()
+        ct = enc.update(_pkcs7_pad(raw_plain)) + enc.finalize()
+        payload = {
+            's': _b64e(salt),
+            'i': _b64e(iv),
+            't': iterations,
+            'c': _b64e(ct),
+        }
+        payload_bytes = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+    elif algo == 'chacha20':
+        salt = os.urandom(16)
+        nonce = os.urandom(16)
+        key = derive_raw_key_with_iterations(password, salt, iterations)
+        cipher = Cipher(algorithms.ChaCha20(key, nonce), mode=None)
+        enc = cipher.encryptor()
+        ct = enc.update(raw_plain) + enc.finalize()
+        payload = {
+            's': _b64e(salt),
+            'n': _b64e(nonce),
+            't': iterations,
+            'c': _b64e(ct),
+        }
+        payload_bytes = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+    elif algo == 'xor-stream':
+        salt = os.urandom(16)
+        rounds = 2
+        ks = _xor_keystream(password, salt, len(raw_plain), rounds=rounds)
+        ct = bytes(a ^ b for a, b in zip(raw_plain, ks))
+        payload = {
+            's': _b64e(salt),
+            'r': rounds,
+            'c': _b64e(ct),
+        }
+        payload_bytes = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+    else:
+        raise ValueError('خوارزمية غير مدعومة')
+
+    if out_fmt == 'b64url':
+        encoded = base64.urlsafe_b64encode(payload_bytes).decode('ascii')
+    else:
+        encoded = base64.b64encode(payload_bytes).decode('ascii')
+    return f"TITANv2::{algo}::{out_fmt}::{encoded}"
+
+
+def decrypt_text_with_method(cipher_text: str, password: str, method: str = 'auto') -> str:
+    text = (cipher_text or '').strip()
+    selected = (method or 'auto').lower()
+
+    if text.startswith('TITANv2::'):
+        parts = text.split('::', 3)
+        if len(parts) != 4:
+            raise ValueError('صيغة النص المشفر غير صحيحة')
+        _, algo, fmt, encoded = parts
+        raw_payload = base64.urlsafe_b64decode(encoded) if fmt == 'b64url' else base64.b64decode(encoded)
+
+        if algo == 'fernet':
+            return decrypt_data(raw_payload, password).decode('utf-8', errors='replace')
+
+        payload = json.loads(raw_payload.decode('utf-8'))
+        if algo == 'aes-cbc':
+            salt = _b64d(payload['s'])
+            iv = _b64d(payload['i'])
+            iterations = int(payload.get('t') or 300000)
+            ct = _b64d(payload['c'])
+            key = derive_raw_key_with_iterations(password, salt, iterations)
+            cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+            dec = cipher.decryptor()
+            plain = _pkcs7_unpad(dec.update(ct) + dec.finalize())
+            return plain.decode('utf-8', errors='replace')
+        if algo == 'chacha20':
+            salt = _b64d(payload['s'])
+            nonce = _b64d(payload['n'])
+            iterations = int(payload.get('t') or 300000)
+            ct = _b64d(payload['c'])
+            key = derive_raw_key_with_iterations(password, salt, iterations)
+            cipher = Cipher(algorithms.ChaCha20(key, nonce), mode=None)
+            dec = cipher.decryptor()
+            plain = dec.update(ct) + dec.finalize()
+            return plain.decode('utf-8', errors='replace')
+        if algo == 'xor-stream':
+            salt = _b64d(payload['s'])
+            rounds = int(payload.get('r') or 1)
+            ct = _b64d(payload['c'])
+            ks = _xor_keystream(password, salt, len(ct), rounds=rounds)
+            plain = bytes(a ^ b for a, b in zip(ct, ks))
+            return plain.decode('utf-8', errors='replace')
+        raise ValueError('خوارزمية غير مدعومة')
+
+    if selected not in ('auto', 'fernet'):
+        raise ValueError('النص الحالي غير متوافق مع الخوارزمية المختارة')
+    try:
+        encrypted_bytes = base64.b64decode(text)
+        return decrypt_data(encrypted_bytes, password).decode('utf-8', errors='replace')
+    except Exception:
+        raise ValueError('فشل فك التشفير: المفتاح خاطئ أو الصيغة غير مدعومة')
+
+
 _TXT_HIDE_PREFIX = '\u2063\u2062\u2061'
 _TXT_HIDE_SUFFIX = '\u2061\u2062\u2063'
 _TXT_HIDE_ZERO = '\u200b'
@@ -3310,19 +3484,65 @@ HTML_TEMPLATE = """
 
                 <!-- ===== CRYPTOGRAPHY SECTION ===== -->
                 <div id="crypt-section" class="hidden">
-                    <div class="space-y-6">
-                        <div>
-                            <label class="block text-sm text-gray-400 mb-2">1. مفتاح التشفير (كلمة السر):</label>
-                            <input type="password" id="cryptKey" class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none">
-                        </div>
-                        <hr class="border-slate-700">
-                        <div>
-                            <label class="block text-sm text-gray-400 mb-2 text-purple-400 font-bold italic">تشفير نصوص:</label>
-                            <textarea id="cryptText" rows="3" class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 mb-2 text-sm outline-none" placeholder="اكتب النص هنا..."></textarea>
-                            <div class="flex gap-2">
-                                <button onclick="processText('encrypt')" class="flex-1 titan-gradient p-2 rounded-lg font-bold">تشفير النص</button>
-                                <button onclick="processText('decrypt')" class="flex-1 bg-slate-700 p-2 rounded-lg font-bold">فك التشفير</button>
+                    <div class="space-y-5">
+                        <div class="rounded-2xl border border-fuchsia-800/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-fuchsia-950/20 p-4">
+                            <h3 class="text-sm font-black text-fuchsia-300 mb-3">إعدادات التشفير الأساسية</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">1. مفتاح التشفير (كلمة السر)</label>
+                                    <input type="password" id="cryptKey" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none" placeholder="أدخل المفتاح هنا...">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">2. الخوارزمية (القوة مدمجة)</label>
+                                    <select id="cryptMethod" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none text-sm">
+                                        <option value="fernet">Fernet + PBKDF2 (قوي جدًا - موصى به)</option>
+                                        <option value="aes-cbc">AES-256-CBC + PBKDF2 (قوي)</option>
+                                        <option value="chacha20">ChaCha20 + PBKDF2 (متوازن)</option>
+                                        <option value="xor-stream">XOR Stream (تعليمي - ضعيف)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">3. KDF Profile</label>
+                                    <select id="cryptKdfProfile" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none text-sm">
+                                        <option value="balanced">Balanced - 120k</option>
+                                        <option value="strong" selected>Strong - 300k</option>
+                                        <option value="paranoid">Paranoid - 600k</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">4. تنسيق الخرج</label>
+                                    <select id="cryptOutputFormat" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none text-sm">
+                                        <option value="b64" selected>Base64</option>
+                                        <option value="b64url">Base64 URL-safe</option>
+                                    </select>
+                                </div>
                             </div>
+                        </div>
+
+                        <div class="rounded-2xl border border-violet-900/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-violet-950/20 p-4">
+                            <h3 class="text-sm font-black text-violet-300 mb-3">لوحة النص والنتيجة</h3>
+                            <textarea id="cryptText" rows="4" class="w-full p-3 rounded-xl bg-slate-950/80 border border-violet-900/40 mb-3 text-sm outline-none focus:ring-2 focus:ring-violet-600/50" placeholder="اكتب النص هنا (تشفير/فك/نسخ)..."></textarea>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <button onclick="processText('encrypt')" class="titan-gradient p-2 rounded-lg font-bold">تشفير النص</button>
+                                <button onclick="processText('decrypt')" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg font-bold border border-slate-600">فك التشفير</button>
+                                <button onclick="copyCryptText()" class="titan-gradient p-2 rounded-lg font-bold">نسخ النتائج</button>
+                                <button onclick="clearCryptText()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-2 text-sm font-bold">مسح سريع</button>
+                            </div>
+                        </div>
+
+                        <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-cyan-950/20 p-4 space-y-3">
+                            <h3 class="text-sm font-black text-cyan-300">اقتراح AI قبل التشفير</h3>
+                            <textarea id="cryptAudience" rows="2" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 text-sm outline-none focus:ring-2 focus:ring-cyan-600/50" placeholder="مثال: بدي أرسل الرسالة لشريك عمل عبر واتساب والمحتوى حساس جدًا..."></textarea>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                <select id="cryptSensitivity" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none">
+                                    <option value="normal">حساسية عادية</option>
+                                    <option value="high" selected>حساسية عالية</option>
+                                    <option value="critical">حساسية حرجة</option>
+                                </select>
+                                <input id="cryptPurpose" type="text" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none" placeholder="الغرض: قانوني / مالي / شخصي...">
+                                <button onclick="processCryptRecommendation()" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">اقتراح ذكي</button>
+                            </div>
+                            <div id="cryptRecommendationBox" class="hidden rounded-xl border border-cyan-800/50 bg-black/40 p-3 text-xs"></div>
                         </div>
                     </div>
                 </div>
@@ -3698,11 +3918,11 @@ HTML_TEMPLATE = """
                     <textarea id="burnNoteText" rows="3" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-600 focus:ring-1 focus:ring-orange-500 outline-none text-sm mb-3 relative z-10" placeholder="اكتب رسالتك السرية هنا..."></textarea>
                     <input id="burnNoteMedia" type="file" accept="image/*" class="hidden">
                     <div class="bg-slate-900/40 border border-slate-700/60 rounded-xl p-3 mb-2 relative z-10">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                        <div class="space-y-2 mb-2">
                             <button type="button" onclick="triggerBurnNoteImagePicker()" class="w-full py-2 rounded-lg border border-orange-700/50 bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 text-xs font-bold">🖼️ اختيار صورة</button>
                             <div class="flex gap-2">
-                                <button type="button" id="burnNoteRecStartBtn" onclick="startBurnNoteAudioRecording()" class="flex-1 py-2 rounded-lg border border-emerald-700/50 bg-emerald-900/20 hover:bg-emerald-800/30 text-emerald-300 text-xs font-bold">🎙️ بدء التسجيل</button>
-                                <button type="button" id="burnNoteRecStopBtn" onclick="stopBurnNoteAudioRecording()" class="flex-1 py-2 rounded-lg border border-amber-700/50 bg-amber-900/20 hover:bg-amber-800/30 text-amber-300 text-xs font-bold" disabled>⏹️ إيقاف</button>
+                                <button type="button" id="burnNoteRecStartBtn" onclick="startBurnNoteAudioRecording()" class="flex-1 py-2 rounded-lg border border-emerald-700/50 bg-emerald-900/20 hover:bg-emerald-800/30 text-emerald-300 text-xs font-bold">🎙️ بدء التسجيل الصوتي</button>
+                                <button type="button" id="burnNoteRecStopBtn" onclick="stopBurnNoteAudioRecording()" class="flex-1 py-2 rounded-lg border border-amber-700/50 bg-amber-900/20 hover:bg-amber-800/30 text-amber-300 text-xs font-bold" disabled>⏹️ إيقاف التسجيل</button>
                             </div>
                         </div>
                         <div class="flex items-center justify-between gap-2">
@@ -4361,7 +4581,9 @@ HTML_TEMPLATE = """
                                                     <span id="idZodiac" class="bg-purple-500/10 text-purple-400 text-[10px] font-black px-4 py-1.5 rounded-full border border-purple-500/20"></span>
                                                 </div>
                                                 <h3 id="idName" class="text-4xl md:text-5xl font-black text-white leading-tight mb-2 tracking-tight"></h3>
-                                                <!-- Removed secondary name per user request so only one name shows -->
+                                                <div id="idNameEnWrap" class="hidden mt-1">
+                                                    <span id="idNameEn" class="inline-block text-sm md:text-base text-cyan-300/90 font-semibold tracking-wide" dir="ltr"></span>
+                                                </div>
                                             </div>
 
                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -6043,10 +6265,100 @@ HTML_TEMPLATE = """
         async function processText(action) {
             const text = document.getElementById('cryptText').value;
             const key = document.getElementById('cryptKey').value;
+            const method = document.getElementById('cryptMethod')?.value || 'fernet';
+            const kdfProfile = document.getElementById('cryptKdfProfile')?.value || 'strong';
+            const outputFormat = document.getElementById('cryptOutputFormat')?.value || 'b64';
             if(!text || !key) return titanAlert("يرجى إدخال النص وكلمة السر!");
-            const res = await fetch('/crypt-text', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text, key, action}) });
+            if (action === 'encrypt' && method === 'xor-stream') {
+                const ok = window.confirm('تحذير: XOR Stream ضعيف وغير مناسب للبيانات الحساسة. هل تريد الاستمرار؟');
+                if (!ok) return;
+            }
+            const res = await fetch('/crypt-text', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    text,
+                    key,
+                    action,
+                    method,
+                    options: {
+                        kdf_profile: kdfProfile,
+                        output_format: outputFormat
+                    }
+                })
+            });
             const data = await res.json();
             if(data.error) titanAlert(data.error); else document.getElementById('cryptText').value = data.result;
+        }
+
+        async function processCryptRecommendation() {
+            const audience = (document.getElementById('cryptAudience')?.value || '').trim();
+            const sensitivity = document.getElementById('cryptSensitivity')?.value || 'high';
+            const purpose = (document.getElementById('cryptPurpose')?.value || '').trim();
+            if (!audience) return titanAlert('اكتب لمن تريد إرسال النص المشفّر أولاً.');
+
+            const box = document.getElementById('cryptRecommendationBox');
+            if (box) {
+                box.classList.remove('hidden');
+                box.innerHTML = '<div class="text-cyan-300">جاري توليد توصية ذكية...</div>';
+            }
+
+            try {
+                const res = await fetch('/api/crypt/recommend', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ audience, sensitivity, purpose })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    throw new Error(data.error || 'فشل التوصية');
+                }
+
+                window.__cryptRec = data.recommendation || null;
+                const rec = window.__cryptRec || {};
+                if (box) {
+                    box.innerHTML = `
+                        <div class="text-cyan-300 font-bold mb-1">اقتراح TITAN AI:</div>
+                        <div class="text-gray-200 mb-1">الخوارزمية: <b>${rec.method || 'fernet'}</b></div>
+                        <div class="text-gray-200 mb-1">KDF: <b>${rec.kdf_profile || 'strong'}</b> | Format: <b>${rec.output_format || 'b64'}</b></div>
+                        <div class="text-gray-300 mb-2">${rec.reason || 'تم اقتراح إعداد متوازن وآمن.'}</div>
+                        ${rec.warning ? `<div class="text-yellow-300 mb-2">⚠ ${rec.warning}</div>` : ''}
+                        <button onclick="applyCryptRecommendation()" class="px-3 py-1.5 rounded bg-cyan-700 hover:bg-cyan-600 text-xs font-bold">تطبيق الاقتراح</button>
+                    `;
+                }
+                soundManager.success();
+            } catch (e) {
+                if (box) box.innerHTML = `<div class="text-red-300">${(e && e.message) ? e.message : 'تعذر جلب التوصية'}</div>`;
+                soundManager.error();
+            }
+        }
+
+        function applyCryptRecommendation() {
+            const rec = window.__cryptRec || {};
+            if (!rec || !rec.method) return titanAlert('لا يوجد اقتراح جاهز حالياً.');
+            const method = document.getElementById('cryptMethod');
+            const kdf = document.getElementById('cryptKdfProfile');
+            const out = document.getElementById('cryptOutputFormat');
+            if (method) method.value = rec.method;
+            if (kdf) kdf.value = rec.kdf_profile || 'strong';
+            if (out) out.value = rec.output_format || 'b64';
+            titanAlert('تم تطبيق الاقتراح الذكي ✅', 'success');
+        }
+
+        async function copyCryptText() {
+            const val = (document.getElementById('cryptText')?.value || '').trim();
+            if (!val) return titanAlert('لا يوجد نص لنسخه.');
+            try {
+                await navigator.clipboard.writeText(val);
+                titanAlert('تم نسخ النص ✅', 'success');
+            } catch (e) {
+                titanAlert('تعذر النسخ تلقائياً.');
+            }
+        }
+
+        function clearCryptText() {
+            const el = document.getElementById('cryptText');
+            if (el) el.value = '';
         }
 
         async function processFile(action) {
@@ -10197,6 +10509,19 @@ HTML_TEMPLATE = """
                 
                 // Populate data safely
                 setEl('idName', data.name);
+                const idNameEnWrap = document.getElementById('idNameEnWrap');
+                const idNameEn = document.getElementById('idNameEn');
+                const hasArabicName = /[\u0600-\u06FF]/.test(String(data.name || ''));
+                const englishName = String(data.name_en || '').trim();
+                if (idNameEnWrap && idNameEn) {
+                    if (hasArabicName && englishName) {
+                        idNameEn.innerText = englishName;
+                        idNameEnWrap.classList.remove('hidden');
+                    } else {
+                        idNameEn.innerText = '';
+                        idNameEnWrap.classList.add('hidden');
+                    }
+                }
                 setEl('idCardNameDisplay', data.name);
                 setEl('idGender', data.gender);
                 setEl('idMotherName', data.mother_name);
@@ -10923,17 +11248,123 @@ def video_stego_decode_route():
 def get_audit_logs():
     return jsonify(AUDIT_LOGS)
 
+
+def _normalize_crypt_recommendation(rec: dict) -> dict:
+    method = str(rec.get('method') or 'fernet').lower()
+    kdf_profile = str(rec.get('kdf_profile') or 'strong').lower()
+    output_format = str(rec.get('output_format') or 'b64').lower()
+    reason = str(rec.get('reason') or 'تم اختيار إعداد آمن ومتوازن حسب السياق.').strip()
+    warning = str(rec.get('warning') or '').strip()
+
+    if method not in ('fernet', 'aes-cbc', 'chacha20', 'xor-stream'):
+        method = 'fernet'
+    if kdf_profile not in ('balanced', 'strong', 'paranoid'):
+        kdf_profile = 'strong'
+    if output_format not in ('b64', 'b64url'):
+        output_format = 'b64'
+
+    return {
+        'method': method,
+        'kdf_profile': kdf_profile,
+        'output_format': output_format,
+        'reason': reason[:600],
+        'warning': warning[:300],
+    }
+
+
+def _fallback_crypt_recommendation(audience: str, sensitivity: str, purpose: str) -> dict:
+    text = f"{audience} {purpose}".lower()
+    sens = (sensitivity or 'high').lower()
+
+    method = 'fernet'
+    kdf_profile = 'strong'
+    output_format = 'b64'
+    warning = ''
+
+    if sens == 'critical' or any(k in text for k in ['مالي', 'bank', 'law', 'قانون', 'secret', 'سري جدا']):
+        method = 'fernet'
+        kdf_profile = 'paranoid'
+    elif any(k in text for k in ['api', 'url', 'link', 'webhook', 'browser', 'واتساب', 'telegram']):
+        method = 'fernet'
+        kdf_profile = 'strong'
+        output_format = 'b64url'
+    elif sens == 'normal':
+        method = 'aes-cbc'
+        kdf_profile = 'balanced'
+
+    reason = (
+        f"تم الاختيار بناءً على حساسية '{sens}' وطريقة الإرسال. "
+        f"للإرسال إلى '{audience[:60]}', هذا الإعداد يوازن بين الأمان وسهولة المشاركة."
+    )
+    return _normalize_crypt_recommendation({
+        'method': method,
+        'kdf_profile': kdf_profile,
+        'output_format': output_format,
+        'reason': reason,
+        'warning': warning,
+    })
+
+
+@app.route('/api/crypt/recommend', methods=['POST'])
+def crypt_recommend_route():
+    data = request.get_json(silent=True) or {}
+    audience = str(data.get('audience') or '').strip()
+    sensitivity = str(data.get('sensitivity') or 'high').strip().lower()
+    purpose = str(data.get('purpose') or '').strip()
+
+    if not audience:
+        return jsonify({"error": "وصف الجهة المستلمة مطلوب"}), 400
+
+    fallback = _fallback_crypt_recommendation(audience, sensitivity, purpose)
+
+    if not DO_AI_KEY:
+        return jsonify({"success": True, "recommendation": fallback, "source": "fallback"})
+
+    advisor_system = (
+        "You are a cryptography advisor for a secure messaging app. "
+        "Return strict JSON only with keys: method, kdf_profile, output_format, reason, warning. "
+        "method must be one of: fernet, aes-cbc, chacha20, xor-stream. "
+        "kdf_profile must be one of: balanced, strong, paranoid. "
+        "output_format must be one of: b64, b64url. "
+        "Prefer security and practical sharing compatibility. "
+        "Avoid recommending xor-stream unless user explicitly asks for learning/demo."
+    )
+    advisor_prompt = (
+        f"Recipient context: {audience}\n"
+        f"Sensitivity: {sensitivity}\n"
+        f"Purpose: {purpose or 'general'}\n"
+        "Choose one best configuration and explain briefly in Arabic in 'reason'."
+    )
+
+    try:
+        raw = _call_do_ai(advisor_prompt, system_prompt=advisor_system)
+        candidate = raw.strip()
+        match = re.search(r'\{[\s\S]*\}', candidate)
+        if match:
+            candidate = match.group(0)
+        parsed = json.loads(candidate)
+        rec = _normalize_crypt_recommendation(parsed)
+        return jsonify({"success": True, "recommendation": rec, "source": "ai"})
+    except Exception:
+        return jsonify({"success": True, "recommendation": fallback, "source": "fallback"})
+
 @app.route('/crypt-text', methods=['POST'])
 def crypt_text_route():
-    data = request.json
-    text, key, action = data['text'], data['key'], data['action']
+    data = request.json or {}
+    text = data.get('text', '')
+    key = data.get('key', '')
+    action = data.get('action', '')
+    method = (data.get('method') or 'fernet').lower()
+    options = data.get('options') or {}
+    if not text or not key or action not in ('encrypt', 'decrypt'):
+        return jsonify({"error": "المدخلات غير مكتملة"}), 400
     try:
         if action == 'encrypt':
-            result = encrypt_data(text.encode(), key).decode('latin1') # استخدام latin1 لنقل bytes كنص
-            return jsonify({"result": base64.b64encode(result.encode('latin1')).decode()})
+            result = encrypt_text_with_method(text, key, method, options)
+            return jsonify({"result": result})
         else:
-            encrypted_bytes = base64.b64decode(text)
-            result = decrypt_data(encrypted_bytes, key).decode()
+            selected_method = method if method else 'auto'
+            result = decrypt_text_with_method(text, key, selected_method)
             return jsonify({"result": result})
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -13680,6 +14111,73 @@ def packet_sniff():
         return jsonify({'error': str(e), 'packets': []}), 500
 
 # --- تحسين الهوية الوهمية ---
+def _contains_arabic_text(value: str) -> bool:
+    return bool(re.search(r'[\u0600-\u06FF]', value or ''))
+
+
+def _arabic_name_to_english(value: str) -> str:
+    raw = re.sub(r'[\u064B-\u065F\u0670\u0640]', '', (value or '').strip())
+    raw = re.sub(r'\s+', ' ', raw).strip()
+
+    phrase_map = {
+        'عبد الله': 'Abdullah',
+        'عبد الرحمن': 'Abdulrahman',
+        'عبدالرحمن': 'Abdulrahman',
+        'عبد العزيز': 'Abdulaziz',
+        'عبدالعزيز': 'Abdulaziz',
+        'ابن': 'Ibn',
+        'بن': 'Bin',
+    }
+    if raw in phrase_map:
+        return phrase_map[raw]
+
+    token_map = {
+        # Common first names (male)
+        'محمد': 'Mohammad', 'أحمد': 'Ahmad', 'احمد': 'Ahmad', 'خالد': 'Khaled', 'عمر': 'Omar',
+        'يوسف': 'Yousef', 'علي': 'Ali', 'حسن': 'Hasan', 'ماجد': 'Majed', 'فيصل': 'Faisal',
+        'سامي': 'Sami', 'ليث': 'Laith', 'زيد': 'Zaid', 'يزن': 'Yazan', 'حمزة': 'Hamza',
+        'عبدالله': 'Abdullah', 'عبد': 'Abd',
+
+        # Common first names (female)
+        'فاطمة': 'Fatimah', 'مريم': 'Maryam', 'سارة': 'Sarah', 'نور': 'Noor', 'لينا': 'Lina',
+        'رنا': 'Rana', 'دانا': 'Dana', 'هند': 'Hind', 'أمل': 'Amal', 'امل': 'Amal',
+        'لمى': 'Lama', 'رهف': 'Rahaf', 'تالا': 'Tala', 'جنى': 'Jana', 'سلمى': 'Salma', 'ليان': 'Layan',
+
+        # Common Jordanian surnames used in this project
+        'العبدلي': 'Al-Abdali', 'الخطيب': 'Al-Khatib', 'القضاة': 'Al-Qudah', 'الزيود': 'Al-Zyoud',
+        'الشرايري': 'Al-Shrairi', 'الطراونة': 'Al-Tarawneh', 'البطاينة': 'Al-Batayneh', 'الحجاوي': 'Al-Hajawi',
+        'العساف': 'Al-Assaf', 'المجالي': 'Al-Majali', 'العدوان': 'Al-Adwan', 'الفايز': 'Al-Fayez',
+        'الروسان': 'Al-Rousan', 'الخصاونة': 'Al-Khasawneh', 'العبادي': 'Al-Abadi',
+    }
+
+    char_map = {
+        'ا': 'a', 'أ': 'a', 'إ': 'e', 'آ': 'aa', 'ب': 'b', 'ت': 't', 'ث': 'th',
+        'ج': 'j', 'ح': 'h', 'خ': 'kh', 'د': 'd', 'ذ': 'dh', 'ر': 'r', 'ز': 'z',
+        'س': 's', 'ش': 'sh', 'ص': 's', 'ض': 'd', 'ط': 't', 'ظ': 'z', 'ع': 'a',
+        'غ': 'gh', 'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n',
+        'ه': 'h', 'ة': 'ah', 'و': 'w', 'ؤ': 'w', 'ي': 'y', 'ى': 'a', 'ئ': 'e', 'ء': '',
+    }
+
+    def translit_token(token: str) -> str:
+        t = token.strip()
+        if not t:
+            return ''
+        if t in token_map:
+            return token_map[t]
+        if t.startswith('ال') and len(t) > 2:
+            stem = translit_token(t[2:])
+            return f"Al-{stem}" if stem else 'Al'
+
+        out = ''.join(char_map.get(ch, ch) for ch in t)
+        out = re.sub(r'([aeiou])\1+', r'\1', out)
+        if not out:
+            return ''
+        return out[0].upper() + out[1:]
+
+    parts = [translit_token(p) for p in raw.split(' ') if p.strip()]
+    return ' '.join(p for p in parts if p).strip()
+
+
 @app.route('/api/fake-identity', methods=['GET'])
 def fake_identity_route():
     try:
@@ -13785,8 +14283,11 @@ def fake_identity_route():
         except Exception:
             color = fake_en.color_name()
 
+        name_en = _arabic_name_to_english(full_name) if _contains_arabic_text(full_name) else ''
+
         return jsonify({
             'name': full_name,
+            'name_en': name_en,
             'gender': gender,
             'mother_name': mother_name,
             'birthdate': dob.strftime('%Y-%m-%d'),
