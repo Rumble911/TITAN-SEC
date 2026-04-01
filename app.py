@@ -11440,34 +11440,26 @@ def crypt_recommend_chat_route():
             "source": "fallback"
         })
 
-    crypt_system = (
-        "You are TITAN encryption advisor in Arabic. "
-        "Return strict JSON only with keys: reply, recommendation. "
-        "recommendation must contain method, kdf_profile, output_format, reason, warning. "
-        "method: fernet|aes-cbc|chacha20|xor-stream. "
-        "kdf_profile: balanced|strong|paranoid. "
-        "output_format: b64|b64url. "
-        "Be practical, ask follow-up briefly when needed, and avoid repeating same recommendation blindly."
-    )
+    topic_seed = f"{message} {audience} {purpose} encryption cryptography secure"
+    topic = _classify_ai_topic(topic_seed)
+    system_prompt = _build_ai_system_prompt(topic, user_text=message)
 
-    user_msg = (
-        f"Context audience: {audience or '(not provided)'}\n"
-        f"Context sensitivity: {sensitivity}\n"
-        f"Context purpose: {purpose or 'general'}\n"
-        f"User message: {message}"
-    )
+    context_lines = []
+    if audience:
+        context_lines.append(f"المستلم/الجهة: {audience}")
+    if sensitivity:
+        context_lines.append(f"الحساسية: {sensitivity}")
+    if purpose:
+        context_lines.append(f"الغرض: {purpose}")
 
-    history_for_ai = history[-12:] + [{"role": "user", "content": user_msg}]
+    enriched_message = message
+    if context_lines:
+        enriched_message = message + "\n\n[سياق التشفير]\n" + "\n".join(context_lines)
+
+    history_for_ai = history[-12:] + [{"role": "user", "content": enriched_message}]
     try:
-        ai_raw = _call_do_ai_with_history(history_for_ai, system_prompt=crypt_system)
-        payload_text = ai_raw.strip()
-        m = re.search(r'\{[\s\S]*\}', payload_text)
-        if m:
-            payload_text = m.group(0)
-
-        parsed = json.loads(payload_text)
-        reply = str(parsed.get('reply') or '').strip() or default_reply
-        recommendation = _normalize_crypt_recommendation(parsed.get('recommendation') or {})
+        reply = _call_do_ai_with_history(history_for_ai, system_prompt=system_prompt).strip() or default_reply
+        recommendation = _fallback_crypt_recommendation((audience + ' ' + message).strip(), sensitivity, purpose)
 
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": reply})
