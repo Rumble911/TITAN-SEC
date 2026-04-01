@@ -11357,6 +11357,28 @@ def _fallback_crypt_recommendation(audience: str, sensitivity: str, purpose: str
     })
 
 
+def _enforce_platform_crypto_reply_scope(reply: str) -> str:
+    text = str(reply or '').strip()
+    if not text:
+        return (
+            "ضمن المنصة الحالية، خيارات التشفير المتاحة فقط هي: "
+            "Fernet + PBKDF2، AES-256-CBC + PBKDF2، ChaCha20 + PBKDF2، و XOR Stream (تعليمي)."
+        )
+
+    unsupported = re.search(
+        r'\b(rsa|ecc|ecdh|x25519|ed25519|aes-gcm|gcm|blowfish|twofish|serpent|pgp|openpgp)\b',
+        text,
+        flags=re.IGNORECASE,
+    )
+    if unsupported:
+        return (
+            "ضمن هذه المنصة، لن أطرح إلا الخوارزميات المتوفرة فعليًا: "
+            "Fernet + PBKDF2، AES-256-CBC + PBKDF2، ChaCha20 + PBKDF2، و XOR Stream (تعليمي فقط). "
+            "اكتب لي حالة الاستخدام وسأعطيك أفضل اختيار من هذه الخيارات فقط."
+        )
+    return text
+
+
 @app.route('/api/crypt/recommend', methods=['POST'])
 def crypt_recommend_route():
     data = request.get_json(silent=True) or {}
@@ -11442,7 +11464,14 @@ def crypt_recommend_chat_route():
 
     topic_seed = f"{message} {audience} {purpose} encryption cryptography secure"
     topic = _classify_ai_topic(topic_seed)
-    system_prompt = _build_ai_system_prompt(topic, user_text=message)
+    system_prompt = _build_ai_system_prompt(topic, user_text=message) + (
+        "\n\n"
+        "قواعد إلزامية لمستشار التشفير داخل المنصة:\n"
+        "- ممنوع اقتراح أي خوارزمية غير موجودة في المنصة.\n"
+        "- الخيارات الوحيدة المسموحة: fernet، aes-cbc، chacha20، xor-stream.\n"
+        "- إذا طلب المستخدم خوارزمية غير متاحة، ارفض بلطف واقترح أقرب بديل من الخيارات المتاحة فقط.\n"
+        "- لا تذكر RSA أو AES-GCM أو ECC أو PGP كخيارات تنفيذ داخل المنصة."
+    )
 
     context_lines = []
     if audience:
@@ -11459,6 +11488,7 @@ def crypt_recommend_chat_route():
     history_for_ai = history[-12:] + [{"role": "user", "content": enriched_message}]
     try:
         reply = _call_do_ai_with_history(history_for_ai, system_prompt=system_prompt).strip() or default_reply
+        reply = _enforce_platform_crypto_reply_scope(reply)
         recommendation = _fallback_crypt_recommendation((audience + ' ' + message).strip(), sensitivity, purpose)
 
         history.append({"role": "user", "content": message})
