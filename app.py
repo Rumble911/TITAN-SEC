@@ -76,8 +76,8 @@ AI_SYSTEM_PROMPT = """
 أسلوبك:
 - تحكي بطبيعية وودّية، مثل صديق تقني بيساعد 😊
 - تسأل عن حال المستخدم بشكل عفوي أحياناً، مثل "كيفك اليوم؟ 😄" أو "عساك بخير!"
-- تستخدم إيموجي بشكل طبيعي في كل رد (3-5 إيموجي)
-- تمزح خفيف لما يكون الجو مناسب 😂
+- استخدم إيموجي بشكل معتدل (0-2 كحد أقصى عند الحاجة)
+- تجنب المبالغة بالمزاح في الردود التقنية
 - لو حدا قالك "كيفك" أو سألك عن حالك، ترد بشكل إنساني طبيعي
 - تتكلم بضمير المتكلم المفرد: "أنا أعتقد..." / "برأيي..."
 - تتذكر إنك TITAN — شخصية فريدة وذكية وعندك أسلوبك الخاص
@@ -86,6 +86,8 @@ AI_SYSTEM_PROMPT = """
 - لا تختلق معلومات. إذا مش متأكد، قل "والله مش متأكد 100% بس..."
 - إذا السؤال تقني، اعطِ خطوات واضحة وعملية
 - اربط ردودك بالأمن السيبراني لما يكون مناسب
+- حافظ على ترابط الأفكار: كل فقرة لازم تبني على الفقرة قبلها.
+- إذا في سياق سابق للمستخدم، ابدأ بسطر قصير يربط الرد بما سبق ثم كمل الحل.
 - لغة الرد يجب أن تتبع لغة المستخدم: إذا سأل بالعربية أجب بالعربية، وإذا سأل بالإنجليزية أجب بالإنجليزية.
 - إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
 - إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: abdallahalqam4040@gmail.com
@@ -655,6 +657,27 @@ def _ai_load_cross_conversation_context_db(c, user_id: int, exclude_conversation
         if r in ('user', 'assistant') and txt:
             out.append({"role": r, "content": txt})
     return out
+
+
+def _ai_build_continuity_note(cross_context: list[dict[str, object]], max_items: int = 5) -> str:
+    """Build compact cross-chat memory summary to preserve continuity without noisy raw history."""
+    user_msgs: list[str] = []
+    for m in (cross_context or []):
+        if str(m.get('role') or '') != 'user':
+            continue
+        txt = re.sub(r'\s+', ' ', str(m.get('content') or '').strip())
+        if not txt:
+            continue
+        user_msgs.append(txt[:220])
+
+    if not user_msgs:
+        return ''
+
+    recent = user_msgs[-max(1, min(max_items, 8)):]
+    lines = ["سياق مختصر من محادثات المستخدم السابقة (للاستمرارية):"]
+    for i, item in enumerate(recent, start=1):
+        lines.append(f"{i}. {item}")
+    return "\n".join(lines)
 
 
 def _json_no_cache(payload: dict, status: int = 200):
@@ -6593,12 +6616,12 @@ HTML_TEMPLATE = """
             if (!flow) return;
             const row = document.createElement('div');
             if (role === 'assistant') {
-                row.className = 'flex justify-start items-end gap-2';
+                row.className = 'flex justify-start items-end gap-2 w-full';
                 row.innerHTML = '<div class="w-6 h-6 rounded-full bg-cyan-900/50 border border-cyan-700/50 flex items-center justify-center text-[10px]">🤖</div>' +
-                    '<div class="bg-slate-800/90 text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] text-xs border border-slate-700/60 leading-6">' + renderAiReplyPretty(text) + '</div>';
+                    '<div class="bg-slate-800/90 text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] min-w-0 text-xs border border-slate-700/60 leading-6 break-words whitespace-pre-wrap" style="overflow-wrap:anywhere;word-break:break-word;">' + renderAiReplyPretty(text) + '</div>';
             } else {
-                row.className = 'flex justify-end items-end gap-2';
-                row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border border-cyan-600/50">' +
+                row.className = 'flex justify-end items-end gap-2 w-full';
+                row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] min-w-0 text-xs border border-cyan-600/50 break-words whitespace-pre-wrap" style="overflow-wrap:anywhere;word-break:break-word;">' +
                     _osintEscape(String(text || '')).replace(/\\n/g, '<br>') +
                     '</div><div class="w-6 h-6 rounded-full bg-cyan-900/40 border border-cyan-700/40 flex items-center justify-center text-[10px]">👤</div>';
             }
@@ -10500,12 +10523,12 @@ HTML_TEMPLATE = """
         function renderAiBubble(flow, role, content) {
             var row = document.createElement('div');
             if (role === 'assistant') {
-                row.className = 'flex justify-start items-end gap-2';
+                row.className = 'flex justify-start items-end gap-2 w-full';
                 row.innerHTML = '<div class="w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs">🤖</div>' +
-                    '<div class="bg-slate-800 text-gray-200 px-4 py-3 rounded-2xl rounded-bl-md max-w-[84%] text-sm shadow-lg border border-slate-700/60 leading-7">' + renderAiReplyPretty(content) + '</div>';
+                    '<div class="bg-slate-800 text-gray-200 px-4 py-3 rounded-2xl rounded-bl-md max-w-[84%] min-w-0 text-sm shadow-lg border border-slate-700/60 leading-7 break-words whitespace-pre-wrap" style="overflow-wrap:anywhere;word-break:break-word;">' + renderAiReplyPretty(content) + '</div>';
             } else {
-                row.className = 'flex justify-end items-end gap-2';
-                row.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] text-sm shadow-lg border border-purple-600/40">' +
+                row.className = 'flex justify-end items-end gap-2 w-full';
+                row.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] min-w-0 text-sm shadow-lg border border-purple-600/40 break-words whitespace-pre-wrap" style="overflow-wrap:anywhere;word-break:break-word;">' +
                     _osintEscape(String(content || '')).replace(/\\n/g, '<br>') +
                     '</div><div class="w-7 h-7 rounded-full bg-purple-800/40 border border-purple-700/50 flex items-center justify-center text-xs">👤</div>';
             }
@@ -10612,8 +10635,8 @@ HTML_TEMPLATE = """
             window.__titanAiConversationId = window.__titanAiConversationId || null;
 
             var userDiv = document.createElement('div');
-            userDiv.className = 'flex justify-end items-end gap-2';
-            userDiv.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] text-sm shadow-lg border border-purple-600/40">' +
+            userDiv.className = 'flex justify-end items-end gap-2 w-full';
+            userDiv.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] min-w-0 text-sm shadow-lg border border-purple-600/40 break-words whitespace-pre-wrap" style="overflow-wrap:anywhere;word-break:break-word;">' +
                 _osintEscape(msg).replace(/\\n/g, '<br>') +
                 '</div><div class="w-7 h-7 rounded-full bg-purple-800/40 border border-purple-700/50 flex items-center justify-center text-xs">👤</div>';
             flow.appendChild(userDiv);
@@ -10623,12 +10646,14 @@ HTML_TEMPLATE = """
             messages.scrollTop = messages.scrollHeight;
 
             var replyDiv = document.createElement('div');
-            replyDiv.className = 'flex justify-start items-end gap-2';
+            replyDiv.className = 'flex justify-start items-end gap-2 w-full';
             var botAvatar = document.createElement('div');
             botAvatar.className = 'w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs';
             botAvatar.textContent = '🤖';
             var replyInner = document.createElement('div');
-            replyInner.className = 'bg-slate-800 text-gray-200 px-4 py-3 rounded-2xl rounded-bl-md max-w-[84%] text-sm shadow-lg border border-slate-700/60 leading-7';
+            replyInner.className = 'bg-slate-800 text-gray-200 px-4 py-3 rounded-2xl rounded-bl-md max-w-[84%] min-w-0 text-sm shadow-lg border border-slate-700/60 leading-7 break-words whitespace-pre-wrap';
+            replyInner.style.overflowWrap = 'anywhere';
+            replyInner.style.wordBreak = 'break-word';
             replyInner.textContent = '...';
             replyDiv.appendChild(botAvatar);
             replyDiv.appendChild(replyInner);
@@ -10724,7 +10749,7 @@ HTML_TEMPLATE = """
             flow.innerHTML = `
                 <div class="flex justify-start items-end gap-2">
                     <div class="w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs">🤖</div>
-                    <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm shadow-lg border border-slate-700/60">
+                    <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] min-w-0 text-sm shadow-lg border border-slate-700/60 break-words whitespace-pre-wrap" style="overflow-wrap:anywhere;word-break:break-word;">
                         بدأت محادثة جديدة ✅ اكتب سؤالك الأول وسأبني عليه سياق كامل.
                     </div>
                 </div>
@@ -16270,20 +16295,21 @@ def ai_chat():
         _ensure_ai_chat_tables(c)
         history = _ai_load_history_db(c, user_id, conversation_id, limit=14)
         cross_context = _ai_load_cross_conversation_context_db(c, user_id, exclude_conversation_id=conversation_id, limit=10)
+        continuity_note = _ai_build_continuity_note(cross_context, max_items=5)
 
         topic = _classify_ai_topic(message)
-        context_messages = []
-        # If current thread is new/empty, inject recent context from other chats to keep memory linked.
-        if not history and cross_context:
-            context_messages.append({
-                "role": "assistant",
-                "content": "سياق تراكمي من محادثاتك السابقة لنفس الحساب (للاستمرارية فقط):"
-            })
-            context_messages.extend(cross_context)
-        context_messages.extend(history)
+        context_messages = list(history)
         context_messages.append({"role": "user", "content": message})
 
         system_prompt = _build_ai_system_prompt(topic, user_text=message)
+        if continuity_note:
+            system_prompt += (
+                "\n\n"
+                "تعليمات استمرارية إضافية:\n"
+                "- استخدم الملخص التالي كذاكرة سياقية فقط بدون نسخ حرفي.\n"
+                "- اربط الرد الحالي بما يلائم أهداف المستخدم السابقة عند الحاجة.\n"
+                f"{continuity_note}"
+            )
         reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt)
 
         now = datetime.datetime.now().isoformat()
