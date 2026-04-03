@@ -88,6 +88,7 @@ AI_SYSTEM_PROMPT = """
 - اربط ردودك بالأمن السيبراني لما يكون مناسب
 - لغة الرد يجب أن تتبع لغة المستخدم: إذا سأل بالعربية أجب بالعربية، وإذا سأل بالإنجليزية أجب بالإنجليزية.
 - إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
+- إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: abdallahalqam4040@gmail.com
 - لا تنهِ الرد بشكل مقطوع؛ اختم دائماً بخطوة عملية تالية واضحة.
 
 قواعد الأمان:
@@ -133,6 +134,172 @@ _CTRL_CHARS_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
 _AR_CHARS_RE = re.compile(r'[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]')
 _LATIN_CHARS_RE = re.compile(r'[A-Za-z]')
 _MOJIBAKE_RE = re.compile(r'[�]|[\u2500-\u257f\u2580-\u259f\u0370-\u03ff\u0400-\u04ff]')
+_KB_TOKEN_RE = re.compile(r'[a-z0-9_+\-]{2,}|[\u0600-\u06ff]{2,}', flags=re.IGNORECASE)
+
+TITAN_KB_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'knowledge_base')
+TITAN_KB_ALWAYS_INCLUDE = [
+    'platform/01_system_overview.md',
+    'platform/02_architecture_and_dataflow.md',
+    'platform/04_api_reference.md',
+    'platform/06_feature_modules.md',
+]
+
+
+def _strip_md_noise_for_prompt(text: str) -> str:
+    t = str(text or '')
+    t = re.sub(r'```[\s\S]*?```', ' ', t)
+    t = re.sub(r'`([^`]+)`', r'\1', t)
+    t = re.sub(r'\[[^\]]+\]\([^\)]+\)', ' ', t)
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t
+
+
+def _tokenize_for_kb(text: str) -> set[str]:
+    return set(_KB_TOKEN_RE.findall((text or '').lower()))
+
+
+def _split_kb_sections(markdown_text: str, max_chars: int = 900) -> list[dict[str, str]]:
+    sections: list[dict[str, str]] = []
+    current_title = ''
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_lines, current_title
+        body = '\n'.join(current_lines).strip()
+        if not body:
+            current_lines = []
+            return
+        clean = _strip_md_noise_for_prompt(body)
+        if not clean:
+            current_lines = []
+            return
+        while len(clean) > max_chars:
+            chunk = clean[:max_chars]
+            cut = chunk.rfind('. ')
+            if cut < 250:
+                cut = chunk.rfind('،')
+            if cut < 220:
+                cut = max_chars
+            sections.append({'title': current_title or 'General', 'text': clean[:cut].strip()})
+            clean = clean[cut:].strip()
+        if clean:
+            sections.append({'title': current_title or 'General', 'text': clean})
+        current_lines = []
+
+    for raw in (markdown_text or '').splitlines():
+        line = raw.rstrip()
+        if line.startswith('#'):
+            flush()
+            current_title = re.sub(r'^#+\s*', '', line).strip() or current_title
+            continue
+        current_lines.append(line)
+    flush()
+    return sections
+
+
+@lru_cache(maxsize=1)
+def _load_titan_kb_chunks() -> list[dict[str, object]]:
+    chunks: list[dict[str, object]] = []
+    if not os.path.isdir(TITAN_KB_ROOT):
+        return chunks
+
+    md_files: list[str] = []
+    for root, _, files in os.walk(TITAN_KB_ROOT):
+        for name in files:
+            if name.lower().endswith('.md'):
+                md_files.append(os.path.join(root, name))
+
+    for abs_path in sorted(md_files):
+        rel = os.path.relpath(abs_path, TITAN_KB_ROOT).replace('\\', '/')
+        try:
+            with open(abs_path, 'r', encoding='utf-8') as f:
+                raw = f.read()
+        except Exception:
+            continue
+        for section in _split_kb_sections(raw, max_chars=900):
+            text = str(section.get('text') or '').strip()
+            if len(text) < 40:
+                continue
+            chunks.append({
+                'source': rel,
+                'title': str(section.get('title') or 'General'),
+                'text': text,
+                'tokens': _tokenize_for_kb(text + ' ' + rel),
+            })
+    return chunks
+
+
+def _kb_topic_terms(topic: str) -> set[str]:
+    mapping = {
+        'incident_response': {'incident', 'incidents', 'ioc', 'forensics', 'hunting', 'triage', 'احتواء', 'تحقيق'},
+        'malware_analysis': {'malware', 'hash', 'threat', 'file', 'url', 'برمجية', 'خبيث'},
+        'network_security': {'network', 'port', 'scan', 'dns', 'ip', 'شبكة', 'منافذ'},
+        'osint': {'osint', 'username', 'domain', 'email', 'ip', 'اوسنت', 'اسم', 'دومين'},
+        'secure_coding': {'xss', 'sqli', 'csrf', 'api', 'code', 'برمجة', 'ثغرة'},
+        'learning_path': {'roadmap', 'course', 'certificate', 'ceh', 'cissp', 'security+'},
+        'general_support': {'platform', 'module', 'api', 'vault', 'auth', 'security', 'منصة', 'ادوات'},
+    }
+    return mapping.get(topic, mapping['general_support'])
+
+
+def _build_titan_kb_context(user_text: str, topic: str, max_items: int = 6, max_chars: int = 3600) -> str:
+    chunks = _load_titan_kb_chunks()
+    if not chunks:
+        return ''
+
+    q = (user_text or '').lower()
+    query_tokens = _tokenize_for_kb(q)
+    query_tokens.update(_kb_topic_terms(topic))
+    broad_platform_query = any(k in q for k in ('المنصة بالكامل', 'كل المنصة', 'كيف تعمل المنصة', 'full platform', 'platform overview'))
+
+    scored: list[tuple[int, dict[str, object]]] = []
+    for item in chunks:
+        source = str(item.get('source') or '')
+        tokens = item.get('tokens') or set()
+        overlap = len(query_tokens.intersection(tokens if isinstance(tokens, set) else set()))
+        score = overlap * 5
+        if any(x in source for x in TITAN_KB_ALWAYS_INCLUDE):
+            score += 4
+            if broad_platform_query:
+                score += 10
+        if 'api' in q and 'api_reference' in source:
+            score += 12
+        if any(k in q for k in ('auth', 'login', 'otp', 'جلسة', 'تسجيل')) and 'auth_and_security_behavior' in source:
+            score += 10
+        if score > 0:
+            scored.append((score, item))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    selected: list[dict[str, object]] = []
+    seen_texts: set[str] = set()
+    for _, item in scored:
+        text = str(item.get('text') or '')
+        if text in seen_texts:
+            continue
+        selected.append(item)
+        seen_texts.add(text)
+        if len(selected) >= max_items:
+            break
+
+    if not selected:
+        selected = [c for c in chunks if str(c.get('source') or '') in TITAN_KB_ALWAYS_INCLUDE][:max_items]
+
+    lines = [
+        'Knowledge context from TITAN KB (authoritative for platform behavior):',
+        'If answer is missing in these KB snippets, say exactly: Not found in current KB, then provide general best-practice guidance.',
+    ]
+    used = 0
+    for idx, item in enumerate(selected, start=1):
+        src = str(item.get('source') or 'unknown.md')
+        title = str(item.get('title') or 'General')
+        text = str(item.get('text') or '')
+        block = f"[{idx}] {src} :: {title}\n{text}"
+        if used + len(block) > max_chars:
+            break
+        lines.append(block)
+        used += len(block)
+
+    return '\n\n'.join(lines).strip()
 
 
 def _sanitize_ai_reply(text: str) -> str:
@@ -375,6 +542,7 @@ def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
         if lang == 'en' else
         "- أجب بالعربية الواضحة لهذا الطلب (بدون تحويل الرد للإنجليزية).\n"
     )
+    kb_context = _build_titan_kb_context(user_text, topic)
     return (
         AI_SYSTEM_PROMPT
         + "\n\n"
@@ -383,7 +551,10 @@ def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
         + "- حافظ على أسلوب طبيعي وودّي، واستخدم إيموجي بشكل طبيعي في الرد.\n"
         + "- ابدأ بجواب مباشر، ثم رتب النقاط عندما يكون ذلك مفيداً.\n"
         + "- اجعل الخطاب واضحاً وقابلاً للتنفيذ دون تعقيد.\n"
-        + f"- تصنيف الموضوع الحالي: {topic}. حافظ على الاستمرارية مع نفس سياق المحادثة."
+        + f"- تصنيف الموضوع الحالي: {topic}. حافظ على الاستمرارية مع نفس سياق المحادثة.\n"
+        + "- عند السؤال عن آلية عمل TITAN أو مكوناته أو أدواته، اشرحها كوحدات: المعمارية، المصادقة، الحماية، الأدوات، API، وتدفقات العمل.\n"
+        + "- عند ذكر عمليات المنصة، اذكر مسارات API ذات الصلة عندما تكون مفيدة.\n\n"
+        + (kb_context or "Knowledge context from TITAN KB is unavailable right now.")
     )
 
 
