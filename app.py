@@ -3380,7 +3380,7 @@ HTML_TEMPLATE = """
                         <div class="min-h-full flex flex-col justify-end gap-3" id="ai-chat-flow">
                             <div class="flex justify-start items-end gap-2">
                                 <div class="w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs">🤖</div>
-                                <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] min-w-0 text-sm shadow-lg border border-slate-700/60 break-words whitespace-pre-wrap" style="overflow-wrap:anywhere;word-break:break-word;">
+                                <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm shadow-lg border border-slate-700/60">
                                     مرحباً! أنا TITAN AI. كيف يمكنني مساعدتك اليوم؟
                                 </div>
                             </div>
@@ -6593,12 +6593,12 @@ HTML_TEMPLATE = """
             if (!flow) return;
             const row = document.createElement('div');
             if (role === 'assistant') {
-                row.className = 'flex justify-start items-end gap-2 w-full';
+                row.className = 'flex justify-start items-end gap-2';
                 row.innerHTML = '<div class="w-6 h-6 rounded-full bg-cyan-900/50 border border-cyan-700/50 flex items-center justify-center text-[10px]">🤖</div>' +
-                    '<div class="bg-slate-800/90 text-gray-100 px-3 py-2.5 rounded-xl rounded-bl-md max-w-[84%] min-w-0 text-xs border border-slate-700/60 leading-6 break-words" style="overflow-wrap:anywhere;word-break:break-word;">' + renderAiReplyPretty(text) + '</div>';
+                    '<div class="bg-slate-800/90 text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] text-xs border border-slate-700/60 leading-6">' + renderAiReplyPretty(text) + '</div>';
             } else {
-                row.className = 'flex justify-end items-end gap-2 w-full';
-                row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2.5 rounded-xl rounded-br-md max-w-[82%] min-w-0 text-xs border border-cyan-600/50 break-words whitespace-pre-wrap leading-6" style="overflow-wrap:anywhere;word-break:break-word;">' +
+                row.className = 'flex justify-end items-end gap-2';
+                row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border border-cyan-600/50">' +
                     _osintEscape(String(text || '')).replace(/\\n/g, '<br>') +
                     '</div><div class="w-6 h-6 rounded-full bg-cyan-900/40 border border-cyan-700/40 flex items-center justify-center text-[10px]">👤</div>';
             }
@@ -10500,12 +10500,12 @@ HTML_TEMPLATE = """
         function renderAiBubble(flow, role, content) {
             var row = document.createElement('div');
             if (role === 'assistant') {
-                row.className = 'flex justify-start items-end gap-2 w-full';
+                row.className = 'flex justify-start items-end gap-2';
                 row.innerHTML = '<div class="w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs">🤖</div>' +
-                    '<div class="bg-slate-800 text-gray-200 px-4 py-3.5 rounded-2xl rounded-bl-md max-w-[84%] min-w-0 text-[13.5px] shadow-lg border border-slate-700/60 leading-7 break-words" style="overflow-wrap:anywhere;word-break:break-word;">' + renderAiReplyPretty(content) + '</div>';
+                    '<div class="bg-slate-800 text-gray-200 px-4 py-3 rounded-2xl rounded-bl-md max-w-[84%] text-sm shadow-lg border border-slate-700/60 leading-7">' + renderAiReplyPretty(content) + '</div>';
             } else {
-                row.className = 'flex justify-end items-end gap-2 w-full';
-                row.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3.5 rounded-2xl rounded-br-md max-w-[80%] min-w-0 text-[13.5px] shadow-lg border border-purple-600/40 break-words whitespace-pre-wrap leading-7" style="overflow-wrap:anywhere;word-break:break-word;">' +
+                row.className = 'flex justify-end items-end gap-2';
+                row.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] text-sm shadow-lg border border-purple-600/40">' +
                     _osintEscape(String(content || '')).replace(/\\n/g, '<br>') +
                     '</div><div class="w-7 h-7 rounded-full bg-purple-800/40 border border-purple-700/50 flex items-center justify-center text-xs">👤</div>';
             }
@@ -10612,8 +10612,8 @@ HTML_TEMPLATE = """
             window.__titanAiConversationId = window.__titanAiConversationId || null;
 
             var userDiv = document.createElement('div');
-            userDiv.className = 'flex justify-end items-end gap-2 w-full';
-            userDiv.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3.5 rounded-2xl rounded-br-md max-w-[80%] min-w-0 text-[13.5px] shadow-lg border border-purple-600/40 break-words whitespace-pre-wrap leading-7" style="overflow-wrap:anywhere;word-break:break-word;">' +
+            userDiv.className = 'flex justify-end items-end gap-2';
+            userDiv.innerHTML = '<div class="bg-purple-700/70 text-white px-4 py-3 rounded-2xl rounded-br-md max-w-[80%] text-sm shadow-lg border border-purple-600/40">' +
                 _osintEscape(msg).replace(/\\n/g, '<br>') +
                 '</div><div class="w-7 h-7 rounded-full bg-purple-800/40 border border-purple-700/50 flex items-center justify-center text-xs">👤</div>';
             flow.appendChild(userDiv);
@@ -10623,14 +10623,12 @@ HTML_TEMPLATE = """
             messages.scrollTop = messages.scrollHeight;
 
             var replyDiv = document.createElement('div');
-            replyDiv.className = 'flex justify-start items-end gap-2 w-full';
+            replyDiv.className = 'flex justify-start items-end gap-2';
             var botAvatar = document.createElement('div');
             botAvatar.className = 'w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs';
             botAvatar.textContent = '🤖';
             var replyInner = document.createElement('div');
-            replyInner.className = 'bg-slate-800 text-gray-200 px-4 py-3.5 rounded-2xl rounded-bl-md max-w-[84%] min-w-0 text-[13.5px] shadow-lg border border-slate-700/60 leading-7 break-words';
-            replyInner.style.overflowWrap = 'anywhere';
-            replyInner.style.wordBreak = 'break-word';
+            replyInner.className = 'bg-slate-800 text-gray-200 px-4 py-3 rounded-2xl rounded-bl-md max-w-[84%] text-sm shadow-lg border border-slate-700/60 leading-7';
             replyInner.textContent = '...';
             replyDiv.appendChild(botAvatar);
             replyDiv.appendChild(replyInner);
@@ -10674,20 +10672,6 @@ HTML_TEMPLATE = """
             const lines = esc.split(/\\n+/);
             let out = [];
             let openedList = false;
-            let inCodeBlock = false;
-            let codeLines = [];
-
-            function formatInline(s) {
-                return String(s || '').replace(/`([^`]+)`/g, '<span class="font-mono text-[12px] px-1.5 py-0.5 rounded bg-slate-900/80 border border-slate-700 text-cyan-200">$1</span>');
-            }
-
-            function flushCodeBlock() {
-                if (!inCodeBlock) return;
-                const codeText = codeLines.join('\\n');
-                out.push('<pre class="mt-2 mb-2 p-3 rounded-xl bg-slate-950/80 border border-slate-700/70 text-cyan-200 text-[12px] font-mono leading-6 overflow-x-auto whitespace-pre">' + codeText + '</pre>');
-                inCodeBlock = false;
-                codeLines = [];
-            }
 
             function closeListIfOpen() {
                 if (openedList) {
@@ -10698,22 +10682,6 @@ HTML_TEMPLATE = """
 
             for (let i = 0; i < lines.length; i++) {
                 const line = (lines[i] || '').trim();
-                if (line.startsWith('```')) {
-                    closeListIfOpen();
-                    if (inCodeBlock) {
-                        flushCodeBlock();
-                    } else {
-                        inCodeBlock = true;
-                        codeLines = [];
-                    }
-                    continue;
-                }
-
-                if (inCodeBlock) {
-                    codeLines.push(lines[i] || '');
-                    continue;
-                }
-
                 if (!line) {
                     closeListIfOpen();
                     continue;
@@ -10722,30 +10690,29 @@ HTML_TEMPLATE = """
                 if (line.startsWith('### ') || line.startsWith('## ') || line.startsWith('# ')) {
                     closeListIfOpen();
                     const title = line.replace(/^#+\\s*/, '');
-                    out.push('<div class="text-purple-300 font-black text-[15px] mt-2 mb-1 tracking-wide break-words" style="overflow-wrap:anywhere;word-break:break-word;">' + formatInline(title) + '</div>');
+                    out.push('<div class="text-purple-300 font-black text-[15px] mt-2 mb-1 tracking-wide">' + title + '</div>');
                     continue;
                 }
 
                 if (/^\\d+\\.\\s+/.test(line)) {
                     if (!openedList) {
-                        out.push('<ol class="list-decimal mr-5 mt-1 mb-1 space-y-1.5 text-gray-100 leading-7">');
+                        out.push('<ol class="list-decimal mr-5 space-y-1 text-gray-100">');
                         openedList = true;
                     }
-                    out.push('<li class="break-words" style="overflow-wrap:anywhere;word-break:break-word;">' + formatInline(line.replace(/^\\d+\\.\\s+/, '')) + '</li>');
+                    out.push('<li>' + line.replace(/^\\d+\\.\\s+/, '') + '</li>');
                     continue;
                 }
 
                 if (/^[-*]\\s+/.test(line)) {
                     closeListIfOpen();
-                    out.push('<div class="text-gray-100 break-words leading-7" style="overflow-wrap:anywhere;word-break:break-word;">• ' + formatInline(line.replace(/^[-*]\\s+/, '')) + '</div>');
+                    out.push('<div class="text-gray-100">• ' + line.replace(/^[-*]\\s+/, '') + '</div>');
                     continue;
                 }
 
                 closeListIfOpen();
-                out.push('<div class="text-gray-100 break-words leading-7" style="overflow-wrap:anywhere;word-break:break-word;">' + formatInline(line) + '</div>');
+                out.push('<div class="text-gray-100">' + line + '</div>');
             }
             closeListIfOpen();
-            flushCodeBlock();
             return out.join('');
         }
 
@@ -10757,7 +10724,7 @@ HTML_TEMPLATE = """
             flow.innerHTML = `
                 <div class="flex justify-start items-end gap-2">
                     <div class="w-7 h-7 rounded-full bg-purple-900/50 border border-purple-700/40 flex items-center justify-center text-xs">🤖</div>
-                    <div class="bg-slate-800 text-gray-300 px-4 py-3.5 rounded-2xl rounded-bl-md max-w-[80%] min-w-0 text-[13.5px] shadow-lg border border-slate-700/60 leading-7 break-words whitespace-pre-wrap" style="overflow-wrap:anywhere;word-break:break-word;">
+                    <div class="bg-slate-800 text-gray-300 px-4 py-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm shadow-lg border border-slate-700/60">
                         بدأت محادثة جديدة ✅ اكتب سؤالك الأول وسأبني عليه سياق كامل.
                     </div>
                 </div>
@@ -11543,9 +11510,15 @@ def _has_local_tailwind_css() -> bool:
 @app.route('/')
 def index():
     html = HTML_TEMPLATE.replace('__TAILWIND_V__', _tailwind_version_token())
-    # Do not use Tailwind Play CDN in production HTML to avoid runtime warning and
-    # keep deterministic styling from /tailwind.css route only.
-    html = html.replace('__TAILWIND_PLAY_CDN__', '')
+    # If compiled Tailwind is missing on production slug, use Play CDN to generate
+    # required utility classes (including arbitrary values used by this UI).
+    if _has_local_tailwind_css():
+        html = html.replace('__TAILWIND_PLAY_CDN__', '')
+    else:
+        html = html.replace(
+            '__TAILWIND_PLAY_CDN__',
+            '<script src="https://cdn.tailwindcss.com"></script>'
+        )
     resp = Response(render_template_string(html), mimetype='text/html')
     # Prevent stale HTML from pinning an old CSS version on custom domains/CDNs.
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
