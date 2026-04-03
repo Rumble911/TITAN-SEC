@@ -10683,7 +10683,7 @@ HTML_TEMPLATE = """
 
             function flushCodeBlock() {
                 if (!inCodeBlock) return;
-                const codeText = codeLines.join('\n');
+                const codeText = codeLines.join('\\n');
                 out.push('<pre class="mt-2 mb-2 p-3 rounded-xl bg-slate-950/80 border border-slate-700/70 text-cyan-200 text-[12px] font-mono leading-6 overflow-x-auto whitespace-pre">' + codeText + '</pre>');
                 inCodeBlock = false;
                 codeLines = [];
@@ -11543,15 +11543,9 @@ def _has_local_tailwind_css() -> bool:
 @app.route('/')
 def index():
     html = HTML_TEMPLATE.replace('__TAILWIND_V__', _tailwind_version_token())
-    # If compiled Tailwind is missing on production slug, use Play CDN to generate
-    # required utility classes (including arbitrary values used by this UI).
-    if _has_local_tailwind_css():
-        html = html.replace('__TAILWIND_PLAY_CDN__', '')
-    else:
-        html = html.replace(
-            '__TAILWIND_PLAY_CDN__',
-            '<script src="https://cdn.tailwindcss.com"></script>'
-        )
+    # Do not use Tailwind Play CDN in production HTML to avoid runtime warning and
+    # keep deterministic styling from /tailwind.css route only.
+    html = html.replace('__TAILWIND_PLAY_CDN__', '')
     resp = Response(render_template_string(html), mimetype='text/html')
     # Prevent stale HTML from pinning an old CSS version on custom domains/CDNs.
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
