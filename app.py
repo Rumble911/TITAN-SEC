@@ -620,6 +620,52 @@ def _ai_load_history_db(c, user_id: int, conversation_id: str, limit: int = 14) 
     return out
 
 
+def _ai_load_cross_conversation_context_db(c, user_id: int, exclude_conversation_id: str = '', limit: int = 10) -> list[dict[str, object]]:
+    """Load a compact memory bridge from user's recent messages across other conversations."""
+    lim = max(1, min(int(limit), 20))
+    if exclude_conversation_id:
+        c.execute(
+            """
+            SELECT role, content
+            FROM ai_chat_messages
+            WHERE user_id=%s AND conversation_id<>%s
+            ORDER BY id DESC
+            LIMIT %s
+            """,
+            (user_id, exclude_conversation_id, lim)
+        )
+    else:
+        c.execute(
+            """
+            SELECT role, content
+            FROM ai_chat_messages
+            WHERE user_id=%s
+            ORDER BY id DESC
+            LIMIT %s
+            """,
+            (user_id, lim)
+        )
+
+    rows = c.fetchall() or []
+    rows = rows[::-1]
+    out: list[dict[str, object]] = []
+    for role, content in rows:
+        r = str(role or '').strip()
+        txt = str(content or '').strip()
+        if r in ('user', 'assistant') and txt:
+            out.append({"role": r, "content": txt})
+    return out
+
+
+def _json_no_cache(payload: dict, status: int = 200):
+    resp = jsonify(payload)
+    resp.status_code = status
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
+
+
 def _ai_upsert_thread_db(c, user_id: int, conversation_id: str, title: str, classification: str, model: str, updated_at: str, preview: str) -> None:
     c.execute(
         """
@@ -10471,7 +10517,7 @@ HTML_TEMPLATE = """
             if (!box) return;
             box.innerHTML = '<div class="text-gray-500">...loading</div>';
             try {
-                const res = await fetch('/api/ai/conversations');
+                const res = await fetch('/api/ai/conversations', { cache: 'no-store' });
                 const data = await res.json();
                 if (!data.success) {
                     box.innerHTML = '<div class="text-rose-300">تعذر تحميل المحادثات</div>';
@@ -10505,9 +10551,9 @@ HTML_TEMPLATE = """
             const ok = await titanConfirm('هل أنت متأكد من حذف هذه المحادثة نهائياً؟');
             if (!ok) return;
             try {
-                let res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId), { method: 'DELETE' });
+                let res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId), { method: 'DELETE', cache: 'no-store' });
                 if (res.status === 405) {
-                    res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId) + '/delete', { method: 'POST' });
+                    res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId) + '/delete', { method: 'POST', cache: 'no-store' });
                 }
                 const data = await res.json();
                 if (!data.success) {
@@ -10532,7 +10578,7 @@ HTML_TEMPLATE = """
             if (!flow) return;
             flow.innerHTML = '<div class="text-gray-500 text-xs">...loading chat</div>';
             try {
-                const res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId));
+                const res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId), { cache: 'no-store' });
                 const data = await res.json();
                 if (!data.success) {
                     flow.innerHTML = '<div class="text-rose-300 text-xs">تعذر فتح الدردشة: ' + _osintEscape(data.error || 'unknown error') + '</div>';
@@ -10592,6 +10638,7 @@ HTML_TEMPLATE = """
             try {
                 const res = await fetch('/api/ai/chat', {
                     method: 'POST',
+                    cache: 'no-store',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         message: msg,
@@ -10682,7 +10729,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
             `;
-            if (meta) meta.textContent = 'الموضوع: عام • الذاكرة: فعالة';
+            if (meta) meta.textContent = 'الموضوع: عام • الذاكرة: مترابطة عبر كل محادثاتك';
             scrollAiChatToBottom();
             const input = document.getElementById('ai-chat-input');
             if (input) input.focus();
@@ -16222,9 +16269,18 @@ def ai_chat():
         c = conn.cursor()
         _ensure_ai_chat_tables(c)
         history = _ai_load_history_db(c, user_id, conversation_id, limit=14)
+        cross_context = _ai_load_cross_conversation_context_db(c, user_id, exclude_conversation_id=conversation_id, limit=10)
 
         topic = _classify_ai_topic(message)
-        context_messages = list(history)
+        context_messages = []
+        # If current thread is new/empty, inject recent context from other chats to keep memory linked.
+        if not history and cross_context:
+            context_messages.append({
+                "role": "assistant",
+                "content": "سياق تراكمي من محادثاتك السابقة لنفس الحساب (للاستمرارية فقط):"
+            })
+            context_messages.extend(cross_context)
+        context_messages.extend(history)
         context_messages.append({"role": "user", "content": message})
 
         system_prompt = _build_ai_system_prompt(topic, user_text=message)
@@ -16288,7 +16344,7 @@ def ai_conversations_route():
             (session['user_id'],)
         )
         rows = c.fetchall() or []
-        return jsonify({
+        return _json_no_cache({
             "success": True,
             "conversations": [
                 {
@@ -16329,7 +16385,7 @@ def ai_conversation_messages_route(conversation_id):
         )
         thread = c.fetchone()
         if not thread:
-            return jsonify({"success": False, "error": "conversation not found"}), 404
+            return _json_no_cache({"success": False, "error": "conversation not found"}, status=404)
 
         c.execute(
             """
@@ -16342,7 +16398,7 @@ def ai_conversation_messages_route(conversation_id):
             (session['user_id'], conversation_id)
         )
         rows = c.fetchall() or []
-        return jsonify({
+        return _json_no_cache({
             "success": True,
             "conversation_id": conversation_id,
             "title": str(thread[0] or ''),
@@ -16376,7 +16432,7 @@ def ai_conversation_delete_route(conversation_id):
             (session['user_id'], conversation_id)
         )
         if not c.fetchone():
-            return jsonify({"success": False, "error": "conversation not found"}), 404
+            return _json_no_cache({"success": False, "error": "conversation not found"}, status=404)
 
         c.execute(
             "DELETE FROM ai_chat_messages WHERE user_id=%s AND conversation_id=%s",
@@ -16388,7 +16444,7 @@ def ai_conversation_delete_route(conversation_id):
         )
         conn.commit()
         add_audit_log("AI Chat Delete 🗑️", f"conversation={conversation_id}", username=session.get('username', ''))
-        return jsonify({"success": True})
+        return _json_no_cache({"success": True})
     except Exception as e:
         if conn:
             conn.rollback()
