@@ -169,109 +169,6 @@ TITAN_KB_ALWAYS_INCLUDE = [
     'platform/06_feature_modules.md',
 ]
 
-LEARNING_SIM_ATTACKS = [
-    {
-        'id': 'wannacry-ransomware',
-        'title': 'WannaCry Ransomware (Defensive Simulation)',
-        'category': 'ransomware',
-        'severity': 'critical',
-        'summary': 'محاكاة دفاعية لسلوك فدية ينتشر عبر SMB ويعطل الأنظمة.',
-        'key_iocs': ['SMB spikes', 'Unexpected file encryption', 'Ransom note artifacts'],
-        'defense_focus': ['Patch management', 'Network segmentation', 'Offline backups'],
-        'metasploit_context': 'يستخدم المختبرون المرخّصون وحدات فحص SMB في بيئات معملية فقط للتحقق من التعرض.',
-    },
-    {
-        'id': 'eternalblue-ms17-010',
-        'title': 'EternalBlue / MS17-010 (Defensive Simulation)',
-        'category': 'network exploit',
-        'severity': 'critical',
-        'summary': 'محاكاة لاكتشاف استغلال ثغرة SMBv1 على أنظمة قديمة.',
-        'key_iocs': ['Lateral movement attempts', 'SMBv1 traffic', 'Unusual service crashes'],
-        'defense_focus': ['Disable SMBv1', 'Patch MS17-010', 'EDR containment policies'],
-        'metasploit_context': 'مرجعية دفاعية: وحدة exploit/windows/smb/ms17_010_eternalblue لأغراض اختبار مصرح فقط.',
-    },
-    {
-        'id': 'sql-injection-webapp',
-        'title': 'SQL Injection Against Web App (Defensive Simulation)',
-        'category': 'web',
-        'severity': 'high',
-        'summary': 'محاكاة إدخال ضار لاستهداف قاعدة البيانات عبر مدخلات التطبيق.',
-        'key_iocs': ['DB query anomalies', 'WAF alerts', 'Auth bypass patterns'],
-        'defense_focus': ['Parameterized queries', 'WAF tuning', 'Input validation'],
-        'metasploit_context': 'السياق الدفاعي يتضمن مراجعة ثغرات التطبيق ضمن بيئة تدريبية فقط.',
-    },
-    {
-        'id': 'xss-session-theft',
-        'title': 'XSS Session Theft (Defensive Simulation)',
-        'category': 'web',
-        'severity': 'high',
-        'summary': 'محاكاة حقن سكربت ضار لمحاولة سرقة جلسات أو تنفيذ أوامر بالمتصفح.',
-        'key_iocs': ['Suspicious script tags', 'CSP violation logs', 'Abnormal cookie usage'],
-        'defense_focus': ['Output encoding', 'Strict CSP', 'HTTPOnly/Secure cookies'],
-        'metasploit_context': 'يركز التدريب هنا على كشف الأثر والتحصين وليس على التنفيذ الهجومي.',
-    },
-    {
-        'id': 'credential-stuffing',
-        'title': 'Credential Stuffing (Defensive Simulation)',
-        'category': 'identity attack',
-        'severity': 'high',
-        'summary': 'محاكاة محاولات دخول جماعية بكلمات مرور مسربة.',
-        'key_iocs': ['Login burst from distributed IPs', 'High failed auth ratio', 'User lockout waves'],
-        'defense_focus': ['MFA enforcement', 'Rate limiting', 'Risk-based authentication'],
-        'metasploit_context': 'تتم الإشارة لأدوات الاختبار الهجومي فقط كمعرفة تهديد دفاعية.',
-    },
-    {
-        'id': 'phishing-bec',
-        'title': 'Business Email Compromise (Defensive Simulation)',
-        'category': 'social engineering',
-        'severity': 'high',
-        'summary': 'محاكاة انتحال بريد تنفيذي لتنفيذ تحويلات مالية أو طلب بيانات حساسة.',
-        'key_iocs': ['Display-name spoofing', 'Lookalike domains', 'Urgent payment language'],
-        'defense_focus': ['DMARC/SPF/DKIM', 'Out-of-band verification', 'User awareness drills'],
-        'metasploit_context': 'لا يتضمن هذا السيناريو أي تشغيل أدوات هجومية، فقط توعية واستجابة.',
-    },
-    {
-        'id': 'ddos-layer7',
-        'title': 'DDoS Layer 7 (Defensive Simulation)',
-        'category': 'availability',
-        'severity': 'high',
-        'summary': 'محاكاة ضغط تطبيقات الويب بطلبات كثيفة تؤثر على الأداء.',
-        'key_iocs': ['Spike in HTTP requests', 'High 5xx rate', 'CPU saturation'],
-        'defense_focus': ['CDN/WAF shielding', 'Rate limiting', 'Autoscaling and failover'],
-        'metasploit_context': 'السياق الدفاعي: مراقبة السعة والتخطيط للاستجابة وليس الهجوم.',
-    },
-    {
-        'id': 'supply-chain-update',
-        'title': 'Supply Chain Compromise (Defensive Simulation)',
-        'category': 'software supply chain',
-        'severity': 'critical',
-        'summary': 'محاكاة إدخال حزمة/تحديث ملوث داخل بيئة التطوير أو الإنتاج.',
-        'key_iocs': ['Unexpected dependency changes', 'Unsigned binaries', 'Outbound anomaly'],
-        'defense_focus': ['SBOM', 'Code signing verification', 'Dependency allow-listing'],
-        'metasploit_context': 'يتم التعامل مع هذا التهديد عبر ضوابط سلسلة التوريد لا عبر استغلالات مباشرة.',
-    },
-    {
-        'id': 'webshell-persistence',
-        'title': 'Webshell Persistence (Defensive Simulation)',
-        'category': 'post-compromise',
-        'severity': 'critical',
-        'summary': 'محاكاة زرع باب خلفي في خادم ويب للحفاظ على الوصول.',
-        'key_iocs': ['Unexpected webroot file changes', 'Suspicious command execution', 'Encoded payload patterns'],
-        'defense_focus': ['File integrity monitoring', 'Least privilege', 'Runtime application protection'],
-        'metasploit_context': 'مرجعية دفاعية: payload/web delivery indicators لاستخدامها في الكشف فقط.',
-    },
-    {
-        'id': 'mimikatz-credential-dump',
-        'title': 'Credential Dumping (Defensive Simulation)',
-        'category': 'endpoint',
-        'severity': 'critical',
-        'summary': 'محاكاة محاولة استخراج بيانات اعتماد من الذاكرة.',
-        'key_iocs': ['LSASS access anomalies', 'Privilege escalation sequence', 'Credential cache events'],
-        'defense_focus': ['Credential Guard', 'LSASS protection', 'Tiered admin model'],
-        'metasploit_context': 'السياق هنا دفاعي: ربط مؤشرات السلوك بقواعد EDR/SIEM.',
-    },
-]
-
 LEARNING_AWARENESS_PROFILES = {
     'ransomware': {
         'attack_method': 'استغلال نظام غير محدث ثم نشر مشفرات الملفات داخل الشبكة.',
@@ -663,6 +560,105 @@ def _learning_level_label(level: str) -> str:
         'advanced': 'Advanced',
     }
     return labels.get(lvl, 'Intermediate')
+
+
+def _learning_normalize_category(raw: str) -> str:
+    txt = str(raw or '').strip().lower()
+    aliases = {
+        'ransomware': 'ransomware',
+        'network': 'network exploit',
+        'network exploit': 'network exploit',
+        'web': 'web',
+        'identity': 'identity attack',
+        'identity attack': 'identity attack',
+        'social': 'social engineering',
+        'social engineering': 'social engineering',
+        'availability': 'availability',
+        'ddos': 'availability',
+        'supply chain': 'software supply chain',
+        'software supply chain': 'software supply chain',
+        'post-compromise': 'post-compromise',
+        'endpoint': 'endpoint',
+    }
+    return aliases.get(txt, 'network exploit')
+
+
+def _learning_coerce_severity(raw: str) -> str:
+    txt = str(raw or '').strip().lower()
+    if txt in ('critical', 'high', 'medium', 'low'):
+        return txt
+    if txt in ('severe', 'urgent'):
+        return 'critical'
+    if txt in ('moderate',):
+        return 'medium'
+    return 'high'
+
+
+def _learning_build_custom_attack_from_ai(custom_attack_type: str, org_context: str, training_level: str) -> dict:
+    attack_type = str(custom_attack_type or '').strip()
+    if not attack_type:
+        raise ValueError('custom_attack_type required')
+
+    fallback = {
+        'id': f"custom-{re.sub(r'[^a-z0-9]+', '-', attack_type.lower()).strip('-')[:40] or 'scenario'}",
+        'title': f"Custom Simulation: {attack_type}",
+        'category': 'network exploit',
+        'severity': 'high',
+        'summary': f"محاكاة دفاعية مخصصة لنوع الهجمة: {attack_type}",
+        'key_iocs': ['Authentication anomalies', 'Unusual outbound traffic', 'Abnormal process behavior'],
+        'defense_focus': ['Rapid triage workflow', 'Containment checkpoints', 'Hardening backlog'],
+        'metasploit_context': 'مرجع دفاعي فقط داخل مختبر مصرح وبدون أوامر تشغيل.',
+    }
+
+    if not DO_AI_KEY:
+        return fallback
+
+    prompt = (
+        "Return strict JSON only with keys: id, title, category, severity, summary, key_iocs, defense_focus, metasploit_context.\n"
+        "Rules:\n"
+        "- Defensive educational content only, no offensive commands or exploit steps.\n"
+        "- category must be one of: ransomware, network exploit, web, identity attack, social engineering, availability, software supply chain, post-compromise, endpoint\n"
+        "- severity must be one of: critical, high, medium, low\n"
+        "- key_iocs array length 3-5\n"
+        "- defense_focus array length 3-5\n\n"
+        f"Attack type requested by user: {attack_type}\n"
+        f"Organization context: {org_context or 'N/A'}\n"
+        f"Training level: {training_level}\n"
+    )
+    system = (
+        "You are a blue-team cyber range designer. "
+        "Produce realistic defensive scenario metadata only. "
+        "Never provide offensive instructions."
+    )
+    try:
+        raw = _call_do_ai(prompt, system_prompt=system)
+        parsed = None
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            m = re.search(r'\{[\s\S]*\}', raw)
+            if m:
+                parsed = json.loads(m.group(0))
+        if not isinstance(parsed, dict):
+            return fallback
+
+        out = {
+            'id': str(parsed.get('id') or fallback['id']).strip() or fallback['id'],
+            'title': str(parsed.get('title') or fallback['title']).strip() or fallback['title'],
+            'category': _learning_normalize_category(str(parsed.get('category') or fallback['category'])),
+            'severity': _learning_coerce_severity(str(parsed.get('severity') or fallback['severity'])),
+            'summary': str(parsed.get('summary') or fallback['summary']).strip() or fallback['summary'],
+            'key_iocs': [str(x).strip() for x in (parsed.get('key_iocs') or []) if str(x).strip()][:5],
+            'defense_focus': [str(x).strip() for x in (parsed.get('defense_focus') or []) if str(x).strip()][:5],
+            'metasploit_context': str(parsed.get('metasploit_context') or fallback['metasploit_context']).strip() or fallback['metasploit_context'],
+        }
+        if not out['key_iocs']:
+            out['key_iocs'] = fallback['key_iocs']
+        if not out['defense_focus']:
+            out['defense_focus'] = fallback['defense_focus']
+        return out
+    except Exception:
+        return fallback
 
 
 def _split_kb_sections(markdown_text: str, max_chars: int = 900) -> list[dict[str, str]]:
@@ -5173,8 +5169,13 @@ HTML_TEMPLATE = """
 
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                     <div class="xl:col-span-1 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-indigo-300">Simulation Catalog</h3>
-                        <select id="learningAttackSelect" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
+                        <h3 class="text-sm font-bold text-indigo-300">AI Scenario Studio</h3>
+                        <div class="p-2.5 rounded border border-cyan-800/40 bg-cyan-950/20 space-y-2">
+                            <div class="text-[11px] font-bold text-cyan-300">AI Scenario Studio</div>
+                            <input id="learningCustomAttackType" type="text" placeholder="اكتب نوع الهجمة (مثال: OAuth Token Theft على Microsoft 365)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" />
+                            <textarea id="learningCustomObjective" rows="2" placeholder="هدف السيناريو (مثال: تدريب SOC على كشف الاختراق خلال 30 دقيقة)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
+                            <div class="text-[10px] text-cyan-100/80 leading-5">الكتالوج القديم تمت إزالته. اكتب نوع الهجمة هنا والـ AI يبني السيناريو كامل من الصفر.</div>
+                        </div>
                         <select id="learningLevel" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
                             <option value="beginner">توعوي - مبتدئ</option>
                             <option value="intermediate" selected>توعوي - متوسط</option>
@@ -5197,7 +5198,7 @@ HTML_TEMPLATE = """
                             <span id="learningLastAttackBadge" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">No run yet</span>
                         </div>
                         <div id="learningResult" class="p-3 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap leading-6">
-                            اختر سيناريو ثم اضغط "تشغيل محاكاة دفاعية".
+                            اكتب نوع الهجمة ثم اضغط "تشغيل محاكاة دفاعية".
                         </div>
                         <div id="learningTrainingChecklist" class="hidden p-3 rounded bg-fuchsia-950/20 border border-fuchsia-900/50 text-xs leading-6"></div>
                     </div>
@@ -6975,7 +6976,6 @@ HTML_TEMPLATE = """
             if(type === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if(type === 'ir' && typeof irInitSection === 'function') irInitSection();
             if(type === 'forensics' && typeof forensicsInitSection === 'function') forensicsInitSection();
-            if(type === 'learninglab' && typeof learningLoadCatalog === 'function') learningLoadCatalog();
             if(type === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
             if(type === 'crypt' && typeof startCryptAdvisorChat === 'function') startCryptAdvisorChat(false);
@@ -7010,12 +7010,10 @@ HTML_TEMPLATE = """
                 }
             });
 
-            if (next === 'learninglab' && typeof learningLoadCatalog === 'function') learningLoadCatalog();
             if (next === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if (next === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
         }
 
-        let __learningCatalogLoaded = false;
         let __learningReportToken = '';
         let __learningReportId = '';
         let __learningLastSimulation = null;
@@ -7200,60 +7198,25 @@ HTML_TEMPLATE = """
             __learningWarRoomTimer = setInterval(_learningWarRoomTick, 2200);
         }
 
-        async function learningLoadCatalog(force = false) {
-            if (__learningCatalogLoaded && !force) return;
-            const sel = document.getElementById('learningAttackSelect');
-            const out = document.getElementById('learningResult');
-            if (!sel || !out) return;
-
-            sel.innerHTML = '<option value="">...loading</option>';
-            try {
-                const res = await fetch('/api/learning/simulations', { cache: 'no-store' });
-                const data = await res.json();
-                if (!data.success) {
-                    sel.innerHTML = '<option value="">تعذر التحميل</option>';
-                    out.textContent = data.error || 'تعذر تحميل سيناريوهات المحاكاة.';
-                    return;
-                }
-
-                const rows = Array.isArray(data.simulations) ? data.simulations : [];
-                if (!rows.length) {
-                    sel.innerHTML = '<option value="">لا يوجد سيناريوهات</option>';
-                    out.textContent = 'لا يوجد سيناريوهات متاحة حالياً.';
-                    return;
-                }
-
-                sel.innerHTML = rows.map((item) => {
-                    const title = _resultEscape(item.title || item.id || 'Scenario');
-                    const level = _resultEscape(String(item.severity || '').toUpperCase());
-                    const id = _resultEscape(item.id || '');
-                    return `<option value="${id}">${title} - ${level}</option>`;
-                }).join('');
-
-                __learningCatalogLoaded = true;
-            } catch (e) {
-                sel.innerHTML = '<option value="">تعذر التحميل</option>';
-                out.textContent = 'فشل الاتصال بالخادم أثناء تحميل السيناريوهات.';
-            }
-        }
-
         async function learningRunSimulation() {
-            const sel = document.getElementById('learningAttackSelect');
             const contextEl = document.getElementById('learningOrgContext');
             const levelEl = document.getElementById('learningLevel');
+            const customAttackEl = document.getElementById('learningCustomAttackType');
+            const customObjectiveEl = document.getElementById('learningCustomObjective');
             const out = document.getElementById('learningResult');
             const badge = document.getElementById('learningLastAttackBadge');
             const pdfBtn = document.getElementById('learningPdfBtn');
             const checklistBtn = document.getElementById('learningChecklistBtn');
             const reportIdEl = document.getElementById('learningReportId');
             const checklistBox = document.getElementById('learningTrainingChecklist');
-            if (!sel || !out || !pdfBtn) return;
+            if (!out || !pdfBtn) return;
 
-            const attackId = String(sel.value || '').trim();
             const orgContext = String(contextEl?.value || '').trim();
             const trainingLevel = String(levelEl?.value || 'intermediate').trim().toLowerCase();
-            if (!attackId) {
-                out.textContent = 'اختر سيناريو محاكاة أولاً.';
+            const customAttackType = String(customAttackEl?.value || '').trim();
+            const customObjective = String(customObjectiveEl?.value || '').trim();
+            if (!customAttackType) {
+                out.textContent = 'اكتب نوع الهجمة المخصص أولاً.';
                 return;
             }
 
@@ -7276,7 +7239,12 @@ HTML_TEMPLATE = """
                 const res = await fetch('/api/learning/simulate', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ attack_id: attackId, org_context: orgContext, training_level: trainingLevel })
+                    body: JSON.stringify({
+                        org_context: orgContext,
+                        training_level: trainingLevel,
+                        custom_attack_type: customAttackType,
+                        custom_objective: customObjective,
+                    })
                 });
                 const data = await res.json();
                 if (!data.success) {
@@ -7315,6 +7283,9 @@ HTML_TEMPLATE = """
                                 <div class="text-[11px] text-slate-300">${_resultEscape(String(sim.severity || '').toUpperCase())} • ${_resultEscape(sim.category || '-')}</div>
                             </div>
                             <div class="text-xs text-slate-300 mt-2">${_resultEscape(sim.summary || '-')}</div>
+                            ${sim.custom_attack_type ? `<div class="text-[11px] text-cyan-300 mt-2">AI Custom Attack Type: ${_resultEscape(sim.custom_attack_type)}</div>` : ''}
+                            ${sim.custom_objective ? `<div class="text-[11px] text-cyan-200/90 mt-1">Objective: ${_resultEscape(sim.custom_objective)}</div>` : ''}
+                            <div class="text-[10px] text-indigo-200/70 mt-1">Authority Mode: ${_resultEscape(sim.exercise_authority || 'full-simulated-authority')}</div>
                         </div>
 
                         <div class="rounded-xl border border-pink-800/50 bg-pink-950/20 p-3">
@@ -14956,6 +14927,9 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
                 f"{('الشدة' if is_ar else 'Severity')}: {sim.get('severity', '')}",
                 f"{('مستوى التوعية' if is_ar else 'Awareness Level')}: {sim.get('training_level_label') or sim.get('training_level') or 'Intermediate'}",
                 f"{('درجة الخطورة' if is_ar else 'Risk Score')}: {analysis.get('risk_score', 0)}/100",
+                f"{('نوع الهجمة المخصص' if is_ar else 'Custom Attack Type')}: {sim.get('custom_attack_type', '') or 'N/A'}",
+                f"{('هدف التمرين' if is_ar else 'Exercise Objective')}: {sim.get('custom_objective', '') or 'N/A'}",
+                f"{('صلاحية التمرين' if is_ar else 'Exercise Authority')}: {sim.get('exercise_authority', '') or 'full-simulated-authority'}",
             ],
         ),
         (
@@ -15088,14 +15062,6 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
     c.drawCentredString(page_w / 2, 24, tx(footer))
     c.save()
     return buf.getvalue()
-
-
-def _learning_find_attack(attack_id: str) -> dict | None:
-    key = str(attack_id or '').strip().lower()
-    for item in LEARNING_SIM_ATTACKS:
-        if str(item.get('id') or '').lower() == key:
-            return item
-    return None
 
 
 def _learning_cleanup_report_cache(now_ts: float | None = None) -> None:
@@ -18081,27 +18047,6 @@ def ai_models():
     return jsonify({"models": ["TITAN-SEC AI (DigitalOcean)"], "success": True})
 
 
-@app.route('/api/learning/simulations', methods=['GET'])
-def learning_simulations_route():
-    user_id, err = _get_logged_in_user_id()
-    if err:
-        return err
-    _ = user_id
-    rows = [
-        {
-            'id': item.get('id'),
-            'title': item.get('title'),
-            'category': item.get('category'),
-            'severity': item.get('severity'),
-            'summary': item.get('summary'),
-            'attack_method': _learning_awareness_profile(item).get('attack_method'),
-            'awareness_goal': _learning_awareness_profile(item).get('awareness_goal'),
-        }
-        for item in LEARNING_SIM_ATTACKS
-    ]
-    return jsonify({'success': True, 'simulations': rows})
-
-
 @app.route('/api/learning/simulate', methods=['POST'])
 def learning_simulate_route():
     user_id, err = _get_logged_in_user_id()
@@ -18110,17 +18055,16 @@ def learning_simulate_route():
     assert user_id is not None
 
     data = request.get_json(silent=True) or {}
-    attack_id = (data.get('attack_id') or '').strip()
+    custom_attack_type = (data.get('custom_attack_type') or '').strip()
+    custom_objective = (data.get('custom_objective') or '').strip()
     org_context = (data.get('org_context') or '').strip()
     training_level = str(data.get('training_level') or 'intermediate').strip().lower()
     if training_level not in ('beginner', 'intermediate', 'advanced'):
         training_level = 'intermediate'
-    if not attack_id:
-        return jsonify({'success': False, 'error': 'attack_id مطلوب'}), 400
+    if not custom_attack_type:
+        return jsonify({'success': False, 'error': 'custom_attack_type مطلوب'}), 400
 
-    attack = _learning_find_attack(attack_id)
-    if not attack:
-        return jsonify({'success': False, 'error': 'السيناريو غير موجود'}), 404
+    attack = _learning_build_custom_attack_from_ai(custom_attack_type, org_context, training_level)
 
     awareness = _learning_awareness_profile(attack)
     exploit_pattern = _learning_apply_level_tone(
@@ -18152,6 +18096,7 @@ def learning_simulate_route():
             f"Defensive focus: {', '.join(attack.get('defense_focus') or [])}\n"
             f"Defensive metasploit context: {attack.get('metasploit_context', '')}\n"
             f"Organization context: {org_context or 'N/A'}\n\n"
+            f"Exercise objective: {custom_objective or 'N/A'}\n"
             "أعطني إجابة مرتبة بهذا الشكل:\n"
             "1) شرح مبسط للهجمة\n"
             "2) كيف يتم استغلال الثغرة مفاهيميا (بدون أوامر)\n"
@@ -18269,6 +18214,9 @@ def learning_simulate_route():
         'metasploit_context': attack.get('metasploit_context') or '',
         'ai_explanation': ai_explanation,
         'org_context': org_context,
+        'custom_attack_type': custom_attack_type,
+        'custom_objective': custom_objective,
+        'exercise_authority': 'full-simulated-authority',
         'generated_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
     realism_pack = _learning_build_realism_pack(attack, awareness, analysis, org_context, training_level)
@@ -18306,7 +18254,7 @@ def learning_simulate_route():
 
     add_audit_log(
         'Learning Simulation',
-        f"attack={attack.get('id', '')} severity={attack.get('severity', '')}",
+        f"attack={attack.get('id', '')} severity={attack.get('severity', '')} custom={'yes' if custom_attack_type else 'no'}",
         username=session.get('username', '')
     )
     return jsonify({'success': True, 'simulation': simulation, 'analysis': analysis, 'report_token': token, 'report_id': report_id})
