@@ -278,7 +278,12 @@ def _learning_awareness_profile(attack: dict) -> dict:
     }
 
 
-def _learning_build_training_checklist(attack: dict, awareness: dict, analysis: dict, org_context: str) -> list[str]:
+def _learning_normalize_lang(raw: str) -> str:
+    return 'en' if str(raw or '').strip().lower() == 'en' else 'ar'
+
+
+def _learning_build_training_checklist(attack: dict, awareness: dict, analysis: dict, org_context: str, lang: str = 'ar') -> list[str]:
+    is_ar = _learning_normalize_lang(lang) == 'ar'
     category = str((attack or {}).get('category') or '').strip().lower()
     focus = [str(x).strip() for x in ((attack or {}).get('defense_focus') or []) if str(x).strip()]
     iocs = [str(x).strip() for x in ((attack or {}).get('key_iocs') or []) if str(x).strip()]
@@ -287,10 +292,10 @@ def _learning_build_training_checklist(attack: dict, awareness: dict, analysis: 
     hardening = [str(x).strip() for x in ((analysis or {}).get('hardening_plan') or []) if str(x).strip()]
 
     rows: list[str] = [
-        'إحاطة افتتاحية 15 دقيقة: نطاق التمرين، قواعد السلامة، وقنوات التصعيد.',
-        f"مراجعة طريقة الهجوم توعوياً: {str((awareness or {}).get('attack_method') or '').strip()}",
-        'تشغيل تمرين Tabletop بزمن مضغوط مع حقن أحداث متتابعة كل 10-15 دقيقة.',
-        'تسجيل قرار القائد في كل مرحلة: ماذا نراقب، ماذا نعزل، ومن المسؤول.',
+        ('إحاطة افتتاحية 15 دقيقة: نطاق التمرين، قواعد السلامة، وقنوات التصعيد.' if is_ar else '15-minute kickoff: scope, safety rules, and escalation channels.'),
+        ((f"مراجعة طريقة الهجوم توعوياً: {str((awareness or {}).get('attack_method') or '').strip()}" if is_ar else f"Review the awareness attack method: {str((awareness or {}).get('attack_method') or '').strip()}")),
+        ('تشغيل تمرين Tabletop بزمن مضغوط مع حقن أحداث متتابعة كل 10-15 دقيقة.' if is_ar else 'Run a compressed tabletop drill with new injects every 10-15 minutes.'),
+        ('تسجيل قرار القائد في كل مرحلة: ماذا نراقب، ماذا نعزل، ومن المسؤول.' if is_ar else 'Log commander decisions at each stage: monitor, isolate, and owner.'),
     ]
 
     if category == 'social engineering':
@@ -307,19 +312,19 @@ def _learning_build_training_checklist(attack: dict, awareness: dict, analysis: 
         rows.append('اختبار استعادة نسخة احتياطية مع قياس RTO/RPO وإقرار Go/No-Go للإرجاع للإنتاج.')
 
     if iocs:
-        rows.append(f"تدريب فريق الرصد على مؤشرات IOC التالية: {', '.join(iocs[:3])}")
+        rows.append((f"تدريب فريق الرصد على مؤشرات IOC التالية: {', '.join(iocs[:3])}" if is_ar else f"Train detection team on these IOC indicators: {', '.join(iocs[:3])}"))
     if focus:
-        rows.append(f"تعيين مسؤول لكل ضابط تحصين: {', '.join(focus[:3])}")
+        rows.append((f"تعيين مسؤول لكل ضابط تحصين: {', '.join(focus[:3])}" if is_ar else f"Assign owners for each hardening control: {', '.join(focus[:3])}"))
     if detection:
-        rows.append(f"تشغيل سيناريو مراقبة: {detection[0]}")
+        rows.append((f"تشغيل سيناريو مراقبة: {detection[0]}" if is_ar else f"Run detection drill: {detection[0]}"))
     if response:
-        rows.append(f"تجربة احتواء: {response[0]}")
+        rows.append((f"تجربة احتواء: {response[0]}" if is_ar else f"Run containment drill: {response[0]}"))
     if hardening:
-        rows.append(f"إجراء تحصين أسبوعي: {hardening[0]}")
+        rows.append((f"إجراء تحصين أسبوعي: {hardening[0]}" if is_ar else f"Weekly hardening task: {hardening[0]}"))
     if org_context.strip():
-        rows.append(f"مواءمة الخطة مع واقع المؤسسة المذكور: {org_context.strip()[:160]}")
+        rows.append((f"مواءمة الخطة مع واقع المؤسسة المذكور: {org_context.strip()[:160]}" if is_ar else f"Align plan with organization context: {org_context.strip()[:160]}"))
 
-    rows.append('جلسة ختامية: الدروس المستفادة + تحديث Playbook + تحديد موعد إعادة المحاكاة.')
+    rows.append('جلسة ختامية: الدروس المستفادة + تحديث Playbook + تحديد موعد إعادة المحاكاة.' if is_ar else 'Closing session: lessons learned + playbook updates + next simulation date.')
 
     clean: list[str] = []
     seen = set()
@@ -335,22 +340,35 @@ def _learning_build_training_checklist(attack: dict, awareness: dict, analysis: 
     return clean[:12]
 
 
-def _learning_build_realism_pack(attack: dict, awareness: dict, analysis: dict, org_context: str, training_level: str) -> dict:
+def _learning_build_realism_pack(attack: dict, awareness: dict, analysis: dict, org_context: str, training_level: str, lang: str = 'ar') -> dict:
+    is_ar = _learning_normalize_lang(lang) == 'ar'
     category = str((attack or {}).get('category') or '').strip().lower()
     title = str((attack or {}).get('title') or 'Scenario').strip()
     org = str(org_context or '').strip()
 
-    base_vectors = {
-        'ransomware': 'Phishing attachment + lateral movement via weak segmentation',
-        'network exploit': 'Exposed legacy service over internal/external network path',
-        'web': 'Public endpoint with weak input/output controls',
+    base_vectors_ar = {
+        'ransomware': 'مرفق تصيّد + حركة جانبية بسبب ضعف التقسيم الشبكي',
+        'network exploit': 'خدمة قديمة مكشوفة على مسار شبكة داخلي/خارجي',
+        'web': 'واجهة ويب عامة مع ضعف في التحقق من المدخلات/المخرجات',
+        'identity attack': 'إعادة استخدام بيانات اعتماد ضد بوابة SSO/VPN',
+        'social engineering': 'انتحال جهة تنفيذية مع ضغط واستعجال',
+        'availability': 'ضغط كثيف على طبقة التطبيق (Layer 7) لنقاط مكلفة',
+        'software supply chain': 'اعتماد/تحديث ملوث يدخل إلى CI/CD',
+        'post-compromise': 'استمرارية وصول بعد اختراق أولي',
+        'endpoint': 'استهداف محطة طرفية عالية الصلاحية لاستخراج بيانات اعتماد',
+    }
+    base_vectors_en = {
+        'ransomware': 'Phishing attachment + lateral movement due to weak segmentation',
+        'network exploit': 'Legacy exposed service over internal/external network path',
+        'web': 'Public web endpoint with weak input/output validation',
         'identity attack': 'Credential reuse against SSO/VPN portal',
-        'social engineering': 'Executive impersonation with urgent business pretext',
-        'availability': 'Layer 7 request flood against costly endpoints',
+        'social engineering': 'Executive impersonation with urgency pressure',
+        'availability': 'High Layer-7 pressure against costly app endpoints',
         'software supply chain': 'Compromised dependency/update entering CI/CD',
-        'post-compromise': 'Persistent foothold after initial breach',
+        'post-compromise': 'Persistent access after initial compromise',
         'endpoint': 'Privileged endpoint targeted for credential access',
     }
+    base_vectors = base_vectors_ar if is_ar else base_vectors_en
 
     if training_level == 'beginner':
         pace = 'مستوى مبسط: التركيز على التسلسل العام واتخاذ القرار الصحيح.'
@@ -431,10 +449,10 @@ def _learning_build_realism_pack(attack: dict, awareness: dict, analysis: dict, 
     ]
 
     artifacts = [
-        'SIEM alerts timeline with correlation IDs',
-        'EDR telemetry snapshot for impacted hosts',
-        'Auth logs (success/failure anomalies)',
-        'DNS/Proxy traces for suspicious destinations',
+        'الخط الزمني لتنبيهات SIEM مع معرفات الربط',
+        'لقطة Telemetry من EDR للأجهزة المتأثرة',
+        'سجلات المصادقة (نجاح/فشل غير اعتيادي)',
+        'آثار DNS/Proxy نحو وجهات مشبوهة',
     ]
 
     decision_points = [
@@ -464,6 +482,32 @@ def _learning_build_realism_pack(attack: dict, awareness: dict, analysis: dict, 
         'إنهاء التمرين بخطة تحسين تنفيذية واضحة لمدة 7 أيام.',
     ]
 
+    common_tools = [
+        'SIEM (مثل Splunk / ELK / Sentinel) لمراقبة التنبيهات وربط الأحداث.',
+        'EDR (مثل Defender for Endpoint / CrowdStrike) لرصد سلوك الأجهزة.',
+        'Nmap و Wireshark لاختبار السطح الشبكي وتحليل الحركة في المختبر الدفاعي.',
+        'Burp Suite / OWASP ZAP لفحص تطبيقات الويب في بيئة اختبار مصرح.',
+    ]
+
+    common_commands = [
+        'nmap -sV <host> : فحص الخدمات والإصدارات (مختبر مصرح فقط).',
+        'netstat -ano : مراجعة الاتصالات والعمليات النشطة على الجهاز.',
+        'Get-EventLog أو journalctl : قراءة سجلات النظام لاكتشاف الشذوذ.',
+        'grep/findstr : البحث عن مؤشرات IOC داخل السجلات والملفات النصية.',
+    ]
+
+    success_signals = [
+        'ظهور تنبيهات مترابطة في SIEM مع نفس النمط الزمني أو نفس الأصل.',
+        'وجود نشاط غير طبيعي في السجلات (ارتفاع فشل الدخول/اتصالات غريبة).',
+        'تحقق أثر فعلي على الخدمة أو البيانات وفق مؤشرات متعددة متسقة.',
+    ]
+
+    failure_signals = [
+        'عدم وجود أي أثر في السجلات مع بقاء الخدمة مستقرة بالكامل.',
+        'المؤشرات متناقضة أو غير قابلة لإعادة التحقق عبر مصدر ثانٍ.',
+        'الفرضية لا تصمد بعد التحقق، ويتبين أن الحدث False Positive.',
+    ]
+
     commander_brief = (
         f"سيناريو {category_ar}: يبدأ التنبيه كحدث اعتيادي، ثم يتضح تدريجيا أن التأثير يتوسع عبر أكثر من طبقة. "
         f"الفريق أمام سباق وقت بين تقليل الأثر على الأعمال ومنع ترسخ التهديد. "
@@ -471,25 +515,128 @@ def _learning_build_realism_pack(attack: dict, awareness: dict, analysis: dict, 
         f"سياق المؤسسة: {org[:140] if org else 'بيئة إنتاج عامة متعددة الخدمات'}"
     )
 
+    if not is_ar:
+        vulnerability_master_brief = (
+            f"The targeted weakness in this scenario is {vuln_title}. "
+            "The core idea: attackers often start from a small repeatable gap (misconfiguration, unpatched service, or social trust abuse), "
+            "then expand impact step by step until a minor alert becomes an operational incident. "
+            "This exercise links technical indicators with business decisions under time pressure. "
+            f"Organization context used in the drill: {org[:150] if org else 'Multi-service production environment under constant business pressure.'}"
+        )
+        vulnerability_root_causes = [
+            'Basic hygiene gaps: delayed patching, over-privileged access, or weak segmentation.',
+            'Early-detection gap: alerts exist but SIEM, EDR, and identity telemetry are not correlated well.',
+            'Decision gap: delayed containment choices increase blast radius.',
+            'Governance gap: playbooks exist but are not updated or pressure-tested.',
+        ]
+        vulnerability_impact_chain = [
+            'Impact-1: Immediate disruption in sensitive services or accounts.',
+            'Impact-2: Scope expansion due to delayed isolation or limited visibility.',
+            'Impact-3: Legal, executive, and public-pressure overhead increases risk cost.',
+            'Impact-4: Without root-cause remediation, recurrence probability rises quickly.',
+        ]
+        timeline = [
+            f"T+00 | Kickoff: Initial alert linked to {title}; incident commander assigned.",
+            'T+10 | Triage: Validate signals, collect first evidence, assign initial severity.',
+            f"T+20 | Scope: Estimate affected surface based on {base_vectors.get(category, 'initial compromise vector')}.",
+            'T+35 | Containment Decision: Partial vs full isolation with business impact note.',
+            'T+50 | Deep Analysis: Correlate IOC indicators across EDR/SIEM/DNS/Proxy logs.',
+            'T+70 | Eradication Plan: Remove root cause and close initial entry path.',
+            'T+90 | Recovery Gate: Go/No-Go decision for service restoration after security checks.',
+            'T+110 | After Action: Capture lessons and assign hardening deadlines.',
+        ]
+        injects = [
+            'Inject 1: Business team reports unusual user behavior patterns.',
+            'Inject 2: New evidence challenges the first attack hypothesis.',
+            'Inject 3: Operational constraints block full isolation; phased containment needed.',
+            'Inject 4: Leadership requests a decision-ready status update in 15 minutes.',
+        ]
+        artifacts = [
+            'Correlated SIEM alert timeline',
+            'EDR telemetry snapshot from impacted endpoints',
+            'Authentication logs (anomalous success/failure patterns)',
+            'DNS/Proxy traces toward suspicious destinations',
+        ]
+        decision_points = [
+            'Is immediate full isolation required, or phased containment first?',
+            'What minimum evidence threshold is needed before major incident escalation?',
+            'When is it safe to transition from containment to recovery?',
+        ]
+        live_feed = [
+            '08:40 - SOC Analyst: Alert volume spikes around the same behavioral pattern.',
+            '08:52 - IR Lead: War Room opened; unified decision channel established.',
+            '09:03 - Threat Hunter: New signal indicates wider scope than expected.',
+            '09:15 - IT Ops: Partial containment succeeded; one critical service remains affected.',
+            '09:27 - CISO Update: Executive decision required in 10 minutes with business impact.',
+        ]
+        pressure_cards = [
+            'Pressure Card #1: Business owner rejects full shutdown during critical sales window.',
+            'Pressure Card #2: One major indicator becomes false positive and distracts the team.',
+            'Pressure Card #3: Legal asks for auditable evidence preservation before major changes.',
+        ]
+        win_conditions = [
+            'Contain threat without additional asset loss.',
+            'Document clear decisions at each critical point within expected time.',
+            'Restore service safely with root-cause closure verified.',
+            'Exit exercise with a 7-day actionable improvement plan.',
+        ]
+        common_tools = [
+            'SIEM (Splunk / ELK / Sentinel) for alert correlation and timelineing.',
+            'EDR (Defender for Endpoint / CrowdStrike) for endpoint behavior visibility.',
+            'Nmap and Wireshark for authorized lab network validation and traffic review.',
+            'Burp Suite / OWASP ZAP for authorized web security assessments.',
+        ]
+        common_commands = [
+            'nmap -sV <host> : service/version visibility in authorized lab only.',
+            'netstat -ano : inspect active connections and owning processes.',
+            'Get-EventLog or journalctl : review host/system logs for anomaly traces.',
+            'grep/findstr : search IOC strings across logs and text artifacts.',
+        ]
+        success_signals = [
+            'Correlated SIEM alerts show consistent timing/source pattern.',
+            'Telemetry confirms unusual auth/network/process behavior across multiple sources.',
+            'Business/service impact aligns with technical findings.',
+        ]
+        failure_signals = [
+            'No meaningful evidence in logs while service remains stable.',
+            'Indicators are contradictory or cannot be verified by a second source.',
+            'Hypothesis collapses after validation and event is likely false positive.',
+        ]
+        commander_brief = (
+            f"{category.title()} scenario: the alert starts as routine noise, then expands across layers. "
+            "The team must balance service continuity against fast threat containment. "
+            "Decision quality under time pressure is the core objective. "
+            f"Organization context: {org[:140] if org else 'General multi-service production environment.'}"
+        )
+
     detection = [str(x).strip() for x in ((analysis or {}).get('detection_plan') or []) if str(x).strip()]
     response = [str(x).strip() for x in ((analysis or {}).get('response_plan') or []) if str(x).strip()]
 
-    kpis = [
-        'MTTD target: <= 15 minutes',
-        'MTTC (containment) target: <= 30 minutes',
-        'Decision log completeness target: >= 90%',
-        'Post-incident hardening completion: within 7 business days',
-    ]
+    kpis = (
+        [
+            'هدف MTTD: أقل أو يساوي 15 دقيقة',
+            'هدف MTTC (الاحتواء): أقل أو يساوي 30 دقيقة',
+            'اكتمال سجل القرارات: 90% فأكثر',
+            'إنهاء التحصين بعد الحادث خلال 7 أيام عمل',
+        ]
+        if is_ar else
+        [
+            'MTTD target: <= 15 minutes',
+            'MTTC target (containment): <= 30 minutes',
+            'Decision log completeness: >= 90%',
+            'Post-incident hardening completion within 7 business days',
+        ]
+    )
 
     if detection:
-        kpis.append(f"Detection quality checkpoint: {detection[0]}")
+        kpis.append((f"مؤشر جودة الكشف: {detection[0]}" if is_ar else f"Detection quality indicator: {detection[0]}"))
     if response:
-        kpis.append(f"Response quality checkpoint: {response[0]}")
+        kpis.append((f"مؤشر جودة الاستجابة: {response[0]}" if is_ar else f"Response quality indicator: {response[0]}"))
 
     scenario_context = org[:180] if org else 'N/A'
 
     return {
-        'simulation_style': 'Realistic SOC Tabletop',
+        'simulation_style': ('محاكاة SOC واقعية' if is_ar else 'Realistic SOC Simulation'),
         'simulation_pace_note': pace,
         'initial_access_vector': base_vectors.get(category, 'Multi-stage initial compromise'),
         'business_context': scenario_context,
@@ -505,6 +652,10 @@ def _learning_build_realism_pack(attack: dict, awareness: dict, analysis: dict, 
         'live_feed': live_feed,
         'pressure_cards': pressure_cards,
         'win_conditions': win_conditions,
+        'common_tools': common_tools,
+        'common_commands': common_commands,
+        'success_signals': success_signals,
+        'failure_signals': failure_signals,
         'kpis': kpis[:6],
     }
 
@@ -594,20 +745,29 @@ def _learning_coerce_severity(raw: str) -> str:
     return 'high'
 
 
-def _learning_build_custom_attack_from_ai(custom_attack_type: str, org_context: str, training_level: str) -> dict:
+def _learning_build_custom_attack_from_ai(custom_attack_type: str, org_context: str, training_level: str, lang: str = 'ar') -> dict:
+    is_ar = _learning_normalize_lang(lang) == 'ar'
     attack_type = str(custom_attack_type or '').strip()
     if not attack_type:
         raise ValueError('custom_attack_type required')
 
     fallback = {
         'id': f"custom-{re.sub(r'[^a-z0-9]+', '-', attack_type.lower()).strip('-')[:40] or 'scenario'}",
-        'title': f"Custom Simulation: {attack_type}",
+        'title': (f"محاكاة مخصصة: {attack_type}" if is_ar else f"Custom Simulation: {attack_type}"),
         'category': 'network exploit',
         'severity': 'high',
-        'summary': f"محاكاة دفاعية مخصصة لنوع الهجمة: {attack_type}",
-        'key_iocs': ['Authentication anomalies', 'Unusual outbound traffic', 'Abnormal process behavior'],
-        'defense_focus': ['Rapid triage workflow', 'Containment checkpoints', 'Hardening backlog'],
-        'metasploit_context': 'مرجع دفاعي فقط داخل مختبر مصرح وبدون أوامر تشغيل.',
+        'summary': (f"محاكاة دفاعية مخصصة لنوع الهجمة: {attack_type}" if is_ar else f"Custom defensive simulation for attack type: {attack_type}"),
+        'key_iocs': (
+            ['شذوذ في المصادقة', 'اتصالات خارجية غير معتادة', 'سلوك عمليات غير طبيعي']
+            if is_ar else
+            ['Authentication anomalies', 'Unusual outbound connections', 'Abnormal process behavior']
+        ),
+        'defense_focus': (
+            ['فرز أولي سريع', 'نقاط تحقق للاحتواء', 'قائمة تحصين واضحة']
+            if is_ar else
+            ['Rapid initial triage', 'Containment checkpoints', 'Clear hardening checklist']
+        ),
+        'metasploit_context': ('مرجع دفاعي فقط داخل مختبر مصرح وبدون أوامر تشغيل.' if is_ar else 'Defensive reference only in an authorized lab, without execution commands.'),
     }
 
     if not DO_AI_KEY:
@@ -621,6 +781,7 @@ def _learning_build_custom_attack_from_ai(custom_attack_type: str, org_context: 
         "- severity must be one of: critical, high, medium, low\n"
         "- key_iocs array length 3-5\n"
         "- defense_focus array length 3-5\n\n"
+        f"- All values should be in language: {'Arabic' if is_ar else 'English'}\n\n"
         f"Attack type requested by user: {attack_type}\n"
         f"Organization context: {org_context or 'N/A'}\n"
         f"Training level: {training_level}\n"
@@ -5185,6 +5346,10 @@ HTML_TEMPLATE = """
                             <option value="ar" selected>PDF عربي</option>
                             <option value="en">PDF English</option>
                         </select>
+                        <select id="learningUiLang" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="ar" selected>نتائج المحاكاة: عربي</option>
+                            <option value="en">Simulation Results: English</option>
+                        </select>
                         <textarea id="learningOrgContext" rows="4" placeholder="سياق بيئتك (مثال: شركة صغيرة، ويندوز، O365، بدون EDR)..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
                         <button onclick="learningRunSimulation()" class="w-full py-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تشغيل محاكاة دفاعية</button>
                         <button id="learningChecklistBtn" onclick="learningRenderTrainingChecklist()" disabled class="w-full py-2 rounded bg-fuchsia-900/40 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">خطة تدريب الفريق</button>
@@ -5195,7 +5360,7 @@ HTML_TEMPLATE = """
                     <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
                         <div class="flex items-center justify-between gap-2 flex-wrap">
                             <h3 class="text-sm font-bold text-cyan-300">نتائج المحاكاة + شرح AI</h3>
-                            <span id="learningLastAttackBadge" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">No run yet</span>
+                            <span id="learningLastAttackBadge" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">لا يوجد تشغيل بعد</span>
                         </div>
                         <div id="learningResult" class="p-3 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap leading-6">
                             اكتب نوع الهجمة ثم اضغط "تشغيل محاكاة دفاعية".
@@ -7050,6 +7215,62 @@ HTML_TEMPLATE = """
             return rows.map((x) => `<div class="text-xs text-gray-100">• ${_resultEscape(x)}</div>`).join('');
         }
 
+        function _learningNormalizeLang(raw) {
+            return String(raw || '').trim().toLowerCase() === 'en' ? 'en' : 'ar';
+        }
+
+        function _learningTranslateResultHtmlToEnglish(html) {
+            let out = String(html || '');
+            const pairs = [
+                ['شرح كامل للثغرة (أولاً)', 'Full Vulnerability Brief (First)'],
+                ['الجذور المحتملة', 'Root Causes'],
+                ['سلسلة الأثر', 'Impact Chain'],
+                ['درجة الخطورة', 'Risk Score'],
+                ['نوع الهجمة المخصص:', 'Custom Attack Type:'],
+                ['هدف التمرين:', 'Exercise Objective:'],
+                ['وضع الصلاحية:', 'Authority Mode:'],
+                ['صلاحيات كاملة داخل بيئة محاكاة', 'Full simulated authority'],
+                ['طريقة الهجوم (توعوي)', 'Attack Method (Awareness)'],
+                ['كيف يتم استغلال الثغرة؟ (توعوي بدون أوامر)', 'How Exploitation Happens (Awareness, no offensive commands)'],
+                ['مراحل الهجوم (محاكاة توعوية)', 'Attack Journey (Awareness Simulation)'],
+                ['محاكاة واقعية', 'Realistic Simulation'],
+                ['مسار الدخول الأولي:', 'Initial Access Vector:'],
+                ['إيجاز قائد غرفة العمليات', 'War Room Commander Brief'],
+                ['الخط الزمني (T+)', 'Timeline (T+)'],
+                ['حقن الأحداث أثناء التمرين', 'Exercise Injects'],
+                ['نقاط القرار الحرجة', 'Critical Decision Points'],
+                ['الأدلة المتوقعة للتحقق', 'Expected Evidence Artifacts'],
+                ['البث الحي لغرفة العمليات', 'Live War Room Stream'],
+                ['الخط الزمني المباشر', 'Live Timeline'],
+                ['تحديثات الحادث', 'Incident Feed'],
+                ['بطاقات الضغط', 'Pressure Cards'],
+                ['مؤشرات التهديد المحتملة (IOC)', 'Potential IOCs'],
+                ['ضوابط التحصين', 'Hardening Controls'],
+                ['خطة الكشف', 'Detection Plan'],
+                ['خطة الاستجابة', 'Response Plan'],
+                ['سياق Metasploit (مرجعي دفاعي فقط)', 'Metasploit Context (Defensive Reference Only)'],
+                ['شرح AI التفصيلي', 'AI Deep Explanation'],
+                ['مؤشرات نجاح التمرين', 'Exercise KPIs'],
+                ['شروط الفوز', 'Win Conditions'],
+                ['أشهر الأدوات المرتبطة بالسيناريو', 'Common Tools Used in This Attack'],
+                ['أوامر شائعة (بشكل مبسط)', 'Common Commands (Simplified)'],
+                ['كيف أعرف أن المحاولة نجحت؟', 'How to tell the attempt likely succeeded?'],
+                ['كيف أعرف أنها لم تنجح؟', 'How to tell the attempt likely failed?'],
+                ['لا توجد مؤشرات', 'No indicators'],
+                ['لا توجد شروط فوز', 'No win conditions'],
+                ['لا توجد مؤشرات نجاح', 'No success indicators'],
+                ['لا توجد مؤشرات فشل', 'No failure indicators'],
+                ['لا توجد خطة كشف', 'No detection plan'],
+                ['لا توجد خطة استجابة', 'No response plan'],
+                ['لا توجد مؤشرات تهديد', 'No IOCs'],
+                ['لا توجد ضوابط', 'No controls'],
+            ];
+            pairs.forEach(([ar, en]) => {
+                out = out.split(ar).join(en);
+            });
+            return out;
+        }
+
         function _learningStopWarRoomStream() {
             if (__learningWarRoomTimer) {
                 clearInterval(__learningWarRoomTimer);
@@ -7137,8 +7358,12 @@ HTML_TEMPLATE = """
             const current = Math.min(total, st.step + 1);
             const pct = Math.round((current / total) * 100);
             progressEl.style.width = pct + '%';
-            statusEl.textContent = `Live Step ${current}/${total} • ${st.isPlaying ? 'Streaming' : 'Paused'}`;
+            const isAr = _learningNormalizeLang(st.lang) === 'ar';
+            statusEl.textContent = isAr
+                ? `الخطوة ${current}/${total} • ${st.isPlaying ? 'بث مباشر' : 'متوقف مؤقتا'}`
+                : `Step ${current}/${total} • ${st.isPlaying ? 'Streaming' : 'Paused'}`;
             if (toggleBtn) toggleBtn.textContent = st.isPlaying ? 'إيقاف مؤقت' : 'استكمال';
+            if (toggleBtn && !isAr) toggleBtn.textContent = st.isPlaying ? 'Pause' : 'Resume';
         }
 
         function _learningWarRoomTick() {
@@ -7177,7 +7402,7 @@ HTML_TEMPLATE = """
             _learningRenderWarRoomStream();
         }
 
-        function _learningStartWarRoomStream(sim) {
+        function _learningStartWarRoomStream(sim, lang) {
             const timeline = Array.isArray(sim?.scenario_timeline) ? sim.scenario_timeline.filter(Boolean) : [];
             const feed = Array.isArray(sim?.live_feed) ? sim.live_feed.filter(Boolean) : [];
             const pressure = Array.isArray(sim?.pressure_cards) ? sim.pressure_cards.filter(Boolean) : [];
@@ -7191,6 +7416,7 @@ HTML_TEMPLATE = """
                 maxSteps,
                 isPlaying: true,
                 lastPressureVisible: 0,
+                lang: _learningNormalizeLang(lang),
             };
 
             _learningStopWarRoomStream();
@@ -7201,6 +7427,7 @@ HTML_TEMPLATE = """
         async function learningRunSimulation() {
             const contextEl = document.getElementById('learningOrgContext');
             const levelEl = document.getElementById('learningLevel');
+            const uiLangEl = document.getElementById('learningUiLang');
             const customAttackEl = document.getElementById('learningCustomAttackType');
             const customObjectiveEl = document.getElementById('learningCustomObjective');
             const out = document.getElementById('learningResult');
@@ -7213,6 +7440,7 @@ HTML_TEMPLATE = """
 
             const orgContext = String(contextEl?.value || '').trim();
             const trainingLevel = String(levelEl?.value || 'intermediate').trim().toLowerCase();
+            const resultLang = _learningNormalizeLang(uiLangEl?.value || 'ar');
             const customAttackType = String(customAttackEl?.value || '').trim();
             const customObjective = String(customObjectiveEl?.value || '').trim();
             if (!customAttackType) {
@@ -7229,7 +7457,7 @@ HTML_TEMPLATE = """
             __learningReportToken = '';
             __learningReportId = '';
             __learningLastSimulation = null;
-            if (reportIdEl) reportIdEl.textContent = 'Report ID: -';
+            if (reportIdEl) reportIdEl.textContent = 'معرف التقرير: -';
             if (checklistBox) {
                 checklistBox.classList.add('hidden');
                 checklistBox.innerHTML = '';
@@ -7242,6 +7470,7 @@ HTML_TEMPLATE = """
                     body: JSON.stringify({
                         org_context: orgContext,
                         training_level: trainingLevel,
+                        result_lang: resultLang,
                         custom_attack_type: customAttackType,
                         custom_objective: customObjective,
                     })
@@ -7258,7 +7487,7 @@ HTML_TEMPLATE = """
                     pdfBtn.disabled = false;
                 }
                 if (reportIdEl) {
-                    reportIdEl.textContent = 'Report ID: ' + (__learningReportId || '-');
+                    reportIdEl.textContent = 'معرف التقرير: ' + (__learningReportId || '-');
                 }
 
                 const sim = data.simulation || {};
@@ -7266,11 +7495,11 @@ HTML_TEMPLATE = """
                 __learningLastSimulation = sim;
                 if (checklistBtn) checklistBtn.disabled = !(Array.isArray(sim.training_checklist) && sim.training_checklist.length);
                 if (badge) {
-                    const t = sim.title || attackId;
+                    const t = sim.title || customAttackType;
                     const sev = String(sim.severity || '').toUpperCase();
                     const score = Number(analysis.risk_score || 0);
                     const lvl = String(sim.training_level_label || sim.training_level || '').toUpperCase();
-                    badge.textContent = `${t} - ${sev} - ${lvl} - Risk ${score}/100`;
+                    badge.textContent = `${t} - ${sev} - ${lvl} - خطورة ${score}/100`;
                 }
 
                 const riskScore = Math.max(0, Math.min(100, Number(analysis.risk_score || 0)));
@@ -7283,41 +7512,41 @@ HTML_TEMPLATE = """
                                 <div class="text-[11px] text-slate-300">${_resultEscape(String(sim.severity || '').toUpperCase())} • ${_resultEscape(sim.category || '-')}</div>
                             </div>
                             <div class="text-xs text-slate-300 mt-2">${_resultEscape(sim.summary || '-')}</div>
-                            ${sim.custom_attack_type ? `<div class="text-[11px] text-cyan-300 mt-2">AI Custom Attack Type: ${_resultEscape(sim.custom_attack_type)}</div>` : ''}
-                            ${sim.custom_objective ? `<div class="text-[11px] text-cyan-200/90 mt-1">Objective: ${_resultEscape(sim.custom_objective)}</div>` : ''}
-                            <div class="text-[10px] text-indigo-200/70 mt-1">Authority Mode: ${_resultEscape(sim.exercise_authority || 'full-simulated-authority')}</div>
+                            ${sim.custom_attack_type ? `<div class="text-[11px] text-cyan-300 mt-2">نوع الهجمة المخصص: ${_resultEscape(sim.custom_attack_type)}</div>` : ''}
+                            ${sim.custom_objective ? `<div class="text-[11px] text-cyan-200/90 mt-1">هدف التمرين: ${_resultEscape(sim.custom_objective)}</div>` : ''}
+                            <div class="text-[10px] text-indigo-200/70 mt-1">وضع الصلاحية: ${_resultEscape(sim.exercise_authority || 'صلاحيات كاملة داخل بيئة محاكاة')}</div>
                         </div>
 
                         <div class="rounded-xl border border-pink-800/50 bg-pink-950/20 p-3">
                             <div class="text-xs font-bold text-pink-300 mb-2">شرح كامل للثغرة (أولاً)</div>
-                            <div class="text-[11px] text-pink-200/85 mb-2">${_resultEscape(sim.vulnerability_title || 'Core Vulnerability Brief')}</div>
+                            <div class="text-[11px] text-pink-200/85 mb-2">${_resultEscape(sim.vulnerability_title || 'ملف الثغرة')}</div>
                             <div class="text-xs text-pink-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.vulnerability_master_brief || '-')}</div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                                 <div class="rounded-lg border border-pink-800/40 bg-pink-950/30 p-2.5">
-                                    <div class="text-[11px] font-bold text-pink-300 mb-1">Root Causes</div>
-                                    ${_learningListHtml(sim.vulnerability_root_causes, 'No root causes')}
+                                    <div class="text-[11px] font-bold text-pink-300 mb-1">الجذور المحتملة</div>
+                                    ${_learningListHtml(sim.vulnerability_root_causes, 'لا توجد جذور مرصودة')}
                                 </div>
                                 <div class="rounded-lg border border-pink-800/40 bg-pink-950/30 p-2.5">
-                                    <div class="text-[11px] font-bold text-pink-300 mb-1">Impact Chain</div>
-                                    ${_learningListHtml(sim.vulnerability_impact_chain, 'No impact chain')}
+                                    <div class="text-[11px] font-bold text-pink-300 mb-1">سلسلة الأثر</div>
+                                    ${_learningListHtml(sim.vulnerability_impact_chain, 'لا توجد سلسلة أثر')}
                                 </div>
                             </div>
                         </div>
 
                         <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
                             <div class="flex items-center justify-between mb-2">
-                                <div class="text-xs font-bold text-cyan-300">AI Risk Score</div>
+                                <div class="text-xs font-bold text-cyan-300">درجة الخطورة</div>
                                 <div class="text-xs text-gray-300">${riskScore}/100</div>
                             </div>
                             <div class="h-2 rounded bg-slate-800 overflow-hidden border border-slate-700">
                                 <div class="h-full ${riskColor}" style="width:${riskScore}%"></div>
                             </div>
-                            <div class="text-[11px] text-slate-400 mt-2">${_resultEscape(analysis.executive_summary || 'No executive summary')}</div>
+                            <div class="text-[11px] text-slate-400 mt-2">${_resultEscape(analysis.executive_summary || 'لا يوجد ملخص تنفيذي')}</div>
                         </div>
 
                         <div class="rounded-xl border border-violet-800/50 bg-violet-950/20 p-3">
                             <div class="text-xs font-bold text-violet-300 mb-2">طريقة الهجوم (توعوي)</div>
-                            <div class="text-[11px] text-violet-200/80 mb-1">المستوى: ${_resultEscape(sim.training_level_label || sim.training_level || 'Intermediate')}</div>
+                            <div class="text-[11px] text-violet-200/80 mb-1">المستوى: ${_resultEscape(sim.training_level_label || sim.training_level || 'متوسط')}</div>
                             <div class="text-xs text-violet-100 leading-6">${_resultEscape(sim.attack_method || '-')}</div>
                             <div class="text-[11px] text-violet-200/90 mt-2">${_resultEscape(sim.awareness_goal || '')}</div>
                         </div>
@@ -7334,40 +7563,40 @@ HTML_TEMPLATE = """
                         </div>
 
                         <div class="rounded-xl border border-cyan-800/50 bg-cyan-950/20 p-3">
-                            <div class="text-xs font-bold text-cyan-300 mb-2">محاكاة واقعية (SOC Tabletop)</div>
-                            <div class="text-[11px] text-cyan-100/80 mb-1">النمط: ${_resultEscape(sim.simulation_style || 'Realistic SOC Tabletop')}</div>
+                            <div class="text-xs font-bold text-cyan-300 mb-2">محاكاة واقعية</div>
+                            <div class="text-[11px] text-cyan-100/80 mb-1">النمط: ${_resultEscape(sim.simulation_style || 'محاكاة SOC واقعية')}</div>
                             <div class="text-[11px] text-cyan-100/80 mb-1">السرعة: ${_resultEscape(sim.simulation_pace_note || '-')}</div>
-                            <div class="text-[11px] text-cyan-100/80">Initial Vector: ${_resultEscape(sim.initial_access_vector || '-')}</div>
+                            <div class="text-[11px] text-cyan-100/80">مسار الدخول الأولي: ${_resultEscape(sim.initial_access_vector || '-')}</div>
                         </div>
 
                         <div class="rounded-xl border border-rose-800/50 bg-rose-950/20 p-3">
-                            <div class="text-xs font-bold text-rose-300 mb-2">War Room Commander Brief</div>
+                            <div class="text-xs font-bold text-rose-300 mb-2">إيجاز قائد غرفة العمليات</div>
                             <div class="text-xs text-rose-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.commander_brief || '-')}</div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div class="rounded-xl border border-sky-800/50 bg-sky-950/20 p-3">
-                                <div class="text-xs font-bold text-sky-300 mb-2">Timeline (T+)</div>
-                                ${_learningListHtml(sim.scenario_timeline, 'No timeline')}
+                                <div class="text-xs font-bold text-sky-300 mb-2">الخط الزمني (T+)</div>
+                                ${_learningListHtml(sim.scenario_timeline, 'لا يوجد خط زمني')}
                             </div>
                             <div class="rounded-xl border border-blue-800/50 bg-blue-950/20 p-3">
-                                <div class="text-xs font-bold text-blue-300 mb-2">Injects During Exercise</div>
-                                ${_learningListHtml(sim.scenario_injects, 'No injects')}
+                                <div class="text-xs font-bold text-blue-300 mb-2">حقن الأحداث أثناء التمرين</div>
+                                ${_learningListHtml(sim.scenario_injects, 'لا توجد حقن أحداث')}
                             </div>
                             <div class="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3">
-                                <div class="text-xs font-bold text-amber-300 mb-2">Critical Decision Points</div>
-                                ${_learningListHtml(sim.decision_points, 'No decisions')}
+                                <div class="text-xs font-bold text-amber-300 mb-2">نقاط القرار الحرجة</div>
+                                ${_learningListHtml(sim.decision_points, 'لا توجد قرارات')}
                             </div>
                             <div class="rounded-xl border border-lime-800/50 bg-lime-950/20 p-3">
-                                <div class="text-xs font-bold text-lime-300 mb-2">Expected Evidence Artifacts</div>
-                                ${_learningListHtml(sim.expected_artifacts, 'No artifacts')}
+                                <div class="text-xs font-bold text-lime-300 mb-2">الأدلة المتوقعة للتحقق</div>
+                                ${_learningListHtml(sim.expected_artifacts, 'لا توجد أدلة متوقعة')}
                             </div>
                         </div>
 
                         <div id="learningWarRoomStream" class="rounded-xl border border-red-800/50 bg-red-950/20 p-3">
                             <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
-                                <div class="text-xs font-bold text-red-300">Live War Room Stream</div>
-                                <div id="learningLiveStatus" class="text-[11px] text-red-100/80">Live Step 1/1 • Streaming</div>
+                                <div class="text-xs font-bold text-red-300">البث الحي لغرفة العمليات</div>
+                                <div id="learningLiveStatus" class="text-[11px] text-red-100/80">الخطوة 1/1 • بث مباشر</div>
                             </div>
                             <div class="h-1.5 rounded bg-red-900/40 border border-red-800/40 overflow-hidden mb-3">
                                 <div id="learningLiveProgress" class="h-full bg-red-400" style="width:0%"></div>
@@ -7378,15 +7607,15 @@ HTML_TEMPLATE = """
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div class="rounded-lg border border-sky-800/50 bg-sky-950/20 p-2.5">
-                                    <div class="text-[11px] font-bold text-sky-300 mb-1">Timeline (Live)</div>
+                                    <div class="text-[11px] font-bold text-sky-300 mb-1">الخط الزمني المباشر</div>
                                     <div id="learningLiveTimeline"></div>
                                 </div>
                                 <div class="rounded-lg border border-red-800/50 bg-red-950/20 p-2.5">
-                                    <div class="text-[11px] font-bold text-red-300 mb-1">Incident Feed</div>
+                                    <div class="text-[11px] font-bold text-red-300 mb-1">تحديثات الحادث</div>
                                     <div id="learningLiveFeed"></div>
                                 </div>
                                 <div class="rounded-lg border border-orange-800/50 bg-orange-950/20 p-2.5">
-                                    <div class="text-[11px] font-bold text-orange-300 mb-1">Pressure Cards</div>
+                                    <div class="text-[11px] font-bold text-orange-300 mb-1">بطاقات الضغط</div>
                                     <div id="learningLivePressure"></div>
                                 </div>
                             </div>
@@ -7394,46 +7623,65 @@ HTML_TEMPLATE = """
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                                <div class="text-xs font-bold text-cyan-300 mb-2">Potential IOCs</div>
-                                ${_learningListHtml(sim.key_iocs, 'No IOCs')}
+                                <div class="text-xs font-bold text-cyan-300 mb-2">مؤشرات التهديد المحتملة (IOC)</div>
+                                ${_learningListHtml(sim.key_iocs, 'لا توجد مؤشرات تهديد')}
                             </div>
                             <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                                <div class="text-xs font-bold text-emerald-300 mb-2">Hardening Controls</div>
-                                ${_learningListHtml(sim.defense_focus, 'No controls')}
+                                <div class="text-xs font-bold text-emerald-300 mb-2">ضوابط التحصين</div>
+                                ${_learningListHtml(sim.defense_focus, 'لا توجد ضوابط')}
                             </div>
                             <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                                <div class="text-xs font-bold text-amber-300 mb-2">Detection Plan</div>
-                                ${_learningListHtml(analysis.detection_plan, 'No detection plan')}
+                                <div class="text-xs font-bold text-amber-300 mb-2">خطة الكشف</div>
+                                ${_learningListHtml(analysis.detection_plan, 'لا توجد خطة كشف')}
                             </div>
                             <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                                <div class="text-xs font-bold text-rose-300 mb-2">Response Plan</div>
-                                ${_learningListHtml(analysis.response_plan, 'No response plan')}
+                                <div class="text-xs font-bold text-rose-300 mb-2">خطة الاستجابة</div>
+                                ${_learningListHtml(analysis.response_plan, 'لا توجد خطة استجابة')}
                             </div>
                         </div>
 
                         <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                            <div class="text-xs font-bold text-violet-300 mb-2">Metasploit Context (Defensive Only)</div>
+                            <div class="text-xs font-bold text-violet-300 mb-2">سياق Metasploit (مرجعي دفاعي فقط)</div>
                             <div class="text-xs text-slate-200">${_resultEscape(sim.metasploit_context || '-')}</div>
                         </div>
 
                         <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                            <div class="text-xs font-bold text-indigo-300 mb-2">AI Deep Explanation</div>
+                            <div class="text-xs font-bold text-indigo-300 mb-2">شرح AI التفصيلي</div>
                             <div class="text-xs text-slate-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.ai_explanation || '-')}</div>
                         </div>
 
                         <div class="rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-3">
-                            <div class="text-xs font-bold text-emerald-300 mb-2">Exercise KPIs</div>
-                            ${_learningListHtml(sim.exercise_kpis, 'No KPIs')}
+                            <div class="text-xs font-bold text-emerald-300 mb-2">مؤشرات نجاح التمرين</div>
+                            ${_learningListHtml(sim.exercise_kpis, 'لا توجد مؤشرات')}
                         </div>
 
                         <div class="rounded-xl border border-teal-800/50 bg-teal-950/20 p-3">
-                            <div class="text-xs font-bold text-teal-300 mb-2">Win Conditions</div>
-                            ${_learningListHtml(sim.win_conditions, 'No win conditions')}
+                            <div class="text-xs font-bold text-teal-300 mb-2">شروط الفوز</div>
+                            ${_learningListHtml(sim.win_conditions, 'لا توجد شروط فوز')}
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div class="rounded-xl border border-cyan-800/50 bg-cyan-950/20 p-3">
+                                <div class="text-xs font-bold text-cyan-300 mb-2">أشهر الأدوات المرتبطة بالسيناريو</div>
+                                ${_learningListHtml(sim.common_tools, 'لا توجد أدوات محددة')}
+                            </div>
+                            <div class="rounded-xl border border-indigo-800/50 bg-indigo-950/20 p-3">
+                                <div class="text-xs font-bold text-indigo-300 mb-2">أوامر شائعة (بشكل مبسط)</div>
+                                ${_learningListHtml(sim.common_commands, 'لا توجد أوامر مقترحة')}
+                            </div>
+                            <div class="rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-3">
+                                <div class="text-xs font-bold text-emerald-300 mb-2">كيف أعرف أن المحاولة نجحت؟</div>
+                                ${_learningListHtml(sim.success_signals, 'لا توجد مؤشرات نجاح')}
+                            </div>
+                            <div class="rounded-xl border border-rose-800/50 bg-rose-950/20 p-3">
+                                <div class="text-xs font-bold text-rose-300 mb-2">كيف أعرف أنها لم تنجح؟</div>
+                                ${_learningListHtml(sim.failure_signals, 'لا توجد مؤشرات فشل')}
+                            </div>
                         </div>
                     </div>
                 `;
-                out.innerHTML = html;
-                _learningStartWarRoomStream(sim);
+                out.innerHTML = resultLang === 'en' ? _learningTranslateResultHtmlToEnglish(html) : html;
+                _learningStartWarRoomStream(sim, resultLang);
                 learningRenderTrainingChecklist();
             } catch (e) {
                 _learningStopWarRoomStream();
@@ -14914,9 +15162,36 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
     y = page_h - 140
     c.setFillColorRGB(0.95, 0.88, 1)
     c.setFont(font_name, 10)
-    c.drawString(36, y, tx(f"User: {username}"))
-    c.drawRightString(page_w - 36, y, tx(f"Generated: {generated}"))
+    c.drawString(36, y, tx(f"{'المستخدم' if is_ar else 'User'}: {username}"))
+    c.drawRightString(page_w - 36, y, tx(f"{'تاريخ الإنشاء' if is_ar else 'Generated'}: {generated}"))
     y -= 20
+
+    def _wrap_chunks(text: str, max_chars: int = 95) -> list[str]:
+        src = str(text or '').strip()
+        if not src:
+            return ['']
+        words = src.split(' ')
+        chunks: list[str] = []
+        cur = ''
+        for w in words:
+            candidate = (cur + ' ' + w).strip() if cur else w
+            if len(candidate) <= max_chars:
+                cur = candidate
+                continue
+            if cur:
+                chunks.append(cur)
+            if len(w) <= max_chars:
+                cur = w
+            else:
+                for i in range(0, len(w), max_chars):
+                    part = w[i:i + max_chars]
+                    if len(part) == max_chars:
+                        chunks.append(part)
+                    else:
+                        cur = part
+        if cur:
+            chunks.append(cur)
+        return chunks or [src]
 
     sections = [
         (
@@ -14929,7 +15204,7 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
                 f"{('درجة الخطورة' if is_ar else 'Risk Score')}: {analysis.get('risk_score', 0)}/100",
                 f"{('نوع الهجمة المخصص' if is_ar else 'Custom Attack Type')}: {sim.get('custom_attack_type', '') or 'N/A'}",
                 f"{('هدف التمرين' if is_ar else 'Exercise Objective')}: {sim.get('custom_objective', '') or 'N/A'}",
-                f"{('صلاحية التمرين' if is_ar else 'Exercise Authority')}: {sim.get('exercise_authority', '') or 'full-simulated-authority'}",
+                f"{('صلاحية التمرين' if is_ar else 'Exercise Authority')}: {sim.get('exercise_authority', '') or ('صلاحيات كاملة داخل بيئة محاكاة' if is_ar else 'full simulated authority')}",
             ],
         ),
         (
@@ -15025,6 +15300,22 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
             'شروط الفوز في التمرين' if is_ar else 'Exercise Win Conditions',
             [f"- {x}" for x in (sim.get('win_conditions') or [])] or ['- N/A'],
         ),
+        (
+            'أشهر الأدوات المرتبطة بالسيناريو' if is_ar else 'Common Tools',
+            [f"- {x}" for x in (sim.get('common_tools') or [])] or ['- N/A'],
+        ),
+        (
+            'أوامر شائعة (مبسطة)' if is_ar else 'Simple Common Commands',
+            [f"- {x}" for x in (sim.get('common_commands') or [])] or ['- N/A'],
+        ),
+        (
+            'مؤشرات ترجّح نجاح المحاولة' if is_ar else 'Success Indicators',
+            [f"- {x}" for x in (sim.get('success_signals') or [])] or ['- N/A'],
+        ),
+        (
+            'مؤشرات ترجّح فشل المحاولة' if is_ar else 'Failure Indicators',
+            [f"- {x}" for x in (sim.get('failure_signals') or [])] or ['- N/A'],
+        ),
     ]
 
     for section_title, rows in sections:
@@ -15044,15 +15335,14 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
         c.setFont(font_name, 9.5)
         for row in rows:
             line = tx(str(row or ''))
-            # Keep width bounded for stable layout.
-            for chunk_start in range(0, len(line), 110):
+            for chunk in _wrap_chunks(line, max_chars=95):
                 if y < 70:
                     c.showPage()
                     _draw_content_page_shell()
                     c.setFont(font_name, 9.5)
                     c.setFillColorRGB(0.93, 0.86, 1)
                     y = page_h - 50
-                c.drawString(42, y, line[chunk_start:chunk_start + 110])
+                c.drawString(42, y, chunk)
                 y -= 13
         y -= 8
 
@@ -18058,13 +18348,14 @@ def learning_simulate_route():
     custom_attack_type = (data.get('custom_attack_type') or '').strip()
     custom_objective = (data.get('custom_objective') or '').strip()
     org_context = (data.get('org_context') or '').strip()
+    result_lang = _learning_normalize_lang(data.get('result_lang') or 'ar')
     training_level = str(data.get('training_level') or 'intermediate').strip().lower()
     if training_level not in ('beginner', 'intermediate', 'advanced'):
         training_level = 'intermediate'
     if not custom_attack_type:
         return jsonify({'success': False, 'error': 'custom_attack_type مطلوب'}), 400
 
-    attack = _learning_build_custom_attack_from_ai(custom_attack_type, org_context, training_level)
+    attack = _learning_build_custom_attack_from_ai(custom_attack_type, org_context, training_level, lang=result_lang)
 
     awareness = _learning_awareness_profile(attack)
     exploit_pattern = _learning_apply_level_tone(
@@ -18077,8 +18368,10 @@ def learning_simulate_route():
     ai_explanation = ''
     if DO_AI_KEY:
         safe_system = (
-            "أنت مدرب أمن سيبراني دفاعي. "
-            "ممنوع نهائياً تقديم أوامر تنفيذية أو أكواد استغلال أو خطوات اختراق عملية أو أوامر Metasploit. "
+            "You are a defensive cybersecurity coach. Never provide offensive commands or exploit steps. "
+            "Provide awareness-first defensive guidance only."
+            if result_lang == 'en' else
+            "أنت مدرب أمن سيبراني دفاعي. ممنوع نهائياً تقديم أوامر تنفيذية أو أكواد استغلال أو خطوات اختراق عملية أو أوامر Metasploit. "
             "قدّم شرحاً تعليمياً دفاعياً فقط: كيف يعمل التهديد، مؤشرات الكشف، خطة احتواء، وخطة تحصين طويلة المدى. "
             "إذا طُلب أي تنفيذ هجومي، ارفضه وقدم بديل دفاعي آمن."
         )
@@ -18097,15 +18390,27 @@ def learning_simulate_route():
             f"Defensive metasploit context: {attack.get('metasploit_context', '')}\n"
             f"Organization context: {org_context or 'N/A'}\n\n"
             f"Exercise objective: {custom_objective or 'N/A'}\n"
-            "أعطني إجابة مرتبة بهذا الشكل:\n"
-            "1) شرح مبسط للهجمة\n"
-            "2) كيف يتم استغلال الثغرة مفاهيميا (بدون أوامر)\n"
-            "3) سيناريو محاكاة دفاعية على مراحل (بدون أي تنفيذ هجومي)\n"
-            "4) كيف نكتشف الهجمة (Logs + IOCs)\n"
-            "5) كيف نحتويها ونتعافى\n"
-            "6) كيف نحصّن البيئة لتجنب تكرارها\n"
-            "7) كيف نستخدم Metasploit كمرجع دفاعي في مختبر مصرح فقط دون أوامر تشغيل\n"
-            "8) بدائل دفاعية آمنة بدل الأوامر الهجومية (ماذا نراقب؟ وماذا نعطّل؟)"
+            + (
+                "Provide a structured answer with these sections:\n"
+                "1) Threat overview\n"
+                "2) Conceptual exploitation path (no commands)\n"
+                "3) Defensive simulation timeline\n"
+                "4) Detection (Logs + IOCs)\n"
+                "5) Containment and recovery\n"
+                "6) Hardening actions\n"
+                "7) Metasploit as defensive lab reference only\n"
+                "8) Safe defensive alternatives (what to monitor and disable)"
+                if result_lang == 'en' else
+                "أعطني إجابة مرتبة بهذا الشكل:\n"
+                "1) شرح مبسط للهجمة\n"
+                "2) كيف يتم استغلال الثغرة مفاهيميا (بدون أوامر)\n"
+                "3) سيناريو محاكاة دفاعية على مراحل (بدون أي تنفيذ هجومي)\n"
+                "4) كيف نكتشف الهجمة (Logs + IOCs)\n"
+                "5) كيف نحتويها ونتعافى\n"
+                "6) كيف نحصّن البيئة لتجنب تكرارها\n"
+                "7) كيف نستخدم Metasploit كمرجع دفاعي في مختبر مصرح فقط دون أوامر تشغيل\n"
+                "8) بدائل دفاعية آمنة بدل الأوامر الهجومية (ماذا نراقب؟ وماذا نعطّل؟)"
+            )
         )
         try:
             ai_explanation = _call_do_ai(safe_prompt, system_prompt=safe_system)
@@ -18114,17 +18419,29 @@ def learning_simulate_route():
 
     if not ai_explanation:
         ai_explanation = (
-            "شرح دفاعي تلقائي:\n"
-            f"- طريقة الهجوم (توعوي): {attack_method}\n"
-            f"- كيف يتم الاستغلال مفاهيميا: {exploit_pattern}\n"
-            f"- مسار الهجوم: {' > '.join(awareness.get('attack_journey') or [])}\n"
-            "- لا يتم عرض أوامر هجومية؛ البديل هو إجراءات كشف واحتواء وتحصين.\n"
-            "- افهم مسار الهجمة وتأثيرها على الأصول.\n"
-            "- راقب مؤشرات IOC في السجلات والشبكة.\n"
-            "- فعّل الاحتواء المرحلي (عزل، منع اتصال، تعطيل حسابات مشبوهة).\n"
-            "- نفذ الاستعادة من نسخ سليمة مع تحليل السبب الجذري.\n"
-            "- طبّق ضوابط منع التكرار: تحديثات، MFA، تقسيم شبكة، ومراقبة مستمرة.\n"
-            "- أي استخدام لـ Metasploit يكون داخل مختبر مصرح فقط ولأغراض التقييم الدفاعي."
+            (
+                "Automated defensive explanation:\n"
+                f"- Attack method (awareness): {attack_method}\n"
+                f"- Conceptual exploitation path: {exploit_pattern}\n"
+                f"- Attack journey: {' > '.join(awareness.get('attack_journey') or [])}\n"
+                "- No offensive commands are shown; focus on detection, containment, and hardening.\n"
+                "- Validate IOC patterns across logs and network telemetry.\n"
+                "- Execute phased containment, then controlled recovery with root-cause analysis."
+            )
+            if result_lang == 'en' else
+            (
+                "شرح دفاعي تلقائي:\n"
+                f"- طريقة الهجوم (توعوي): {attack_method}\n"
+                f"- كيف يتم الاستغلال مفاهيميا: {exploit_pattern}\n"
+                f"- مسار الهجوم: {' > '.join(awareness.get('attack_journey') or [])}\n"
+                "- لا يتم عرض أوامر هجومية؛ البديل هو إجراءات كشف واحتواء وتحصين.\n"
+                "- افهم مسار الهجمة وتأثيرها على الأصول.\n"
+                "- راقب مؤشرات IOC في السجلات والشبكة.\n"
+                "- فعّل الاحتواء المرحلي (عزل، منع اتصال، تعطيل حسابات مشبوهة).\n"
+                "- نفذ الاستعادة من نسخ سليمة مع تحليل السبب الجذري.\n"
+                "- طبّق ضوابط منع التكرار: تحديثات، MFA، تقسيم شبكة، ومراقبة مستمرة.\n"
+                "- أي استخدام لـ Metasploit يكون داخل مختبر مصرح فقط ولأغراض التقييم الدفاعي."
+            )
         )
 
     severity = str(attack.get('severity') or '').lower()
@@ -18137,22 +18454,46 @@ def learning_simulate_route():
 
     analysis = {
         'risk_score': base_risk,
-        'executive_summary': 'تحليل افتراضي دفاعي: يلزم رصد مبكر وخطة احتواء واضحة.',
-        'detection_plan': [
-            'تفعيل تنبيهات SIEM على الأنماط الشاذة المتعلقة بالسيناريو.',
-            'ربط مؤشرات IOC مع قواعد EDR وDNS/Proxy logs.',
-            'مراقبة محاولات الحركة الجانبية وارتفاع الأخطاء الأمنية.'
-        ],
-        'response_plan': [
-            'عزل الأنظمة المتأثرة فوراً ومنع الاتصالات المشبوهة.',
-            'توثيق الأدلة وحفظ timeline للحادث.',
-            'بدء الاستعادة التدريجية مع التحقق بعد المعالجة.'
-        ],
-        'hardening_plan': [
-            'Patch management مستمر + إغلاق الخدمات القديمة.',
-            'تطبيق MFA وسياسات وصول أقل صلاحية.',
-            'اختبارات محاكاة دورية وتحديث playbooks.'
-        ],
+        'executive_summary': ('Baseline defensive analysis: prioritize early detection and structured containment.' if result_lang == 'en' else 'تحليل افتراضي دفاعي: يلزم رصد مبكر وخطة احتواء واضحة.'),
+        'detection_plan': (
+            [
+                'Enable SIEM alerts for abnormal patterns tied to the scenario.',
+                'Correlate IOC signals with EDR and DNS/Proxy logs.',
+                'Monitor lateral movement attempts and rising security errors.'
+            ]
+            if result_lang == 'en' else
+            [
+                'تفعيل تنبيهات SIEM على الأنماط الشاذة المتعلقة بالسيناريو.',
+                'ربط مؤشرات IOC مع قواعد EDR وDNS/Proxy logs.',
+                'مراقبة محاولات الحركة الجانبية وارتفاع الأخطاء الأمنية.'
+            ]
+        ),
+        'response_plan': (
+            [
+                'Isolate impacted systems and block suspicious communications immediately.',
+                'Preserve evidence and maintain an incident timeline.',
+                'Start phased recovery with post-fix validation.'
+            ]
+            if result_lang == 'en' else
+            [
+                'عزل الأنظمة المتأثرة فوراً ومنع الاتصالات المشبوهة.',
+                'توثيق الأدلة وحفظ timeline للحادث.',
+                'بدء الاستعادة التدريجية مع التحقق بعد المعالجة.'
+            ]
+        ),
+        'hardening_plan': (
+            [
+                'Continuous patch management and legacy service reduction.',
+                'Apply MFA and least-privilege access policies.',
+                'Run periodic simulations and keep playbooks updated.'
+            ]
+            if result_lang == 'en' else
+            [
+                'Patch management مستمر + إغلاق الخدمات القديمة.',
+                'تطبيق MFA وسياسات وصول أقل صلاحية.',
+                'اختبارات محاكاة دورية وتحديث playbooks.'
+            ]
+        ),
     }
 
     if DO_AI_KEY:
@@ -18216,10 +18557,11 @@ def learning_simulate_route():
         'org_context': org_context,
         'custom_attack_type': custom_attack_type,
         'custom_objective': custom_objective,
-        'exercise_authority': 'full-simulated-authority',
+        'exercise_authority': ('صلاحيات كاملة داخل بيئة محاكاة' if result_lang == 'ar' else 'Full authority in simulation environment'),
+        'result_lang': result_lang,
         'generated_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
-    realism_pack = _learning_build_realism_pack(attack, awareness, analysis, org_context, training_level)
+    realism_pack = _learning_build_realism_pack(attack, awareness, analysis, org_context, training_level, lang=result_lang)
     simulation.update({
         'simulation_style': realism_pack.get('simulation_style'),
         'simulation_pace_note': realism_pack.get('simulation_pace_note'),
@@ -18237,9 +18579,13 @@ def learning_simulate_route():
         'live_feed': realism_pack.get('live_feed') or [],
         'pressure_cards': realism_pack.get('pressure_cards') or [],
         'win_conditions': realism_pack.get('win_conditions') or [],
+        'common_tools': realism_pack.get('common_tools') or [],
+        'common_commands': realism_pack.get('common_commands') or [],
+        'success_signals': realism_pack.get('success_signals') or [],
+        'failure_signals': realism_pack.get('failure_signals') or [],
         'exercise_kpis': realism_pack.get('kpis') or [],
     })
-    simulation['training_checklist'] = _learning_build_training_checklist(attack, awareness, analysis, org_context)
+    simulation['training_checklist'] = _learning_build_training_checklist(attack, awareness, analysis, org_context, lang=result_lang)
 
     report_id = f"TITAN-REP-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2).upper()}"
 
