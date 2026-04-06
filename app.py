@@ -7633,8 +7633,16 @@ HTML_TEMPLATE = """
                         custom_objective: customObjective,
                     })
                 });
-                const data = await res.json();
-                if (!data.success) {
+                const contentType = String(res.headers.get('content-type') || '').toLowerCase();
+                let data = null;
+                if (contentType.includes('application/json')) {
+                    data = await res.json();
+                } else {
+                    const rawText = await res.text();
+                    throw new Error(`HTTP ${res.status} - ${rawText.slice(0, 240) || 'Unexpected non-JSON response'}`);
+                }
+
+                if (!res.ok || !data || !data.success) {
                     if (data.code === 'attack_type_suggestion') {
                         const rows = Array.isArray(data.suggestions) ? data.suggestions : [];
                         const picked = rows.length ? rows : [{ canonical: String(data.suggested_attack_type || '').trim() }];
@@ -7658,7 +7666,8 @@ HTML_TEMPLATE = """
                             </div>
                         `;
                     } else {
-                        out.textContent = data.error || 'فشل تشغيل المحاكاة.';
+                        const errMsg = String(data?.error || `فشل تشغيل المحاكاة (HTTP ${res.status}).`);
+                        out.textContent = errMsg;
                     }
                     return;
                 }
@@ -7710,7 +7719,8 @@ HTML_TEMPLATE = """
             } catch (e) {
                 _learningStopWarRoomStream();
                 __learningWarRoomState = null;
-                out.textContent = 'فشل الاتصال بالخادم أثناء تشغيل المحاكاة.';
+                const msg = (e && e.message) ? String(e.message) : 'فشل الاتصال بالخادم أثناء تشغيل المحاكاة.';
+                out.textContent = msg;
             }
         }
 
