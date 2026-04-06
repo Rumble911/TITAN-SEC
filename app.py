@@ -807,11 +807,21 @@ _LEARNING_ATTACK_NAME_CATALOG: list[dict[str, object]] = [
         'label_en': 'OAuth Token Theft',
         'aliases': ['oauth token theft', 'token theft', 'oauth hijack', 'سرقة توكن', 'سرقة رمز oauth'],
     },
+    {
+        'canonical': 'evil twin',
+        'label_ar': 'هجوم التوأم الشرير',
+        'label_en': 'Evil Twin',
+        'aliases': ['evil twin', 'evil-twin', 'rogue ap', 'wifi impersonation', 'التوأم الشرير', 'هجمة التوأم', 'التوأم', 'التوم'],
+    },
 ]
 
 
 def _learning_norm_for_match(text: str) -> str:
     t = str(text or '').strip().lower()
+    # Normalize common Arabic variants to make typo matching more tolerant.
+    t = t.replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
+    t = t.replace('ى', 'ي').replace('ؤ', 'و').replace('ئ', 'ي').replace('ة', 'ه')
+    t = t.replace('ـ', '')
     t = re.sub(r'[^a-z0-9\u0600-\u06ff\s\-]+', ' ', t)
     t = re.sub(r'\s+', ' ', t).strip()
     return t
@@ -893,7 +903,7 @@ def _learning_suggest_attack_type(raw: str) -> dict | None:
 
     return {
         'matched': False,
-        'needs_confirmation': top_score >= 0.76,
+        'needs_confirmation': top_score >= 0.68,
         'canonical': str(top.get('canonical') or ''),
         'label_ar': str(top.get('label_ar') or top.get('canonical') or ''),
         'label_en': str(top.get('label_en') or top.get('canonical') or ''),
@@ -18258,7 +18268,7 @@ def learning_simulate_route():
         return jsonify({'success': False, 'error': 'custom_attack_type مطلوب'}), 400
 
     attack_suggestion = _learning_suggest_attack_type(custom_attack_type)
-    if attack_suggestion and bool(attack_suggestion.get('needs_confirmation')):
+    if attack_suggestion and not bool(attack_suggestion.get('matched')):
         canonical = str(attack_suggestion.get('canonical') or '').strip()
         label_ar = str(attack_suggestion.get('label_ar') or canonical)
         label_en = str(attack_suggestion.get('label_en') or canonical)
@@ -18266,9 +18276,17 @@ def learning_simulate_route():
         suggestions = attack_suggestion.get('suggestions')
         suggestions_list = suggestions if isinstance(suggestions, list) else []
         if result_lang == 'en':
-            msg = f"Did you mean one of these attacks?"
+            msg = (
+                "Did you mean one of these attacks?"
+                if score >= 0.68 else
+                "Attack name is unclear. Please pick the closest option:"
+            )
         else:
-            msg = f"هل تقصد واحدة من هذه الهجمات؟"
+            msg = (
+                "هل تقصد واحدة من هذه الهجمات؟"
+                if score >= 0.68 else
+                "اسم الهجمة غير واضح. اختر الأقرب من الخيارات التالية:"
+            )
         return jsonify({
             'success': False,
             'error': msg,
