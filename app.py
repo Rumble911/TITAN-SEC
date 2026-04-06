@@ -1,5 +1,6 @@
 import os
 import re
+import difflib
 import secrets
 import string
 import hashlib
@@ -743,6 +744,163 @@ def _learning_coerce_severity(raw: str) -> str:
     if txt in ('moderate',):
         return 'medium'
     return 'high'
+
+
+_LEARNING_ATTACK_NAME_CATALOG: list[dict[str, object]] = [
+    {
+        'canonical': 'ransomware',
+        'label_ar': 'هجوم فدية',
+        'label_en': 'Ransomware',
+        'aliases': ['ransomware', 'ransom ware', 'crypto malware', 'فدية', 'رانسوموير', 'تشفير الملفات'],
+    },
+    {
+        'canonical': 'phishing',
+        'label_ar': 'تصيد احتيالي',
+        'label_en': 'Phishing',
+        'aliases': ['phishing', 'phish', 'email phishing', 'spear phishing', 'تصيد', 'تصيّد', 'تصيد احتيالي'],
+    },
+    {
+        'canonical': 'xss',
+        'label_ar': 'ثغرة XSS',
+        'label_en': 'Cross-Site Scripting (XSS)',
+        'aliases': ['xss', 'cross site scripting', 'cross-site scripting', 'script injection', 'حقن سكربت'],
+    },
+    {
+        'canonical': 'sql injection',
+        'label_ar': 'حقن SQL',
+        'label_en': 'SQL Injection',
+        'aliases': ['sql injection', 'sqli', 'sqli', 'حقن sql', 'حقن قواعد البيانات'],
+    },
+    {
+        'canonical': 'ddos',
+        'label_ar': 'هجوم DDoS',
+        'label_en': 'DDoS',
+        'aliases': ['ddos', 'dos', 'l7 ddos', 'application ddos', 'تعطيل خدمة', 'حجب الخدمة'],
+    },
+    {
+        'canonical': 'brute force',
+        'label_ar': 'تخمين كلمات مرور',
+        'label_en': 'Brute Force',
+        'aliases': ['bruteforce', 'brute force', 'password spraying', 'credential stuffing', 'تخمين كلمة المرور'],
+    },
+    {
+        'canonical': 'mitm',
+        'label_ar': 'رجل في المنتصف',
+        'label_en': 'Man-in-the-Middle',
+        'aliases': ['mitm', 'man in the middle', 'man-in-the-middle', 'رجل في المنتصف'],
+    },
+    {
+        'canonical': 'privilege escalation',
+        'label_ar': 'تصعيد صلاحيات',
+        'label_en': 'Privilege Escalation',
+        'aliases': ['privilege escalation', 'privesc', 'تصعيد صلاحيات'],
+    },
+    {
+        'canonical': 'supply chain',
+        'label_ar': 'هجوم سلسلة التوريد',
+        'label_en': 'Supply Chain Attack',
+        'aliases': ['supply chain', 'dependency hijack', 'package poisoning', 'سلسلة التوريد'],
+    },
+    {
+        'canonical': 'oauth token theft',
+        'label_ar': 'سرقة OAuth Token',
+        'label_en': 'OAuth Token Theft',
+        'aliases': ['oauth token theft', 'token theft', 'oauth hijack', 'سرقة توكن', 'سرقة رمز oauth'],
+    },
+]
+
+
+def _learning_norm_for_match(text: str) -> str:
+    t = str(text or '').strip().lower()
+    t = re.sub(r'[^a-z0-9\u0600-\u06ff\s\-]+', ' ', t)
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t
+
+
+def _learning_suggest_attack_type(raw: str) -> dict | None:
+    query = _learning_norm_for_match(raw)
+    if not query or len(query) < 3:
+        return None
+
+    # Exact checks first.
+    for item in _LEARNING_ATTACK_NAME_CATALOG:
+        canonical = str(item.get('canonical') or '').strip()
+        raw_aliases = item.get('aliases')
+        aliases_src = raw_aliases if isinstance(raw_aliases, list) else []
+        aliases = [str(x).strip() for x in aliases_src if str(x).strip()]
+        for candidate in [canonical] + aliases:
+            norm_candidate = _learning_norm_for_match(candidate)
+            if not norm_candidate:
+                continue
+            if query == norm_candidate:
+                return {
+                    'matched': True,
+                    'needs_confirmation': False,
+                    'canonical': canonical,
+                    'label_ar': str(item.get('label_ar') or canonical),
+                    'label_en': str(item.get('label_en') or canonical),
+                    'score': 1.0,
+                }
+
+    scored: dict[str, dict[str, object]] = {}
+    for item in _LEARNING_ATTACK_NAME_CATALOG:
+        canonical = str(item.get('canonical') or '').strip()
+        raw_aliases = item.get('aliases')
+        aliases_src = raw_aliases if isinstance(raw_aliases, list) else []
+        aliases = [str(x).strip() for x in aliases_src if str(x).strip()]
+        best_item_score = 0.0
+        for candidate in [canonical] + aliases:
+            norm_candidate = _learning_norm_for_match(candidate)
+            if not norm_candidate:
+                continue
+            score = difflib.SequenceMatcher(None, query, norm_candidate).ratio()
+            if len(query) >= 5 and (query in norm_candidate or norm_candidate in query):
+                score = max(score, 0.9)
+            if score > best_item_score:
+                best_item_score = score
+        if best_item_score > 0:
+            scored[canonical] = {
+                'canonical': canonical,
+                'label_ar': str(item.get('label_ar') or canonical),
+                'label_en': str(item.get('label_en') or canonical),
+                'score': best_item_score,
+            }
+
+    def _score_value(v: object) -> float:
+        try:
+            return float(v)  # type: ignore[arg-type]
+        except Exception:
+            return 0.0
+
+    ranked = sorted(scored.values(), key=lambda x: _score_value(x.get('score')), reverse=True)
+    if not ranked:
+        return None
+
+    top = ranked[0]
+    top_score = _score_value(top.get('score'))
+    if top_score < 0.60:
+        return None
+
+    suggestions = [
+        {
+            'canonical': str(x.get('canonical') or ''),
+            'label_ar': str(x.get('label_ar') or x.get('canonical') or ''),
+            'label_en': str(x.get('label_en') or x.get('canonical') or ''),
+            'score': round(_score_value(x.get('score')), 3),
+        }
+        for x in ranked[:3]
+    ]
+
+    return {
+        'matched': False,
+        'needs_confirmation': top_score >= 0.76,
+        'canonical': str(top.get('canonical') or ''),
+        'label_ar': str(top.get('label_ar') or top.get('canonical') or ''),
+        'label_en': str(top.get('label_en') or top.get('canonical') or ''),
+        'score': top_score,
+        'suggestions': suggestions,
+    }
+    return None
 
 
 def _learning_build_custom_attack_from_ai(custom_attack_type: str, org_context: str, training_level: str, lang: str = 'ar') -> dict:
@@ -7261,6 +7419,19 @@ HTML_TEMPLATE = """
             return out;
         }
 
+        function learningApplySuggestedAttack(rawValue) {
+            const inp = document.getElementById('learningCustomAttackType');
+            const out = document.getElementById('learningResult');
+            const value = String(rawValue || '').trim();
+            if (inp && value) {
+                inp.value = value;
+                inp.focus();
+            }
+            if (out && value) {
+                out.textContent = 'تم تطبيق الاقتراح. اضغط تشغيل المحاكاة.';
+            }
+        }
+
         function _learningStopWarRoomStream() {
             if (__learningWarRoomTimer) {
                 clearInterval(__learningWarRoomTimer);
@@ -7454,7 +7625,31 @@ HTML_TEMPLATE = """
                 });
                 const data = await res.json();
                 if (!data.success) {
-                    out.textContent = data.error || 'فشل تشغيل المحاكاة.';
+                    if (data.code === 'attack_type_suggestion') {
+                        const rows = Array.isArray(data.suggestions) ? data.suggestions : [];
+                        const picked = rows.length ? rows : [{ canonical: String(data.suggested_attack_type || '').trim() }];
+                        const safeMsg = _resultEscape(data.error || 'الاسم غير واضح، هل تقصد الهجمة المقترحة؟');
+                        const optionsHtml = picked
+                            .filter((x) => String(x?.canonical || '').trim())
+                            .slice(0, 3)
+                            .map((x) => {
+                                const canonical = String(x.canonical || '').trim();
+                                const label = resultLang === 'en'
+                                    ? String(x.label_en || canonical)
+                                    : String(x.label_ar || canonical);
+                                const encoded = encodeURIComponent(canonical);
+                                return `<button onclick="learningApplySuggestedAttack(decodeURIComponent('${encoded}'))" class="px-3 py-1.5 rounded bg-amber-900/40 border border-amber-700/60 text-amber-100 text-xs font-bold">${_resultEscape(label)} (${_resultEscape(canonical)})</button>`;
+                            })
+                            .join('');
+                        out.innerHTML = `
+                            <div class="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3 space-y-2">
+                                <div class="text-xs text-amber-200">${safeMsg}</div>
+                                <div class="flex flex-wrap gap-2">${optionsHtml || `<span class="text-xs text-amber-200">${_resultEscape(String(data.suggested_attack_type || 'N/A'))}</span>`}</div>
+                            </div>
+                        `;
+                    } else {
+                        out.textContent = data.error || 'فشل تشغيل المحاكاة.';
+                    }
                     return;
                 }
 
@@ -18061,6 +18256,29 @@ def learning_simulate_route():
         training_level = 'intermediate'
     if not custom_attack_type:
         return jsonify({'success': False, 'error': 'custom_attack_type مطلوب'}), 400
+
+    attack_suggestion = _learning_suggest_attack_type(custom_attack_type)
+    if attack_suggestion and bool(attack_suggestion.get('needs_confirmation')):
+        canonical = str(attack_suggestion.get('canonical') or '').strip()
+        label_ar = str(attack_suggestion.get('label_ar') or canonical)
+        label_en = str(attack_suggestion.get('label_en') or canonical)
+        score = float(attack_suggestion.get('score') or 0.0)
+        suggestions = attack_suggestion.get('suggestions')
+        suggestions_list = suggestions if isinstance(suggestions, list) else []
+        if result_lang == 'en':
+            msg = f"Did you mean one of these attacks?"
+        else:
+            msg = f"هل تقصد واحدة من هذه الهجمات؟"
+        return jsonify({
+            'success': False,
+            'error': msg,
+            'code': 'attack_type_suggestion',
+            'suggested_attack_type': canonical,
+            'suggested_label_ar': label_ar,
+            'suggested_label_en': label_en,
+            'match_score': round(score, 3),
+            'suggestions': suggestions_list,
+        }), 400
 
     attack = _learning_build_custom_attack_from_ai(custom_attack_type, org_context, training_level, lang=result_lang)
 
