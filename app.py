@@ -390,23 +390,24 @@ def _learning_build_training_checklist(attack: dict, awareness: dict, analysis: 
     hardening = [str(x).strip() for x in ((analysis or {}).get('hardening_plan') or []) if str(x).strip()]
 
     rows: list[str] = [
-        'جلسة افتتاحية لمدة 15 دقيقة لشرح الهدف التوعوي ونطاق التدريب.',
+        'إحاطة افتتاحية 15 دقيقة: نطاق التمرين، قواعد السلامة، وقنوات التصعيد.',
         f"مراجعة طريقة الهجوم توعوياً: {str((awareness or {}).get('attack_method') or '').strip()}",
-        'تمثيل مراحل السيناريو على لوحة زمنية بدون أي تنفيذ هجومي.',
+        'تشغيل تمرين Tabletop بزمن مضغوط مع حقن أحداث متتابعة كل 10-15 دقيقة.',
+        'تسجيل قرار القائد في كل مرحلة: ماذا نراقب، ماذا نعزل، ومن المسؤول.',
     ]
 
     if category == 'social engineering':
-        rows.append('تنفيذ تمرين Role-Play للتحقق خارج القناة قبل أي إجراء مالي أو مشاركة بيانات.')
+        rows.append('تنفيذ Role-Play واقعي: مكالمة تحقق خارج القناة قبل أي تحويل أو مشاركة بيانات.')
     elif category == 'web':
-        rows.append('تدريب فريق التطوير على التحقق من المدخلات وترميز المخرجات ضمن مراجعة الكود.')
+        rows.append('تدريب Dev + SOC: ربط تنبيهات WAF مع مراجعة الكود وإغلاق الثغرة خلال نفس اليوم.')
     elif category in ('network exploit', 'endpoint', 'post-compromise'):
-        rows.append('تمرين SOC/IT على العزل السريع ونقاط القرار خلال أول 30 دقيقة من الحادث.')
+        rows.append('تمرين SOC/IT واقعي: قرار عزل خلال أول 30 دقيقة مع موازنة أثر العمل.')
     elif category == 'availability':
-        rows.append('تجربة Playbook لاستيعاب الضغط التشغيلي والتحول إلى خطط الاستمرارية.')
+        rows.append('تشغيل Playbook الاستمرارية: تحويل المرور وتفعيل الحماية مع قياس زمن التعافي.')
     elif category == 'software supply chain':
-        rows.append('ورشة تحقق الاعتمادات: SBOM، التوقيع الرقمي، ومراجعة مصدر الحزمة.')
+        rows.append('ورشة طوارئ سلسلة التوريد: إيقاف النشر، تدقيق الحزم، ثم استئناف آمن موثق.')
     elif category == 'ransomware':
-        rows.append('اختبار استعادة نسخة احتياطية مع قياس RTO/RPO وتوثيق العوائق.')
+        rows.append('اختبار استعادة نسخة احتياطية مع قياس RTO/RPO وإقرار Go/No-Go للإرجاع للإنتاج.')
 
     if iocs:
         rows.append(f"تدريب فريق الرصد على مؤشرات IOC التالية: {', '.join(iocs[:3])}")
@@ -435,6 +436,180 @@ def _learning_build_training_checklist(attack: dict, awareness: dict, analysis: 
         seen.add(key)
         clean.append(txt)
     return clean[:12]
+
+
+def _learning_build_realism_pack(attack: dict, awareness: dict, analysis: dict, org_context: str, training_level: str) -> dict:
+    category = str((attack or {}).get('category') or '').strip().lower()
+    title = str((attack or {}).get('title') or 'Scenario').strip()
+    org = str(org_context or '').strip()
+
+    base_vectors = {
+        'ransomware': 'Phishing attachment + lateral movement via weak segmentation',
+        'network exploit': 'Exposed legacy service over internal/external network path',
+        'web': 'Public endpoint with weak input/output controls',
+        'identity attack': 'Credential reuse against SSO/VPN portal',
+        'social engineering': 'Executive impersonation with urgent business pretext',
+        'availability': 'Layer 7 request flood against costly endpoints',
+        'software supply chain': 'Compromised dependency/update entering CI/CD',
+        'post-compromise': 'Persistent foothold after initial breach',
+        'endpoint': 'Privileged endpoint targeted for credential access',
+    }
+
+    if training_level == 'beginner':
+        pace = 'مستوى مبسط: التركيز على التسلسل العام واتخاذ القرار الصحيح.'
+    elif training_level == 'advanced':
+        pace = 'مستوى متقدم: قرارات زمنية دقيقة وربط السجلات مع فرضيات تحقيق متوازية.'
+    else:
+        pace = 'مستوى متوسط: موازنة بين سرعة الاستجابة وجودة التحليل.'
+
+    category_ar = {
+        'ransomware': 'فدية',
+        'network exploit': 'استغلال شبكي',
+        'web': 'هجوم ويب',
+        'identity attack': 'هجوم هوية',
+        'social engineering': 'هندسة اجتماعية',
+        'availability': 'تعطيل توفر',
+        'software supply chain': 'سلسلة توريد برمجية',
+        'post-compromise': 'ما بعد الاختراق',
+        'endpoint': 'نقطة نهاية',
+    }.get(category, 'تهديد سيبراني')
+
+    vuln_title = {
+        'ransomware': 'Ransomware Propagation',
+        'network exploit': 'Unpatched Network Service Exploitation',
+        'web': 'Web Injection / Session Abuse',
+        'identity attack': 'Credential Stuffing & Account Takeover',
+        'social engineering': 'Business Email Compromise (BEC)',
+        'availability': 'Layer 7 Application DDoS',
+        'software supply chain': 'Dependency/Supply-Chain Compromise',
+        'post-compromise': 'Persistence & Lateral Expansion',
+        'endpoint': 'Privileged Credential Exposure',
+    }.get(category, 'Cyber Threat Exposure')
+
+    depth_line = {
+        'beginner': 'المطلوب هنا فهم الصورة الكاملة بوضوح: كيف تبدأ الثغرة، وكيف تتطور، ولماذا تصبح خطيرة بسرعة.',
+        'intermediate': 'المطلوب هنا ربط السلوك التقني مع الأثر التشغيلي: مؤشر تقني -> قرار عمليات -> أثر أعمال.',
+        'advanced': 'المطلوب هنا تحليل فرضيات متعددة بالتوازي: مسار الاختراق، مسار التمويه، ومسار التعافي دون إعادة إدخال الخطر.',
+    }.get(training_level, 'المطلوب هنا ربط السلوك التقني مع قرار الاستجابة بسرعة ودقة.')
+
+    vulnerability_master_brief = (
+        f"الثغرة المستهدفة في هذا السيناريو هي {vuln_title}. "
+        f"الفكرة الجوهرية: المهاجم لا يحتاج اختراقا دراميا من أول لحظة، بل يستغل فجوة صغيرة قابلة للتكرار "
+        f"(إعداد ضعيف، خدمة غير محدثة، أو سلوك بشري قابل للخداع) ثم يوسع الأثر خطوة بخطوة حتى يتحول الحدث "
+        f"من تنبيه تقني محدود إلى أزمة تشغيلية كاملة. "
+        f"{depth_line} "
+        f"سياق المؤسسة المستخدم في التمرين: {org[:150] if org else 'بيئة إنتاج متعددة الأنظمة والخدمات مع ضغط أعمال مستمر.'}"
+    )
+
+    vulnerability_root_causes = [
+        'ثغرات إدارة أساسية: تحديثات متأخرة، صلاحيات زائدة، أو غياب تقسيم الشبكة.',
+        'فجوة كشف مبكر: التنبيه موجود لكن بدون ربط صحيح بين SIEM وEDR وسجلات الهوية.',
+        'فجوة قرار: تأخر الحسم بين الاحتواء السريع واستمرارية الخدمة يزيد مساحة التأثير.',
+        'فجوة حوكمة: playbook موجود لكنه غير محدث أو غير مجرّب تحت ضغط حقيقي.',
+    ]
+
+    vulnerability_impact_chain = [
+        'Impact-1: اضطراب تشغيلي فوري في جزء من الخدمة أو الحسابات الحساسة.',
+        'Impact-2: توسع النطاق بسبب تأخر العزل أو ضعف الرؤية الشاملة.',
+        'Impact-3: ضغط إداري وقانوني وإعلامي يرفع كلفة القرار الخاطئ.',
+        'Impact-4: إن لم يُعالج سبب الجذر، يعود الحادث بصورة أعنف خلال نافذة قصيرة.',
+    ]
+
+    timeline = [
+        f"T+00 | Kickoff: تنبيه أولي متعلق بـ {title} مع تحديد قائد الحادث.",
+        'T+10 | Triage: فرز التنبيه، جمع أول أدلة، ورفع مستوى الخطورة الأولي.',
+        f"T+20 | Scope: تقدير نطاق التأثر بناءً على {base_vectors.get(category, 'initial compromise vector')}.",
+        'T+35 | Containment Decision: قرار عزل جزئي/كامل مع توثيق أثر القرار على الأعمال.',
+        'T+50 | Deep Analysis: ربط IOC مع logs (EDR/SIEM/DNS/Proxy) لتأكيد الفرضية.',
+        'T+70 | Eradication Plan: إزالة السبب الجذري وإغلاق مسار الدخول الأولي.',
+        'T+90 | Recovery Gate: قرار Go/No-Go لإرجاع الخدمة بعد تحقق أمني.',
+        'T+110 | After Action: توثيق الدروس وتحديث playbook وSLA التحسينات.',
+    ]
+
+    injects = [
+        'Inject 1: بلاغ من فريق الأعمال عن سلوك غير طبيعي لدى المستخدمين.',
+        'Inject 2: ظهور مؤشر جديد يغيّر فرضية الهجوم الأولى.',
+        'Inject 3: قيود تشغيلية تمنع العزل الكامل وتتطلب بديل احتواء مرحلي.',
+        'Inject 4: طلب الإدارة تقرير موقف خلال 15 دقيقة مع قرار واضح.',
+    ]
+
+    artifacts = [
+        'SIEM alerts timeline with correlation IDs',
+        'EDR telemetry snapshot for impacted hosts',
+        'Auth logs (success/failure anomalies)',
+        'DNS/Proxy traces for suspicious destinations',
+    ]
+
+    decision_points = [
+        'هل العزل الفوري الكامل ضروري أم نبدأ باحتواء مرحلي لتقليل انقطاع الخدمة؟',
+        'ما الحد الأدنى من الأدلة المطلوبة قبل تصعيد الحالة إلى Major Incident؟',
+        'متى ننتقل من الاحتواء إلى التعافي دون إعادة إدخال الخطر؟',
+    ]
+
+    live_feed = [
+        '08:40 - SOC Analyst: ارتفاع غير طبيعي في التنبيهات المرتبطة بنفس النمط.',
+        '08:52 - IR Lead: تم فتح War Room وتثبيت قناة اتصال موحدة للقرارات.',
+        '09:03 - Threat Hunter: دليل جديد يشير إلى توسّع النطاق أكثر من المتوقع.',
+        '09:15 - IT Ops: الاحتواء الجزئي نجح، لكن هناك خدمة حرجة ما زالت متأثرة.',
+        '09:27 - CISO Update: مطلوب قرار تنفيذي خلال 10 دقائق مع أثر أعمال واضح.',
+    ]
+
+    pressure_cards = [
+        'بطاقة ضغط #1: مدير الأعمال يرفض إيقاف النظام كاملًا بسبب نافذة مبيعات حرجة.',
+        'بطاقة ضغط #2: أحد المؤشرات يتبين لاحقًا أنه False Positive ويشوّش الفريق.',
+        'بطاقة ضغط #3: فريق قانوني يطلب حفظ الأدلة بصيغة قابلة للتدقيق قبل أي تغيير جذري.',
+    ]
+
+    win_conditions = [
+        'احتواء التهديد دون فقدان أصول إضافية.',
+        'تقديم قرار موثق عند كل نقطة حرجة خلال الزمن المحدد.',
+        'إرجاع الخدمة بأمان بعد تحقق أمني وتأكيد سبب الجذر.',
+        'إنهاء التمرين بخطة تحسين تنفيذية واضحة لمدة 7 أيام.',
+    ]
+
+    commander_brief = (
+        f"سيناريو {category_ar}: يبدأ التنبيه كحدث اعتيادي، ثم يتضح تدريجيا أن التأثير يتوسع عبر أكثر من طبقة. "
+        f"الفريق أمام سباق وقت بين تقليل الأثر على الأعمال ومنع ترسخ التهديد. "
+        f"المطلوب قيادة دقيقة: قرار سريع، دليل كافٍ، وتعافٍ آمن. "
+        f"سياق المؤسسة: {org[:140] if org else 'بيئة إنتاج عامة متعددة الخدمات'}"
+    )
+
+    detection = [str(x).strip() for x in ((analysis or {}).get('detection_plan') or []) if str(x).strip()]
+    response = [str(x).strip() for x in ((analysis or {}).get('response_plan') or []) if str(x).strip()]
+
+    kpis = [
+        'MTTD target: <= 15 minutes',
+        'MTTC (containment) target: <= 30 minutes',
+        'Decision log completeness target: >= 90%',
+        'Post-incident hardening completion: within 7 business days',
+    ]
+
+    if detection:
+        kpis.append(f"Detection quality checkpoint: {detection[0]}")
+    if response:
+        kpis.append(f"Response quality checkpoint: {response[0]}")
+
+    scenario_context = org[:180] if org else 'N/A'
+
+    return {
+        'simulation_style': 'Realistic SOC Tabletop',
+        'simulation_pace_note': pace,
+        'initial_access_vector': base_vectors.get(category, 'Multi-stage initial compromise'),
+        'business_context': scenario_context,
+        'vulnerability_title': vuln_title,
+        'vulnerability_master_brief': vulnerability_master_brief,
+        'vulnerability_root_causes': vulnerability_root_causes,
+        'vulnerability_impact_chain': vulnerability_impact_chain,
+        'commander_brief': commander_brief,
+        'timeline': timeline,
+        'injects': injects,
+        'artifacts': artifacts,
+        'decision_points': decision_points,
+        'live_feed': live_feed,
+        'pressure_cards': pressure_cards,
+        'win_conditions': win_conditions,
+        'kpis': kpis[:6],
+    }
 
 _LEARNING_REPORTS_LOCK = threading.Lock()
 _LEARNING_REPORTS: dict[str, dict[str, object]] = {}
@@ -1592,6 +1767,17 @@ def init_db():
             artifact_value TEXT NOT NULL,
             confidence TEXT DEFAULT 'medium',
             created_at TEXT NOT NULL
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS learning_reports (
+            id SERIAL PRIMARY KEY,
+            token TEXT UNIQUE NOT NULL,
+            user_id INTEGER NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at DOUBLE PRECISION NOT NULL
         )
     ''')
 
@@ -6833,6 +7019,9 @@ HTML_TEMPLATE = """
         let __learningReportToken = '';
         let __learningReportId = '';
         let __learningLastSimulation = null;
+        let __learningWarRoomTimer = null;
+        let __learningWarRoomState = null;
+        let __learningAudioCtx = null;
 
         function _learningChecklistHtml(items) {
             const rows = Array.isArray(items) ? items.filter(Boolean) : [];
@@ -6861,6 +7050,154 @@ HTML_TEMPLATE = """
                 return `<div class="text-gray-400 text-xs">${_resultEscape(emptyText)}</div>`;
             }
             return rows.map((x) => `<div class="text-xs text-gray-100">• ${_resultEscape(x)}</div>`).join('');
+        }
+
+        function _learningStopWarRoomStream() {
+            if (__learningWarRoomTimer) {
+                clearInterval(__learningWarRoomTimer);
+                __learningWarRoomTimer = null;
+            }
+        }
+
+        function _learningPrimeWarRoomAudio() {
+            try {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return;
+                if (!__learningAudioCtx) {
+                    __learningAudioCtx = new Ctx();
+                }
+                if (__learningAudioCtx && __learningAudioCtx.state === 'suspended') {
+                    __learningAudioCtx.resume().catch(() => {});
+                }
+            } catch (_) {
+                // ignore audio errors
+            }
+        }
+
+        function _learningPlayWarRoomTone() {
+            try {
+                if (!__learningAudioCtx) return;
+                if (__learningAudioCtx.state === 'suspended') {
+                    __learningAudioCtx.resume().catch(() => {});
+                }
+                const now = __learningAudioCtx.currentTime;
+                const osc = __learningAudioCtx.createOscillator();
+                const gain = __learningAudioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(880, now);
+                gain.gain.setValueAtTime(0.0001, now);
+                gain.gain.linearRampToValueAtTime(0.028, now + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+                osc.connect(gain);
+                gain.connect(__learningAudioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.17);
+            } catch (_) {
+                // ignore audio errors
+            }
+        }
+
+        function _learningFlashWarRoom(wrap) {
+            if (!wrap) return;
+            wrap.classList.add('ring-2', 'ring-red-400/80', 'animate-pulse');
+            setTimeout(() => {
+                wrap.classList.remove('ring-2', 'ring-red-400/80', 'animate-pulse');
+            }, 520);
+        }
+
+        function _learningRenderWarRoomStream() {
+            const wrap = document.getElementById('learningWarRoomStream');
+            const timelineEl = document.getElementById('learningLiveTimeline');
+            const feedEl = document.getElementById('learningLiveFeed');
+            const pressureEl = document.getElementById('learningLivePressure');
+            const statusEl = document.getElementById('learningLiveStatus');
+            const progressEl = document.getElementById('learningLiveProgress');
+            const toggleBtn = document.getElementById('learningLiveToggleBtn');
+            if (!wrap || !timelineEl || !feedEl || !pressureEl || !statusEl || !progressEl) return;
+            if (!__learningWarRoomState) return;
+
+            const st = __learningWarRoomState;
+            const tRows = st.timeline.slice(0, Math.min(st.timeline.length, st.step + 1));
+            const fRows = st.feed.slice(0, Math.min(st.feed.length, st.step + 1));
+            const pVisible = Math.max(0, Math.min(st.pressure.length, Math.floor((st.step + 1) / 2)));
+            const pRows = st.pressure.slice(0, pVisible);
+
+            const lastPressureVisible = Number(st.lastPressureVisible || 0);
+            const hasNewInject = pVisible > lastPressureVisible;
+            st.lastPressureVisible = pVisible;
+
+            timelineEl.innerHTML = _learningListHtml(tRows, 'بانتظار أول تحديث...');
+            feedEl.innerHTML = _learningListHtml(fRows, 'بانتظار أول تحديث...');
+            pressureEl.innerHTML = _learningListHtml(pRows, 'لا توجد بطاقات ضغط بعد.');
+
+            if (hasNewInject) {
+                _learningFlashWarRoom(wrap);
+                _learningPlayWarRoomTone();
+            }
+
+            const total = Math.max(1, st.maxSteps);
+            const current = Math.min(total, st.step + 1);
+            const pct = Math.round((current / total) * 100);
+            progressEl.style.width = pct + '%';
+            statusEl.textContent = `Live Step ${current}/${total} • ${st.isPlaying ? 'Streaming' : 'Paused'}`;
+            if (toggleBtn) toggleBtn.textContent = st.isPlaying ? 'إيقاف مؤقت' : 'استكمال';
+        }
+
+        function _learningWarRoomTick() {
+            if (!__learningWarRoomState) return;
+            const st = __learningWarRoomState;
+            if (st.step + 1 >= st.maxSteps) {
+                st.step = st.maxSteps - 1;
+                st.isPlaying = false;
+                _learningStopWarRoomStream();
+                _learningRenderWarRoomStream();
+                return;
+            }
+            st.step += 1;
+            _learningRenderWarRoomStream();
+        }
+
+        function learningWarRoomTogglePlay() {
+            if (!__learningWarRoomState) return;
+            const st = __learningWarRoomState;
+            st.isPlaying = !st.isPlaying;
+            if (st.isPlaying) {
+                _learningStopWarRoomStream();
+                __learningWarRoomTimer = setInterval(_learningWarRoomTick, 2200);
+            } else {
+                _learningStopWarRoomStream();
+            }
+            _learningRenderWarRoomStream();
+        }
+
+        function learningWarRoomNextStep() {
+            if (!__learningWarRoomState) return;
+            const st = __learningWarRoomState;
+            st.isPlaying = false;
+            _learningStopWarRoomStream();
+            if (st.step + 1 < st.maxSteps) st.step += 1;
+            _learningRenderWarRoomStream();
+        }
+
+        function _learningStartWarRoomStream(sim) {
+            const timeline = Array.isArray(sim?.scenario_timeline) ? sim.scenario_timeline.filter(Boolean) : [];
+            const feed = Array.isArray(sim?.live_feed) ? sim.live_feed.filter(Boolean) : [];
+            const pressure = Array.isArray(sim?.pressure_cards) ? sim.pressure_cards.filter(Boolean) : [];
+            const maxSteps = Math.max(timeline.length, feed.length, pressure.length * 2, 1);
+
+            __learningWarRoomState = {
+                timeline,
+                feed,
+                pressure,
+                step: 0,
+                maxSteps,
+                isPlaying: true,
+                lastPressureVisible: 0,
+            };
+
+            _learningStopWarRoomStream();
+            _learningRenderWarRoomStream();
+            __learningWarRoomTimer = setInterval(_learningWarRoomTick, 2200);
         }
 
         async function learningLoadCatalog(force = false) {
@@ -6921,6 +7258,9 @@ HTML_TEMPLATE = """
             }
 
             out.textContent = 'جاري تشغيل المحاكاة الدفاعية وطلب شرح AI...';
+            _learningPrimeWarRoomAudio();
+            _learningStopWarRoomStream();
+            __learningWarRoomState = null;
             pdfBtn.disabled = true;
             if (checklistBtn) checklistBtn.disabled = true;
             __learningReportToken = '';
@@ -6977,6 +7317,22 @@ HTML_TEMPLATE = """
                             <div class="text-xs text-slate-300 mt-2">${_resultEscape(sim.summary || '-')}</div>
                         </div>
 
+                        <div class="rounded-xl border border-pink-800/50 bg-pink-950/20 p-3">
+                            <div class="text-xs font-bold text-pink-300 mb-2">شرح كامل للثغرة (أولاً)</div>
+                            <div class="text-[11px] text-pink-200/85 mb-2">${_resultEscape(sim.vulnerability_title || 'Core Vulnerability Brief')}</div>
+                            <div class="text-xs text-pink-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.vulnerability_master_brief || '-')}</div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                                <div class="rounded-lg border border-pink-800/40 bg-pink-950/30 p-2.5">
+                                    <div class="text-[11px] font-bold text-pink-300 mb-1">Root Causes</div>
+                                    ${_learningListHtml(sim.vulnerability_root_causes, 'No root causes')}
+                                </div>
+                                <div class="rounded-lg border border-pink-800/40 bg-pink-950/30 p-2.5">
+                                    <div class="text-[11px] font-bold text-pink-300 mb-1">Impact Chain</div>
+                                    ${_learningListHtml(sim.vulnerability_impact_chain, 'No impact chain')}
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
                             <div class="flex items-center justify-between mb-2">
                                 <div class="text-xs font-bold text-cyan-300">AI Risk Score</div>
@@ -7004,6 +7360,65 @@ HTML_TEMPLATE = """
                         <div class="rounded-xl border border-fuchsia-800/50 bg-fuchsia-950/20 p-3">
                             <div class="text-xs font-bold text-fuchsia-300 mb-2">مراحل الهجوم (محاكاة توعوية)</div>
                             ${_learningListHtml(sim.attack_journey, 'لا يوجد مراحل متاحة')}
+                        </div>
+
+                        <div class="rounded-xl border border-cyan-800/50 bg-cyan-950/20 p-3">
+                            <div class="text-xs font-bold text-cyan-300 mb-2">محاكاة واقعية (SOC Tabletop)</div>
+                            <div class="text-[11px] text-cyan-100/80 mb-1">النمط: ${_resultEscape(sim.simulation_style || 'Realistic SOC Tabletop')}</div>
+                            <div class="text-[11px] text-cyan-100/80 mb-1">السرعة: ${_resultEscape(sim.simulation_pace_note || '-')}</div>
+                            <div class="text-[11px] text-cyan-100/80">Initial Vector: ${_resultEscape(sim.initial_access_vector || '-')}</div>
+                        </div>
+
+                        <div class="rounded-xl border border-rose-800/50 bg-rose-950/20 p-3">
+                            <div class="text-xs font-bold text-rose-300 mb-2">War Room Commander Brief</div>
+                            <div class="text-xs text-rose-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.commander_brief || '-')}</div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div class="rounded-xl border border-sky-800/50 bg-sky-950/20 p-3">
+                                <div class="text-xs font-bold text-sky-300 mb-2">Timeline (T+)</div>
+                                ${_learningListHtml(sim.scenario_timeline, 'No timeline')}
+                            </div>
+                            <div class="rounded-xl border border-blue-800/50 bg-blue-950/20 p-3">
+                                <div class="text-xs font-bold text-blue-300 mb-2">Injects During Exercise</div>
+                                ${_learningListHtml(sim.scenario_injects, 'No injects')}
+                            </div>
+                            <div class="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3">
+                                <div class="text-xs font-bold text-amber-300 mb-2">Critical Decision Points</div>
+                                ${_learningListHtml(sim.decision_points, 'No decisions')}
+                            </div>
+                            <div class="rounded-xl border border-lime-800/50 bg-lime-950/20 p-3">
+                                <div class="text-xs font-bold text-lime-300 mb-2">Expected Evidence Artifacts</div>
+                                ${_learningListHtml(sim.expected_artifacts, 'No artifacts')}
+                            </div>
+                        </div>
+
+                        <div id="learningWarRoomStream" class="rounded-xl border border-red-800/50 bg-red-950/20 p-3">
+                            <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
+                                <div class="text-xs font-bold text-red-300">Live War Room Stream</div>
+                                <div id="learningLiveStatus" class="text-[11px] text-red-100/80">Live Step 1/1 • Streaming</div>
+                            </div>
+                            <div class="h-1.5 rounded bg-red-900/40 border border-red-800/40 overflow-hidden mb-3">
+                                <div id="learningLiveProgress" class="h-full bg-red-400" style="width:0%"></div>
+                            </div>
+                            <div class="flex items-center gap-2 mb-3">
+                                <button id="learningLiveToggleBtn" onclick="learningWarRoomTogglePlay()" class="px-2.5 py-1 rounded bg-red-900/40 border border-red-700/60 text-red-100 text-[11px] font-bold">إيقاف مؤقت</button>
+                                <button onclick="learningWarRoomNextStep()" class="px-2.5 py-1 rounded bg-orange-900/40 border border-orange-700/60 text-orange-100 text-[11px] font-bold">خطوة تالية</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div class="rounded-lg border border-sky-800/50 bg-sky-950/20 p-2.5">
+                                    <div class="text-[11px] font-bold text-sky-300 mb-1">Timeline (Live)</div>
+                                    <div id="learningLiveTimeline"></div>
+                                </div>
+                                <div class="rounded-lg border border-red-800/50 bg-red-950/20 p-2.5">
+                                    <div class="text-[11px] font-bold text-red-300 mb-1">Incident Feed</div>
+                                    <div id="learningLiveFeed"></div>
+                                </div>
+                                <div class="rounded-lg border border-orange-800/50 bg-orange-950/20 p-2.5">
+                                    <div class="text-[11px] font-bold text-orange-300 mb-1">Pressure Cards</div>
+                                    <div id="learningLivePressure"></div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -7034,11 +7449,24 @@ HTML_TEMPLATE = """
                             <div class="text-xs font-bold text-indigo-300 mb-2">AI Deep Explanation</div>
                             <div class="text-xs text-slate-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.ai_explanation || '-')}</div>
                         </div>
+
+                        <div class="rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-3">
+                            <div class="text-xs font-bold text-emerald-300 mb-2">Exercise KPIs</div>
+                            ${_learningListHtml(sim.exercise_kpis, 'No KPIs')}
+                        </div>
+
+                        <div class="rounded-xl border border-teal-800/50 bg-teal-950/20 p-3">
+                            <div class="text-xs font-bold text-teal-300 mb-2">Win Conditions</div>
+                            ${_learningListHtml(sim.win_conditions, 'No win conditions')}
+                        </div>
                     </div>
                 `;
                 out.innerHTML = html;
+                _learningStartWarRoomStream(sim);
                 learningRenderTrainingChecklist();
             } catch (e) {
+                _learningStopWarRoomStream();
+                __learningWarRoomState = null;
                 out.textContent = 'فشل الاتصال بالخادم أثناء تشغيل المحاكاة.';
             }
         }
@@ -14531,6 +14959,21 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
             ],
         ),
         (
+            'شرح شامل للثغرة' if is_ar else 'Full Vulnerability Brief',
+            [
+                f"{('الثغرة' if is_ar else 'Vulnerability')}: {sim.get('vulnerability_title', '')}",
+                str(sim.get('vulnerability_master_brief') or 'N/A'),
+            ],
+        ),
+        (
+            'الجذور المحتملة للثغرة' if is_ar else 'Likely Root Causes',
+            [f"- {x}" for x in (sim.get('vulnerability_root_causes') or [])] or ['- N/A'],
+        ),
+        (
+            'سلسلة الأثر على الأعمال' if is_ar else 'Business Impact Chain',
+            [f"- {x}" for x in (sim.get('vulnerability_impact_chain') or [])] or ['- N/A'],
+        ),
+        (
             'طريقة الهجوم (توعوي)' if is_ar else 'Attack Method (Awareness)',
             [
                 str(sim.get('attack_method') or 'N/A'),
@@ -14547,6 +14990,34 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
         (
             'مراحل الهجوم (محاكاة توعوية)' if is_ar else 'Attack Journey (Awareness Simulation)',
             [f"- {x}" for x in (sim.get('attack_journey') or [])] or ['- N/A'],
+        ),
+        (
+            'إيجاز قائد غرفة العمليات' if is_ar else 'War Room Commander Brief',
+            [str(sim.get('commander_brief') or 'N/A')],
+        ),
+        (
+            'الجدول الزمني للتمرين الواقعي' if is_ar else 'Realistic Exercise Timeline',
+            [f"- {x}" for x in (sim.get('scenario_timeline') or [])] or ['- N/A'],
+        ),
+        (
+            'حقن الأحداث أثناء التمرين' if is_ar else 'Exercise Injects',
+            [f"- {x}" for x in (sim.get('scenario_injects') or [])] or ['- N/A'],
+        ),
+        (
+            'نقاط القرار الحرجة' if is_ar else 'Critical Decision Points',
+            [f"- {x}" for x in (sim.get('decision_points') or [])] or ['- N/A'],
+        ),
+        (
+            'الأدلة المتوقعة للتحقق' if is_ar else 'Expected Evidence Artifacts',
+            [f"- {x}" for x in (sim.get('expected_artifacts') or [])] or ['- N/A'],
+        ),
+        (
+            'التحديثات اللحظية للحادث' if is_ar else 'Live Incident Feed',
+            [f"- {x}" for x in (sim.get('live_feed') or [])] or ['- N/A'],
+        ),
+        (
+            'بطاقات الضغط' if is_ar else 'Pressure Cards',
+            [f"- {x}" for x in (sim.get('pressure_cards') or [])] or ['- N/A'],
         ),
         (
             'الملخص التنفيذي' if is_ar else 'Executive Summary',
@@ -14571,6 +15042,14 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
         (
             'خطة تدريب الفريق' if is_ar else 'Team Training Checklist',
             [f"- {x}" for x in (sim.get('training_checklist') or [])] or ['- N/A'],
+        ),
+        (
+            'مؤشرات نجاح التمرين (KPIs)' if is_ar else 'Exercise Success KPIs',
+            [f"- {x}" for x in (sim.get('exercise_kpis') or [])] or ['- N/A'],
+        ),
+        (
+            'شروط الفوز في التمرين' if is_ar else 'Exercise Win Conditions',
+            [f"- {x}" for x in (sim.get('win_conditions') or [])] or ['- N/A'],
         ),
     ]
 
@@ -14639,11 +15118,36 @@ def _learning_cleanup_report_cache(now_ts: float | None = None) -> None:
 
 def _learning_store_report(user_id: int, report_payload: dict) -> str:
     token = secrets.token_urlsafe(18)
+    now_ts = time.time()
+
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO learning_reports (token, user_id, payload_json, created_at, expires_at) VALUES (%s,%s,%s,%s,%s)",
+            (
+                token,
+                int(user_id),
+                json.dumps(report_payload, ensure_ascii=False),
+                datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                float(now_ts + _LEARNING_REPORT_TTL_SECONDS),
+            )
+        )
+        c.execute("DELETE FROM learning_reports WHERE expires_at < %s", (float(now_ts),))
+        conn.commit()
+    except Exception:
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
     with _LEARNING_REPORTS_LOCK:
-        _learning_cleanup_report_cache()
+        _learning_cleanup_report_cache(now_ts)
         _LEARNING_REPORTS[token] = {
             'user_id': int(user_id),
-            'created_at': time.time(),
+            'created_at': now_ts,
             'payload': report_payload,
         }
     return token
@@ -14653,23 +15157,60 @@ def _learning_get_report(token: str, user_id: int) -> dict | None:
     key = str(token or '').strip()
     if not key:
         return None
+
+    requested_uid = int(user_id)
+
     with _LEARNING_REPORTS_LOCK:
         _learning_cleanup_report_cache()
         cached = _LEARNING_REPORTS.get(key)
         if not cached:
-            return None
-        raw_uid = cached.get('user_id', -1)
-        if isinstance(raw_uid, (int, str)):
-            try:
-                owner_uid = int(raw_uid)
-            except Exception:
-                owner_uid = -1
+            payload = None
         else:
-            owner_uid = -1
-        if owner_uid != int(user_id):
+            raw_uid = cached.get('user_id', -1)
+            if isinstance(raw_uid, (int, str)):
+                try:
+                    owner_uid = int(raw_uid)
+                except Exception:
+                    owner_uid = -1
+            else:
+                owner_uid = -1
+            if owner_uid == requested_uid:
+                payload = cached.get('payload')
+                if isinstance(payload, dict):
+                    return payload
+
+    conn = None
+    try:
+        now_ts = time.time()
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("DELETE FROM learning_reports WHERE expires_at < %s", (float(now_ts),))
+        c.execute(
+            "SELECT payload_json FROM learning_reports WHERE token=%s AND user_id=%s AND expires_at >= %s LIMIT 1",
+            (key, requested_uid, float(now_ts))
+        )
+        row = c.fetchone()
+        conn.commit()
+        if not row or not row[0]:
             return None
-        payload = cached.get('payload')
-        return payload if isinstance(payload, dict) else None
+        payload = json.loads(row[0])
+        if not isinstance(payload, dict):
+            return None
+
+        with _LEARNING_REPORTS_LOCK:
+            _LEARNING_REPORTS[key] = {
+                'user_id': requested_uid,
+                'created_at': now_ts,
+                'payload': payload,
+            }
+        return payload
+    except Exception:
+        if conn:
+            conn.rollback()
+        return None
+    finally:
+        if conn:
+            conn.close()
 
 
 def _forensics_unique(values):
@@ -17730,6 +18271,26 @@ def learning_simulate_route():
         'org_context': org_context,
         'generated_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
+    realism_pack = _learning_build_realism_pack(attack, awareness, analysis, org_context, training_level)
+    simulation.update({
+        'simulation_style': realism_pack.get('simulation_style'),
+        'simulation_pace_note': realism_pack.get('simulation_pace_note'),
+        'initial_access_vector': realism_pack.get('initial_access_vector'),
+        'business_context': realism_pack.get('business_context'),
+        'vulnerability_title': realism_pack.get('vulnerability_title') or '',
+        'vulnerability_master_brief': realism_pack.get('vulnerability_master_brief') or '',
+        'vulnerability_root_causes': realism_pack.get('vulnerability_root_causes') or [],
+        'vulnerability_impact_chain': realism_pack.get('vulnerability_impact_chain') or [],
+        'commander_brief': realism_pack.get('commander_brief') or '',
+        'scenario_timeline': realism_pack.get('timeline') or [],
+        'scenario_injects': realism_pack.get('injects') or [],
+        'expected_artifacts': realism_pack.get('artifacts') or [],
+        'decision_points': realism_pack.get('decision_points') or [],
+        'live_feed': realism_pack.get('live_feed') or [],
+        'pressure_cards': realism_pack.get('pressure_cards') or [],
+        'win_conditions': realism_pack.get('win_conditions') or [],
+        'exercise_kpis': realism_pack.get('kpis') or [],
+    })
     simulation['training_checklist'] = _learning_build_training_checklist(attack, awareness, analysis, org_context)
 
     report_id = f"TITAN-REP-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2).upper()}"
