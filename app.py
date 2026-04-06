@@ -5342,19 +5342,12 @@ HTML_TEMPLATE = """
                             <option value="intermediate" selected>توعوي - متوسط</option>
                             <option value="advanced">توعوي - متقدم</option>
                         </select>
-                        <select id="learningPdfLang" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="ar" selected>PDF عربي</option>
-                            <option value="en">PDF English</option>
-                        </select>
                         <select id="learningUiLang" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
                             <option value="ar" selected>نتائج المحاكاة: عربي</option>
                             <option value="en">Simulation Results: English</option>
                         </select>
                         <textarea id="learningOrgContext" rows="4" placeholder="سياق بيئتك (مثال: شركة صغيرة، ويندوز، O365، بدون EDR)..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
                         <button onclick="learningRunSimulation()" class="w-full py-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تشغيل محاكاة دفاعية</button>
-                        <button id="learningChecklistBtn" onclick="learningRenderTrainingChecklist()" disabled class="w-full py-2 rounded bg-fuchsia-900/40 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">خطة تدريب الفريق</button>
-                        <button id="learningPdfBtn" onclick="learningDownloadReportPdf()" disabled class="w-full py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">تقرير PDF</button>
-                        <div id="learningReportId" class="text-[11px] text-indigo-200/80 font-mono">Report ID: -</div>
                     </div>
 
                     <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
@@ -5365,7 +5358,6 @@ HTML_TEMPLATE = """
                         <div id="learningResult" class="p-3 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap leading-6">
                             اكتب نوع الهجمة ثم اضغط "تشغيل محاكاة دفاعية".
                         </div>
-                        <div id="learningTrainingChecklist" class="hidden p-3 rounded bg-fuchsia-950/20 border border-fuchsia-900/50 text-xs leading-6"></div>
                     </div>
                 </div>
             </div>
@@ -7179,8 +7171,6 @@ HTML_TEMPLATE = """
             if (next === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
         }
 
-        let __learningReportToken = '';
-        let __learningReportId = '';
         let __learningLastSimulation = null;
         let __learningWarRoomTimer = null;
         let __learningWarRoomState = null;
@@ -7432,11 +7422,7 @@ HTML_TEMPLATE = """
             const customObjectiveEl = document.getElementById('learningCustomObjective');
             const out = document.getElementById('learningResult');
             const badge = document.getElementById('learningLastAttackBadge');
-            const pdfBtn = document.getElementById('learningPdfBtn');
-            const checklistBtn = document.getElementById('learningChecklistBtn');
-            const reportIdEl = document.getElementById('learningReportId');
-            const checklistBox = document.getElementById('learningTrainingChecklist');
-            if (!out || !pdfBtn) return;
+            if (!out) return;
 
             const orgContext = String(contextEl?.value || '').trim();
             const trainingLevel = String(levelEl?.value || 'intermediate').trim().toLowerCase();
@@ -7452,16 +7438,7 @@ HTML_TEMPLATE = """
             _learningPrimeWarRoomAudio();
             _learningStopWarRoomStream();
             __learningWarRoomState = null;
-            pdfBtn.disabled = true;
-            if (checklistBtn) checklistBtn.disabled = true;
-            __learningReportToken = '';
-            __learningReportId = '';
             __learningLastSimulation = null;
-            if (reportIdEl) reportIdEl.textContent = 'معرف التقرير: -';
-            if (checklistBox) {
-                checklistBox.classList.add('hidden');
-                checklistBox.innerHTML = '';
-            }
 
             try {
                 const res = await fetch('/api/learning/simulate', {
@@ -7481,29 +7458,13 @@ HTML_TEMPLATE = """
                     return;
                 }
 
-                __learningReportToken = String(data.report_token || '');
-                __learningReportId = String(data.report_id || '');
-                if (__learningReportToken) {
-                    pdfBtn.disabled = false;
-                }
-                if (reportIdEl) {
-                    reportIdEl.textContent = 'معرف التقرير: ' + (__learningReportId || '-');
-                }
-
                 const sim = data.simulation || {};
-                const analysis = data.analysis || {};
                 __learningLastSimulation = sim;
-                if (checklistBtn) checklistBtn.disabled = !(Array.isArray(sim.training_checklist) && sim.training_checklist.length);
                 if (badge) {
                     const t = sim.title || customAttackType;
-                    const sev = String(sim.severity || '').toUpperCase();
-                    const score = Number(analysis.risk_score || 0);
-                    const lvl = String(sim.training_level_label || sim.training_level || '').toUpperCase();
-                    badge.textContent = `${t} - ${sev} - ${lvl} - خطورة ${score}/100`;
+                    badge.textContent = String(t || '-');
                 }
 
-                const riskScore = Math.max(0, Math.min(100, Number(analysis.risk_score || 0)));
-                const riskColor = riskScore >= 70 ? 'bg-rose-500' : (riskScore >= 40 ? 'bg-amber-500' : 'bg-emerald-500');
                 const html = `
                     <div class="space-y-3">
                         <div class="rounded-xl border border-indigo-800/50 bg-indigo-950/20 p-3">
@@ -7513,192 +7474,39 @@ HTML_TEMPLATE = """
                             </div>
                             <div class="text-xs text-slate-300 mt-2">${_resultEscape(sim.summary || '-')}</div>
                             ${sim.custom_attack_type ? `<div class="text-[11px] text-cyan-300 mt-2">نوع الهجمة المخصص: ${_resultEscape(sim.custom_attack_type)}</div>` : ''}
-                            ${sim.custom_objective ? `<div class="text-[11px] text-cyan-200/90 mt-1">هدف التمرين: ${_resultEscape(sim.custom_objective)}</div>` : ''}
-                            <div class="text-[10px] text-indigo-200/70 mt-1">وضع الصلاحية: ${_resultEscape(sim.exercise_authority || 'صلاحيات كاملة داخل بيئة محاكاة')}</div>
                         </div>
 
                         <div class="rounded-xl border border-pink-800/50 bg-pink-950/20 p-3">
-                            <div class="text-xs font-bold text-pink-300 mb-2">شرح كامل للثغرة (أولاً)</div>
+                            <div class="text-xs font-bold text-pink-300 mb-2">شرح الثغرة: وين بتصير وكيف بتصير</div>
                             <div class="text-[11px] text-pink-200/85 mb-2">${_resultEscape(sim.vulnerability_title || 'ملف الثغرة')}</div>
                             <div class="text-xs text-pink-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.vulnerability_master_brief || '-')}</div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                                <div class="rounded-lg border border-pink-800/40 bg-pink-950/30 p-2.5">
-                                    <div class="text-[11px] font-bold text-pink-300 mb-1">الجذور المحتملة</div>
-                                    ${_learningListHtml(sim.vulnerability_root_causes, 'لا توجد جذور مرصودة')}
-                                </div>
-                                <div class="rounded-lg border border-pink-800/40 bg-pink-950/30 p-2.5">
-                                    <div class="text-[11px] font-bold text-pink-300 mb-1">سلسلة الأثر</div>
-                                    ${_learningListHtml(sim.vulnerability_impact_chain, 'لا توجد سلسلة أثر')}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-                            <div class="flex items-center justify-between mb-2">
-                                <div class="text-xs font-bold text-cyan-300">درجة الخطورة</div>
-                                <div class="text-xs text-gray-300">${riskScore}/100</div>
-                            </div>
-                            <div class="h-2 rounded bg-slate-800 overflow-hidden border border-slate-700">
-                                <div class="h-full ${riskColor}" style="width:${riskScore}%"></div>
-                            </div>
-                            <div class="text-[11px] text-slate-400 mt-2">${_resultEscape(analysis.executive_summary || 'لا يوجد ملخص تنفيذي')}</div>
-                        </div>
-
-                        <div class="rounded-xl border border-violet-800/50 bg-violet-950/20 p-3">
-                            <div class="text-xs font-bold text-violet-300 mb-2">طريقة الهجوم (توعوي)</div>
-                            <div class="text-[11px] text-violet-200/80 mb-1">المستوى: ${_resultEscape(sim.training_level_label || sim.training_level || 'متوسط')}</div>
-                            <div class="text-xs text-violet-100 leading-6">${_resultEscape(sim.attack_method || '-')}</div>
-                            <div class="text-[11px] text-violet-200/90 mt-2">${_resultEscape(sim.awareness_goal || '')}</div>
                         </div>
 
                         <div class="rounded-xl border border-purple-800/50 bg-purple-950/20 p-3">
-                            <div class="text-xs font-bold text-purple-300 mb-2">كيف يتم استغلال الثغرة؟ (توعوي بدون أوامر)</div>
+                            <div class="text-xs font-bold text-purple-300 mb-2">وين بتصير وكيف بتصير</div>
                             <div class="text-xs text-purple-100 leading-6">${_resultEscape(sim.exploit_pattern || '-')}</div>
-                            <div class="text-[11px] text-purple-200/80 mt-2">هذا شرح مفاهيمي دفاعي فقط ولا يتضمن خطوات اختراق تنفيذية.</div>
-                        </div>
-
-                        <div class="rounded-xl border border-fuchsia-800/50 bg-fuchsia-950/20 p-3">
-                            <div class="text-xs font-bold text-fuchsia-300 mb-2">مراحل الهجوم (محاكاة توعوية)</div>
-                            ${_learningListHtml(sim.attack_journey, 'لا يوجد مراحل متاحة')}
-                        </div>
-
-                        <div class="rounded-xl border border-cyan-800/50 bg-cyan-950/20 p-3">
-                            <div class="text-xs font-bold text-cyan-300 mb-2">محاكاة واقعية</div>
-                            <div class="text-[11px] text-cyan-100/80 mb-1">النمط: ${_resultEscape(sim.simulation_style || 'محاكاة SOC واقعية')}</div>
-                            <div class="text-[11px] text-cyan-100/80 mb-1">السرعة: ${_resultEscape(sim.simulation_pace_note || '-')}</div>
-                            <div class="text-[11px] text-cyan-100/80">مسار الدخول الأولي: ${_resultEscape(sim.initial_access_vector || '-')}</div>
-                        </div>
-
-                        <div class="rounded-xl border border-rose-800/50 bg-rose-950/20 p-3">
-                            <div class="text-xs font-bold text-rose-300 mb-2">إيجاز قائد غرفة العمليات</div>
-                            <div class="text-xs text-rose-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.commander_brief || '-')}</div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div class="rounded-xl border border-sky-800/50 bg-sky-950/20 p-3">
-                                <div class="text-xs font-bold text-sky-300 mb-2">الخط الزمني (T+)</div>
-                                ${_learningListHtml(sim.scenario_timeline, 'لا يوجد خط زمني')}
-                            </div>
-                            <div class="rounded-xl border border-blue-800/50 bg-blue-950/20 p-3">
-                                <div class="text-xs font-bold text-blue-300 mb-2">حقن الأحداث أثناء التمرين</div>
-                                ${_learningListHtml(sim.scenario_injects, 'لا توجد حقن أحداث')}
-                            </div>
-                            <div class="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3">
-                                <div class="text-xs font-bold text-amber-300 mb-2">نقاط القرار الحرجة</div>
-                                ${_learningListHtml(sim.decision_points, 'لا توجد قرارات')}
-                            </div>
-                            <div class="rounded-xl border border-lime-800/50 bg-lime-950/20 p-3">
-                                <div class="text-xs font-bold text-lime-300 mb-2">الأدلة المتوقعة للتحقق</div>
-                                ${_learningListHtml(sim.expected_artifacts, 'لا توجد أدلة متوقعة')}
-                            </div>
-                        </div>
-
-                        <div id="learningWarRoomStream" class="rounded-xl border border-red-800/50 bg-red-950/20 p-3">
-                            <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
-                                <div class="text-xs font-bold text-red-300">البث الحي لغرفة العمليات</div>
-                                <div id="learningLiveStatus" class="text-[11px] text-red-100/80">الخطوة 1/1 • بث مباشر</div>
-                            </div>
-                            <div class="h-1.5 rounded bg-red-900/40 border border-red-800/40 overflow-hidden mb-3">
-                                <div id="learningLiveProgress" class="h-full bg-red-400" style="width:0%"></div>
-                            </div>
-                            <div class="flex items-center gap-2 mb-3">
-                                <button id="learningLiveToggleBtn" onclick="learningWarRoomTogglePlay()" class="px-2.5 py-1 rounded bg-red-900/40 border border-red-700/60 text-red-100 text-[11px] font-bold">إيقاف مؤقت</button>
-                                <button onclick="learningWarRoomNextStep()" class="px-2.5 py-1 rounded bg-orange-900/40 border border-orange-700/60 text-orange-100 text-[11px] font-bold">خطوة تالية</button>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div class="rounded-lg border border-sky-800/50 bg-sky-950/20 p-2.5">
-                                    <div class="text-[11px] font-bold text-sky-300 mb-1">الخط الزمني المباشر</div>
-                                    <div id="learningLiveTimeline"></div>
-                                </div>
-                                <div class="rounded-lg border border-red-800/50 bg-red-950/20 p-2.5">
-                                    <div class="text-[11px] font-bold text-red-300 mb-1">تحديثات الحادث</div>
-                                    <div id="learningLiveFeed"></div>
-                                </div>
-                                <div class="rounded-lg border border-orange-800/50 bg-orange-950/20 p-2.5">
-                                    <div class="text-[11px] font-bold text-orange-300 mb-1">بطاقات الضغط</div>
-                                    <div id="learningLivePressure"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                                <div class="text-xs font-bold text-cyan-300 mb-2">مؤشرات التهديد المحتملة (IOC)</div>
-                                ${_learningListHtml(sim.key_iocs, 'لا توجد مؤشرات تهديد')}
-                            </div>
-                            <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                                <div class="text-xs font-bold text-emerald-300 mb-2">ضوابط التحصين</div>
-                                ${_learningListHtml(sim.defense_focus, 'لا توجد ضوابط')}
-                            </div>
-                            <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                                <div class="text-xs font-bold text-amber-300 mb-2">خطة الكشف</div>
-                                ${_learningListHtml(analysis.detection_plan, 'لا توجد خطة كشف')}
-                            </div>
-                            <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                                <div class="text-xs font-bold text-rose-300 mb-2">خطة الاستجابة</div>
-                                ${_learningListHtml(analysis.response_plan, 'لا توجد خطة استجابة')}
-                            </div>
-                        </div>
-
-                        <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                            <div class="text-xs font-bold text-violet-300 mb-2">سياق Metasploit (مرجعي دفاعي فقط)</div>
-                            <div class="text-xs text-slate-200">${_resultEscape(sim.metasploit_context || '-')}</div>
-                        </div>
-
-                        <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
-                            <div class="text-xs font-bold text-indigo-300 mb-2">شرح AI التفصيلي</div>
-                            <div class="text-xs text-slate-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.ai_explanation || '-')}</div>
-                        </div>
-
-                        <div class="rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-3">
-                            <div class="text-xs font-bold text-emerald-300 mb-2">مؤشرات نجاح التمرين</div>
-                            ${_learningListHtml(sim.exercise_kpis, 'لا توجد مؤشرات')}
-                        </div>
-
-                        <div class="rounded-xl border border-teal-800/50 bg-teal-950/20 p-3">
-                            <div class="text-xs font-bold text-teal-300 mb-2">شروط الفوز</div>
-                            ${_learningListHtml(sim.win_conditions, 'لا توجد شروط فوز')}
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div class="rounded-xl border border-cyan-800/50 bg-cyan-950/20 p-3">
-                                <div class="text-xs font-bold text-cyan-300 mb-2">أشهر الأدوات المرتبطة بالسيناريو</div>
-                                ${_learningListHtml(sim.common_tools, 'لا توجد أدوات محددة')}
+                                <div class="text-xs font-bold text-cyan-300 mb-2">أشهر الأدوات</div>
+                                ${_learningListHtml(sim.common_tools, 'لا توجد أدوات')}
                             </div>
                             <div class="rounded-xl border border-indigo-800/50 bg-indigo-950/20 p-3">
-                                <div class="text-xs font-bold text-indigo-300 mb-2">أوامر شائعة (بشكل مبسط)</div>
-                                ${_learningListHtml(sim.common_commands, 'لا توجد أوامر مقترحة')}
-                            </div>
-                            <div class="rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-3">
-                                <div class="text-xs font-bold text-emerald-300 mb-2">كيف أعرف أن المحاولة نجحت؟</div>
-                                ${_learningListHtml(sim.success_signals, 'لا توجد مؤشرات نجاح')}
-                            </div>
-                            <div class="rounded-xl border border-rose-800/50 bg-rose-950/20 p-3">
-                                <div class="text-xs font-bold text-rose-300 mb-2">كيف أعرف أنها لم تنجح؟</div>
-                                ${_learningListHtml(sim.failure_signals, 'لا توجد مؤشرات فشل')}
+                                <div class="text-xs font-bold text-indigo-300 mb-2">أشهر الأوامر</div>
+                                ${_learningListHtml(sim.common_commands, 'لا توجد أوامر')}
                             </div>
                         </div>
                     </div>
                 `;
                 out.innerHTML = resultLang === 'en' ? _learningTranslateResultHtmlToEnglish(html) : html;
-                _learningStartWarRoomStream(sim, resultLang);
-                learningRenderTrainingChecklist();
+                _learningStopWarRoomStream();
+                __learningWarRoomState = null;
             } catch (e) {
                 _learningStopWarRoomStream();
                 __learningWarRoomState = null;
                 out.textContent = 'فشل الاتصال بالخادم أثناء تشغيل المحاكاة.';
             }
-        }
-
-        function learningDownloadReportPdf() {
-            const token = String(__learningReportToken || '').trim();
-            const langEl = document.getElementById('learningPdfLang');
-            const lang = String(langEl?.value || 'ar').trim().toLowerCase() === 'en' ? 'en' : 'ar';
-            if (!token) {
-                titanAlert('شغّل محاكاة أولاً لتوليد التقرير.', 'error');
-                return;
-            }
-            window.open('/api/learning/report.pdf?token=' + encodeURIComponent(token) + '&lang=' + encodeURIComponent(lang), '_blank');
         }
 
         function _resultGetElement(target) {
@@ -15195,126 +15003,25 @@ def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
 
     sections = [
         (
-            'ملف السيناريو' if is_ar else 'Scenario Profile',
+            'شرح الثغرة' if is_ar else 'Vulnerability Brief',
             [
-                f"{('السيناريو' if is_ar else 'Scenario')}: {sim.get('title', '')}",
-                f"{('الفئة' if is_ar else 'Category')}: {sim.get('category', '')}",
-                f"{('الشدة' if is_ar else 'Severity')}: {sim.get('severity', '')}",
-                f"{('مستوى التوعية' if is_ar else 'Awareness Level')}: {sim.get('training_level_label') or sim.get('training_level') or 'Intermediate'}",
-                f"{('درجة الخطورة' if is_ar else 'Risk Score')}: {analysis.get('risk_score', 0)}/100",
-                f"{('نوع الهجمة المخصص' if is_ar else 'Custom Attack Type')}: {sim.get('custom_attack_type', '') or 'N/A'}",
-                f"{('هدف التمرين' if is_ar else 'Exercise Objective')}: {sim.get('custom_objective', '') or 'N/A'}",
-                f"{('صلاحية التمرين' if is_ar else 'Exercise Authority')}: {sim.get('exercise_authority', '') or ('صلاحيات كاملة داخل بيئة محاكاة' if is_ar else 'full simulated authority')}",
+                f"{('العنوان' if is_ar else 'Title')}: {sim.get('vulnerability_title', '') or sim.get('title', '')}",
+                str(sim.get('vulnerability_master_brief') or sim.get('summary') or 'N/A'),
             ],
         ),
         (
-            'شرح شامل للثغرة' if is_ar else 'Full Vulnerability Brief',
-            [
-                f"{('الثغرة' if is_ar else 'Vulnerability')}: {sim.get('vulnerability_title', '')}",
-                str(sim.get('vulnerability_master_brief') or 'N/A'),
-            ],
-        ),
-        (
-            'الجذور المحتملة للثغرة' if is_ar else 'Likely Root Causes',
-            [f"- {x}" for x in (sim.get('vulnerability_root_causes') or [])] or ['- N/A'],
-        ),
-        (
-            'سلسلة الأثر على الأعمال' if is_ar else 'Business Impact Chain',
-            [f"- {x}" for x in (sim.get('vulnerability_impact_chain') or [])] or ['- N/A'],
-        ),
-        (
-            'طريقة الهجوم (توعوي)' if is_ar else 'Attack Method (Awareness)',
-            [
-                str(sim.get('attack_method') or 'N/A'),
-                str(sim.get('awareness_goal') or ''),
-            ],
-        ),
-        (
-            'كيف يتم الاستغلال (مفاهيمي توعوي)' if is_ar else 'How Exploitation Happens (Awareness)',
+            'وين بتصير وكيف بتصير' if is_ar else 'Where It Happens and How',
             [
                 str(sim.get('exploit_pattern') or 'N/A'),
-                'محتوى توعوي فقط بدون أوامر هجومية.' if is_ar else 'Awareness-only content with no offensive commands.',
             ],
         ),
         (
-            'مراحل الهجوم (محاكاة توعوية)' if is_ar else 'Attack Journey (Awareness Simulation)',
-            [f"- {x}" for x in (sim.get('attack_journey') or [])] or ['- N/A'],
-        ),
-        (
-            'إيجاز قائد غرفة العمليات' if is_ar else 'War Room Commander Brief',
-            [str(sim.get('commander_brief') or 'N/A')],
-        ),
-        (
-            'الجدول الزمني للتمرين الواقعي' if is_ar else 'Realistic Exercise Timeline',
-            [f"- {x}" for x in (sim.get('scenario_timeline') or [])] or ['- N/A'],
-        ),
-        (
-            'حقن الأحداث أثناء التمرين' if is_ar else 'Exercise Injects',
-            [f"- {x}" for x in (sim.get('scenario_injects') or [])] or ['- N/A'],
-        ),
-        (
-            'نقاط القرار الحرجة' if is_ar else 'Critical Decision Points',
-            [f"- {x}" for x in (sim.get('decision_points') or [])] or ['- N/A'],
-        ),
-        (
-            'الأدلة المتوقعة للتحقق' if is_ar else 'Expected Evidence Artifacts',
-            [f"- {x}" for x in (sim.get('expected_artifacts') or [])] or ['- N/A'],
-        ),
-        (
-            'التحديثات اللحظية للحادث' if is_ar else 'Live Incident Feed',
-            [f"- {x}" for x in (sim.get('live_feed') or [])] or ['- N/A'],
-        ),
-        (
-            'بطاقات الضغط' if is_ar else 'Pressure Cards',
-            [f"- {x}" for x in (sim.get('pressure_cards') or [])] or ['- N/A'],
-        ),
-        (
-            'الملخص التنفيذي' if is_ar else 'Executive Summary',
-            [str(analysis.get('executive_summary') or 'N/A')],
-        ),
-        (
-            'مؤشرات التهديد (IOCs)' if is_ar else 'Threat Indicators (IOCs)',
-            [f"- {x}" for x in (sim.get('key_iocs') or [])] or ['- N/A'],
-        ),
-        (
-            'خطة الكشف' if is_ar else 'Detection Plan',
-            [f"- {x}" for x in (analysis.get('detection_plan') or [])] or ['- N/A'],
-        ),
-        (
-            'خطة الاستجابة' if is_ar else 'Response Plan',
-            [f"- {x}" for x in (analysis.get('response_plan') or [])] or ['- N/A'],
-        ),
-        (
-            'خطة التحصين' if is_ar else 'Hardening Plan',
-            [f"- {x}" for x in (analysis.get('hardening_plan') or sim.get('defense_focus') or [])] or ['- N/A'],
-        ),
-        (
-            'خطة تدريب الفريق' if is_ar else 'Team Training Checklist',
-            [f"- {x}" for x in (sim.get('training_checklist') or [])] or ['- N/A'],
-        ),
-        (
-            'مؤشرات نجاح التمرين (KPIs)' if is_ar else 'Exercise Success KPIs',
-            [f"- {x}" for x in (sim.get('exercise_kpis') or [])] or ['- N/A'],
-        ),
-        (
-            'شروط الفوز في التمرين' if is_ar else 'Exercise Win Conditions',
-            [f"- {x}" for x in (sim.get('win_conditions') or [])] or ['- N/A'],
-        ),
-        (
-            'أشهر الأدوات المرتبطة بالسيناريو' if is_ar else 'Common Tools',
+            'أشهر الأدوات' if is_ar else 'Common Tools',
             [f"- {x}" for x in (sim.get('common_tools') or [])] or ['- N/A'],
         ),
         (
-            'أوامر شائعة (مبسطة)' if is_ar else 'Simple Common Commands',
+            'أشهر الأوامر' if is_ar else 'Common Commands',
             [f"- {x}" for x in (sim.get('common_commands') or [])] or ['- N/A'],
-        ),
-        (
-            'مؤشرات ترجّح نجاح المحاولة' if is_ar else 'Success Indicators',
-            [f"- {x}" for x in (sim.get('success_signals') or [])] or ['- N/A'],
-        ),
-        (
-            'مؤشرات ترجّح فشل المحاولة' if is_ar else 'Failure Indicators',
-            [f"- {x}" for x in (sim.get('failure_signals') or [])] or ['- N/A'],
         ),
     ]
 
@@ -18587,52 +18294,17 @@ def learning_simulate_route():
     })
     simulation['training_checklist'] = _learning_build_training_checklist(attack, awareness, analysis, org_context, lang=result_lang)
 
-    report_id = f"TITAN-REP-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2).upper()}"
-
-    report_payload = {
-        'platform_name': 'TITAN CYBER PLATFORM',
-        'report_id': report_id,
-        'simulation': simulation,
-        'analysis': analysis,
-        'username': session.get('username', ''),
-    }
-    token = _learning_store_report(user_id, report_payload)
-
     add_audit_log(
         'Learning Simulation',
         f"attack={attack.get('id', '')} severity={attack.get('severity', '')} custom={'yes' if custom_attack_type else 'no'}",
         username=session.get('username', '')
     )
-    return jsonify({'success': True, 'simulation': simulation, 'analysis': analysis, 'report_token': token, 'report_id': report_id})
+    return jsonify({'success': True, 'simulation': simulation, 'analysis': analysis})
 
 
 @app.route('/api/learning/report.pdf', methods=['GET'])
 def learning_report_pdf_route():
-    user_id, err = _get_logged_in_user_id()
-    if err:
-        return err
-    assert user_id is not None
-
-    token = (request.args.get('token') or '').strip()
-    lang = (request.args.get('lang') or 'ar').strip().lower()
-    if lang not in ('ar', 'en'):
-        lang = 'ar'
-    if not token:
-        return jsonify({'success': False, 'error': 'token مطلوب'}), 400
-
-    payload = _learning_get_report(token, user_id)
-    if not payload:
-        return jsonify({'success': False, 'error': 'التقرير غير موجود أو انتهت صلاحيته'}), 404
-
-    pdf_bytes = _build_learning_pdf_bytes_branded(payload, lang=lang)
-    report_id = str((payload.get('report_id') if isinstance(payload, dict) else '') or 'TITAN-REPORT')
-    safe_report_id = re.sub(r'[^A-Za-z0-9_\-]+', '-', report_id).strip('-') or 'TITAN-REPORT'
-    return send_file(
-        io.BytesIO(pdf_bytes),
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=f"{safe_report_id}-{'AR' if lang == 'ar' else 'EN'}.pdf"
-    )
+    return jsonify({'success': False, 'error': 'تم تعطيل تصدير PDF لهذا القسم'}), 410
 
 
 @app.route('/api/support/tickets', methods=['GET', 'POST'])
