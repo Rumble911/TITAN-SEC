@@ -67,8 +67,9 @@ SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 
 # --- DigitalOcean AI Agent Config ---
-DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://y4l7lnqc5wj5frtdqugl6dqs.agents.do-ai.run')
+DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://qc7djk7x6emxmlvcslcknjyf.agents.do-ai.run')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
+DO_AI_MODEL = os.environ.get('DO_AI_MODEL', 'tor1')
 
 AI_SYSTEM_PROMPT = """
 أنت TITAN، مساعد ذكي وشخصية حقيقية — مش مجرد برنامج.
@@ -432,17 +433,25 @@ def _dash_public_ip_cached():
     return _dash_public_ip
 
 
-def _do_ai_chat_completion(messages: list[dict[str, object]], timeout_seconds: int = 45, max_tokens: int = 1400) -> tuple[str, str]:
-    headers = {
-        'Authorization': f'Bearer {DO_AI_KEY}',
-        'Content-Type': 'application/json',
-    }
+def _do_ai_chat_completion(
+    messages: list[dict[str, object]],
+    timeout_seconds: int = 45,
+    max_tokens: int = 1400,
+    model: str | None = None,
+) -> tuple[str, str]:
+    headers = {'Content-Type': 'application/json'}
+    api_key = (DO_AI_KEY or '').strip()
+    if api_key:
+        headers['Authorization'] = f'Bearer {api_key}'
     payload = {
         "temperature": 0.2,
         "top_p": 0.9,
         "max_tokens": max_tokens,
         "messages": messages,
     }
+    model_name = (model or DO_AI_MODEL or '').strip()
+    if model_name:
+        payload["model"] = model_name
     res = requests.post(
         f"{DO_AI_ENDPOINT}/api/v1/chat/completions",
         headers=headers,
@@ -457,7 +466,7 @@ def _do_ai_chat_completion(messages: list[dict[str, object]], timeout_seconds: i
     finish_reason = str(choice.get('finish_reason') or '')
     return content, finish_reason
 
-def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
+def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None) -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     messages: list[dict[str, object]] = [
@@ -467,7 +476,7 @@ def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
 
     chunks: list[str] = []
     for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1400)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1400, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -485,7 +494,12 @@ def _call_do_ai(message: str, system_prompt: str | None = None) -> str:
     return _repair_garbled_ai_reply(full_reply, context_hint=message[:200])
 
 
-def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prompt: str | None = None) -> str:
+def _call_do_ai_multimodal(
+    message: str,
+    image_data_urls: list[str],
+    system_prompt: str | None = None,
+    model: str | None = None,
+) -> str:
     """Call DigitalOcean AI with text + inline image data URLs (OpenAI-compatible format)."""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
 
@@ -505,7 +519,7 @@ def _call_do_ai_multimodal(message: str, image_data_urls: list[str], system_prom
 
     chunks: list[str] = []
     for _ in range(2):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=60, max_tokens=1600)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=60, max_tokens=1600, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -558,7 +572,11 @@ def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
     )
 
 
-def _call_do_ai_with_history(history_messages: list[dict[str, object]], system_prompt: str | None = None) -> str:
+def _call_do_ai_with_history(
+    history_messages: list[dict[str, object]],
+    system_prompt: str | None = None,
+    model: str | None = None,
+) -> str:
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     messages: list[dict[str, object]] = [{"role": "system", "content": sys_prompt}]
     for m in (history_messages or []):
@@ -569,7 +587,7 @@ def _call_do_ai_with_history(history_messages: list[dict[str, object]], system_p
 
     chunks: list[str] = []
     for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1600)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1600, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -16252,7 +16270,7 @@ def ai_chat():
 
     data = request.get_json(silent=True) or {}
     message = (data.get('message') or '').strip()
-    model = (data.get('model') or 'titan_ultimate').strip()
+    model = (data.get('model') or DO_AI_MODEL or 'tor1').strip()
     conversation_id = (data.get('conversation_id') or '').strip()
 
     if not message:
@@ -16284,7 +16302,7 @@ def ai_chat():
         context_messages.append({"role": "user", "content": message})
 
         system_prompt = _build_ai_system_prompt(topic, user_text=message)
-        reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt)
+        reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt, model=model)
 
         now = datetime.datetime.now().isoformat()
         preview = _ai_trim_title(reply, 120)
