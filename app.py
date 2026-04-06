@@ -22,7 +22,7 @@ from cryptography.hazmat.primitives import hashes  # type: ignore
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # type: ignore
 import requests  # type: ignore
 from functools import lru_cache
-from PIL import Image  # type: ignore
+from PIL import Image, ImageDraw, ImageFont  # type: ignore
 from pypdf import PdfReader, PdfWriter  # type: ignore
 import random
 import uuid
@@ -43,6 +43,30 @@ from email.mime.text import MIMEText
 import urllib.request
 import json as _json
 import html
+
+try:
+    from reportlab.pdfgen import canvas  # type: ignore
+    from reportlab.lib.pagesizes import A4  # type: ignore
+    from reportlab.pdfbase import pdfmetrics  # type: ignore
+    from reportlab.pdfbase.ttfonts import TTFont  # type: ignore
+    from reportlab.lib.utils import ImageReader  # type: ignore
+    _HAS_REPORTLAB = True
+except Exception:
+    _HAS_REPORTLAB = False
+    canvas = None  # type: ignore
+    A4 = (595.0, 842.0)  # type: ignore
+    pdfmetrics = None  # type: ignore
+    TTFont = None  # type: ignore
+    ImageReader = None  # type: ignore
+
+try:
+    import arabic_reshaper  # type: ignore
+    from bidi.algorithm import get_display  # type: ignore
+    _HAS_ARABIC_SHAPING = True
+except Exception:
+    _HAS_ARABIC_SHAPING = False
+    arabic_reshaper = None  # type: ignore
+    get_display = None  # type: ignore
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -145,6 +169,277 @@ TITAN_KB_ALWAYS_INCLUDE = [
     'platform/06_feature_modules.md',
 ]
 
+LEARNING_SIM_ATTACKS = [
+    {
+        'id': 'wannacry-ransomware',
+        'title': 'WannaCry Ransomware (Defensive Simulation)',
+        'category': 'ransomware',
+        'severity': 'critical',
+        'summary': 'محاكاة دفاعية لسلوك فدية ينتشر عبر SMB ويعطل الأنظمة.',
+        'key_iocs': ['SMB spikes', 'Unexpected file encryption', 'Ransom note artifacts'],
+        'defense_focus': ['Patch management', 'Network segmentation', 'Offline backups'],
+        'metasploit_context': 'يستخدم المختبرون المرخّصون وحدات فحص SMB في بيئات معملية فقط للتحقق من التعرض.',
+    },
+    {
+        'id': 'eternalblue-ms17-010',
+        'title': 'EternalBlue / MS17-010 (Defensive Simulation)',
+        'category': 'network exploit',
+        'severity': 'critical',
+        'summary': 'محاكاة لاكتشاف استغلال ثغرة SMBv1 على أنظمة قديمة.',
+        'key_iocs': ['Lateral movement attempts', 'SMBv1 traffic', 'Unusual service crashes'],
+        'defense_focus': ['Disable SMBv1', 'Patch MS17-010', 'EDR containment policies'],
+        'metasploit_context': 'مرجعية دفاعية: وحدة exploit/windows/smb/ms17_010_eternalblue لأغراض اختبار مصرح فقط.',
+    },
+    {
+        'id': 'sql-injection-webapp',
+        'title': 'SQL Injection Against Web App (Defensive Simulation)',
+        'category': 'web',
+        'severity': 'high',
+        'summary': 'محاكاة إدخال ضار لاستهداف قاعدة البيانات عبر مدخلات التطبيق.',
+        'key_iocs': ['DB query anomalies', 'WAF alerts', 'Auth bypass patterns'],
+        'defense_focus': ['Parameterized queries', 'WAF tuning', 'Input validation'],
+        'metasploit_context': 'السياق الدفاعي يتضمن مراجعة ثغرات التطبيق ضمن بيئة تدريبية فقط.',
+    },
+    {
+        'id': 'xss-session-theft',
+        'title': 'XSS Session Theft (Defensive Simulation)',
+        'category': 'web',
+        'severity': 'high',
+        'summary': 'محاكاة حقن سكربت ضار لمحاولة سرقة جلسات أو تنفيذ أوامر بالمتصفح.',
+        'key_iocs': ['Suspicious script tags', 'CSP violation logs', 'Abnormal cookie usage'],
+        'defense_focus': ['Output encoding', 'Strict CSP', 'HTTPOnly/Secure cookies'],
+        'metasploit_context': 'يركز التدريب هنا على كشف الأثر والتحصين وليس على التنفيذ الهجومي.',
+    },
+    {
+        'id': 'credential-stuffing',
+        'title': 'Credential Stuffing (Defensive Simulation)',
+        'category': 'identity attack',
+        'severity': 'high',
+        'summary': 'محاكاة محاولات دخول جماعية بكلمات مرور مسربة.',
+        'key_iocs': ['Login burst from distributed IPs', 'High failed auth ratio', 'User lockout waves'],
+        'defense_focus': ['MFA enforcement', 'Rate limiting', 'Risk-based authentication'],
+        'metasploit_context': 'تتم الإشارة لأدوات الاختبار الهجومي فقط كمعرفة تهديد دفاعية.',
+    },
+    {
+        'id': 'phishing-bec',
+        'title': 'Business Email Compromise (Defensive Simulation)',
+        'category': 'social engineering',
+        'severity': 'high',
+        'summary': 'محاكاة انتحال بريد تنفيذي لتنفيذ تحويلات مالية أو طلب بيانات حساسة.',
+        'key_iocs': ['Display-name spoofing', 'Lookalike domains', 'Urgent payment language'],
+        'defense_focus': ['DMARC/SPF/DKIM', 'Out-of-band verification', 'User awareness drills'],
+        'metasploit_context': 'لا يتضمن هذا السيناريو أي تشغيل أدوات هجومية، فقط توعية واستجابة.',
+    },
+    {
+        'id': 'ddos-layer7',
+        'title': 'DDoS Layer 7 (Defensive Simulation)',
+        'category': 'availability',
+        'severity': 'high',
+        'summary': 'محاكاة ضغط تطبيقات الويب بطلبات كثيفة تؤثر على الأداء.',
+        'key_iocs': ['Spike in HTTP requests', 'High 5xx rate', 'CPU saturation'],
+        'defense_focus': ['CDN/WAF shielding', 'Rate limiting', 'Autoscaling and failover'],
+        'metasploit_context': 'السياق الدفاعي: مراقبة السعة والتخطيط للاستجابة وليس الهجوم.',
+    },
+    {
+        'id': 'supply-chain-update',
+        'title': 'Supply Chain Compromise (Defensive Simulation)',
+        'category': 'software supply chain',
+        'severity': 'critical',
+        'summary': 'محاكاة إدخال حزمة/تحديث ملوث داخل بيئة التطوير أو الإنتاج.',
+        'key_iocs': ['Unexpected dependency changes', 'Unsigned binaries', 'Outbound anomaly'],
+        'defense_focus': ['SBOM', 'Code signing verification', 'Dependency allow-listing'],
+        'metasploit_context': 'يتم التعامل مع هذا التهديد عبر ضوابط سلسلة التوريد لا عبر استغلالات مباشرة.',
+    },
+    {
+        'id': 'webshell-persistence',
+        'title': 'Webshell Persistence (Defensive Simulation)',
+        'category': 'post-compromise',
+        'severity': 'critical',
+        'summary': 'محاكاة زرع باب خلفي في خادم ويب للحفاظ على الوصول.',
+        'key_iocs': ['Unexpected webroot file changes', 'Suspicious command execution', 'Encoded payload patterns'],
+        'defense_focus': ['File integrity monitoring', 'Least privilege', 'Runtime application protection'],
+        'metasploit_context': 'مرجعية دفاعية: payload/web delivery indicators لاستخدامها في الكشف فقط.',
+    },
+    {
+        'id': 'mimikatz-credential-dump',
+        'title': 'Credential Dumping (Defensive Simulation)',
+        'category': 'endpoint',
+        'severity': 'critical',
+        'summary': 'محاكاة محاولة استخراج بيانات اعتماد من الذاكرة.',
+        'key_iocs': ['LSASS access anomalies', 'Privilege escalation sequence', 'Credential cache events'],
+        'defense_focus': ['Credential Guard', 'LSASS protection', 'Tiered admin model'],
+        'metasploit_context': 'السياق هنا دفاعي: ربط مؤشرات السلوك بقواعد EDR/SIEM.',
+    },
+]
+
+LEARNING_AWARENESS_PROFILES = {
+    'ransomware': {
+        'attack_method': 'استغلال نظام غير محدث ثم نشر مشفرات الملفات داخل الشبكة.',
+        'attack_journey': [
+            'تهيئة الوصول الأولي عبر خدمة أو نظام ضعيف الحماية.',
+            'محاولة الانتشار الأفقي للوصول إلى أكبر عدد من الأجهزة.',
+            'تشفير البيانات وتعطيل الاستمرارية التشغيلية.',
+            'استخدام الضغط النفسي بطلب فدية لزيادة أثر الحادث.',
+        ],
+        'awareness_goal': 'التركيز على النسخ الاحتياطي غير المتصل، التحديثات، والعزل السريع.',
+    },
+    'network exploit': {
+        'attack_method': 'استهداف ثغرة خدمة شبكية مكشوفة لتجاوز الحماية على الأنظمة الضعيفة.',
+        'attack_journey': [
+            'رصد خدمة قديمة أو إعداد خاطئ على الشبكة.',
+            'إرسال حركة خبيثة لاستغلال الضعف الأمني.',
+            'محاولة تنفيذ أوامر عن بعد أو التحرك داخل الشبكة.',
+            'ترسيخ الوصول واستغلال الأنظمة المجاورة عند غياب العزل.',
+        ],
+        'awareness_goal': 'إغلاق الخدمات القديمة وتقسيم الشبكة ومراقبة الحركة الجانبية.',
+    },
+    'web': {
+        'attack_method': 'استغلال مدخلات التطبيق أو مخرجاته غير الآمنة للتأثير على البيانات أو المستخدمين.',
+        'attack_journey': [
+            'تجربة مدخلات غير متوقعة في نقاط التطبيق المختلفة.',
+            'استغلال ضعف التحقق أو ترميز المخرجات.',
+            'الوصول إلى أثر أمني مثل تسريب بيانات أو اختطاف جلسات.',
+            'إعادة استخدام الضعف طالما لم يتم الإصلاح الجذري.',
+        ],
+        'awareness_goal': 'اعتماد التحقق الصارم، الاستعلامات المعيارية، وCSP وسياسات الجلسات.',
+    },
+    'identity attack': {
+        'attack_method': 'إعادة استخدام بيانات اعتماد مسربة على نطاق واسع ضد بوابات تسجيل الدخول.',
+        'attack_journey': [
+            'جمع بيانات اعتماد مسربة من مصادر متعددة.',
+            'تشغيل محاولات دخول متعددة من عناوين مختلفة.',
+            'النجاح في بعض الحسابات ذات كلمات مرور معادة الاستخدام.',
+            'الانتقال إلى إساءة استخدام الحسابات داخل المنصة.',
+        ],
+        'awareness_goal': 'فرض MFA وحدود المحاولات ومراقبة تسجيل الدخول المبني على المخاطر.',
+    },
+    'social engineering': {
+        'attack_method': 'استغلال الثقة البشرية برسائل منتحلة لدفع الضحية لاتخاذ قرار خاطئ.',
+        'attack_journey': [
+            'تحضير رسالة مقنعة بهوية قريبة من جهة موثوقة.',
+            'إرسال طلب عاجل لخلق ضغط زمني على المستلم.',
+            'دفع الضحية لمشاركة بيانات أو تنفيذ تحويلات.',
+            'استمرار الاستغلال عبر الردود أو تحديث الطلبات المزيفة.',
+        ],
+        'awareness_goal': 'اعتماد التحقق خارج القناة، والتدريب الدوري على هندسة اجتماعية.',
+    },
+    'availability': {
+        'attack_method': 'إغراق طبقة التطبيق بطلبات كثيفة لإضعاف الأداء أو تعطيل الخدمة.',
+        'attack_journey': [
+            'زيادة تدريجية في الحمل الموجه لنقاط حساسة.',
+            'تضخيم استهلاك الموارد ورفع زمن الاستجابة.',
+            'ظهور أخطاء خدمة وانخفاض توفر المنصة.',
+            'محاولة الإبقاء على الضغط لمنع التعافي السريع.',
+        ],
+        'awareness_goal': 'التخفيف عبر WAF/CDN، التحجيم التلقائي، وخطط استمرارية الخدمة.',
+    },
+    'software supply chain': {
+        'attack_method': 'إدخال مكون برمجي غير موثوق ضمن سلسلة البناء أو النشر.',
+        'attack_journey': [
+            'تغيير اعتماد أو تحديث دون تحقق أمني كاف.',
+            'انتقال المكون الملوث خلال pipeline التطوير.',
+            'وصول الكود الضار إلى بيئة حساسة.',
+            'استغلال الثقة بسلسلة التوريد للبقاء غير ملحوظ.',
+        ],
+        'awareness_goal': 'تفعيل SBOM، التوقيع الرقمي، وسياسات مراجعة الاعتمادات.',
+    },
+    'post-compromise': {
+        'attack_method': 'الحفاظ على الوصول بعد الاختراق عبر ملفات أو نقاط ثبات مخفية.',
+        'attack_journey': [
+            'استغلال اختراق أولي سابق غير مكتشف.',
+            'زرع آلية ثبات داخل بيئة الخدمة.',
+            'استخدام الوصول المتكرر لتوسيع التأثير.',
+            'محاولة إخفاء الأثر لتأخير الاستجابة.',
+        ],
+        'awareness_goal': 'مراقبة سلامة الملفات، حماية وقت التشغيل، وإزالة أسباب الاختراق الأولي.',
+    },
+    'endpoint': {
+        'attack_method': 'محاولة الوصول لبيانات اعتماد حساسة من ذاكرة النظام أو العمليات الحرجة.',
+        'attack_journey': [
+            'الحصول على صلاحيات مرتفعة على الجهاز المستهدف.',
+            'استهداف عمليات تحتوي مواد اعتماد حساسة.',
+            'استخراج بيانات يمكن استخدامها للتنقل الداخلي.',
+            'استمرار الهجوم عبر إساءة استخدام الحسابات الممتازة.',
+        ],
+        'awareness_goal': 'تفعيل حماية LSASS وCredential Guard وتقسيم صلاحيات الإدارة.',
+    },
+}
+
+
+def _learning_awareness_profile(attack: dict) -> dict:
+    category = str((attack or {}).get('category') or '').strip().lower()
+    profile = LEARNING_AWARENESS_PROFILES.get(category) or {}
+    return {
+        'attack_method': str(profile.get('attack_method') or 'استغلال ثغرات تقنية أو بشرية للوصول غير المصرح به ثم توسيع الأثر.'),
+        'attack_journey': [str(x).strip() for x in (profile.get('attack_journey') or []) if str(x).strip()] or [
+            'مرحلة وصول أولي عبر نقطة ضعف.',
+            'مرحلة توسيع التأثير داخل البيئة.',
+            'مرحلة إحداث الأثر الأمني على البيانات أو الخدمة.',
+            'مرحلة الاستمرارية أو إعادة المحاولة عند غياب الضوابط.',
+        ],
+        'awareness_goal': str(profile.get('awareness_goal') or 'الهدف التوعوي: تحسين الكشف المبكر، الاحتواء السريع، والتحصين المستمر.'),
+    }
+
+
+def _learning_build_training_checklist(attack: dict, awareness: dict, analysis: dict, org_context: str) -> list[str]:
+    category = str((attack or {}).get('category') or '').strip().lower()
+    focus = [str(x).strip() for x in ((attack or {}).get('defense_focus') or []) if str(x).strip()]
+    iocs = [str(x).strip() for x in ((attack or {}).get('key_iocs') or []) if str(x).strip()]
+    detection = [str(x).strip() for x in ((analysis or {}).get('detection_plan') or []) if str(x).strip()]
+    response = [str(x).strip() for x in ((analysis or {}).get('response_plan') or []) if str(x).strip()]
+    hardening = [str(x).strip() for x in ((analysis or {}).get('hardening_plan') or []) if str(x).strip()]
+
+    rows: list[str] = [
+        'جلسة افتتاحية لمدة 15 دقيقة لشرح الهدف التوعوي ونطاق التدريب.',
+        f"مراجعة طريقة الهجوم توعوياً: {str((awareness or {}).get('attack_method') or '').strip()}",
+        'تمثيل مراحل السيناريو على لوحة زمنية بدون أي تنفيذ هجومي.',
+    ]
+
+    if category == 'social engineering':
+        rows.append('تنفيذ تمرين Role-Play للتحقق خارج القناة قبل أي إجراء مالي أو مشاركة بيانات.')
+    elif category == 'web':
+        rows.append('تدريب فريق التطوير على التحقق من المدخلات وترميز المخرجات ضمن مراجعة الكود.')
+    elif category in ('network exploit', 'endpoint', 'post-compromise'):
+        rows.append('تمرين SOC/IT على العزل السريع ونقاط القرار خلال أول 30 دقيقة من الحادث.')
+    elif category == 'availability':
+        rows.append('تجربة Playbook لاستيعاب الضغط التشغيلي والتحول إلى خطط الاستمرارية.')
+    elif category == 'software supply chain':
+        rows.append('ورشة تحقق الاعتمادات: SBOM، التوقيع الرقمي، ومراجعة مصدر الحزمة.')
+    elif category == 'ransomware':
+        rows.append('اختبار استعادة نسخة احتياطية مع قياس RTO/RPO وتوثيق العوائق.')
+
+    if iocs:
+        rows.append(f"تدريب فريق الرصد على مؤشرات IOC التالية: {', '.join(iocs[:3])}")
+    if focus:
+        rows.append(f"تعيين مسؤول لكل ضابط تحصين: {', '.join(focus[:3])}")
+    if detection:
+        rows.append(f"تشغيل سيناريو مراقبة: {detection[0]}")
+    if response:
+        rows.append(f"تجربة احتواء: {response[0]}")
+    if hardening:
+        rows.append(f"إجراء تحصين أسبوعي: {hardening[0]}")
+    if org_context.strip():
+        rows.append(f"مواءمة الخطة مع واقع المؤسسة المذكور: {org_context.strip()[:160]}")
+
+    rows.append('جلسة ختامية: الدروس المستفادة + تحديث Playbook + تحديد موعد إعادة المحاكاة.')
+
+    clean: list[str] = []
+    seen = set()
+    for row in rows:
+        txt = str(row or '').strip()
+        if not txt:
+            continue
+        key = txt.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        clean.append(txt)
+    return clean[:12]
+
+_LEARNING_REPORTS_LOCK = threading.Lock()
+_LEARNING_REPORTS: dict[str, dict[str, object]] = {}
+_LEARNING_REPORT_TTL_SECONDS = 3600
+
 
 def _strip_md_noise_for_prompt(text: str) -> str:
     t = str(text or '')
@@ -157,6 +452,42 @@ def _strip_md_noise_for_prompt(text: str) -> str:
 
 def _tokenize_for_kb(text: str) -> set[str]:
     return set(_KB_TOKEN_RE.findall((text or '').lower()))
+
+
+def _learning_exploit_pattern(category: str) -> str:
+    key = str(category or '').strip().lower()
+    patterns = {
+        'ransomware': 'غالبا يبدأ الاستغلال من نظام غير محدث أو وصول أولي ضعيف، ثم حركة جانبية، ثم تشفير البيانات لفرض الابتزاز.',
+        'network exploit': 'الاستغلال يتم عادة عبر خدمة مكشوفة ضعيفة، ثم إرسال حركة تستهدف الثغرة، ثم محاولة توسيع الوصول داخل الشبكة.',
+        'web': 'الاستغلال يحدث عند مدخلات/مخرجات غير آمنة: إدخال ضار، ثم تأثير على منطق التطبيق أو البيانات أو جلسات المستخدمين.',
+        'identity attack': 'يعتمد على بيانات اعتماد مسربة ومحاولات دخول كثيفة ومتوزعة حتى يتم اختراق حسابات مع حماية ضعيفة.',
+        'social engineering': 'يستغل العامل البشري عبر انتحال الثقة والاستعجال لإقناع الضحية بتنفيذ إجراء حساس أو مشاركة بيانات.',
+        'availability': 'يستغل نقاط اختناق الخدمة عبر زيادة الطلبات تدريجيا حتى تتدهور الاستجابة أو تتوقف الخدمة.',
+        'software supply chain': 'يستغل الثقة في سلسلة التوريد عبر مكون غير موثوق يدخل مراحل البناء ثم يصل إلى بيئات حساسة.',
+        'post-compromise': 'بعد اختراق أولي، يتم استغلال ضعف المراقبة لزرع آليات بقاء والحفاظ على الوصول لفترات أطول.',
+        'endpoint': 'الاستغلال يركز على رفع الصلاحيات ثم الوصول إلى عمليات حساسة لاستخراج بيانات اعتماد وإعادة استخدامها.',
+    }
+    return patterns.get(key, 'يبدأ الاستغلال غالبا من نقطة ضعف أولية، ثم توسيع التأثير، ثم محاولة الحفاظ على الوصول إذا غابت الضوابط.')
+
+
+def _learning_apply_level_tone(text: str, level: str) -> str:
+    raw = str(text or '').strip()
+    lvl = str(level or 'intermediate').strip().lower()
+    if lvl == 'beginner':
+        return f"بشكل مبسط: {raw} ركز على الفكرة العامة وما الذي يجب مراقبته."
+    if lvl == 'advanced':
+        return f"تفصيل متقدم: {raw} مع ربط السلوك بسلسلة الهجوم، نقاط الكشف، وأولوية الاستجابة."
+    return raw
+
+
+def _learning_level_label(level: str) -> str:
+    lvl = str(level or 'intermediate').strip().lower()
+    labels = {
+        'beginner': 'Beginner',
+        'intermediate': 'Intermediate',
+        'advanced': 'Advanced',
+    }
+    return labels.get(lvl, 'Intermediate')
 
 
 def _split_kb_sections(markdown_text: str, max_chars: int = 900) -> list[dict[str, str]]:
@@ -3033,6 +3364,34 @@ HTML_TEMPLATE = """
                 box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3), 0 0 18px rgba(234, 179, 8, 0.35);
             }
 
+            .training-subtabs-shell {
+                border: 1px solid rgba(147, 197, 253, 0.35);
+                background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.94));
+                box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.08), 0 10px 26px rgba(2, 6, 23, 0.48);
+            }
+
+            .training-subtab-btn {
+                width: 100%;
+                border: 1px solid rgba(125, 211, 252, 0.32);
+                background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+                color: #e2e8f0;
+                min-height: 2.3rem;
+                box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.16), 0 1px 0 rgba(15, 23, 42, 0.9);
+            }
+
+            .training-subtab-btn:hover {
+                transform: translateY(-1px);
+                border-color: rgba(168, 85, 247, 0.45);
+                box-shadow: 0 8px 18px rgba(88, 28, 135, 0.28);
+            }
+
+            .training-subtab-btn.training-subtab-active {
+                background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(109, 40, 217, 0.95));
+                border-color: rgba(196, 181, 253, 0.7);
+                color: #ffffff;
+                box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.25), 0 0 18px rgba(139, 92, 246, 0.45);
+            }
+
             .result-panel {
                 background: linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(2, 6, 23, 0.88));
                 border: 1px solid rgba(148, 163, 184, 0.26);
@@ -3337,8 +3696,7 @@ HTML_TEMPLATE = """
                     <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
                     <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
                     <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
-                    <button onclick="showTab('ctf')" id="btn-ctf" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span class="inline-block animate-pulse">🏁</span> CTF</button>
-                    <button onclick="showTab('se')" id="btn-se" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🎭</span> الهندسة الاجتماعية</button>
+                    <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
                 </div>
                 </div>
 
@@ -4326,6 +4684,20 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
+            <div id="training-section" class="hidden space-y-4">
+                <h2 class="text-xl font-bold text-amber-300 border-b border-slate-700 pb-2">🎯 قسم التدريب</h2>
+                <div class="bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl text-xs text-amber-100/90 leading-6">
+                    هذا القسم يجمع 3 مسارات تدريبية في مكان واحد: التعلم والمحاكاة، CTF، والهندسة الاجتماعية.
+                </div>
+                <div class="training-subtabs-shell rounded-xl p-2">
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 التعلم والمحاكاة</button>
+                        <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
+                        <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
+                    </div>
+                </div>
+            </div>
+
             <div id="ctf-section" class="hidden space-y-6 ctf-ui">
                 <h2 class="ctf-main-title font-bold text-amber-400 border-b border-slate-700 pb-2 flex items-center gap-2"><span class="inline-block animate-pulse">🏁</span> CTF TRAINING</h2>
                 <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
@@ -4601,6 +4973,47 @@ HTML_TEMPLATE = """
                             </div>
                         </div>
                         <div id="forensicsSessionDetail" class="p-2 rounded bg-black/40 border border-slate-700 max-h-80 overflow-y-auto text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div id="learninglab-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🎓 التعلم والمحاكاة</h2>
+
+                <div class="bg-indigo-950/20 border border-indigo-900/40 p-4 rounded-xl text-xs text-indigo-200 leading-6">
+                    هذا المختبر تعليمي دفاعي فقط. يتم حجب أي أوامر أو أكواد اختراق تنفيذية، ويتركز المحتوى على الفهم، الرصد، الاستجابة، والتحصين.
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="xl:col-span-1 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-indigo-300">Simulation Catalog</h3>
+                        <select id="learningAttackSelect" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
+                        <select id="learningLevel" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="beginner">توعوي - مبتدئ</option>
+                            <option value="intermediate" selected>توعوي - متوسط</option>
+                            <option value="advanced">توعوي - متقدم</option>
+                        </select>
+                        <select id="learningPdfLang" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="ar" selected>PDF عربي</option>
+                            <option value="en">PDF English</option>
+                        </select>
+                        <textarea id="learningOrgContext" rows="4" placeholder="سياق بيئتك (مثال: شركة صغيرة، ويندوز، O365، بدون EDR)..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
+                        <button onclick="learningRunSimulation()" class="w-full py-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تشغيل محاكاة دفاعية</button>
+                        <button id="learningChecklistBtn" onclick="learningRenderTrainingChecklist()" disabled class="w-full py-2 rounded bg-fuchsia-900/40 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">خطة تدريب الفريق</button>
+                        <button id="learningPdfBtn" onclick="learningDownloadReportPdf()" disabled class="w-full py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">تقرير PDF</button>
+                        <div id="learningReportId" class="text-[11px] text-indigo-200/80 font-mono">Report ID: -</div>
+                    </div>
+
+                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <h3 class="text-sm font-bold text-cyan-300">نتائج المحاكاة + شرح AI</h3>
+                            <span id="learningLastAttackBadge" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">No run yet</span>
+                        </div>
+                        <div id="learningResult" class="p-3 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap leading-6">
+                            اختر سيناريو ثم اضغط "تشغيل محاكاة دفاعية".
+                        </div>
+                        <div id="learningTrainingChecklist" class="hidden p-3 rounded bg-fuchsia-950/20 border border-fuchsia-900/50 text-xs leading-6"></div>
                     </div>
                 </div>
             </div>
@@ -5980,7 +6393,9 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','ctf','ir','forensics','se','audio','video','qr','identity','admin'];
+        const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','training','ctf','ir','forensics','se','audio','video','qr','identity','admin'];
+        const TRAINING_SUB_TABS = ['learninglab', 'ctf', 'se'];
+        let __trainingSubTab = 'learninglab';
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
 
@@ -6338,8 +6753,9 @@ HTML_TEMPLATE = """
                 const sec = document.getElementById(t + '-section');
                 const btn = document.getElementById('btn-' + t);
                 if(sec) {
-                    sec.classList.toggle('hidden', t !== type);
-                    if (t === type) _animateTabSection(sec);
+                    const shouldShow = (t === type);
+                    sec.classList.toggle('hidden', !shouldShow);
+                    if (shouldShow) _animateTabSection(sec);
                 }
                 if(btn) {
                     if(t === type) {
@@ -6373,14 +6789,269 @@ HTML_TEMPLATE = """
             if(type === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if(type === 'ir' && typeof irInitSection === 'function') irInitSection();
             if(type === 'forensics' && typeof forensicsInitSection === 'function') forensicsInitSection();
+            if(type === 'learninglab' && typeof learningLoadCatalog === 'function') learningLoadCatalog();
             if(type === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
             if(type === 'crypt' && typeof startCryptAdvisorChat === 'function') startCryptAdvisorChat(false);
+            if(type === 'training') {
+                setTrainingSubTab(__trainingSubTab || 'learninglab');
+            }
 
             const activeBtn = document.getElementById('btn-' + type);
             if (activeBtn && typeof activeBtn.scrollIntoView === 'function') {
                 activeBtn.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'nearest'});
             }
+        }
+
+        function setTrainingSubTab(tab) {
+            const next = TRAINING_SUB_TABS.includes(tab) ? tab : 'learninglab';
+            __trainingSubTab = next;
+
+            TRAINING_SUB_TABS.forEach((t) => {
+                const sec = document.getElementById(t + '-section');
+                if (sec) {
+                    const visible = t === next;
+                    sec.classList.toggle('hidden', !visible);
+                    if (visible) _animateTabSection(sec);
+                }
+
+                const btn = document.getElementById('btn-training-' + t);
+                if (btn) {
+                    btn.classList.remove('training-subtab-active');
+                    if (t === next) {
+                        btn.classList.add('training-subtab-active');
+                    }
+                }
+            });
+
+            if (next === 'learninglab' && typeof learningLoadCatalog === 'function') learningLoadCatalog();
+            if (next === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
+            if (next === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
+        }
+
+        let __learningCatalogLoaded = false;
+        let __learningReportToken = '';
+        let __learningReportId = '';
+        let __learningLastSimulation = null;
+
+        function _learningChecklistHtml(items) {
+            const rows = Array.isArray(items) ? items.filter(Boolean) : [];
+            if (!rows.length) {
+                return '<div class="text-fuchsia-200/80">لا توجد خطة تدريب متاحة حالياً.</div>';
+            }
+            return rows.map((x, idx) => `<div class="text-fuchsia-100">${idx + 1}. ${_resultEscape(x)}</div>`).join('');
+        }
+
+        function learningRenderTrainingChecklist() {
+            const box = document.getElementById('learningTrainingChecklist');
+            if (!box) return;
+            const sim = (__learningLastSimulation && typeof __learningLastSimulation === 'object') ? __learningLastSimulation : {};
+            const items = Array.isArray(sim.training_checklist) ? sim.training_checklist : [];
+            const title = _resultEscape(sim.title || 'الخطة التدريبية');
+            box.innerHTML = `
+                <div class="text-xs font-bold text-fuchsia-300 mb-2">Checklist: ${title}</div>
+                <div class="space-y-1">${_learningChecklistHtml(items)}</div>
+            `;
+            box.classList.remove('hidden');
+        }
+
+        function _learningListHtml(items, emptyText = 'N/A') {
+            const rows = Array.isArray(items) ? items.filter(Boolean) : [];
+            if (!rows.length) {
+                return `<div class="text-gray-400 text-xs">${_resultEscape(emptyText)}</div>`;
+            }
+            return rows.map((x) => `<div class="text-xs text-gray-100">• ${_resultEscape(x)}</div>`).join('');
+        }
+
+        async function learningLoadCatalog(force = false) {
+            if (__learningCatalogLoaded && !force) return;
+            const sel = document.getElementById('learningAttackSelect');
+            const out = document.getElementById('learningResult');
+            if (!sel || !out) return;
+
+            sel.innerHTML = '<option value="">...loading</option>';
+            try {
+                const res = await fetch('/api/learning/simulations', { cache: 'no-store' });
+                const data = await res.json();
+                if (!data.success) {
+                    sel.innerHTML = '<option value="">تعذر التحميل</option>';
+                    out.textContent = data.error || 'تعذر تحميل سيناريوهات المحاكاة.';
+                    return;
+                }
+
+                const rows = Array.isArray(data.simulations) ? data.simulations : [];
+                if (!rows.length) {
+                    sel.innerHTML = '<option value="">لا يوجد سيناريوهات</option>';
+                    out.textContent = 'لا يوجد سيناريوهات متاحة حالياً.';
+                    return;
+                }
+
+                sel.innerHTML = rows.map((item) => {
+                    const title = _resultEscape(item.title || item.id || 'Scenario');
+                    const level = _resultEscape(String(item.severity || '').toUpperCase());
+                    const id = _resultEscape(item.id || '');
+                    return `<option value="${id}">${title} - ${level}</option>`;
+                }).join('');
+
+                __learningCatalogLoaded = true;
+            } catch (e) {
+                sel.innerHTML = '<option value="">تعذر التحميل</option>';
+                out.textContent = 'فشل الاتصال بالخادم أثناء تحميل السيناريوهات.';
+            }
+        }
+
+        async function learningRunSimulation() {
+            const sel = document.getElementById('learningAttackSelect');
+            const contextEl = document.getElementById('learningOrgContext');
+            const levelEl = document.getElementById('learningLevel');
+            const out = document.getElementById('learningResult');
+            const badge = document.getElementById('learningLastAttackBadge');
+            const pdfBtn = document.getElementById('learningPdfBtn');
+            const checklistBtn = document.getElementById('learningChecklistBtn');
+            const reportIdEl = document.getElementById('learningReportId');
+            const checklistBox = document.getElementById('learningTrainingChecklist');
+            if (!sel || !out || !pdfBtn) return;
+
+            const attackId = String(sel.value || '').trim();
+            const orgContext = String(contextEl?.value || '').trim();
+            const trainingLevel = String(levelEl?.value || 'intermediate').trim().toLowerCase();
+            if (!attackId) {
+                out.textContent = 'اختر سيناريو محاكاة أولاً.';
+                return;
+            }
+
+            out.textContent = 'جاري تشغيل المحاكاة الدفاعية وطلب شرح AI...';
+            pdfBtn.disabled = true;
+            if (checklistBtn) checklistBtn.disabled = true;
+            __learningReportToken = '';
+            __learningReportId = '';
+            __learningLastSimulation = null;
+            if (reportIdEl) reportIdEl.textContent = 'Report ID: -';
+            if (checklistBox) {
+                checklistBox.classList.add('hidden');
+                checklistBox.innerHTML = '';
+            }
+
+            try {
+                const res = await fetch('/api/learning/simulate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ attack_id: attackId, org_context: orgContext, training_level: trainingLevel })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    out.textContent = data.error || 'فشل تشغيل المحاكاة.';
+                    return;
+                }
+
+                __learningReportToken = String(data.report_token || '');
+                __learningReportId = String(data.report_id || '');
+                if (__learningReportToken) {
+                    pdfBtn.disabled = false;
+                }
+                if (reportIdEl) {
+                    reportIdEl.textContent = 'Report ID: ' + (__learningReportId || '-');
+                }
+
+                const sim = data.simulation || {};
+                const analysis = data.analysis || {};
+                __learningLastSimulation = sim;
+                if (checklistBtn) checklistBtn.disabled = !(Array.isArray(sim.training_checklist) && sim.training_checklist.length);
+                if (badge) {
+                    const t = sim.title || attackId;
+                    const sev = String(sim.severity || '').toUpperCase();
+                    const score = Number(analysis.risk_score || 0);
+                    const lvl = String(sim.training_level_label || sim.training_level || '').toUpperCase();
+                    badge.textContent = `${t} - ${sev} - ${lvl} - Risk ${score}/100`;
+                }
+
+                const riskScore = Math.max(0, Math.min(100, Number(analysis.risk_score || 0)));
+                const riskColor = riskScore >= 70 ? 'bg-rose-500' : (riskScore >= 40 ? 'bg-amber-500' : 'bg-emerald-500');
+                const html = `
+                    <div class="space-y-3">
+                        <div class="rounded-xl border border-indigo-800/50 bg-indigo-950/20 p-3">
+                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                <div class="text-sm font-bold text-indigo-200">${_resultEscape(sim.title || '-')}</div>
+                                <div class="text-[11px] text-slate-300">${_resultEscape(String(sim.severity || '').toUpperCase())} • ${_resultEscape(sim.category || '-')}</div>
+                            </div>
+                            <div class="text-xs text-slate-300 mt-2">${_resultEscape(sim.summary || '-')}</div>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="text-xs font-bold text-cyan-300">AI Risk Score</div>
+                                <div class="text-xs text-gray-300">${riskScore}/100</div>
+                            </div>
+                            <div class="h-2 rounded bg-slate-800 overflow-hidden border border-slate-700">
+                                <div class="h-full ${riskColor}" style="width:${riskScore}%"></div>
+                            </div>
+                            <div class="text-[11px] text-slate-400 mt-2">${_resultEscape(analysis.executive_summary || 'No executive summary')}</div>
+                        </div>
+
+                        <div class="rounded-xl border border-violet-800/50 bg-violet-950/20 p-3">
+                            <div class="text-xs font-bold text-violet-300 mb-2">طريقة الهجوم (توعوي)</div>
+                            <div class="text-[11px] text-violet-200/80 mb-1">المستوى: ${_resultEscape(sim.training_level_label || sim.training_level || 'Intermediate')}</div>
+                            <div class="text-xs text-violet-100 leading-6">${_resultEscape(sim.attack_method || '-')}</div>
+                            <div class="text-[11px] text-violet-200/90 mt-2">${_resultEscape(sim.awareness_goal || '')}</div>
+                        </div>
+
+                        <div class="rounded-xl border border-purple-800/50 bg-purple-950/20 p-3">
+                            <div class="text-xs font-bold text-purple-300 mb-2">كيف يتم استغلال الثغرة؟ (توعوي بدون أوامر)</div>
+                            <div class="text-xs text-purple-100 leading-6">${_resultEscape(sim.exploit_pattern || '-')}</div>
+                            <div class="text-[11px] text-purple-200/80 mt-2">هذا شرح مفاهيمي دفاعي فقط ولا يتضمن خطوات اختراق تنفيذية.</div>
+                        </div>
+
+                        <div class="rounded-xl border border-fuchsia-800/50 bg-fuchsia-950/20 p-3">
+                            <div class="text-xs font-bold text-fuchsia-300 mb-2">مراحل الهجوم (محاكاة توعوية)</div>
+                            ${_learningListHtml(sim.attack_journey, 'لا يوجد مراحل متاحة')}
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
+                                <div class="text-xs font-bold text-cyan-300 mb-2">Potential IOCs</div>
+                                ${_learningListHtml(sim.key_iocs, 'No IOCs')}
+                            </div>
+                            <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
+                                <div class="text-xs font-bold text-emerald-300 mb-2">Hardening Controls</div>
+                                ${_learningListHtml(sim.defense_focus, 'No controls')}
+                            </div>
+                            <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
+                                <div class="text-xs font-bold text-amber-300 mb-2">Detection Plan</div>
+                                ${_learningListHtml(analysis.detection_plan, 'No detection plan')}
+                            </div>
+                            <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
+                                <div class="text-xs font-bold text-rose-300 mb-2">Response Plan</div>
+                                ${_learningListHtml(analysis.response_plan, 'No response plan')}
+                            </div>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
+                            <div class="text-xs font-bold text-violet-300 mb-2">Metasploit Context (Defensive Only)</div>
+                            <div class="text-xs text-slate-200">${_resultEscape(sim.metasploit_context || '-')}</div>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-700 bg-black/35 p-3">
+                            <div class="text-xs font-bold text-indigo-300 mb-2">AI Deep Explanation</div>
+                            <div class="text-xs text-slate-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.ai_explanation || '-')}</div>
+                        </div>
+                    </div>
+                `;
+                out.innerHTML = html;
+                learningRenderTrainingChecklist();
+            } catch (e) {
+                out.textContent = 'فشل الاتصال بالخادم أثناء تشغيل المحاكاة.';
+            }
+        }
+
+        function learningDownloadReportPdf() {
+            const token = String(__learningReportToken || '').trim();
+            const langEl = document.getElementById('learningPdfLang');
+            const lang = String(langEl?.value || 'ar').trim().toLowerCase() === 'en' ? 'en' : 'ar';
+            if (!token) {
+                titanAlert('شغّل محاكاة أولاً لتوليد التقرير.', 'error');
+                return;
+            }
+            window.open('/api/learning/report.pdf?token=' + encodeURIComponent(token) + '&lang=' + encodeURIComponent(lang), '_blank');
         }
 
         function _resultGetElement(target) {
@@ -10954,7 +11625,7 @@ HTML_TEMPLATE = """
                 setEl('idName', data.name);
                 const idNameEnWrap = document.getElementById('idNameEnWrap');
                 const idNameEn = document.getElementById('idNameEn');
-                const hasArabicName = /[\u0600-\u06FF]/.test(String(data.name || ''));
+                const hasArabicName = /[\\u0600-\\u06FF]/.test(String(data.name || ''));
                 const englishName = String(data.name_en || '').trim();
                 if (idNameEnWrap && idNameEn) {
                     if (hasArabicName && englishName) {
@@ -13641,6 +14312,364 @@ def _build_minimal_pdf_bytes(lines: list[str]) -> bytes:
         pdf.extend(f"{off:010d} 00000 n \n".encode('ascii'))
     pdf.extend(f"trailer << /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode('ascii'))
     return bytes(pdf)
+
+
+def _shape_arabic_for_pdf(text: str) -> str:
+    raw = str(text or '')
+    if not _HAS_ARABIC_SHAPING or arabic_reshaper is None or get_display is None:
+        return raw
+    try:
+        shaped = arabic_reshaper.reshape(raw)
+        out = get_display(shaped)
+        return str(out)
+    except Exception:
+        return raw
+
+
+def _pdf_register_font() -> str:
+    if not _HAS_REPORTLAB or pdfmetrics is None or TTFont is None:
+        return 'Helvetica'
+    font_name = 'Helvetica'
+    candidates = [
+        ('TITAN_Arabic', 'C:/Windows/Fonts/arial.ttf'),
+        ('TITAN_Arabic', 'C:/Windows/Fonts/tahoma.ttf'),
+    ]
+    for name, path in candidates:
+        try:
+            if os.path.exists(path):
+                pdfmetrics.registerFont(TTFont(name, path))
+                return name
+        except Exception:
+            continue
+    return font_name
+
+
+@lru_cache(maxsize=1)
+def _build_titan_logo_png_bytes() -> bytes:
+    w, h = 920, 260
+    img = Image.new('RGB', (w, h), (10, 12, 25))
+    draw = ImageDraw.Draw(img)
+
+    # Main plate
+    draw.rounded_rectangle((14, 14, w - 14, h - 14), radius=28, fill=(18, 24, 46), outline=(124, 58, 237), width=4)
+    draw.rounded_rectangle((30, 30, w - 30, h - 30), radius=22, fill=(9, 14, 28), outline=(56, 189, 248), width=2)
+
+    def _load_font(size: int, bold: bool = False):
+        candidates = [
+            'C:/Windows/Fonts/arialbd.ttf' if bold else 'C:/Windows/Fonts/arial.ttf',
+            'C:/Windows/Fonts/tahomabd.ttf' if bold else 'C:/Windows/Fonts/tahoma.ttf',
+            'C:/Windows/Fonts/segoeuib.ttf' if bold else 'C:/Windows/Fonts/segoeui.ttf',
+        ]
+        for p in candidates:
+            try:
+                if os.path.exists(p):
+                    return ImageFont.truetype(p, size=size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
+    font_big = _load_font(110, bold=True)
+    font_mid = _load_font(36, bold=True)
+    font_small = _load_font(24, bold=False)
+
+    draw.text((60, 72), 'TITAN', font=font_big, fill=(232, 224, 255))
+    draw.text((530, 88), 'CYBER', font=font_mid, fill=(56, 189, 248))
+    draw.text((530, 134), 'PLATFORM', font=font_mid, fill=(167, 139, 250))
+    draw.text((64, 192), 'AI Security Engine', font=font_small, fill=(148, 163, 184))
+
+    # Accent dots
+    draw.ellipse((860, 42, 890, 72), fill=(34, 197, 94))
+    draw.ellipse((860, 84, 890, 114), fill=(56, 189, 248))
+    draw.ellipse((860, 126, 890, 156), fill=(168, 85, 247))
+
+    buf = io.BytesIO()
+    img.save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
+
+def _build_learning_pdf_bytes_branded(payload: dict, lang: str = 'ar') -> bytes:
+    if not _HAS_REPORTLAB or canvas is None:
+        # Fallback to minimal engine when reportlab is unavailable.
+        sim = payload.get('simulation') if isinstance(payload, dict) else {}
+        sim = sim if isinstance(sim, dict) else {}
+        analysis = payload.get('analysis') if isinstance(payload, dict) else {}
+        analysis = analysis if isinstance(analysis, dict) else {}
+        lines = [
+            str(payload.get('platform_name') or 'TITAN CYBER PLATFORM'),
+            f"Report ID: {payload.get('report_id', '')}",
+            f"Scenario: {sim.get('title', '')}",
+            f"Risk Score: {analysis.get('risk_score', 0)}/100",
+            str(analysis.get('executive_summary', '')),
+        ]
+        return _build_minimal_pdf_bytes(lines)
+
+    font_name = _pdf_register_font()
+    page_w, page_h = A4
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    is_ar = str(lang or '').lower().startswith('ar')
+
+    def tx(s: str) -> str:
+        raw = str(s or '')
+        if is_ar:
+            return _shape_arabic_for_pdf(raw)
+        return raw
+
+    def _draw_confidential_watermark() -> None:
+        label = tx('TITAN CONFIDENTIAL')
+        c.saveState()
+        try:
+            try:
+                c.setFillAlpha(0.18)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            c.setFont(font_name, 58)
+            c.setFillColorRGB(0.70, 0.35, 0.98)
+            c.translate(page_w / 2, page_h / 2)
+            c.rotate(32)
+            c.drawCentredString(0, 0, label)
+        finally:
+            c.restoreState()
+
+    def _draw_content_page_shell() -> None:
+        # Full dark page background.
+        c.setFillColorRGB(0.02, 0.01, 0.08)
+        c.rect(0, 0, page_w, page_h, stroke=0, fill=1)
+
+        # Top band.
+        c.setFillColorRGB(0.11, 0.05, 0.27)
+        c.rect(0, page_h - 110, page_w, 110, stroke=0, fill=1)
+        c.setFillColorRGB(0.86, 0.41, 0.99)
+        c.circle(42, page_h - 52, 18, stroke=0, fill=1)
+        _draw_confidential_watermark()
+
+        if ImageReader is not None:
+            try:
+                logo_small = ImageReader(io.BytesIO(_build_titan_logo_png_bytes()))
+                c.drawImage(logo_small, 28, page_h - 102, width=120, height=36, preserveAspectRatio=True, mask='auto')
+            except Exception:
+                pass
+
+        c.setFillColorRGB(0.99, 0.95, 1)
+        c.setFont(font_name, 16)
+        c.drawString(72, page_h - 45, tx('TITAN'))
+        c.setFont(font_name, 11)
+        c.drawString(72, page_h - 64, tx(subtitle))
+
+        c.setFont(font_name, 14)
+        c.drawRightString(page_w - 36, page_h - 45, tx(title))
+        c.setFont(font_name, 9)
+        c.drawRightString(page_w - 36, page_h - 62, tx(f"Report ID: {report_id}"))
+
+    sim = payload.get('simulation') if isinstance(payload, dict) else {}
+    sim = sim if isinstance(sim, dict) else {}
+    analysis = payload.get('analysis') if isinstance(payload, dict) else {}
+    analysis = analysis if isinstance(analysis, dict) else {}
+
+    title = 'تقرير التعلم والمحاكاة الدفاعية' if is_ar else 'Defensive Learning & Simulation Report'
+    subtitle = 'منصة TITAN للأمن السيبراني' if is_ar else 'TITAN Cyber Platform'
+    report_id = str(payload.get('report_id') or '')
+    username = str(payload.get('username') or '')
+    generated = str(sim.get('generated_at') or '')
+
+    # Cover page
+    c.setFillColorRGB(0.02, 0.01, 0.09)
+    c.rect(0, 0, page_w, page_h, stroke=0, fill=1)
+    c.setFillColorRGB(0.10, 0.03, 0.22)
+    c.roundRect(32, 36, page_w - 64, page_h - 72, radius=20, stroke=0, fill=1)
+    _draw_confidential_watermark()
+
+    if ImageReader is not None:
+        try:
+            logo_reader = ImageReader(io.BytesIO(_build_titan_logo_png_bytes()))
+            c.drawImage(logo_reader, 58, page_h - 250, width=480, height=136, preserveAspectRatio=True, mask='auto')
+        except Exception:
+            pass
+
+    c.setFillColorRGB(0.97, 0.93, 1)
+    c.setFont(font_name, 20)
+    c.drawString(58, page_h - 290, tx(title))
+    c.setFillColorRGB(0.82, 0.56, 0.98)
+    c.setFont(font_name, 12)
+    c.drawString(58, page_h - 316, tx(subtitle))
+
+    c.setFillColorRGB(0.95, 0.90, 1)
+    c.setFont(font_name, 11)
+    c.drawString(58, page_h - 372, tx(f"Report ID: {report_id}"))
+    c.drawString(58, page_h - 392, tx(f"User: {username}"))
+    c.drawString(58, page_h - 412, tx(f"Generated: {generated}"))
+
+    c.setFillColorRGB(0.83, 0.74, 0.96)
+    c.setFont(font_name, 10)
+    cover_note = (
+        'This document is defensive and educational. No offensive instructions included.'
+        if not is_ar else
+        'هذا التقرير دفاعي وتوعوي فقط، ولا يتضمن تعليمات هجومية.'
+    )
+    c.drawString(58, 74, tx(cover_note))
+    c.showPage()
+
+    _draw_content_page_shell()
+
+    y = page_h - 140
+    c.setFillColorRGB(0.95, 0.88, 1)
+    c.setFont(font_name, 10)
+    c.drawString(36, y, tx(f"User: {username}"))
+    c.drawRightString(page_w - 36, y, tx(f"Generated: {generated}"))
+    y -= 20
+
+    sections = [
+        (
+            'ملف السيناريو' if is_ar else 'Scenario Profile',
+            [
+                f"{('السيناريو' if is_ar else 'Scenario')}: {sim.get('title', '')}",
+                f"{('الفئة' if is_ar else 'Category')}: {sim.get('category', '')}",
+                f"{('الشدة' if is_ar else 'Severity')}: {sim.get('severity', '')}",
+                f"{('مستوى التوعية' if is_ar else 'Awareness Level')}: {sim.get('training_level_label') or sim.get('training_level') or 'Intermediate'}",
+                f"{('درجة الخطورة' if is_ar else 'Risk Score')}: {analysis.get('risk_score', 0)}/100",
+            ],
+        ),
+        (
+            'طريقة الهجوم (توعوي)' if is_ar else 'Attack Method (Awareness)',
+            [
+                str(sim.get('attack_method') or 'N/A'),
+                str(sim.get('awareness_goal') or ''),
+            ],
+        ),
+        (
+            'كيف يتم الاستغلال (مفاهيمي توعوي)' if is_ar else 'How Exploitation Happens (Awareness)',
+            [
+                str(sim.get('exploit_pattern') or 'N/A'),
+                'محتوى توعوي فقط بدون أوامر هجومية.' if is_ar else 'Awareness-only content with no offensive commands.',
+            ],
+        ),
+        (
+            'مراحل الهجوم (محاكاة توعوية)' if is_ar else 'Attack Journey (Awareness Simulation)',
+            [f"- {x}" for x in (sim.get('attack_journey') or [])] or ['- N/A'],
+        ),
+        (
+            'الملخص التنفيذي' if is_ar else 'Executive Summary',
+            [str(analysis.get('executive_summary') or 'N/A')],
+        ),
+        (
+            'مؤشرات التهديد (IOCs)' if is_ar else 'Threat Indicators (IOCs)',
+            [f"- {x}" for x in (sim.get('key_iocs') or [])] or ['- N/A'],
+        ),
+        (
+            'خطة الكشف' if is_ar else 'Detection Plan',
+            [f"- {x}" for x in (analysis.get('detection_plan') or [])] or ['- N/A'],
+        ),
+        (
+            'خطة الاستجابة' if is_ar else 'Response Plan',
+            [f"- {x}" for x in (analysis.get('response_plan') or [])] or ['- N/A'],
+        ),
+        (
+            'خطة التحصين' if is_ar else 'Hardening Plan',
+            [f"- {x}" for x in (analysis.get('hardening_plan') or sim.get('defense_focus') or [])] or ['- N/A'],
+        ),
+        (
+            'خطة تدريب الفريق' if is_ar else 'Team Training Checklist',
+            [f"- {x}" for x in (sim.get('training_checklist') or [])] or ['- N/A'],
+        ),
+    ]
+
+    for section_title, rows in sections:
+        if y < 90:
+            c.showPage()
+            _draw_content_page_shell()
+            c.setFont(font_name, 10)
+            c.setFillColorRGB(0.95, 0.88, 1)
+            y = page_h - 50
+
+        c.setFillColorRGB(0.86, 0.48, 1)
+        c.setFont(font_name, 12)
+        c.drawString(36, y, tx(section_title))
+        y -= 16
+
+        c.setFillColorRGB(0.93, 0.86, 1)
+        c.setFont(font_name, 9.5)
+        for row in rows:
+            line = tx(str(row or ''))
+            # Keep width bounded for stable layout.
+            for chunk_start in range(0, len(line), 110):
+                if y < 70:
+                    c.showPage()
+                    _draw_content_page_shell()
+                    c.setFont(font_name, 9.5)
+                    c.setFillColorRGB(0.93, 0.86, 1)
+                    y = page_h - 50
+                c.drawString(42, y, line[chunk_start:chunk_start + 110])
+                y -= 13
+        y -= 8
+
+    c.setFont(font_name, 8.5)
+    c.setFillColorRGB(0.72, 0.93, 1)
+    footer = 'Generated by TITAN AI Security Engine'
+    c.drawCentredString(page_w / 2, 24, tx(footer))
+    c.save()
+    return buf.getvalue()
+
+
+def _learning_find_attack(attack_id: str) -> dict | None:
+    key = str(attack_id or '').strip().lower()
+    for item in LEARNING_SIM_ATTACKS:
+        if str(item.get('id') or '').lower() == key:
+            return item
+    return None
+
+
+def _learning_cleanup_report_cache(now_ts: float | None = None) -> None:
+    ts = now_ts if isinstance(now_ts, (int, float)) else time.time()
+    stale = []
+    for token, payload in _LEARNING_REPORTS.items():
+        raw_created = payload.get('created_at', 0)
+        if isinstance(raw_created, (int, float, str)):
+            try:
+                created_at = float(raw_created or 0)
+            except Exception:
+                created_at = 0.0
+        else:
+            created_at = 0.0
+        if not created_at or (ts - created_at) > _LEARNING_REPORT_TTL_SECONDS:
+            stale.append(token)
+    for token in stale:
+        _LEARNING_REPORTS.pop(token, None)
+
+
+def _learning_store_report(user_id: int, report_payload: dict) -> str:
+    token = secrets.token_urlsafe(18)
+    with _LEARNING_REPORTS_LOCK:
+        _learning_cleanup_report_cache()
+        _LEARNING_REPORTS[token] = {
+            'user_id': int(user_id),
+            'created_at': time.time(),
+            'payload': report_payload,
+        }
+    return token
+
+
+def _learning_get_report(token: str, user_id: int) -> dict | None:
+    key = str(token or '').strip()
+    if not key:
+        return None
+    with _LEARNING_REPORTS_LOCK:
+        _learning_cleanup_report_cache()
+        cached = _LEARNING_REPORTS.get(key)
+        if not cached:
+            return None
+        raw_uid = cached.get('user_id', -1)
+        if isinstance(raw_uid, (int, str)):
+            try:
+                owner_uid = int(raw_uid)
+            except Exception:
+                owner_uid = -1
+        else:
+            owner_uid = -1
+        if owner_uid != int(user_id):
+            return None
+        payload = cached.get('payload')
+        return payload if isinstance(payload, dict) else None
 
 
 def _forensics_unique(values):
@@ -16509,6 +17538,246 @@ def ai_analyze():
 @app.route('/api/ai/models', methods=['GET'])
 def ai_models():
     return jsonify({"models": ["TITAN-SEC AI (DigitalOcean)"], "success": True})
+
+
+@app.route('/api/learning/simulations', methods=['GET'])
+def learning_simulations_route():
+    user_id, err = _get_logged_in_user_id()
+    if err:
+        return err
+    _ = user_id
+    rows = [
+        {
+            'id': item.get('id'),
+            'title': item.get('title'),
+            'category': item.get('category'),
+            'severity': item.get('severity'),
+            'summary': item.get('summary'),
+            'attack_method': _learning_awareness_profile(item).get('attack_method'),
+            'awareness_goal': _learning_awareness_profile(item).get('awareness_goal'),
+        }
+        for item in LEARNING_SIM_ATTACKS
+    ]
+    return jsonify({'success': True, 'simulations': rows})
+
+
+@app.route('/api/learning/simulate', methods=['POST'])
+def learning_simulate_route():
+    user_id, err = _get_logged_in_user_id()
+    if err:
+        return err
+    assert user_id is not None
+
+    data = request.get_json(silent=True) or {}
+    attack_id = (data.get('attack_id') or '').strip()
+    org_context = (data.get('org_context') or '').strip()
+    training_level = str(data.get('training_level') or 'intermediate').strip().lower()
+    if training_level not in ('beginner', 'intermediate', 'advanced'):
+        training_level = 'intermediate'
+    if not attack_id:
+        return jsonify({'success': False, 'error': 'attack_id مطلوب'}), 400
+
+    attack = _learning_find_attack(attack_id)
+    if not attack:
+        return jsonify({'success': False, 'error': 'السيناريو غير موجود'}), 404
+
+    awareness = _learning_awareness_profile(attack)
+    exploit_pattern = _learning_apply_level_tone(
+        _learning_exploit_pattern(str(attack.get('category') or '')),
+        training_level,
+    )
+    attack_method = _learning_apply_level_tone(str(awareness.get('attack_method') or ''), training_level)
+    awareness_goal = _learning_apply_level_tone(str(awareness.get('awareness_goal') or ''), training_level)
+
+    ai_explanation = ''
+    if DO_AI_KEY:
+        safe_system = (
+            "أنت مدرب أمن سيبراني دفاعي. "
+            "ممنوع نهائياً تقديم أوامر تنفيذية أو أكواد استغلال أو خطوات اختراق عملية أو أوامر Metasploit. "
+            "قدّم شرحاً تعليمياً دفاعياً فقط: كيف يعمل التهديد، مؤشرات الكشف، خطة احتواء، وخطة تحصين طويلة المدى. "
+            "إذا طُلب أي تنفيذ هجومي، ارفضه وقدم بديل دفاعي آمن."
+        )
+        safe_prompt = (
+            f"Scenario: {attack.get('title', '')}\n"
+            f"Category: {attack.get('category', '')}\n"
+            f"Severity: {attack.get('severity', '')}\n"
+            f"Summary: {attack.get('summary', '')}\n"
+            f"Awareness attack method: {awareness.get('attack_method', '')}\n"
+            f"Awareness attack journey: {' | '.join(awareness.get('attack_journey') or [])}\n"
+            f"Awareness exploit pattern (high-level): {exploit_pattern}\n"
+            f"Awareness goal: {awareness_goal}\n"
+            f"Training level: {training_level}\n"
+            f"Potential IOCs: {', '.join(attack.get('key_iocs') or [])}\n"
+            f"Defensive focus: {', '.join(attack.get('defense_focus') or [])}\n"
+            f"Defensive metasploit context: {attack.get('metasploit_context', '')}\n"
+            f"Organization context: {org_context or 'N/A'}\n\n"
+            "أعطني إجابة مرتبة بهذا الشكل:\n"
+            "1) شرح مبسط للهجمة\n"
+            "2) كيف يتم استغلال الثغرة مفاهيميا (بدون أوامر)\n"
+            "3) سيناريو محاكاة دفاعية على مراحل (بدون أي تنفيذ هجومي)\n"
+            "4) كيف نكتشف الهجمة (Logs + IOCs)\n"
+            "5) كيف نحتويها ونتعافى\n"
+            "6) كيف نحصّن البيئة لتجنب تكرارها\n"
+            "7) كيف نستخدم Metasploit كمرجع دفاعي في مختبر مصرح فقط دون أوامر تشغيل\n"
+            "8) بدائل دفاعية آمنة بدل الأوامر الهجومية (ماذا نراقب؟ وماذا نعطّل؟)"
+        )
+        try:
+            ai_explanation = _call_do_ai(safe_prompt, system_prompt=safe_system)
+        except Exception:
+            ai_explanation = ''
+
+    if not ai_explanation:
+        ai_explanation = (
+            "شرح دفاعي تلقائي:\n"
+            f"- طريقة الهجوم (توعوي): {attack_method}\n"
+            f"- كيف يتم الاستغلال مفاهيميا: {exploit_pattern}\n"
+            f"- مسار الهجوم: {' > '.join(awareness.get('attack_journey') or [])}\n"
+            "- لا يتم عرض أوامر هجومية؛ البديل هو إجراءات كشف واحتواء وتحصين.\n"
+            "- افهم مسار الهجمة وتأثيرها على الأصول.\n"
+            "- راقب مؤشرات IOC في السجلات والشبكة.\n"
+            "- فعّل الاحتواء المرحلي (عزل، منع اتصال، تعطيل حسابات مشبوهة).\n"
+            "- نفذ الاستعادة من نسخ سليمة مع تحليل السبب الجذري.\n"
+            "- طبّق ضوابط منع التكرار: تحديثات، MFA، تقسيم شبكة، ومراقبة مستمرة.\n"
+            "- أي استخدام لـ Metasploit يكون داخل مختبر مصرح فقط ولأغراض التقييم الدفاعي."
+        )
+
+    severity = str(attack.get('severity') or '').lower()
+    base_risk = {
+        'critical': 90,
+        'high': 72,
+        'medium': 50,
+        'low': 28,
+    }.get(severity, 55)
+
+    analysis = {
+        'risk_score': base_risk,
+        'executive_summary': 'تحليل افتراضي دفاعي: يلزم رصد مبكر وخطة احتواء واضحة.',
+        'detection_plan': [
+            'تفعيل تنبيهات SIEM على الأنماط الشاذة المتعلقة بالسيناريو.',
+            'ربط مؤشرات IOC مع قواعد EDR وDNS/Proxy logs.',
+            'مراقبة محاولات الحركة الجانبية وارتفاع الأخطاء الأمنية.'
+        ],
+        'response_plan': [
+            'عزل الأنظمة المتأثرة فوراً ومنع الاتصالات المشبوهة.',
+            'توثيق الأدلة وحفظ timeline للحادث.',
+            'بدء الاستعادة التدريجية مع التحقق بعد المعالجة.'
+        ],
+        'hardening_plan': [
+            'Patch management مستمر + إغلاق الخدمات القديمة.',
+            'تطبيق MFA وسياسات وصول أقل صلاحية.',
+            'اختبارات محاكاة دورية وتحديث playbooks.'
+        ],
+    }
+
+    if DO_AI_KEY:
+        structured_system = (
+            "أنت محلل SOC دفاعي. أعد JSON فقط بدون أي نص زائد. "
+            "ممنوع الأوامر الهجومية أو خطوات استغلال."
+        )
+        structured_prompt = (
+            f"Return strict JSON with keys: risk_score (0-100 integer), executive_summary (string), "
+            f"detection_plan (array of 3 short strings), response_plan (array of 3 short strings), "
+            f"hardening_plan (array of 3 short strings).\n"
+            f"Scenario={attack.get('title', '')}; Severity={attack.get('severity', '')}; "
+            f"Category={attack.get('category', '')}; Summary={attack.get('summary', '')}; "
+            f"IOCs={', '.join(attack.get('key_iocs') or [])}; "
+            f"Defense={', '.join(attack.get('defense_focus') or [])}; Context={org_context or 'N/A'}"
+        )
+        try:
+            structured_raw = _call_do_ai(structured_prompt, system_prompt=structured_system)
+            parsed = None
+            try:
+                parsed = json.loads(structured_raw)
+            except Exception:
+                m = re.search(r'\{[\s\S]*\}', structured_raw)
+                if m:
+                    parsed = json.loads(m.group(0))
+            if isinstance(parsed, dict):
+                rs = parsed.get('risk_score', analysis['risk_score'])
+                if isinstance(rs, (int, float, str)):
+                    try:
+                        analysis['risk_score'] = int(max(0, min(100, int(float(rs)))))
+                    except Exception:
+                        pass
+                summary = parsed.get('executive_summary')
+                if isinstance(summary, str) and summary.strip():
+                    analysis['executive_summary'] = summary.strip()
+                for k in ('detection_plan', 'response_plan', 'hardening_plan'):
+                    v = parsed.get(k)
+                    if isinstance(v, list):
+                        clean = [str(x).strip() for x in v if str(x).strip()][:5]
+                        if clean:
+                            analysis[k] = clean
+        except Exception:
+            pass
+
+    simulation = {
+        'id': attack.get('id'),
+        'title': attack.get('title'),
+        'category': attack.get('category'),
+        'severity': attack.get('severity'),
+        'summary': attack.get('summary'),
+        'training_level': training_level,
+        'training_level_label': _learning_level_label(training_level),
+        'attack_method': attack_method,
+        'exploit_pattern': exploit_pattern,
+        'attack_journey': awareness.get('attack_journey') or [],
+        'awareness_goal': awareness_goal,
+        'key_iocs': attack.get('key_iocs') or [],
+        'defense_focus': attack.get('defense_focus') or [],
+        'metasploit_context': attack.get('metasploit_context') or '',
+        'ai_explanation': ai_explanation,
+        'org_context': org_context,
+        'generated_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    simulation['training_checklist'] = _learning_build_training_checklist(attack, awareness, analysis, org_context)
+
+    report_id = f"TITAN-REP-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2).upper()}"
+
+    report_payload = {
+        'platform_name': 'TITAN CYBER PLATFORM',
+        'report_id': report_id,
+        'simulation': simulation,
+        'analysis': analysis,
+        'username': session.get('username', ''),
+    }
+    token = _learning_store_report(user_id, report_payload)
+
+    add_audit_log(
+        'Learning Simulation',
+        f"attack={attack.get('id', '')} severity={attack.get('severity', '')}",
+        username=session.get('username', '')
+    )
+    return jsonify({'success': True, 'simulation': simulation, 'analysis': analysis, 'report_token': token, 'report_id': report_id})
+
+
+@app.route('/api/learning/report.pdf', methods=['GET'])
+def learning_report_pdf_route():
+    user_id, err = _get_logged_in_user_id()
+    if err:
+        return err
+    assert user_id is not None
+
+    token = (request.args.get('token') or '').strip()
+    lang = (request.args.get('lang') or 'ar').strip().lower()
+    if lang not in ('ar', 'en'):
+        lang = 'ar'
+    if not token:
+        return jsonify({'success': False, 'error': 'token مطلوب'}), 400
+
+    payload = _learning_get_report(token, user_id)
+    if not payload:
+        return jsonify({'success': False, 'error': 'التقرير غير موجود أو انتهت صلاحيته'}), 404
+
+    pdf_bytes = _build_learning_pdf_bytes_branded(payload, lang=lang)
+    report_id = str((payload.get('report_id') if isinstance(payload, dict) else '') or 'TITAN-REPORT')
+    safe_report_id = re.sub(r'[^A-Za-z0-9_\-]+', '-', report_id).strip('-') or 'TITAN-REPORT'
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f"{safe_report_id}-{'AR' if lang == 'ar' else 'EN'}.pdf"
+    )
 
 
 @app.route('/api/support/tickets', methods=['GET', 'POST'])
