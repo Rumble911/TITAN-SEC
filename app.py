@@ -5128,42 +5128,45 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <div class="space-y-2">
-                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
-                        <div class="text-[10px] text-gray-500">Active</div>
-                        <div id="ctfStatActive" class="text-lg font-black text-amber-300">0</div>
-                    </div>
-                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
-                        <div class="text-[10px] text-gray-500">Solved This Cycle</div>
-                        <div id="ctfStatSolvedCycle" class="text-lg font-black text-emerald-300">0</div>
-                    </div>
-                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
-                        <div class="text-[10px] text-gray-500">Total Solved</div>
-                        <div id="ctfStatSolvedTotal" class="text-lg font-black text-cyan-300">0</div>
-                    </div>
-                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
-                        <div class="text-[10px] text-gray-500">Total Points</div>
-                        <div id="ctfStatPoints" class="text-lg font-black text-violet-300">0</div>
-                    </div>
-                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
-                        <div class="text-[10px] text-gray-500">Rotation</div>
-                        <div id="ctfStatRotation" class="text-sm font-black text-amber-200">--</div>
+                <div class="rounded-2xl border border-slate-700/70 bg-slate-950/35 p-3 space-y-2">
+                    <div class="text-[10px] text-slate-400 uppercase tracking-[0.12em]">Session Snapshot</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2">
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                            <div class="text-[10px] text-gray-500">Active Challenges</div>
+                            <div id="ctfStatActive" class="text-base font-black text-amber-300">0</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                            <div class="text-[10px] text-gray-500">Solved This Cycle</div>
+                            <div id="ctfStatSolvedCycle" class="text-base font-black text-emerald-300">0</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                            <div class="text-[10px] text-gray-500">Total Solved</div>
+                            <div id="ctfStatSolvedTotal" class="text-base font-black text-cyan-300">0</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                            <div class="text-[10px] text-gray-500">Total Points</div>
+                            <div id="ctfStatPoints" class="text-base font-black text-violet-300">0</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                            <div class="text-[10px] text-gray-500">Rotation</div>
+                            <div id="ctfStatRotation" class="text-sm font-black text-amber-200">--</div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="space-y-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
-                        <div class="flex flex-col gap-3 mb-3">
+                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-amber-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.28)]">
+                        <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-3">
                             <div>
                                 <div class="ctf-section-label text-amber-300">Challenge Filters</div>
                                 <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">ابحث بسرعة بالتصنيف/الصعوبة أو اعرض غير المحلول فقط.</p>
                             </div>
-                            <div class="flex flex-col gap-2 w-full">
-                                <button onclick="ctfLoadChallenges(true)" class="px-3 py-2 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تحديث التحديات</button>
+                            <div class="w-full lg:w-auto">
+                                <button onclick="ctfLoadChallenges(true)" class="w-full lg:w-auto px-4 py-2.5 rounded-xl bg-amber-900/35 hover:bg-amber-800/55 border border-amber-800/50 text-amber-200 text-xs font-bold">تحديث التحديات</button>
                             </div>
                         </div>
-                        <div class="space-y-2 mb-2">
-                            <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none w-full">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                            <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none w-full md:col-span-2">
                             <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
                                 <option value="all" selected>كل الصعوبات</option>
                                 <option value="easy">Easy</option>
@@ -5181,7 +5184,7 @@ HTML_TEMPLATE = """
                         <div id="ctfMeta" class="ctf-meta-text text-gray-300 bg-black/40 border border-slate-700 rounded-lg p-2 ctf-bidi mt-2">جار تحميل بيانات CTF...</div>
                     </div>
 
-                    <div id="ctfList" class="grid grid-cols-1 gap-4"></div>
+                    <div id="ctfList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
                 </div>
             </div>
 
@@ -5442,26 +5445,26 @@ HTML_TEMPLATE = """
                     هذا القسم الآن عبارة عن موسوعة دفاعية شاملة للهجمات والثغرات الشائعة والمتقدمة. المحتوى توعوي دفاعي فقط: كيف تحدث الهجمة، أين تحدث، أشهر الأدوات المرتبطة بها، وخطوات الحماية العملية.
                 </div>
 
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3">
-                    <div class="space-y-2">
-                        <input id="learningSearchInput" type="text" oninput="learningCatalogApplyFilters()" placeholder="ابحث باسم الهجمة أو الأداة أو وسيلة الحماية..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                <div class="bg-slate-900/60 p-4 rounded-2xl border border-indigo-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.26)] space-y-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <input id="learningSearchInput" type="text" oninput="learningCatalogApplyFilters()" placeholder="ابحث باسم الهجمة أو الأداة أو وسيلة الحماية..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none lg:col-span-2">
                         <select id="learningCategoryFilter" onchange="learningCatalogApplyFilters()" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
                         <select id="learningSeverityFilter" onchange="learningCatalogApplyFilters()" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
-                        <button onclick="learningCatalogResetFilters()" class="p-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">إعادة ضبط الفلاتر</button>
+                        <button onclick="learningCatalogResetFilters()" class="w-full p-2.5 rounded-xl bg-indigo-900/30 hover:bg-indigo-800/45 border border-indigo-800/50 text-indigo-200 text-xs font-bold lg:col-span-4">إعادة ضبط الفلاتر</button>
                     </div>
                     <div id="learningCatalogStats" class="text-[11px] text-gray-400"></div>
                 </div>
 
                 <div class="space-y-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
+                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-cyan-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.26)]">
                         <div class="flex items-center justify-between gap-2 mb-3">
                             <h3 class="text-sm font-bold text-cyan-300">قائمة الثغرات والهجمات</h3>
                             <span class="text-[10px] text-gray-500">عرض دفاعي منظّم</span>
                         </div>
-                        <div id="learningAttackCards" class="grid grid-cols-1 gap-2"></div>
+                        <div id="learningAttackCards" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
                     </div>
 
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40 space-y-3">
+                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-fuchsia-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.26)] space-y-3">
                         <div class="flex items-center justify-between gap-2">
                             <h3 class="text-sm font-bold text-fuchsia-300">التفاصيل الكاملة</h3>
                             <span id="learningSelectedAttackBadge" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">اختر هجمة</span>
@@ -9263,7 +9266,7 @@ HTML_TEMPLATE = """
                     ? '<span class="text-[10px] px-2 py-1 rounded border border-emerald-800/50 bg-emerald-900/20 text-emerald-300">Solved</span>'
                     : '<span class="text-[10px] px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">Unsolved</span>';
                 return `
-                    <div class="ctf-card bg-slate-900/60 p-4 rounded-xl border border-amber-900/35 space-y-3">
+                    <div class="ctf-card bg-slate-900/55 p-4 rounded-2xl border border-amber-900/30 space-y-3">
                         <div class="flex items-center justify-between gap-2">
                             <h3 class="ctf-card-title text-amber-300 ctf-bidi">${_osintEscape(c.title || 'Challenge')}</h3>
                             ${solvedBadge}
@@ -9274,20 +9277,20 @@ HTML_TEMPLATE = """
                             <span class="px-2 py-1 rounded border border-violet-800/50 bg-violet-900/20 text-violet-300">${_osintEscape(c.points || 0)} pts</span>
                         </div>
 
-                        <div class="space-y-2 rounded-lg border border-slate-700/70 bg-black/25 p-3">
+                        <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-cyan-300 ctf-bidi">تفاصيل التحدي</div>
                             <div class="ctf-bidi text-gray-200 whitespace-pre-wrap">${_osintEscape(c.description || '')}</div>
                             <div class="text-sm text-gray-300 ctf-bidi">صيغة العلم: <span class="font-mono text-amber-300 ctf-ltr">${_osintEscape(c.flag_format || 'TITAN{...}')}</span></div>
                         </div>
 
-                        <div class="space-y-2 rounded-lg border border-slate-700/70 bg-black/25 p-3">
+                        <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-violet-300 ctf-bidi">كيف أفكر بالحل؟</div>
                             <div class="ctf-bidi text-gray-200">${_osintEscape(c.method || 'ابدأ بتحليل المعطيات وتقسيم المشكلة لخطوات صغيرة.')}</div>
                         </div>
 
                         ${fileBlock}
 
-                        <div class="space-y-2 rounded-lg border border-slate-700/70 bg-black/25 p-3">
+                        <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-amber-300 ctf-bidi">تلميحات سريعة</div>
                             <ol class="space-y-1">${hintsHtml}</ol>
                         </div>
@@ -9295,8 +9298,8 @@ HTML_TEMPLATE = """
                         <div class="space-y-2">
                             <input id="ctf-flag-${_osintEscape(c.id)}" type="text" placeholder="أدخل العلم هنا..." class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm font-mono ctf-ltr" dir="ltr">
                             <div class="flex flex-col gap-2">
-                                <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-amber-900/40 border border-amber-800/50 text-amber-300 text-xs font-bold">تحقق من الحل</button>
-                                <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-violet-900/40 border border-violet-800/50 text-violet-300 text-xs font-bold">مساعد AI</button>
+                                <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="w-full py-2.5 rounded-xl bg-amber-900/35 hover:bg-amber-800/50 border border-amber-800/50 text-amber-200 text-xs font-bold">تحقق من الحل</button>
+                                <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="w-full py-2.5 rounded-xl bg-violet-900/35 hover:bg-violet-800/50 border border-violet-800/50 text-violet-200 text-xs font-bold">مساعد AI</button>
                             </div>
                         </div>
 
