@@ -4236,10 +4236,7 @@ HTML_TEMPLATE = """
 
                 <div class="flex flex-wrap items-center justify-start gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700">
                     <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-400 font-bold">النموذج:</span>
-                        <select id="ai-model-select" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
-                            <option value="tor1" selected>TITAN</option>
-                        </select>
+                        <span class="text-xs text-gray-300 font-bold">TITAN</span>
                     </div>
                     <div class="flex items-center justify-end gap-2 ml-auto">
                         <button id="ai-subtab-support" onclick="showAiSubTab('support')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Support</button>
@@ -12128,8 +12125,6 @@ HTML_TEMPLATE = """
             var flow = document.getElementById('ai-chat-flow') || messages;
             var btn = document.getElementById('ai-send-btn');
             var meta = document.getElementById('ai-chat-meta');
-            var modelEl = document.getElementById('ai-model-select');
-            var model = modelEl ? modelEl.value : 'tor1';
             var msg = input.value.trim();
             if (!msg) return;
 
@@ -12166,7 +12161,6 @@ HTML_TEMPLATE = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         message: msg,
-                        model: model,
                         conversation_id: window.__titanAiConversationId
                     })
                 });
@@ -18183,7 +18177,7 @@ def ai_chat():
 
     data = request.get_json(silent=True) or {}
     message = (data.get('message') or '').strip()
-    model = (data.get('model') or DO_AI_MODEL or 'tor1').strip()
+    model = (DO_AI_MODEL or 'tor1').strip()
     conversation_id = (data.get('conversation_id') or '').strip()
 
     if not message:
