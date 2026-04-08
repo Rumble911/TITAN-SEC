@@ -1297,7 +1297,13 @@ def _do_ai_chat_completion(
     finish_reason = str(choice.get('finish_reason') or '')
     return content, finish_reason
 
-def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None) -> str:
+def _call_do_ai(
+    message: str,
+    system_prompt: str | None = None,
+    model: str | None = None,
+    timeout_seconds: int = 45,
+    max_tokens: int = 1400,
+) -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     messages: list[dict[str, object]] = [
@@ -1307,7 +1313,7 @@ def _call_do_ai(message: str, system_prompt: str | None = None, model: str | Non
 
     chunks: list[str] = []
     for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1400, model=model)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=timeout_seconds, max_tokens=max_tokens, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -1407,6 +1413,8 @@ def _call_do_ai_with_history(
     history_messages: list[dict[str, object]],
     system_prompt: str | None = None,
     model: str | None = None,
+    timeout_seconds: int = 45,
+    max_tokens: int = 1600,
 ) -> str:
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     messages: list[dict[str, object]] = [{"role": "system", "content": sys_prompt}]
@@ -1418,7 +1426,7 @@ def _call_do_ai_with_history(
 
     chunks: list[str] = []
     for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1600, model=model)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=timeout_seconds, max_tokens=max_tokens, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -7957,6 +7965,8 @@ HTML_TEMPLATE = """
             if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 22000);
                 const res = await fetch('/api/crypt/recommend/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -7964,9 +7974,28 @@ HTML_TEMPLATE = """
                         message,
                         conversation_id: window.__cryptAdvisorConversationId,
                         context: { audience, sensitivity, purpose }
-                    })
+                    }),
+                    signal: controller.signal
                 });
-                const data = await res.json();
+                clearTimeout(timeoutId);
+                const ct = (res.headers.get('content-type') || '').toLowerCase();
+                let data = null;
+                if (ct.includes('application/json')) {
+                    data = await res.json();
+                } else {
+                    const raw = await res.text();
+                    if (raw && raw.trim().startsWith('<!DOCTYPE')) {
+                        if (res.status === 401 || res.redirected) {
+                            throw new Error('انتهت الجلسة أو يلزم تسجيل الدخول من جديد.');
+                        }
+                        throw new Error('الخادم أعاد صفحة HTML بدل JSON. تحقق من المسار /api/crypt/recommend/chat.');
+                    }
+                    try {
+                        data = JSON.parse(raw || '{}');
+                    } catch (_) {
+                        throw new Error('استجابة غير صالحة من الخادم.');
+                    }
+                }
                 if (!res.ok || !data.success) throw new Error(data.error || 'تعذر فتح الدردشة');
 
                 window.__cryptAdvisorConversationId = data.conversation_id || window.__cryptAdvisorConversationId;
@@ -7982,7 +8011,11 @@ HTML_TEMPLATE = """
                 if (kdf && rec.kdf_profile) kdf.value = rec.kdf_profile;
                 if (out && rec.output_format) out.value = rec.output_format;
             } catch (e) {
-                _cryptAdvisorRenderBubble('assistant', 'تعذر فتح الدردشة الآن. ' + ((e && e.message) ? e.message : ''));
+                if (e && e.name === 'AbortError') {
+                    _cryptAdvisorRenderBubble('assistant', 'انتهت مهلة الرد. أرسل طلبًا أقصر للحصول على نتيجة أسرع.');
+                } else {
+                    _cryptAdvisorRenderBubble('assistant', 'تعذر فتح الدردشة الآن. ' + ((e && e.message) ? e.message : ''));
+                }
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'إرسال'; }
             }
@@ -9425,18 +9458,41 @@ HTML_TEMPLATE = """
             out.className = 'p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi';
             out.innerText = 'AI يفكر...';
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 22000);
                 const res = await fetch('/api/ctf/assistant', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ challenge_id: challengeId, question, attempt })
+                    body: JSON.stringify({ challenge_id: challengeId, question, attempt }),
+                    signal: controller.signal
                 });
-                const data = await res.json();
+                clearTimeout(timeoutId);
+
+                const ct = (res.headers.get('content-type') || '').toLowerCase();
+                let data = null;
+                if (ct.includes('application/json')) {
+                    data = await res.json();
+                } else {
+                    const raw = await res.text();
+                    if (raw && raw.trim().startsWith('<!DOCTYPE')) {
+                        throw new Error('الخادم أعاد صفحة HTML بدل JSON');
+                    }
+                    try {
+                        data = JSON.parse(raw || '{}');
+                    } catch (_) {
+                        throw new Error('استجابة غير صالحة من الخادم');
+                    }
+                }
                 if (!res.ok || !data.success) throw new Error(data.error || 'فشل مساعد AI.');
                 out.className = 'p-2 rounded-lg bg-violet-900/20 border border-violet-800/50 text-sm text-violet-200 whitespace-pre-wrap ctf-bidi';
                 out.innerText = data.reply || 'لا يوجد رد.';
             } catch (e) {
                 out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 whitespace-pre-wrap ctf-bidi';
-                out.innerText = `فشل الاتصال: ${e.message || e}`;
+                if (e && e.name === 'AbortError') {
+                    out.innerText = 'انتهت مهلة الرد. جرّب صياغة أقصر أو سؤال خطوة واحدة.';
+                } else {
+                    out.innerText = `فشل الاتصال: ${e.message || e}`;
+                }
             }
         }
 
@@ -12283,6 +12339,8 @@ HTML_TEMPLATE = """
             messages.scrollTop = messages.scrollHeight;
 
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 28000);
                 const res = await fetch('/api/ai/chat', {
                     method: 'POST',
                     cache: 'no-store',
@@ -12290,9 +12348,26 @@ HTML_TEMPLATE = """
                     body: JSON.stringify({
                         message: msg,
                         conversation_id: window.__titanAiConversationId
-                    })
+                    }),
+                    signal: controller.signal
                 });
-                var data = await res.json();
+                clearTimeout(timeoutId);
+
+                const ct = (res.headers.get('content-type') || '').toLowerCase();
+                let data = null;
+                if (ct.includes('application/json')) {
+                    data = await res.json();
+                } else {
+                    const raw = await res.text();
+                    if (raw && raw.trim().startsWith('<!DOCTYPE')) {
+                        throw new Error('الخادم أعاد صفحة HTML بدل JSON');
+                    }
+                    try {
+                        data = JSON.parse(raw || '{}');
+                    } catch (_) {
+                        throw new Error('استجابة غير صالحة من الخادم');
+                    }
+                }
                 if (data.reply) {
                     window.__titanAiConversationId = data.conversation_id || window.__titanAiConversationId;
                     if (meta) {
@@ -12305,7 +12380,11 @@ HTML_TEMPLATE = """
                     replyInner.textContent = data.error || 'حدث خطأ';
                 }
             } catch(e) {
-                replyInner.textContent = 'فشل الاتصال';
+                if (e && e.name === 'AbortError') {
+                    replyInner.textContent = 'انتهت مهلة الطلب. حاول سؤالًا أقصر.';
+                } else {
+                    replyInner.textContent = 'فشل الاتصال';
+                }
             }
             btn.disabled = false;
             btn.textContent = 'إرسال';
@@ -12492,17 +12571,36 @@ HTML_TEMPLATE = """
             const result = document.getElementById('ai-pass-result');
             if (!pass) return titanAlert('أدخل كلمة السر للتحليل');
             result.classList.remove('hidden');
-            result.textContent = 'جاري التحليل... قد يستغرق 30-60 ثانية ⏳';
+            result.textContent = 'جاري التحليل الذكي... عادة خلال 5-15 ثانية ⏳';
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 22000);
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'password', content: pass})
+                    body: JSON.stringify({type: 'password', content: pass}),
+                    signal: controller.signal
                 });
-                const data = await res.json();
-                result.textContent = data.analysis || data.error || 'فشل التحليل';
+                clearTimeout(timeoutId);
+
+                const contentType = (res.headers.get('content-type') || '').toLowerCase();
+                let data = null;
+                if (contentType.includes('application/json')) {
+                    data = await res.json();
+                } else {
+                    const txt = await res.text();
+                    throw new Error(txt && txt.startsWith('<!DOCTYPE') ? 'الخادم أعاد صفحة HTML بدل JSON' : 'استجابة غير متوقعة من الخادم');
+                }
+
+                const analysisText = data?.analysis || data?.error || 'فشل التحليل';
+                const sourceTag = data?.source === 'fallback' ? '\n\n[تم استخدام التحليل السريع المحلي لتحسين السرعة]' : '';
+                result.textContent = analysisText + sourceTag;
             } catch(e) {
-                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
+                if (e && e.name === 'AbortError') {
+                    result.textContent = 'انتهت مهلة الطلب. تم تقليل وقت الانتظار، جرّب مرة أخرى.';
+                } else {
+                    result.textContent = 'فشل الاتصال - حاول مرة أخرى';
+                }
             }
         }
 
@@ -12511,17 +12609,36 @@ HTML_TEMPLATE = """
             const result = document.getElementById('ai-security-result');
             if (!secVal) return titanAlert('أدخل البيانات للتحليل');
             result.classList.remove('hidden');
-            result.textContent = 'جاري التحليل الأمني... قد يستغرق 30-60 ثانية ⏳';
+            result.textContent = 'جاري التحليل الأمني... عادة خلال 5-15 ثانية ⏳';
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 22000);
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'security', content: secVal})
+                    body: JSON.stringify({type: 'security', content: secVal}),
+                    signal: controller.signal
                 });
-                const data = await res.json();
-                result.textContent = data.analysis || data.error || 'فشل التحليل';
+                clearTimeout(timeoutId);
+
+                const contentType = (res.headers.get('content-type') || '').toLowerCase();
+                let data = null;
+                if (contentType.includes('application/json')) {
+                    data = await res.json();
+                } else {
+                    const txt = await res.text();
+                    throw new Error(txt && txt.startsWith('<!DOCTYPE') ? 'الخادم أعاد صفحة HTML بدل JSON' : 'استجابة غير متوقعة من الخادم');
+                }
+
+                const analysisText = data?.analysis || data?.error || 'فشل التحليل';
+                const sourceTag = data?.source === 'fallback' ? '\n\n[تم استخدام التحليل السريع المحلي لتحسين السرعة]' : '';
+                result.textContent = analysisText + sourceTag;
             } catch(e) {
-                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
+                if (e && e.name === 'AbortError') {
+                    result.textContent = 'انتهت مهلة الطلب. تم تقليل وقت الانتظار، جرّب مرة أخرى.';
+                } else {
+                    result.textContent = 'فشل الاتصال - حاول مرة أخرى';
+                }
             }
         }
 
@@ -18241,8 +18358,15 @@ def ctf_challenge_file_route(challenge_id):
 def ctf_ai_assistant_route():
     if 'user_id' not in session:
         return jsonify({"success": False, "error": "غير مصرح"}), 401
+    fallback_hint = (
+        "دليل سريع للحل بدون كشف الإجابة:\n"
+        "1) اقرأ وصف التحدي واكتب المطلوب حرفيًا.\n"
+        "2) حدّد النوع (Web/Pwn/Crypto/Forensics) ثم اختر أداة واحدة مناسبة.\n"
+        "3) جرّب خطوة صغيرة، راقب المخرجات، وعدّل الفرضية.\n"
+        "4) تجنّب التخمين العشوائي للـ flag؛ ابنِ الدليل خطوة خطوة."
+    )
     if not DO_AI_KEY:
-        return jsonify({"success": False, "error": "DO_AI_KEY غير مضبوط"}), 500
+        return jsonify({"success": True, "reply": fallback_hint, "source": "fallback"})
 
     data = request.json or {}
     challenge_id = (data.get('challenge_id') or '').strip()
@@ -18280,7 +18404,7 @@ def ctf_ai_assistant_route():
     )
 
     try:
-        reply = _call_do_ai(user_prompt, system_prompt=ctf_system)
+        reply = _call_do_ai(user_prompt, system_prompt=ctf_system, timeout_seconds=16, max_tokens=700)
         add_audit_log("CTF AI Hint", f"challenge={challenge_id}", username=session.get('username', ''))
         return jsonify({
             "success": True,
@@ -18289,7 +18413,7 @@ def ctf_ai_assistant_route():
             "model": (DO_AI_MODEL or 'tor1')
         })
     except Exception as e:
-        return jsonify({"success": False, "error": f"AI hint failed: {str(e)}"}), 500
+        return jsonify({"success": True, "reply": fallback_hint, "source": "fallback"})
 
 
 # =====================================================================
@@ -18312,7 +18436,8 @@ def ai_chat():
     if not message:
         return jsonify({"error": "الرسالة مطلوبة"}), 400
     if not DO_AI_KEY:
-        return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
+        fallback = "خدمة AI غير متاحة حالياً. اكتب سؤالك بشكل مختصر وسأحاول مجددًا بعد لحظات."
+        return jsonify({"success": True, "reply": fallback, "conversation_id": conversation_id or '', "classification": "general_support", "source": "fallback"})
 
     try:
         if not conversation_id:
@@ -18338,7 +18463,13 @@ def ai_chat():
         context_messages.append({"role": "user", "content": message})
 
         system_prompt = _build_ai_system_prompt(topic, user_text=message)
-        reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt, model=model)
+        reply = _call_do_ai_with_history(
+            context_messages,
+            system_prompt=system_prompt,
+            model=model,
+            timeout_seconds=22,
+            max_tokens=1100,
+        )
 
         now = datetime.datetime.now().isoformat()
         preview = _ai_trim_title(reply, 120)
@@ -18375,7 +18506,8 @@ def ai_chat():
         })
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
-        return jsonify({"error": f"فشل الاتصال بـ TITAN AI: {str(e)}"}), 500
+        fallback = "حصل ضغط مؤقت على خدمة AI. أعد إرسال السؤال بصياغة أقصر وسأكمل معك خطوة بخطوة."
+        return jsonify({"success": True, "reply": fallback, "conversation_id": conversation_id or '', "classification": "general_support", "source": "fallback"})
 
 
 @app.route('/api/ai/conversations', methods=['GET'])
@@ -18524,22 +18656,104 @@ def ai_analyze():
     if not content_to_analyze:
         return jsonify({"error": "المحتوى مطلوب"}), 400
 
+    def _local_password_analysis(password: str) -> str:
+        pwd = str(password or '')
+        strength_label, strength_score = get_strength_details(pwd)
+        leaked_count = check_hibp_leak(pwd)
+
+        tips = []
+        if len(pwd) < 12:
+            tips.append('طوّل كلمة السر إلى 12-16+ حرف.')
+        if not re.search(r"[A-Z]", pwd):
+            tips.append('أضف حرفًا كبيرًا واحدًا على الأقل.')
+        if not re.search(r"[a-z]", pwd):
+            tips.append('أضف أحرفًا صغيرة لزيادة التنوع.')
+        if not re.search(r"[0-9]", pwd):
+            tips.append('أضف أرقامًا عشوائية غير متوقعة.')
+        if not re.search(r"[!@#$%^&*()_+\-={}\[\]:;""'<>?,./\\|~`]", pwd):
+            tips.append('أضف رمزًا خاصًا واحدًا على الأقل.')
+        if leaked_count > 0:
+            tips.append('كلمة السر ظهرت في تسريبات؛ استبدلها فورًا ولا تعيد استخدامها.')
+        if not tips:
+            tips.append('المستوى ممتاز، حافظ على عدم إعادة الاستخدام وتفعيل MFA.')
+
+        exposure = (
+            f"🚨 ظهرت في تسريبات معروفة {leaked_count} مرة." if leaked_count > 0
+            else "✅ لم تُرصد في التسريبات المعروفة حالياً."
+        )
+
+        return (
+            "تحليل سريع لكلمة السر:\n"
+            f"- مستوى الأمان: {strength_label} ({strength_score}/5)\n"
+            f"- الطول: {len(pwd)}\n"
+            f"- التسريبات: {exposure}\n"
+            "- توصيات عملية:\n"
+            + "\n".join([f"  • {t}" for t in tips])
+            + "\n- خطوة إضافية موصى بها: فعّل المصادقة الثنائية (MFA)."
+        )
+
+    def _local_security_analysis(raw_text: str) -> str:
+        txt = str(raw_text or '').strip()
+        if not txt:
+            return 'لا يوجد محتوى كافٍ للتحليل.'
+        signals = []
+        low = txt.lower()
+        if any(k in low for k in ['http://', 'bit.ly', 'tinyurl', 't.co']):
+            signals.append('روابط قد تكون قصيرة/غير موثوقة.')
+        if any(k in low for k in ['otp', 'password', 'كلمة السر', 'رمز تحقق']):
+            signals.append('طلب بيانات حساسة.')
+        if any(k in low for k in ['urgent', 'immediately', 'فوري', 'حالاً']):
+            signals.append('لهجة استعجال غير طبيعية.')
+        if any(k in low for k in ['attach', '.exe', '.js', '.scr', 'مرفق']):
+            signals.append('مرفقات/ملفات قابلة للتنفيذ.')
+
+        risk = 'منخفض'
+        if len(signals) >= 3:
+            risk = 'مرتفع'
+        elif len(signals) >= 1:
+            risk = 'متوسط'
+
+        lines = [
+            'تحليل أمني سريع (Fallback):',
+            f'- تقييم المخاطر: {risk}',
+            '- المؤشرات المرصودة:'
+        ]
+        lines.extend([f'  • {s}' for s in (signals or ['لا مؤشرات عالية واضحة في النص.'])])
+        lines.append('- توصية: لا تنفذ أي إجراء حساس قبل التحقق من المصدر عبر قناة مستقلة.')
+        return "\n".join(lines)
+
     prompts = {
-        'password': f"حلل كلمة السر هذه أمنياً بالعربية: مستوى الأمان، نقاط الضعف، اقتراحات للتحسين. كلمة السر: {content_to_analyze}",
-        'ip': f"حلل بيانات IP هذه أمنياً بالعربية وأعطني تقييم وتوصيات: {content_to_analyze}",
-        'security': f"حلل هذه البيانات الأمنية بالعربية وأعطني تقييماً شاملاً وتوصيات عملية: {content_to_analyze}"
+        'password': (
+            'قدّم تحليل كلمة السر بالعربية وباختصار: '
+            '1) المستوى 2) نقاط الضعف 3) خطوات تحسين عملية. '
+            f'كلمة السر: {content_to_analyze}'
+        ),
+        'ip': f"حلل بيانات IP هذه أمنياً بالعربية وأعطني تقييمًا مختصرًا وتوصيات مباشرة: {content_to_analyze}",
+        'security': f"حلل هذه البيانات الأمنية بالعربية بإيجاز مفيد (مخاطر + توصيات): {content_to_analyze}"
     }
 
     prompt = prompts.get(analyze_type, prompts['security'])
     if not DO_AI_KEY:
-        return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
+        fallback = _local_password_analysis(content_to_analyze) if analyze_type == 'password' else _local_security_analysis(content_to_analyze)
+        return jsonify({"success": True, "analysis": fallback, "source": "fallback"})
     try:
-        analysis = _call_do_ai(prompt, system_prompt=AI_SYSTEM_PROMPT)
+        fast_system = (
+            'أنت محلل أمني عملي. أعطِ إجابة مباشرة ومختصرة (6-10 أسطر)، '
+            'بدون إطالة، وبنقاط واضحة قابلة للتنفيذ.'
+        )
+        messages: list[dict[str, object]] = [
+            {"role": "system", "content": fast_system},
+            {"role": "user", "content": prompt},
+        ]
+        analysis, _ = _do_ai_chat_completion(messages, timeout_seconds=14, max_tokens=520)
+        if not str(analysis or '').strip():
+            raise RuntimeError('empty_ai_reply')
         add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
-        return jsonify({"success": True, "analysis": analysis})
+        return jsonify({"success": True, "analysis": analysis, "source": "ai"})
     except Exception as e:
         print(f"[TITAN AI] Analyze error: {e}")
-        return jsonify({"error": f"فشل التحليل: {str(e)}"}), 500
+        fallback = _local_password_analysis(content_to_analyze) if analyze_type == 'password' else _local_security_analysis(content_to_analyze)
+        return jsonify({"success": True, "analysis": fallback, "source": "fallback"})
 
 
 @app.route('/api/ai/models', methods=['GET'])
