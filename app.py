@@ -5118,17 +5118,17 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="ctf-section" class="hidden space-y-6 ctf-ui">
-                <div class="rounded-2xl border border-amber-900/40 bg-gradient-to-r from-amber-950/25 via-slate-900/85 to-violet-950/20 p-4">
-                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="rounded-2xl border border-amber-900/40 bg-gradient-to-r from-amber-950/25 via-slate-900/85 to-violet-950/20 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
+                    <div class="flex flex-col items-start gap-3">
                         <div>
                             <h2 class="ctf-main-title font-bold text-amber-300 border-b border-transparent pb-0 flex items-center gap-2"><span class="inline-block animate-pulse">🏁</span> TITAN CTF ARENA</h2>
-                            <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">منصة تحديات متجددة مع TITAN AI Coach جديد: تلميحات منهجية دقيقة بدون كشف العلم النهائي.</p>
+                            <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">منصة تحديات متجددة مع مساعد AI للتلميحات المنهجية بدون كشف العلم النهائي.</p>
                         </div>
                         <div id="ctfAiSourceBadge" class="text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300 font-bold">AI: TITAN</div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div class="space-y-2">
                     <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
                         <div class="text-[10px] text-gray-500">Active</div>
                         <div id="ctfStatActive" class="text-lg font-black text-amber-300">0</div>
@@ -5151,53 +5151,37 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="xl:col-span-2 space-y-4">
-                        <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
-                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
-                                <div>
-                                    <div class="ctf-section-label text-amber-300">Challenge Filters</div>
-                                    <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">ابحث بسرعة بالتصنيف/الصعوبة أو اعرض غير المحلول فقط.</p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="ctfLoadChallenges(true)" class="px-3 py-2 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تحديث التحديات</button>
-                                </div>
+                <div class="space-y-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
+                        <div class="flex flex-col gap-3 mb-3">
+                            <div>
+                                <div class="ctf-section-label text-amber-300">Challenge Filters</div>
+                                <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">ابحث بسرعة بالتصنيف/الصعوبة أو اعرض غير المحلول فقط.</p>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
-                                <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="md:col-span-2 p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
-                                    <option value="all" selected>كل الصعوبات</option>
-                                    <option value="easy">Easy</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="hard">Hard</option>
-                                </select>
-                                <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
-                                    <option value="all" selected>كل التصنيفات</option>
-                                </select>
-                            </div>
-                            <label class="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/60 w-fit">
-                                <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
-                                <span class="text-gray-300">عرض غير المحلولة فقط</span>
-                            </label>
-                            <div id="ctfMeta" class="ctf-meta-text text-gray-300 bg-black/40 border border-slate-700 rounded-lg p-2 ctf-bidi mt-2">جار تحميل بيانات CTF...</div>
-                        </div>
-
-                        <div id="ctfList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-                    </div>
-
-                    <div class="space-y-4">
-                        <div class="bg-slate-900/65 p-4 rounded-xl border border-cyan-900/40 space-y-3">
-                            <h3 class="text-sm font-bold text-cyan-300">TITAN AI Coach</h3>
-                            <p class="text-[11px] text-gray-400 ctf-bidi">اختر تحديًا ثم احصل على خطة حل تدريجية بدون كشف العلم.</p>
-                            <select id="ctfCoachChallengeSelect" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none"></select>
-                            <div id="ctfCoachFlow" class="h-64 overflow-y-auto rounded-xl border border-cyan-900/40 bg-black/35 p-3 space-y-2 text-sm"></div>
-                            <textarea id="ctfCoachInput" rows="3" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm ctf-bidi" placeholder="مثال: أعطني خطة حل 4 خطوات مع خطأين شائعين يجب أتجنبهم..."></textarea>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button id="ctfCoachSendBtn" onclick="ctfCoachSend()" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">إرسال</button>
-                                <button onclick="ctfCoachNewChat()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold border border-slate-600">محادثة جديدة</button>
+                            <div class="flex flex-col gap-2 w-full">
+                                <button onclick="ctfLoadChallenges(true)" class="px-3 py-2 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تحديث التحديات</button>
                             </div>
                         </div>
+                        <div class="space-y-2 mb-2">
+                            <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none w-full">
+                            <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="all" selected>كل الصعوبات</option>
+                                <option value="easy">Easy</option>
+                                <option value="medium">Medium</option>
+                                <option value="hard">Hard</option>
+                            </select>
+                            <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="all" selected>كل التصنيفات</option>
+                            </select>
+                        </div>
+                        <label class="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/60 w-fit">
+                            <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
+                            <span class="text-gray-300">عرض غير المحلولة فقط</span>
+                        </label>
+                        <div id="ctfMeta" class="ctf-meta-text text-gray-300 bg-black/40 border border-slate-700 rounded-lg p-2 ctf-bidi mt-2">جار تحميل بيانات CTF...</div>
                     </div>
+
+                    <div id="ctfList" class="grid grid-cols-1 gap-4"></div>
                 </div>
             </div>
 
@@ -5459,8 +5443,8 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3">
-                    <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
-                        <input id="learningSearchInput" type="text" oninput="learningCatalogApplyFilters()" placeholder="ابحث باسم الهجمة أو الأداة أو وسيلة الحماية..." class="md:col-span-2 p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                    <div class="space-y-2">
+                        <input id="learningSearchInput" type="text" oninput="learningCatalogApplyFilters()" placeholder="ابحث باسم الهجمة أو الأداة أو وسيلة الحماية..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
                         <select id="learningCategoryFilter" onchange="learningCatalogApplyFilters()" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
                         <select id="learningSeverityFilter" onchange="learningCatalogApplyFilters()" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
                         <button onclick="learningCatalogResetFilters()" class="p-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">إعادة ضبط الفلاتر</button>
@@ -5468,13 +5452,13 @@ HTML_TEMPLATE = """
                     <div id="learningCatalogStats" class="text-[11px] text-gray-400"></div>
                 </div>
 
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
+                <div class="space-y-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
                         <div class="flex items-center justify-between gap-2 mb-3">
                             <h3 class="text-sm font-bold text-cyan-300">قائمة الثغرات والهجمات</h3>
                             <span class="text-[10px] text-gray-500">عرض دفاعي منظّم</span>
                         </div>
-                        <div id="learningAttackCards" class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[34rem] overflow-y-auto pr-1"></div>
+                        <div id="learningAttackCards" class="grid grid-cols-1 gap-2"></div>
                     </div>
 
                     <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40 space-y-3">
@@ -5482,7 +5466,7 @@ HTML_TEMPLATE = """
                             <h3 class="text-sm font-bold text-fuchsia-300">التفاصيل الكاملة</h3>
                             <span id="learningSelectedAttackBadge" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">اختر هجمة</span>
                         </div>
-                        <div id="learningAttackDetail" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6 max-h-[34rem] overflow-y-auto">
+                        <div id="learningAttackDetail" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6">
                             اختر أي هجمة من القائمة لعرض شرح كامل عنها.
                         </div>
                     </div>
@@ -9251,89 +9235,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        function _ctfRenderCoachBubble(role, text) {
-            const flow = document.getElementById('ctfCoachFlow');
-            if (!flow) return;
-            const row = document.createElement('div');
-            if (role === 'assistant') {
-                row.className = 'flex justify-start items-end gap-2';
-                row.innerHTML = '<div class="w-6 h-6 rounded-full bg-cyan-900/50 border border-cyan-700/50 flex items-center justify-center text-[10px]">🤖</div>' +
-                    '<div class="bg-slate-800/90 text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] text-xs border border-slate-700/60 leading-6 ctf-bidi">' + renderAiReplyPretty(text) + '</div>';
-            } else {
-                row.className = 'flex justify-end items-end gap-2';
-                row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border border-cyan-600/50 ctf-bidi">' +
-                    _osintEscape(String(text || '')).replace(/\\n/g, '<br>') +
-                    '</div><div class="w-6 h-6 rounded-full bg-cyan-900/40 border border-cyan-700/40 flex items-center justify-center text-[10px]">👤</div>';
-            }
-            flow.appendChild(row);
-            flow.scrollTop = flow.scrollHeight;
-        }
-
-        function _ctfPopulateCoachSelect() {
-            const sel = document.getElementById('ctfCoachChallengeSelect');
-            if (!sel) return;
-            const rows = Array.isArray(_ctfChallenges) ? _ctfChallenges : [];
-            sel.innerHTML = rows.map((c) => {
-                const d = String(c.difficulty || '').toUpperCase() || '-';
-                const solved = c.solved ? ' (SOLVED)' : '';
-                return `<option value="${_osintEscape(c.id)}">${_osintEscape(c.title || c.id)} [${_osintEscape(d)}]${solved}</option>`;
-            }).join('');
-        }
-
-        function ctfCoachNewChat() {
-            const flow = document.getElementById('ctfCoachFlow');
-            if (flow) flow.innerHTML = '';
-            _ctfRenderCoachBubble('assistant', 'أنا TITAN AI Coach. اختر التحدي ثم اسألني عن أول خطوة أو خطة حل أو كيف تتجنب الأخطاء الشائعة.');
-        }
-
-        async function _ctfAskAiCore(challengeId, question, attempt) {
-            const res = await fetch('/api/ctf/assistant', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ challenge_id: challengeId, question, attempt })
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.error || 'فشل مساعد AI.');
-            const badge = document.getElementById('ctfAiSourceBadge');
-            if (badge) {
-                badge.textContent = 'AI: TITAN';
-                badge.className = 'text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300 font-bold';
-            }
-            return data;
-        }
-
-        async function ctfCoachSend() {
-            const sel = document.getElementById('ctfCoachChallengeSelect');
-            const input = document.getElementById('ctfCoachInput');
-            const btn = document.getElementById('ctfCoachSendBtn');
-            const challengeId = (sel?.value || '').trim();
-            const question = (input?.value || '').trim();
-            if (!challengeId) return titanAlert('اختر تحدي أولاً.');
-            if (!question) return titanAlert('اكتب سؤالك أولاً.');
-
-            _ctfRenderCoachBubble('user', question);
-            if (input) input.value = '';
-            if (btn) { btn.disabled = true; btn.textContent = '...'; }
-            try {
-                const data = await _ctfAskAiCore(challengeId, question, '');
-                _ctfRenderCoachBubble('assistant', data.reply || 'لا يوجد رد.');
-            } catch (e) {
-                _ctfRenderCoachBubble('assistant', 'تعذر الحصول على رد من TITAN الآن: ' + (e?.message || e));
-            } finally {
-                if (btn) { btn.disabled = false; btn.textContent = 'إرسال'; }
-            }
-        }
-
-        function ctfStartQuickCoach(challengeId) {
-            const sel = document.getElementById('ctfCoachChallengeSelect');
-            if (sel) sel.value = String(challengeId || '');
-            ctfCoachNewChat();
-            const question = 'اعطني خطة حل مختصرة من 4 خطوات لهذا التحدي بدون كشف العلم.';
-            const input = document.getElementById('ctfCoachInput');
-            if (input) input.value = question;
-            ctfCoachSend();
-        }
-
         function _ctfRenderList(items) {
             const box = document.getElementById('ctfList');
             if (!box) return;
@@ -9393,10 +9294,9 @@ HTML_TEMPLATE = """
 
                         <div class="space-y-2">
                             <input id="ctf-flag-${_osintEscape(c.id)}" type="text" placeholder="أدخل العلم هنا..." class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm font-mono ctf-ltr" dir="ltr">
-                            <div class="flex gap-2">
+                            <div class="flex flex-col gap-2">
                                 <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-amber-900/40 border border-amber-800/50 text-amber-300 text-xs font-bold">تحقق من الحل</button>
                                 <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-violet-900/40 border border-violet-800/50 text-violet-300 text-xs font-bold">مساعد AI</button>
-                                <button onclick="ctfStartQuickCoach('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">Coach سريع</button>
                             </div>
                         </div>
 
@@ -9425,12 +9325,7 @@ HTML_TEMPLATE = """
                 _ctfChallenges = data.challenges || [];
                 _ctfRefreshCategoryFilter();
                 _ctfUpdateDashboard(data);
-                _ctfPopulateCoachSelect();
                 ctfApplyFilters();
-                if (!window.__ctfCoachInitDone) {
-                    window.__ctfCoachInitDone = true;
-                    ctfCoachNewChat();
-                }
                 if (meta) {
                     const solved = Number(data.solved_count || 0);
                     const total = Number((_ctfChallenges || []).length);
@@ -9527,7 +9422,13 @@ HTML_TEMPLATE = """
             out.className = 'p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi';
             out.innerText = 'AI يفكر...';
             try {
-                const data = await _ctfAskAiCore(challengeId, question, attempt);
+                const res = await fetch('/api/ctf/assistant', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ challenge_id: challengeId, question, attempt })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'فشل مساعد AI.');
                 out.className = 'p-2 rounded-lg bg-violet-900/20 border border-violet-800/50 text-sm text-violet-200 whitespace-pre-wrap ctf-bidi';
                 out.innerText = data.reply || 'لا يوجد رد.';
             } catch (e) {
@@ -13252,8 +13153,11 @@ def _has_local_tailwind_css() -> bool:
 @app.route('/')
 def index():
     html = HTML_TEMPLATE.replace('__TAILWIND_V__', _tailwind_version_token())
-    # Keep production deterministic: no Play CDN injection.
-    html = html.replace('__TAILWIND_PLAY_CDN__', '')
+    # Ensure full UI utility coverage when local compiled CSS is incomplete.
+    html = html.replace(
+        '__TAILWIND_PLAY_CDN__',
+        '<script src="https://cdn.tailwindcss.com"></script>'
+    )
     resp = Response(render_template_string(html), mimetype='text/html')
     # Prevent stale HTML from pinning an old CSS version on custom domains/CDNs.
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
