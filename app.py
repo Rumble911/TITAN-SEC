@@ -4466,71 +4466,91 @@ HTML_TEMPLATE = """
 
                 <!-- ===== CRYPTOGRAPHY SECTION ===== -->
                 <div id="crypt-section" class="hidden">
-                    <div class="space-y-5">
-                        <div class="rounded-2xl border border-fuchsia-800/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-fuchsia-950/20 p-4">
-                            <h3 class="text-sm font-black text-fuchsia-300 mb-3">إعدادات التشفير الأساسية</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="space-y-4">
+                        <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-r from-cyan-950/25 via-slate-900/80 to-fuchsia-950/20 p-4">
+                            <div class="flex items-center justify-between gap-3 flex-wrap">
                                 <div>
-                                    <label class="block text-xs text-gray-400 mb-1">1. مفتاح التشفير (كلمة السر)</label>
-                                    <input type="password" id="cryptKey" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none" placeholder="أدخل المفتاح هنا...">
+                                    <h3 class="text-sm font-black text-cyan-300 tracking-wide">TITAN Crypto Studio</h3>
+                                    <p class="text-xs text-gray-400 mt-1">تشفير نصي متقدم + توصية فورية من TITAN AI مبنية على سياقك الفعلي.</p>
                                 </div>
-                                <div>
-                                    <label class="block text-xs text-gray-400 mb-1">2. الخوارزمية (القوة مدمجة)</label>
-                                    <select id="cryptMethod" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none text-sm">
-                                        <option value="fernet">Fernet + PBKDF2 (قوي جدًا - موصى به)</option>
-                                        <option value="aes-cbc">AES-256-CBC + PBKDF2 (قوي)</option>
-                                        <option value="chacha20">ChaCha20 + PBKDF2 (متوازن)</option>
-                                        <option value="xor-stream">XOR Stream (تعليمي - ضعيف)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs text-gray-400 mb-1">3. KDF Profile</label>
-                                    <select id="cryptKdfProfile" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none text-sm">
-                                        <option value="balanced">Balanced - 120k</option>
-                                        <option value="strong" selected>Strong - 300k</option>
-                                        <option value="paranoid">Paranoid - 600k</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs text-gray-400 mb-1">4. تنسيق الخرج</label>
-                                    <select id="cryptOutputFormat" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none text-sm">
-                                        <option value="b64" selected>Base64</option>
-                                        <option value="b64url">Base64 URL-safe</option>
-                                    </select>
-                                </div>
+                                <div id="cryptAiSourceBadge" class="text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300 font-bold">AI: TITAN</div>
                             </div>
                         </div>
 
-                        <div class="rounded-2xl border border-violet-900/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-violet-950/20 p-4">
-                            <h3 class="text-sm font-black text-violet-300 mb-3">لوحة النص والنتيجة</h3>
-                            <textarea id="cryptText" rows="4" class="w-full p-3 rounded-xl bg-slate-950/80 border border-violet-900/40 mb-3 text-sm outline-none focus:ring-2 focus:ring-violet-600/50" placeholder="اكتب النص هنا (تشفير/فك/نسخ)..."></textarea>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                <button onclick="processText('encrypt')" class="titan-gradient p-2 rounded-lg font-bold">تشفير النص</button>
-                                <button onclick="processText('decrypt')" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg font-bold border border-slate-600">فك التشفير</button>
-                                <button onclick="copyCryptText()" class="titan-gradient p-2 rounded-lg font-bold">نسخ النتائج</button>
-                                <button onclick="clearCryptText()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-2 text-sm font-bold">مسح سريع</button>
+                        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                            <div class="xl:col-span-2 space-y-4">
+                                <div class="rounded-2xl border border-fuchsia-800/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-fuchsia-950/20 p-4">
+                                    <h3 class="text-sm font-black text-fuchsia-300 mb-3">إعدادات التشفير الأساسية</h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-gray-400 mb-1">1. مفتاح التشفير (كلمة السر)</label>
+                                            <input type="password" id="cryptKey" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none" placeholder="أدخل المفتاح هنا...">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-400 mb-1">2. الخوارزمية</label>
+                                            <select id="cryptMethod" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none text-sm">
+                                                <option value="fernet">Fernet + PBKDF2 (قوي جدًا - موصى به)</option>
+                                                <option value="aes-cbc">AES-256-CBC + PBKDF2 (قوي)</option>
+                                                <option value="chacha20">ChaCha20 + PBKDF2 (متوازن)</option>
+                                                <option value="xor-stream">XOR Stream (تعليمي - ضعيف)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-400 mb-1">3. KDF Profile</label>
+                                            <select id="cryptKdfProfile" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none text-sm">
+                                                <option value="balanced">Balanced - 120k</option>
+                                                <option value="strong" selected>Strong - 300k</option>
+                                                <option value="paranoid">Paranoid - 600k</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-400 mb-1">4. تنسيق الخرج</label>
+                                            <select id="cryptOutputFormat" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 focus:ring-2 focus:ring-fuchsia-500/60 outline-none text-sm">
+                                                <option value="b64" selected>Base64</option>
+                                                <option value="b64url">Base64 URL-safe</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div id="cryptAdvisorLastConfig" class="mt-3 text-[11px] text-cyan-300 bg-cyan-950/15 border border-cyan-900/35 rounded-lg px-3 py-2">لا توجد توصية مطبقة بعد.</div>
+                                </div>
+
+                                <div class="rounded-2xl border border-violet-900/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-violet-950/20 p-4">
+                                    <h3 class="text-sm font-black text-violet-300 mb-3">لوحة النص والنتيجة</h3>
+                                    <textarea id="cryptText" rows="6" class="w-full p-3 rounded-xl bg-slate-950/80 border border-violet-900/40 mb-3 text-sm outline-none focus:ring-2 focus:ring-violet-600/50" placeholder="اكتب النص هنا (تشفير/فك/نسخ)..."></textarea>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <button onclick="processText('encrypt')" class="titan-gradient p-2 rounded-lg font-bold">تشفير النص</button>
+                                        <button onclick="processText('decrypt')" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg font-bold border border-slate-600">فك التشفير</button>
+                                        <button onclick="copyCryptText()" class="titan-gradient p-2 rounded-lg font-bold">نسخ النتائج</button>
+                                        <button onclick="clearCryptText()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-2 text-sm font-bold">مسح سريع</button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-cyan-950/20 p-4 space-y-3">
-                            <h3 class="text-sm font-black text-cyan-300">محادثة AI لتوصية التشفير</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                <select id="cryptSensitivity" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none">
-                                    <option value="normal">حساسية عادية</option>
-                                    <option value="high" selected>حساسية عالية</option>
-                                    <option value="critical">حساسية حرجة</option>
-                                </select>
-                                <input id="cryptPurpose" type="text" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none" placeholder="الغرض: قانوني / مالي / شخصي...">
-                                <button onclick="startCryptAdvisorChat(true)" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">بدء/تحديث السياق</button>
-                            </div>
-                            <textarea id="cryptAudience" rows="2" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 text-sm outline-none focus:ring-2 focus:ring-cyan-600/50" placeholder="اكتب لمن سترسل النص ولماذا (كل التفاصيل)..."></textarea>
+                            <div class="space-y-4">
+                                <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-slate-900/85 via-slate-900/70 to-cyan-950/25 p-4 space-y-3">
+                                    <h3 class="text-sm font-black text-cyan-300">توصية TITAN AI للتشفير</h3>
+                                    <div class="grid grid-cols-1 gap-2">
+                                        <select id="cryptSensitivity" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none">
+                                            <option value="normal">حساسية عادية</option>
+                                            <option value="high" selected>حساسية عالية</option>
+                                            <option value="critical">حساسية حرجة</option>
+                                        </select>
+                                        <input id="cryptPurpose" type="text" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none" placeholder="الغرض: قانوني / مالي / شخصي...">
+                                        <textarea id="cryptAudience" rows="2" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 text-sm outline-none focus:ring-2 focus:ring-cyan-600/50" placeholder="اكتب لمن سترسل النص ولماذا (كل التفاصيل)..."></textarea>
+                                    </div>
 
-                            <div id="cryptAiChatFlow" class="h-44 overflow-y-auto rounded-xl border border-cyan-900/40 bg-black/35 p-3 space-y-2 text-sm"></div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <button onclick="startCryptAdvisorChat(true)" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">تهيئة سياق AI</button>
+                                        <button onclick="applyCryptRecommendation()" class="px-3 py-2 rounded-lg bg-fuchsia-800/40 hover:bg-fuchsia-700/50 text-xs font-bold border border-fuchsia-700/50 text-fuchsia-200">تطبيق التوصية</button>
+                                    </div>
 
-                            <div class="flex gap-2">
-                                <input id="cryptAiChatInput" type="text" class="flex-1 p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-sm outline-none" placeholder="اكتب رسالتك لـ AI...">
-                                <button id="cryptAiSendBtn" onclick="sendCryptAdvisorMessage()" class="px-4 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">إرسال</button>
-                                <button onclick="startCryptAdvisorChat(true)" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold border border-slate-600">محادثة جديدة</button>
+                                    <div id="cryptAiChatFlow" class="h-64 overflow-y-auto rounded-xl border border-cyan-900/40 bg-black/35 p-3 space-y-2 text-sm"></div>
+
+                                    <div class="flex gap-2">
+                                        <input id="cryptAiChatInput" type="text" class="flex-1 p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-sm outline-none" placeholder="اسأل TITAN AI عن أفضل إعداد تشفير لهذه الحالة...">
+                                        <button id="cryptAiSendBtn" onclick="sendCryptAdvisorMessage()" class="px-4 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">إرسال</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -5098,33 +5118,87 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="ctf-section" class="hidden space-y-6 ctf-ui">
-                <h2 class="ctf-main-title font-bold text-amber-400 border-b border-slate-700 pb-2 flex items-center gap-2"><span class="inline-block animate-pulse">🏁</span> CTF TRAINING</h2>
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
-                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2">
+                <div class="rounded-2xl border border-amber-900/40 bg-gradient-to-r from-amber-950/25 via-slate-900/85 to-violet-950/20 p-4">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
                         <div>
-                            <div class="ctf-section-label text-amber-300">تحديات متجددة + مساعد AI</div>
-                            <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">التحديات تتجدد تلقائياً كل فترة. مساعد AI يشرح المنهجية ويعطي تلميحات خطوة بخطوة بدون كشف العلم النهائي.</p>
+                            <h2 class="ctf-main-title font-bold text-amber-300 border-b border-transparent pb-0 flex items-center gap-2"><span class="inline-block animate-pulse">🏁</span> TITAN CTF ARENA</h2>
+                            <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">منصة تحديات متجددة مع TITAN AI Coach جديد: تلميحات منهجية دقيقة بدون كشف العلم النهائي.</p>
                         </div>
-                        <div class="flex gap-2">
-                            <button onclick="ctfLoadChallenges(true)" class="px-3 py-2 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تحديث التحديات</button>
-                        </div>
+                        <div id="ctfAiSourceBadge" class="text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300 font-bold">AI: TITAN</div>
                     </div>
-                    <div class="flex flex-col md:flex-row gap-2 mb-2">
-                        <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="all" selected>كل الصعوبات</option>
-                            <option value="easy">Easy</option>
-                            <option value="medium">Medium</option>
-                            <option value="hard">Hard</option>
-                        </select>
-                        <label class="flex items-center gap-2 text-xs px-3 rounded-lg border border-slate-700 bg-slate-900/60">
-                            <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
-                            <span class="text-gray-300">عرض غير المحلولة فقط</span>
-                        </label>
-                    </div>
-                    <div id="ctfMeta" class="ctf-meta-text text-gray-300 bg-black/40 border border-slate-700 rounded-lg p-2 ctf-bidi">جار تحميل بيانات CTF...</div>
                 </div>
 
-                <div id="ctfList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
+                        <div class="text-[10px] text-gray-500">Active</div>
+                        <div id="ctfStatActive" class="text-lg font-black text-amber-300">0</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
+                        <div class="text-[10px] text-gray-500">Solved This Cycle</div>
+                        <div id="ctfStatSolvedCycle" class="text-lg font-black text-emerald-300">0</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
+                        <div class="text-[10px] text-gray-500">Total Solved</div>
+                        <div id="ctfStatSolvedTotal" class="text-lg font-black text-cyan-300">0</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
+                        <div class="text-[10px] text-gray-500">Total Points</div>
+                        <div id="ctfStatPoints" class="text-lg font-black text-violet-300">0</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700 bg-black/35 px-3 py-2">
+                        <div class="text-[10px] text-gray-500">Rotation</div>
+                        <div id="ctfStatRotation" class="text-sm font-black text-amber-200">--</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="xl:col-span-2 space-y-4">
+                        <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
+                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+                                <div>
+                                    <div class="ctf-section-label text-amber-300">Challenge Filters</div>
+                                    <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">ابحث بسرعة بالتصنيف/الصعوبة أو اعرض غير المحلول فقط.</p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="ctfLoadChallenges(true)" class="px-3 py-2 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تحديث التحديات</button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
+                                <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="md:col-span-2 p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                                    <option value="all" selected>كل الصعوبات</option>
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                                <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                                    <option value="all" selected>كل التصنيفات</option>
+                                </select>
+                            </div>
+                            <label class="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/60 w-fit">
+                                <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
+                                <span class="text-gray-300">عرض غير المحلولة فقط</span>
+                            </label>
+                            <div id="ctfMeta" class="ctf-meta-text text-gray-300 bg-black/40 border border-slate-700 rounded-lg p-2 ctf-bidi mt-2">جار تحميل بيانات CTF...</div>
+                        </div>
+
+                        <div id="ctfList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="bg-slate-900/65 p-4 rounded-xl border border-cyan-900/40 space-y-3">
+                            <h3 class="text-sm font-bold text-cyan-300">TITAN AI Coach</h3>
+                            <p class="text-[11px] text-gray-400 ctf-bidi">اختر تحديًا ثم احصل على خطة حل تدريجية بدون كشف العلم.</p>
+                            <select id="ctfCoachChallengeSelect" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none"></select>
+                            <div id="ctfCoachFlow" class="h-64 overflow-y-auto rounded-xl border border-cyan-900/40 bg-black/35 p-3 space-y-2 text-sm"></div>
+                            <textarea id="ctfCoachInput" rows="3" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm ctf-bidi" placeholder="مثال: أعطني خطة حل 4 خطوات مع خطأين شائعين يجب أتجنبهم..."></textarea>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button id="ctfCoachSendBtn" onclick="ctfCoachSend()" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">إرسال</button>
+                                <button onclick="ctfCoachNewChat()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold border border-slate-600">محادثة جديدة</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="ir-section" class="hidden space-y-6">
@@ -7836,6 +7910,30 @@ HTML_TEMPLATE = """
             flow.scrollTop = flow.scrollHeight;
         }
 
+        function _cryptAdvisorRenderRecommendationMeta(rec, source) {
+            const metaEl = document.getElementById('cryptAdvisorLastConfig');
+            const badge = document.getElementById('cryptAiSourceBadge');
+            if (badge) {
+                const src = String(source || 'ai').toLowerCase();
+                if (src === 'fallback') {
+                    badge.textContent = 'AI: TITAN (Fallback)';
+                    badge.className = 'text-[10px] px-2 py-1 rounded border border-amber-800/50 bg-amber-900/20 text-amber-300 font-bold';
+                } else {
+                    badge.textContent = 'AI: TITAN';
+                    badge.className = 'text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300 font-bold';
+                }
+            }
+
+            if (!metaEl) return;
+            if (!rec || !rec.method) {
+                metaEl.textContent = 'لا توجد توصية مطبقة بعد.';
+                return;
+            }
+
+            const reason = rec.reason ? (' | السبب: ' + rec.reason) : '';
+            metaEl.textContent = 'آخر توصية: ' + rec.method + ' / ' + (rec.kdf_profile || 'strong') + ' / ' + (rec.output_format || 'b64') + reason;
+        }
+
         function startCryptAdvisorChat(reset) {
             const flow = document.getElementById('cryptAiChatFlow');
             if (!flow) return;
@@ -7843,14 +7941,16 @@ HTML_TEMPLATE = """
             if (reset || !window.__cryptAiStarted) {
                 window.__cryptAdvisorConversationId = null;
                 window.__cryptAiStarted = true;
+                window.__cryptRec = null;
                 flow.innerHTML = '';
                 const sensitivity = document.getElementById('cryptSensitivity')?.value || 'high';
                 const purpose = (document.getElementById('cryptPurpose')?.value || '').trim() || 'عام';
                 _cryptAdvisorRenderBubble('assistant',
-                    'اكتب تفاصيل الحالة وسأعطيك توصية تشفير مخصصة.\\n' +
+                    'أنا TITAN AI داخل Crypto Studio. اكتب سيناريو الاستخدام وسأعطيك أفضل إعداد متاح داخل المنصة.\n' +
                     'الحساسية الحالية: ' + sensitivity + ' | الغرض: ' + purpose + '\\n' +
                     'بعد كل رد، أقدر أطبق الإعدادات تلقائيًا على خيارات التشفير.'
                 );
+                _cryptAdvisorRenderRecommendationMeta(null, 'ai');
             }
         }
 
@@ -7885,6 +7985,7 @@ HTML_TEMPLATE = """
                 window.__cryptAdvisorConversationId = data.conversation_id || window.__cryptAdvisorConversationId;
                 window.__cryptRec = data.recommendation || null;
                 _cryptAdvisorRenderBubble('assistant', data.reply || 'تم توليد توصية.');
+                _cryptAdvisorRenderRecommendationMeta(window.__cryptRec, data.source || 'ai');
 
                 const rec = window.__cryptRec || {};
                 const method = document.getElementById('cryptMethod');
@@ -7909,6 +8010,7 @@ HTML_TEMPLATE = """
             if (method) method.value = rec.method;
             if (kdf) kdf.value = rec.kdf_profile || 'strong';
             if (out) out.value = rec.output_format || 'b64';
+            _cryptAdvisorRenderRecommendationMeta(rec, 'ai');
             titanAlert('تم تطبيق الاقتراح الذكي ✅', 'success');
         }
 
@@ -9090,6 +9192,7 @@ HTML_TEMPLATE = """
         }
 
         let _ctfChallenges = [];
+        let _ctfLastPayload = null;
 
         function _ctfDifficultyClass(level) {
             const t = String(level || '').toLowerCase();
@@ -9100,14 +9203,135 @@ HTML_TEMPLATE = """
 
         function ctfApplyFilters() {
             const diff = (document.getElementById('ctfFilterDifficulty')?.value || 'all').toLowerCase();
+            const cat = (document.getElementById('ctfFilterCategory')?.value || 'all').toLowerCase();
+            const q = (document.getElementById('ctfSearchInput')?.value || '').trim().toLowerCase();
             const unsolvedOnly = !!document.getElementById('ctfFilterUnsolved')?.checked;
             const source = Array.isArray(_ctfChallenges) ? _ctfChallenges : [];
             const filtered = source.filter((c) => {
                 if (diff !== 'all' && String(c.difficulty || '').toLowerCase() !== diff) return false;
+                if (cat !== 'all' && String(c.category || '').toLowerCase() !== cat) return false;
                 if (unsolvedOnly && c.solved) return false;
+                if (q) {
+                    const blob = [c.title, c.description, c.category, c.method].map((x) => String(x || '').toLowerCase()).join(' ');
+                    if (!blob.includes(q)) return false;
+                }
                 return true;
             });
             _ctfRenderList(filtered);
+        }
+
+        function _ctfUpdateDashboard(payload) {
+            const p = payload || {};
+            const total = Number((p.challenges || []).length || 0);
+            const solvedCycle = Number(p.solved_count || 0);
+            const solvedTotal = Number(p.total_solved || 0);
+            const points = Number(p.total_points || 0);
+            const rotation = String(p.rotation_key || '--');
+
+            const a = document.getElementById('ctfStatActive');
+            const s1 = document.getElementById('ctfStatSolvedCycle');
+            const s2 = document.getElementById('ctfStatSolvedTotal');
+            const pts = document.getElementById('ctfStatPoints');
+            const rot = document.getElementById('ctfStatRotation');
+            if (a) a.innerText = String(total);
+            if (s1) s1.innerText = String(solvedCycle);
+            if (s2) s2.innerText = String(solvedTotal);
+            if (pts) pts.innerText = String(points);
+            if (rot) rot.innerText = rotation;
+        }
+
+        function _ctfRefreshCategoryFilter() {
+            const el = document.getElementById('ctfFilterCategory');
+            if (!el) return;
+            const categories = Array.from(new Set((_ctfChallenges || []).map((c) => String(c.category || '').trim()).filter(Boolean))).sort();
+            const oldVal = (el.value || 'all').toLowerCase();
+            el.innerHTML = '<option value="all" selected>كل التصنيفات</option>' + categories.map((c) => `<option value="${_osintEscape(c.toLowerCase())}">${_osintEscape(c)}</option>`).join('');
+            if (oldVal !== 'all' && categories.some((c) => c.toLowerCase() === oldVal)) {
+                el.value = oldVal;
+            }
+        }
+
+        function _ctfRenderCoachBubble(role, text) {
+            const flow = document.getElementById('ctfCoachFlow');
+            if (!flow) return;
+            const row = document.createElement('div');
+            if (role === 'assistant') {
+                row.className = 'flex justify-start items-end gap-2';
+                row.innerHTML = '<div class="w-6 h-6 rounded-full bg-cyan-900/50 border border-cyan-700/50 flex items-center justify-center text-[10px]">🤖</div>' +
+                    '<div class="bg-slate-800/90 text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] text-xs border border-slate-700/60 leading-6 ctf-bidi">' + renderAiReplyPretty(text) + '</div>';
+            } else {
+                row.className = 'flex justify-end items-end gap-2';
+                row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border border-cyan-600/50 ctf-bidi">' +
+                    _osintEscape(String(text || '')).replace(/\n/g, '<br>') +
+                    '</div><div class="w-6 h-6 rounded-full bg-cyan-900/40 border border-cyan-700/40 flex items-center justify-center text-[10px]">👤</div>';
+            }
+            flow.appendChild(row);
+            flow.scrollTop = flow.scrollHeight;
+        }
+
+        function _ctfPopulateCoachSelect() {
+            const sel = document.getElementById('ctfCoachChallengeSelect');
+            if (!sel) return;
+            const rows = Array.isArray(_ctfChallenges) ? _ctfChallenges : [];
+            sel.innerHTML = rows.map((c) => {
+                const d = String(c.difficulty || '').toUpperCase() || '-';
+                const solved = c.solved ? ' (SOLVED)' : '';
+                return `<option value="${_osintEscape(c.id)}">${_osintEscape(c.title || c.id)} [${_osintEscape(d)}]${solved}</option>`;
+            }).join('');
+        }
+
+        function ctfCoachNewChat() {
+            const flow = document.getElementById('ctfCoachFlow');
+            if (flow) flow.innerHTML = '';
+            _ctfRenderCoachBubble('assistant', 'أنا TITAN AI Coach. اختر التحدي ثم اسألني عن أول خطوة أو خطة حل أو كيف تتجنب الأخطاء الشائعة.');
+        }
+
+        async function _ctfAskAiCore(challengeId, question, attempt) {
+            const res = await fetch('/api/ctf/assistant', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ challenge_id: challengeId, question, attempt })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'فشل مساعد AI.');
+            const badge = document.getElementById('ctfAiSourceBadge');
+            if (badge) {
+                badge.textContent = 'AI: TITAN';
+                badge.className = 'text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300 font-bold';
+            }
+            return data;
+        }
+
+        async function ctfCoachSend() {
+            const sel = document.getElementById('ctfCoachChallengeSelect');
+            const input = document.getElementById('ctfCoachInput');
+            const btn = document.getElementById('ctfCoachSendBtn');
+            const challengeId = (sel?.value || '').trim();
+            const question = (input?.value || '').trim();
+            if (!challengeId) return titanAlert('اختر تحدي أولاً.');
+            if (!question) return titanAlert('اكتب سؤالك أولاً.');
+
+            _ctfRenderCoachBubble('user', question);
+            if (input) input.value = '';
+            if (btn) { btn.disabled = true; btn.textContent = '...'; }
+            try {
+                const data = await _ctfAskAiCore(challengeId, question, '');
+                _ctfRenderCoachBubble('assistant', data.reply || 'لا يوجد رد.');
+            } catch (e) {
+                _ctfRenderCoachBubble('assistant', 'تعذر الحصول على رد من TITAN الآن: ' + (e?.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'إرسال'; }
+            }
+        }
+
+        function ctfStartQuickCoach(challengeId) {
+            const sel = document.getElementById('ctfCoachChallengeSelect');
+            if (sel) sel.value = String(challengeId || '');
+            ctfCoachNewChat();
+            const question = 'اعطني خطة حل مختصرة من 4 خطوات لهذا التحدي بدون كشف العلم.';
+            const input = document.getElementById('ctfCoachInput');
+            if (input) input.value = question;
+            ctfCoachSend();
         }
 
         function _ctfRenderList(items) {
@@ -9172,6 +9396,7 @@ HTML_TEMPLATE = """
                             <div class="flex gap-2">
                                 <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-amber-900/40 border border-amber-800/50 text-amber-300 text-xs font-bold">تحقق من الحل</button>
                                 <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-violet-900/40 border border-violet-800/50 text-violet-300 text-xs font-bold">مساعد AI</button>
+                                <button onclick="ctfStartQuickCoach('${_osintEscape(c.id)}')" class="flex-1 py-2 rounded-lg bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">Coach سريع</button>
                             </div>
                         </div>
 
@@ -9196,13 +9421,22 @@ HTML_TEMPLATE = """
                     if (meta) meta.innerText = data.error || 'فشل تحميل التحديات.';
                     return;
                 }
+                _ctfLastPayload = data;
                 _ctfChallenges = data.challenges || [];
+                _ctfRefreshCategoryFilter();
+                _ctfUpdateDashboard(data);
+                _ctfPopulateCoachSelect();
                 ctfApplyFilters();
+                if (!window.__ctfCoachInitDone) {
+                    window.__ctfCoachInitDone = true;
+                    ctfCoachNewChat();
+                }
                 if (meta) {
                     const solved = Number(data.solved_count || 0);
                     const total = Number((_ctfChallenges || []).length);
                     const totalSolved = Number(data.total_solved || solved);
-                    meta.innerText = `الدورة: ${data.rotation_key || '-'} | محلول في الدفعة: ${solved}/${total} | إجمالي المحلول: ${totalSolved} | آخر تحديث: ${new Date().toLocaleTimeString()}`;
+                    const points = Number(data.total_points || 0);
+                    meta.innerText = `الدورة: ${data.rotation_key || '-'} | محلول في الدفعة: ${solved}/${total} | إجمالي المحلول: ${totalSolved} | النقاط: ${points} | آخر تحديث: ${new Date().toLocaleTimeString()}`;
                 }
             } catch (e) {
                 if (meta) meta.innerText = `تعذر تحميل التحديات: ${e.message || e}`;
@@ -9293,17 +9527,7 @@ HTML_TEMPLATE = """
             out.className = 'p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi';
             out.innerText = 'AI يفكر...';
             try {
-                const res = await fetch('/api/ctf/assistant', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ challenge_id: challengeId, question, attempt })
-                });
-                const data = await res.json();
-                if (!data.success) {
-                    out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 whitespace-pre-wrap ctf-bidi';
-                    out.innerText = data.error || 'فشل مساعد AI.';
-                    return;
-                }
+                const data = await _ctfAskAiCore(challengeId, question, attempt);
                 out.className = 'p-2 rounded-lg bg-violet-900/20 border border-violet-800/50 text-sm text-violet-200 whitespace-pre-wrap ctf-bidi';
                 out.innerText = data.reply || 'لا يوجد رد.';
             } catch (e) {
@@ -18158,7 +18382,12 @@ def ctf_ai_assistant_route():
     try:
         reply = _call_do_ai(user_prompt, system_prompt=ctf_system)
         add_audit_log("CTF AI Hint", f"challenge={challenge_id}", username=session.get('username', ''))
-        return jsonify({"success": True, "reply": reply})
+        return jsonify({
+            "success": True,
+            "reply": reply,
+            "source": "titan",
+            "model": (DO_AI_MODEL or 'tor1')
+        })
     except Exception as e:
         return jsonify({"success": False, "error": f"AI hint failed: {str(e)}"}), 500
 
