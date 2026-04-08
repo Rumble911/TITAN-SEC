@@ -92,7 +92,7 @@ SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 
 # --- DigitalOcean AI Agent Config ---
-DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://qc7djk7x6emxmlvcslcknjyf.agents.do-ai.run')
+DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://vrzo4x5ckv5tiputtr6i5iyk.agents.do-ai.run')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 DO_AI_MODEL = os.environ.get('DO_AI_MODEL', 'tor1')
 
@@ -4449,193 +4449,6 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="suite-section" class="hidden space-y-8">
-                <!-- ===== GLOBAL THREAT DASHBOARD (Interactive) ===== -->
-                <div class="relative rounded-2xl border border-purple-900/50 overflow-hidden shadow-[0_0_40px_rgba(168,85,247,0.12)]" style="background:#050508;">
-
-                    <!-- Animated Canvas Background -->
-                    <canvas id="threatCanvas" class="absolute inset-0 w-full h-full opacity-40" style="height:220px;"></canvas>
-
-                    <!-- Scanline overlay -->
-                    <div class="absolute inset-0 pointer-events-none" style="background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);"></div>
-
-                    <!-- Content -->
-                    <div class="relative z-10 p-5" style="min-height:220px;">
-                        <!-- Header Row -->
-                        <div class="flex items-start justify-between mb-3">
-                            <div>
-                                <div class="flex items-center gap-2 mb-0.5">
-                                    <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_#ef4444]"></span>
-                                    <span class="text-[10px] font-mono text-red-400 uppercase tracking-[0.3em]">LIVE FEED</span>
-                                </div>
-                                <h3 class="text-xl font-black text-purple-300 tracking-tight">Global Threat Dashboard</h3>
-                                <p class="text-[10px] font-mono text-gray-500 tracking-[0.2em] uppercase mt-0.5">Neural Threat Intelligence · Active Protocols <span id="gtd-protocols" class="text-purple-400">04</span></p>
-                            </div>
-                            <!-- Live clock -->
-                            <div class="text-right">
-                                <div id="gtd-clock" class="font-mono text-purple-400 text-sm font-bold tracking-widest"></div>
-                                <div class="text-[9px] text-gray-600 font-mono mt-0.5">UTC+03:00</div>
-                            </div>
-                        </div>
-
-                        <!-- Stats Row -->
-                        <div class="grid grid-cols-4 gap-2 mb-3">
-                            <div class="bg-black/40 border border-red-900/40 rounded-xl p-2 text-center">
-                                <div id="gtd-threats" class="text-lg font-black text-red-400 font-mono leading-none">0</div>
-                                <div class="text-[9px] text-gray-500 mt-0.5 uppercase tracking-wider">Threats Blocked</div>
-                            </div>
-                            <div class="bg-black/40 border border-purple-900/40 rounded-xl p-2 text-center">
-                                <div id="gtd-enc" class="text-lg font-black text-purple-400 font-mono leading-none">0</div>
-                                <div class="text-[9px] text-gray-500 mt-0.5 uppercase tracking-wider">Encrypt Ops/s</div>
-                            </div>
-                            <div class="bg-black/40 border border-blue-900/40 rounded-xl p-2 text-center">
-                                <div id="gtd-nodes" class="text-lg font-black text-blue-400 font-mono leading-none">0</div>
-                                <div class="text-[9px] text-gray-500 mt-0.5 uppercase tracking-wider">Active Nodes</div>
-                            </div>
-                            <div class="bg-black/40 border border-green-900/40 rounded-xl p-2 text-center">
-                                <div id="gtd-entropy" class="text-lg font-black text-green-400 font-mono leading-none">0.00</div>
-                                <div class="text-[9px] text-gray-500 mt-0.5 uppercase tracking-wider">Entropy</div>
-                            </div>
-                        </div>
-
-                        <!-- Scrolling Cyber Ticker -->
-                        <div class="overflow-hidden rounded-lg bg-black/50 border border-purple-900/30 py-1.5 px-0 relative" style="height:28px;">
-                            <div id="gtd-ticker" class="flex gap-8 items-center font-mono text-[10px] whitespace-nowrap absolute" style="animation:gtdScroll 30s linear infinite;top:6px;left:0;">
-                                <span class="text-purple-400">AES-256-GCM · SHA3-512 · BLAKE3</span>
-                                <span class="text-red-400">⚠ INTRUSION ATTEMPT BLOCKED: 185.220.101.x</span>
-                                <span class="text-green-400">∑(p·log₂p) = 7.998 bits/byte</span>
-                                <span class="text-blue-400">RSA-4096 · ECDH-P521 · X25519</span>
-                                <span class="text-yellow-400">⚡ CIPHER: ChaCha20-Poly1305 · IV: 96bit nonce</span>
-                                <span class="text-purple-300">∀x∈{0,1}ⁿ: H(x) = H(k‖x) mod 2²⁵⁶</span>
-                                <span class="text-red-400">⚠ BRUTEFORCE DETECTED → FIREWALL ENGAGED</span>
-                                <span class="text-cyan-400">TLS 1.3 · HSTS · OCSP Stapling · CT Logs</span>
-                                <span class="text-green-300">KDF: PBKDF2-HMAC-SHA512 · 310,000 iterations</span>
-                                <span class="text-orange-400">⚡ ZERO-DAY SIGNATURE UPDATED: CVE-2025-TITAN</span>
-                                <!-- duplicate for seamless loop -->
-                                <span class="text-purple-400">AES-256-GCM · SHA3-512 · BLAKE3</span>
-                                <span class="text-red-400">⚠ INTRUSION ATTEMPT BLOCKED: 185.220.101.x</span>
-                                <span class="text-green-400">∑(p·log₂p) = 7.998 bits/byte</span>
-                                <span class="text-blue-400">RSA-4096 · ECDH-P521 · X25519</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <style>
-                    @keyframes gtdScroll { from { transform:translateX(0) } to { transform:translateX(-50%) } }
-                    #threatCanvas { width: 100%; height: 100%; position: absolute; top: 0; left: 0; pointer-events: none; opacity: 0.4; }
-                </style>
-
-                <script>
-                (function(){
-                    const canvas = document.getElementById('threatCanvas');
-                    if(!canvas) return;
-                    const ctx = canvas.getContext('2d');
-                    
-                    function resizeCanvas(){
-                        canvas.width = canvas.offsetWidth;
-                        canvas.height = canvas.offsetHeight;
-                    }
-                    resizeCanvas();
-                    window.addEventListener('resize', resizeCanvas);
-
-                    // === Canvas Cyber Streams ===
-                    const CHARS = '01アイウエオカキクケコ∑∆∇∫∂π≠≡◊⊕⊗⊞⊟ABCDEF'.split('');
-                    const cols = Math.floor(canvas.width / 14) || 50;
-                    const drops = Array.from({length: cols + 1}, () => Math.random() * -50);
-                    const speeds = Array.from({length: cols + 1}, () => Math.random() * 0.4 + 0.15);
-                    const colors = ['#7c3aed','#a855f7','#c084fc','#f43f5e','#3b82f6'];
-
-                    // === Threat Pings ===
-                    const pings = [];
-                    function createPing() {
-                        if(pings.length > 5) return;
-                        pings.push({ 
-                            x: Math.random() * canvas.width, 
-                            y: Math.random() * canvas.height, 
-                            r: 0, 
-                            alpha: 1 
-                        });
-                    }
-                    setInterval(createPing, 3000);
-
-                    function drawThreatPings() {
-                        for (let i = pings.length - 1; i >= 0; i--) {
-                            const p = pings[i];
-                            ctx.beginPath();
-                            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-                            ctx.strokeStyle = `rgba(239, 68, 68, ${p.alpha})`;
-                            ctx.lineWidth = 2;
-                            ctx.stroke();
-                            
-                            ctx.beginPath();
-                            ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-                            ctx.fillStyle = `rgba(239, 68, 68, ${p.alpha})`;
-                            ctx.fill();
-
-                            p.r += 1.5;
-                            p.alpha -= 0.015;
-                            if (p.alpha <= 0) pings.splice(i, 1);
-                        }
-                    }
-
-                    function drawCyberStream(){
-                        ctx.fillStyle = 'rgba(5,5,8,0.18)';
-                        ctx.fillRect(0,0,canvas.width,canvas.height);
-                        drawThreatPings();
-                        for(let i=0;i<cols;i++){
-                            const char = CHARS[Math.floor(Math.random()*CHARS.length)];
-                            const color = colors[i % colors.length];
-                            ctx.font = `bold 12px monospace`;
-                            // head glow
-                            ctx.fillStyle = '#fff';
-                            ctx.shadowColor = color;
-                            ctx.shadowBlur = 8;
-                            ctx.fillText(char, i*14, drops[i]*14);
-                            // trail
-                            ctx.fillStyle = color + 'aa';
-                            ctx.shadowBlur = 3;
-                            ctx.fillText(CHARS[Math.floor(Math.random()*CHARS.length)], i*14, (drops[i]-1)*14);
-                            ctx.shadowBlur = 0;
-                            if(drops[i]*14 > canvas.height && Math.random() > 0.975) drops[i] = 0;
-                            drops[i] += speeds[i];
-                        }
-                    }
-                    setInterval(drawCyberStream, 50);
-
-                    // === Live Counters ===
-                    let threats = 14872, enc = 0, nodes = 217, entropy = 7.94;
-                    function updateCounters(){
-                        threats += Math.floor(Math.random()*3);
-                        enc = Math.floor(Math.random()*9999 + 5000);
-                        nodes = 200 + Math.floor(Math.random()*40);
-                        entropy = (7.90 + Math.random()*0.09).toFixed(3);
-                        const t = document.getElementById('gtd-threats');
-                        const e = document.getElementById('gtd-enc');
-                        const n = document.getElementById('gtd-nodes');
-                        const en = document.getElementById('gtd-entropy');
-                        if(t) t.textContent = threats.toLocaleString();
-                        if(e) e.textContent = enc.toLocaleString();
-                        if(n) n.textContent = nodes;
-                        if(en) en.textContent = entropy;
-                    }
-                    updateCounters();
-                    setInterval(updateCounters, 1200);
-
-                    // === Live Clock ===
-                    function updateClock(){
-                        const now = new Date();
-                        const h = String(now.getHours()).padStart(2,'0');
-                        const m = String(now.getMinutes()).padStart(2,'0');
-                        const s = String(now.getSeconds()).padStart(2,'0');
-                        const el = document.getElementById('gtd-clock');
-                        if(el) el.textContent = h + ':' + m + ':' + s;
-                    }
-                    updateClock();
-                    setInterval(updateClock, 1000);
-                })();
-                </script>
-
-
                 <!-- Features Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="md:col-span-2 bg-slate-900/50 p-5 rounded-xl border border-slate-700 hover:border-purple-500/50 transition-all group text-right">
@@ -5154,43 +4967,122 @@ HTML_TEMPLATE = """
 
             <!-- ===== OSINT SECTION ===== -->
             <div id="osint-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🕵️ OSINT Workbench</h2>
+                <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🕵️ OSINT Mission Center</h2>
 
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div class="lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
-                        <h3 class="text-sm font-bold text-indigo-300 mb-2">البحث الموحد (IP / Domain / URL / Email / Phone)</h3>
-                        <p class="text-[11px] text-gray-500 mb-3">اكتب أي هدف وسيتم تحليله تلقائياً حسب النوع مع درجة خطورة سريعة.</p>
+                <div class="relative overflow-hidden rounded-2xl border border-indigo-900/50 bg-gradient-to-r from-indigo-950/35 via-slate-950/60 to-cyan-950/30 p-4">
+                    <div class="absolute -top-10 -right-6 w-44 h-44 rounded-full bg-indigo-600/10 blur-3xl"></div>
+                    <div class="absolute -bottom-10 -left-6 w-44 h-44 rounded-full bg-cyan-600/10 blur-3xl"></div>
+                    <div class="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-[0.35em] text-indigo-300 font-mono">Threat Mapping Grid</div>
+                            <div class="text-sm text-gray-300 mt-1">تحليل موحد + مقارنة هدفين + تحليل دفعي + سجل نشاط حي في لوحة واحدة.</div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-0">
+                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                                <div class="text-[10px] text-gray-500">Total Runs</div>
+                                <div id="osintMissionTotal" class="text-base font-black text-indigo-300">0</div>
+                            </div>
+                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                                <div class="text-[10px] text-gray-500">High Risk</div>
+                                <div id="osintMissionHigh" class="text-base font-black text-rose-300">0</div>
+                            </div>
+                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                                <div class="text-[10px] text-gray-500">Avg Risk</div>
+                                <div id="osintMissionAvg" class="text-base font-black text-amber-300">0</div>
+                            </div>
+                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                                <div class="text-[10px] text-gray-500">Last Type</div>
+                                <div id="osintMissionLast" class="text-sm font-black text-cyan-300">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
+                        <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
+                            <h3 class="text-sm font-bold text-indigo-300">البحث الموحد (IP / Domain / URL / Email / Phone)</h3>
+                            <div class="text-[10px] text-gray-500">Enter = تحليل مباشر</div>
+                        </div>
+                        <p class="text-[11px] text-gray-500 mb-3">اكتب أي هدف وسيتم تحليله تلقائياً حسب النوع مع درجة خطورة سريعة وذكر المسار المقترح.</p>
+                        <div class="flex flex-wrap gap-2 mb-3">
+                            <button onclick="osintApplyPreset('ip')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">IP Demo</button>
+                            <button onclick="osintApplyPreset('domain')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">Domain Demo</button>
+                            <button onclick="osintApplyPreset('url')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">URL Demo</button>
+                            <button onclick="osintApplyPreset('email')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">Email Demo</button>
+                            <button onclick="osintApplyPreset('phone')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">Phone Demo</button>
+                        </div>
                         <div class="flex flex-col md:flex-row gap-2">
                             <input id="osintTargetInput" type="text" placeholder="8.8.8.8 أو example.com أو user@mail.com أو +962..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-left" dir="ltr">
                             <button onclick="runUnifiedOsint()" class="bg-indigo-900/50 hover:bg-indigo-800 px-5 py-3 rounded-xl font-bold border border-indigo-800/50 transition-all text-indigo-300">تحليل الهدف</button>
                         </div>
                         <div id="osintRiskScore" class="hidden mt-3 p-3 rounded-xl border text-sm font-bold"></div>
-                        <div id="osintUnifiedResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
+                        <div id="osintUnifiedResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-80 overflow-y-auto" dir="ltr"></div>
                     </div>
 
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
-                        <h3 class="text-sm font-bold text-indigo-300 mb-2">Watchlist</h3>
-                        <p class="text-[11px] text-gray-500 mb-3">احفظ الأهداف لمراقبتها وتصدير تقرير سريع.</p>
-                        <div class="flex gap-2 mb-2">
-                            <button onclick="saveCurrentOsintTarget()" class="flex-1 py-2 bg-indigo-900/40 hover:bg-indigo-800 rounded-lg text-xs font-bold text-indigo-300 border border-indigo-800/40">إضافة الهدف الحالي</button>
-                            <button onclick="exportOsintReport()" class="flex-1 py-2 bg-emerald-900/40 hover:bg-emerald-800 rounded-lg text-xs font-bold text-emerald-300 border border-emerald-800/40">تصدير JSON</button>
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-2">
+                        <h3 class="text-sm font-bold text-indigo-300">Watchlist</h3>
+                        <p class="text-[11px] text-gray-500">احفظ الأهداف، شغّلها بنقرة، وصدّر تقريرًا شاملًا.</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="saveCurrentOsintTarget()" class="py-2 bg-indigo-900/40 hover:bg-indigo-800 rounded-lg text-xs font-bold text-indigo-300 border border-indigo-800/40">إضافة الهدف الحالي</button>
+                            <button onclick="runWatchlistBatch()" class="py-2 bg-cyan-900/40 hover:bg-cyan-800 rounded-lg text-xs font-bold text-cyan-300 border border-cyan-800/40">تحليل الكل</button>
+                            <button onclick="clearOsintWatchlist()" class="py-2 bg-rose-900/30 hover:bg-rose-800 rounded-lg text-xs font-bold text-rose-300 border border-rose-800/40">تفريغ</button>
+                            <button onclick="exportOsintReport()" class="py-2 bg-emerald-900/40 hover:bg-emerald-800 rounded-lg text-xs font-bold text-emerald-300 border border-emerald-800/40">تصدير JSON</button>
                         </div>
-                        <div id="osintWatchlist" class="bg-black/40 border border-slate-700 rounded-lg p-2 max-h-56 overflow-y-auto text-xs text-gray-300"></div>
+                        <div id="osintWatchlist" class="bg-black/40 border border-slate-700 rounded-lg p-2 max-h-64 overflow-y-auto text-xs text-gray-300"></div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-4">
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-violet-900/40">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-bold text-violet-300">Batch Analyzer</h3>
+                            <button onclick="runBatchOsint()" class="px-3 py-1.5 rounded-lg bg-violet-900/40 hover:bg-violet-800 border border-violet-800/50 text-violet-300 text-xs font-bold">تشغيل دفعة</button>
+                        </div>
+                        <p class="text-[11px] text-gray-500 mb-2">ألصق أهداف متعددة (سطر لكل هدف) لتحليلها مرة واحدة.</p>
+                        <textarea id="osintBatchInput" rows="6" placeholder="8.8.8.8&#10;example.com&#10;support@example.com&#10;https://example.com/login" class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs font-mono" dir="ltr"></textarea>
+                        <div id="osintBatchResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs max-h-80 overflow-y-auto"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-bold text-fuchsia-300">Target Comparison</h3>
+                            <button onclick="compareOsintTargets()" class="px-3 py-1.5 rounded-lg bg-fuchsia-900/40 hover:bg-fuchsia-800 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">مقارنة</button>
+                        </div>
+                        <p class="text-[11px] text-gray-500 mb-2">قارن هدفين لاكتشاف أيهما أعلى مخاطرة وأقرب للتهديد.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input id="osintCompareA" type="text" placeholder="Target A" class="p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs font-mono" dir="ltr">
+                            <input id="osintCompareB" type="text" placeholder="Target B" class="p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs font-mono" dir="ltr">
+                        </div>
+                        <div id="osintCompareResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs max-h-80 overflow-y-auto"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
                         <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter</h3>
-                        <p class="text-[11px] text-gray-500 mb-3">فحص اليوزرنيم على أشهر مواقع التواصل الاجتماعي فقط.</p>
-                        <div class="flex gap-2">
+                        <p class="text-[11px] text-gray-500 mb-3">فحص اليوزرنيم على المنصات الأشهر مع وضع سريع أو عميق.</p>
+                        <div class="flex flex-col md:flex-row gap-2">
                             <input id="osintUsernameInput" type="text" placeholder="username" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none font-mono text-left" dir="ltr">
+                            <select id="osintUsernameMode" class="p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs">
+                                <option value="quick">Quick</option>
+                                <option value="deep" selected>Deep</option>
+                            </select>
                             <button onclick="huntUsername()" class="bg-cyan-900/50 hover:bg-cyan-800 px-5 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-300">ابحث</button>
                         </div>
                         <div class="mt-2 text-[11px] text-cyan-100/90 bg-slate-900/60 border border-cyan-900/30 rounded-lg px-3 py-2">
                             المنصات المفحوصة: Facebook, Instagram, X, TikTok, YouTube, Threads, Snapchat, Telegram, LinkedIn, Pinterest, Reddit, Twitch.
                         </div>
                         <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-bold text-amber-300">Activity Timeline</h3>
+                            <button onclick="clearOsintActivityLog()" class="px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تنظيف السجل</button>
+                        </div>
+                        <p class="text-[11px] text-gray-500 mb-2">آخر عمليات OSINT مع الوقت والنوع ودرجة المخاطرة.</p>
+                        <div id="osintActivityFeed" class="space-y-2 max-h-72 overflow-y-auto"></div>
                     </div>
                 </div>
             </div>
@@ -5493,38 +5385,35 @@ HTML_TEMPLATE = """
                 <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🎓 التعلم والمحاكاة</h2>
 
                 <div class="bg-indigo-950/20 border border-indigo-900/40 p-4 rounded-xl text-xs text-indigo-200 leading-6">
-                    هذا المختبر تعليمي دفاعي فقط. يتم حجب أي أوامر أو أكواد اختراق تنفيذية، ويتركز المحتوى على الفهم، الرصد، الاستجابة، والتحصين.
+                    هذا القسم الآن عبارة عن موسوعة دفاعية شاملة للهجمات والثغرات الشائعة والمتقدمة. المحتوى توعوي دفاعي فقط: كيف تحدث الهجمة، أين تحدث، أشهر الأدوات المرتبطة بها، وخطوات الحماية العملية.
+                </div>
+
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3">
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                        <input id="learningSearchInput" type="text" oninput="learningCatalogApplyFilters()" placeholder="ابحث باسم الهجمة أو الأداة أو وسيلة الحماية..." class="md:col-span-2 p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                        <select id="learningCategoryFilter" onchange="learningCatalogApplyFilters()" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
+                        <select id="learningSeverityFilter" onchange="learningCatalogApplyFilters()" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
+                        <button onclick="learningCatalogResetFilters()" class="p-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">إعادة ضبط الفلاتر</button>
+                    </div>
+                    <div id="learningCatalogStats" class="text-[11px] text-gray-400"></div>
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="xl:col-span-1 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-indigo-300">AI Scenario Studio</h3>
-                        <div class="p-2.5 rounded border border-cyan-800/40 bg-cyan-950/20 space-y-2">
-                            <div class="text-[11px] font-bold text-cyan-300">AI Scenario Studio</div>
-                            <input id="learningCustomAttackType" type="text" placeholder="اكتب نوع الهجمة (مثال: OAuth Token Theft على Microsoft 365)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" />
-                            <textarea id="learningCustomObjective" rows="2" placeholder="هدف السيناريو (مثال: تدريب SOC على كشف الاختراق خلال 30 دقيقة)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
-                            <div class="text-[10px] text-cyan-100/80 leading-5">الكتالوج القديم تمت إزالته. اكتب نوع الهجمة هنا والـ AI يبني السيناريو كامل من الصفر.</div>
+                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <h3 class="text-sm font-bold text-cyan-300">قائمة الثغرات والهجمات</h3>
+                            <span class="text-[10px] text-gray-500">عرض دفاعي منظّم</span>
                         </div>
-                        <select id="learningLevel" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="beginner">توعوي - مبتدئ</option>
-                            <option value="intermediate" selected>توعوي - متوسط</option>
-                            <option value="advanced">توعوي - متقدم</option>
-                        </select>
-                        <select id="learningUiLang" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="ar" selected>نتائج المحاكاة: عربي</option>
-                            <option value="en">Simulation Results: English</option>
-                        </select>
-                        <textarea id="learningOrgContext" rows="4" placeholder="سياق بيئتك (مثال: شركة صغيرة، ويندوز، O365، بدون EDR)..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
-                        <button onclick="learningRunSimulation()" class="w-full py-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تشغيل محاكاة دفاعية</button>
+                        <div id="learningAttackCards" class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[34rem] overflow-y-auto pr-1"></div>
                     </div>
 
-                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
-                            <h3 class="text-sm font-bold text-cyan-300">نتائج المحاكاة + شرح AI</h3>
-                            <span id="learningLastAttackBadge" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">لا يوجد تشغيل بعد</span>
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <h3 class="text-sm font-bold text-fuchsia-300">التفاصيل الكاملة</h3>
+                            <span id="learningSelectedAttackBadge" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">اختر هجمة</span>
                         </div>
-                        <div id="learningResult" class="p-3 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap leading-6">
-                            اكتب نوع الهجمة ثم اضغط "تشغيل محاكاة دفاعية".
+                        <div id="learningAttackDetail" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6 max-h-[34rem] overflow-y-auto">
+                            اختر أي هجمة من القائمة لعرض شرح كامل عنها.
                         </div>
                     </div>
                 </div>
@@ -7337,391 +7226,377 @@ HTML_TEMPLATE = """
 
             if (next === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if (next === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
+            if (next === 'learninglab' && typeof learningInitCatalog === 'function') learningInitCatalog();
         }
 
-        let __learningLastSimulation = null;
-        let __learningWarRoomTimer = null;
-        let __learningWarRoomState = null;
-        let __learningAudioCtx = null;
-
-        function _learningChecklistHtml(items) {
-            const rows = Array.isArray(items) ? items.filter(Boolean) : [];
-            if (!rows.length) {
-                return '<div class="text-fuchsia-200/80">لا توجد خطة تدريب متاحة حالياً.</div>';
+        const LEARNING_ATTACK_CATALOG = [
+            {
+                id: 'web-attacks',
+                title: 'هجمات تطبيقات الويب (Web Attacks)',
+                items: [
+                    { id: 'sqli', name: 'SQL Injection (SQLi)', how: 'يتم تمرير مدخلات غير منقاة داخل استعلام قاعدة البيانات، فيفسرها المحرك كأوامر SQL بدل بيانات عادية.', where: 'نماذج تسجيل الدخول، البحث، صفحات الاستعلام، وواجهات API التي تبني SQL ديناميكياً.', tools: ['Burp Suite', 'sqlmap', 'OWASP ZAP'], protection: ['استخدم Prepared Statements', 'طبّق Validation صارم للمدخلات', 'فعّل مبدأ أقل صلاحية لحسابات DB', 'راقب أخطاء SQL وأنماط الاستعلام الشاذة'] },
+                    { id: 'xss', name: 'Cross-Site Scripting (XSS)', how: 'يُحقن JavaScript خبيث في الصفحة ويُنفذ داخل متصفح الضحية عند عرض المحتوى.', where: 'حقول التعليقات، الملفات الشخصية، رسائل الدعم، وأي مكان يعرض مدخلات المستخدم دون ترميز.', tools: ['Burp Suite', 'XSS Hunter', 'OWASP ZAP'], protection: ['ترميز المخرجات حسب السياق', 'فعّل Content Security Policy', 'امنع inline scripts قدر الإمكان', 'فلترة المدخلات الخطرة مع السماح الآمن'] },
+                    { id: 'csrf', name: 'Cross-Site Request Forgery (CSRF)', how: 'يتم خداع المستخدم الموثق لإرسال طلب شرعي من متصفحه دون علمه.', where: 'عمليات تغيير كلمة المرور، التحويلات المالية، إعدادات الحساب، وطلبات POST الحساسة.', tools: ['Burp Suite', 'Browser DevTools', 'OWASP ZAP'], protection: ['CSRF Token لكل طلب حساس', 'استخدم SameSite Cookies', 'تحقق من Origin/Referer', 'أضف إعادة مصادقة للعمليات الحرجة'] },
+                    { id: 'idor', name: 'Insecure Direct Object Reference (IDOR)', how: 'يتم تغيير معرف مورد (ID) للوصول إلى بيانات تخص مستخدم آخر لغياب التحقق المنطقي.', where: 'روابط profile/order/invoice ونقاط API التي تعتمد معرفات مباشرة.', tools: ['Burp Suite', 'Postman', 'OWASP ZAP'], protection: ['تحقق من الملكية Authorization لكل مورد', 'لا تعتمد على ID مكشوف فقط', 'استخدم معرفات غير قابلة للتخمين', 'اختبر BOLA في الـ API دورياً'] },
+                    { id: 'broken-access', name: 'Broken Access Control', how: 'تطبيق الصلاحيات غير مكتمل أو متفرق، فيسمح بوصول غير مصرح به.', where: 'لوحات الإدارة، مسارات مخفية، وظائف premium، ونهايات API الداخلية.', tools: ['Burp Suite', 'OWASP ZAP', 'Nuclei'], protection: ['مركزة قرارات الصلاحيات في middleware واحد', 'اختبار صلاحيات على مستوى كل endpoint', 'تعطيل الوصول الافتراضي ومنح الصلاحية صراحة', 'مراجعة دورية للأدوار والـ RBAC'] },
+                    { id: 'ssrf', name: 'Server-Side Request Forgery (SSRF)', how: 'يُجبر الخادم على إجراء طلبات إلى عناوين داخلية أو خدمات حساسة نيابة عن المهاجم.', where: 'خدمات سحب URL/preview/webhook/image fetch وعمليات التكامل الخارجية.', tools: ['Burp Suite', 'Interactsh/OAST', 'Caido'], protection: ['Allowlist للوجهات المسموح بها', 'حظر عناوين metadata/internal ranges', 'عزل الشبكة الداخلية عن خوادم الويب', 'فرض DNS resolution آمن مع منع إعادة التوجيه الخطر'] },
+                    { id: 'dir-traversal', name: 'Directory Traversal', how: 'استغلال مسارات الملفات للوصول إلى ملفات خارج الدليل المسموح.', where: 'نقاط تحميل/عرض الملفات، download endpoints، وأي باراميتر path.', tools: ['Burp Suite', 'ffuf', 'OWASP ZAP'], protection: ['طبعنة المسار Canonicalization', 'استخدم معرفات ملفات لا مسارات مباشرة', 'حصر الوصول داخل مجلد آمن', 'تعطيل عرض ملفات النظام الحساسة'] },
+                    { id: 'cmd-injection', name: 'Command Injection', how: 'مدخلات المستخدم تُمرر لأمر نظام تشغيل دون تعقيم فتسمح بتنفيذ أوامر إضافية.', where: 'وظائف ping/traceroute/convert/backup التي تستدعي shell.', tools: ['Burp Suite', 'Semgrep', 'SAST/DAST scanners'], protection: ['تجنب shell execution قدر الإمكان', 'استخدم APIs آمنة بدل shell', 'قيّد القيم عبر allowlist', 'تشغيل الخدمة بحساب محدود الصلاحية'] },
+                    { id: 'xxe', name: 'XML External Entity (XXE)', how: 'معالج XML يسمح بكيانات خارجية فتُقرأ ملفات أو تُرسل طلبات داخلية.', where: 'SOAP APIs، XML upload، SSO/SAML parsers القديمة.', tools: ['Burp Suite', 'OWASP ZAP', 'xmllint for validation'], protection: ['تعطيل DTD وExternal Entities', 'التحول إلى JSON عند الإمكان', 'استخدام مكتبات parser آمنة', 'تحديث المكونات القديمة'] },
+                    { id: 'file-inclusion', name: 'File Inclusion (LFI/RFI)', how: 'إدخال اسم ملف غير موثوق في include/require أو loader.', where: 'أنظمة القوالب، تحميل اللغات/themes، وباراميترات الصفحة الديناميكية.', tools: ['Burp Suite', 'Nuclei', 'OWASP ZAP'], protection: ['منع include بناءً على مدخل خارجي', 'Allowlist للملفات المسموح بها', 'عزل ملفات الإعدادات الحساسة', 'إغلاق remote include إن وجد'] }
+                ]
+            },
+            {
+                id: 'network-attacks',
+                title: 'هجمات الشبكة والبنية التحتية (Network Attacks)',
+                items: [
+                    { id: 'ddos', name: 'DDoS', how: 'إغراق الخدمة بعدد ضخم من الطلبات من مصادر متعددة لتعطيل التوفر.', where: 'واجهات الويب العامة، DNS، APIs، وبوابات الشبكة.', tools: ['Botnet panels (malicious)', 'LOIC/HOIC (historical)', 'hping3'], protection: ['استخدم CDN/WAF وحماية DDoS', 'Rate limiting وtraffic shaping', 'Anycast وتوزيع جغرافي للخدمة', 'Runbooks للاستجابة السريعة'] },
+                    { id: 'mitm', name: 'Man-in-the-Middle (MitM)', how: 'اعتراض أو تعديل الاتصال بين طرفين دون علمهما.', where: 'شبكات Wi-Fi عامة، شبكات داخلية غير مؤمنة، وصلات بدون TLS صحيح.', tools: ['Wireshark', 'Ettercap', 'Bettercap'], protection: ['TLS قوي مع certificate validation', 'HSTS وcertificate pinning', 'استخدام VPN موثوق', 'منع الشبكات غير الموثوقة'] },
+                    { id: 'arp-spoof', name: 'ARP Spoofing', how: 'تزوير ردود ARP لربط IP البوابة بعنوان MAC المهاجم.', where: 'شبكات LAN المحلية غير المحمية.', tools: ['Ettercap', 'Bettercap', 'arpspoof'], protection: ['Dynamic ARP Inspection', 'Static ARP للأجهزة الحساسة', 'تقسيم الشبكة VLANs', 'مراقبة ARP anomalies'] },
+                    { id: 'dns-spoof', name: 'DNS Spoofing / Poisoning', how: 'إرجاع سجلات DNS مزيفة لتوجيه المستخدم لخوادم خبيثة.', where: 'Resolvers غير مؤمنة، راوترات منزلية، وشبكات وسيطة.', tools: ['dnsspoof', 'Responder', 'Bettercap'], protection: ['فعّل DNSSEC', 'استخدم DoH/DoT من مزود موثوق', 'تأمين resolver الداخلي', 'مراقبة تغيّر سجلات DNS الحرجة'] },
+                    { id: 'port-scan', name: 'Port Scanning', how: 'استكشاف المنافذ والخدمات المفتوحة لتحديد سطح الهجوم.', where: 'الخوادم العامة، الأجهزة الداخلية، وأجهزة الشبكة.', tools: ['Nmap', 'Masscan', 'Rustscan'], protection: ['إغلاق المنافذ غير الضرورية', 'تقسيم الشبكة وتقليل التعريض', 'جدران نارية بقواعد صريحة', 'كشف scanning عبر IDS'] },
+                    { id: 'packet-sniff', name: 'Packet Sniffing', how: 'التقاط حزم الشبكة وتحليلها لاستخراج بيانات حساسة.', where: 'شبكات غير مشفرة أو عند وجود وصول إلى switch/span.', tools: ['Wireshark', 'tcpdump', 'TShark'], protection: ['تشفير النقل دائماً', '802.1X للشبكات الداخلية', 'عزل الشبكة الحساسة', 'كشف بطاقات promiscuous إن أمكن'] },
+                    { id: 'evil-twin', name: 'Evil Twin', how: 'إنشاء نقطة Wi-Fi وهمية بنفس SSID لجذب الضحايا.', where: 'المقاهي، المكاتب، المطارات، والأماكن العامة.', tools: ['Airbase-ng', 'Wifiphisher', 'hostapd'], protection: ['تثقيف المستخدمين حول SSID المزيف', 'WPA2-Enterprise/WPA3', 'Certificate-based auth', 'منع الاتصال التلقائي بالشبكات المفتوحة'] },
+                    { id: 'rogue-ap', name: 'Rogue Access Point', how: 'إدخال نقطة وصول غير مصرح بها داخل الشبكة المؤسسية.', where: 'المكاتب والفروع دون رقابة لاسلكية مركزية.', tools: ['Portable AP devices', 'Kismet', 'Acrylic Wi-Fi'], protection: ['Wireless NAC', 'اكتشاف Rogue AP باستمرار', 'إغلاق منافذ غير موثوقة', 'سياسة صارمة للأجهزة اللاسلكية'] },
+                    { id: 'vlan-hopping', name: 'VLAN Hopping', how: 'استغلال إعدادات switching للوصول إلى VLAN غير مصرح بها.', where: 'بيئات سويتشات بإعداد trunk/native vlan غير آمن.', tools: ['Yersinia', 'Scapy', 'Switch testing suites'], protection: ['تعطيل DTP', 'تغيير native VLAN الافتراضية', 'Port security', 'فصل الإدارة عن شبكات المستخدمين'] },
+                    { id: 'bgp-hijack', name: 'BGP Hijacking', how: 'إعلان مسارات BGP مضللة لإعادة توجيه أو إسقاط حركة الإنترنت.', where: 'مزودو الخدمة وشبكات الإنترنت بين الأنظمة المستقلة.', tools: ['BGP monitoring platforms', 'Route analysis tools', 'RIPE RIS/RouteViews'], protection: ['RPKI وRoute Origin Validation', 'تصفية الإعلانات بين AS', 'Monitoring لمسارات BGP', 'اتفاقيات تنسيق استجابة مع مزودي الخدمة'] }
+                ]
+            },
+            {
+                id: 'password-attacks',
+                title: 'هجمات كلمات المرور (Password Attacks)',
+                items: [
+                    { id: 'bruteforce', name: 'Brute Force Attack', how: 'تجربة كم هائل من الاحتمالات حتى العثور على كلمة المرور الصحيحة.', where: 'بوابات تسجيل الدخول، VPN، SSH، ولوحات الإدارة.', tools: ['Hydra', 'Burp Intruder', 'Medusa'], protection: ['MFA إلزامي', 'Lockout ذكي بعد محاولات فاشلة', 'Rate limiting', 'كلمات مرور قوية مع مراقبة تسجيل الدخول'] },
+                    { id: 'dictionary', name: 'Dictionary Attack', how: 'استخدام قوائم كلمات مرور شائعة بدل تجربة جميع الاحتمالات.', where: 'أنظمة لا تفرض تعقيد أو تستخدم كلمات مرور متوقعة.', tools: ['Hashcat', 'John the Ripper', 'Hydra'], protection: ['حظر كلمات المرور الشائعة', 'سياسة طول وتعقيد', 'فحص كلمة المرور أثناء الإنشاء', 'MFA'] },
+                    { id: 'credential-stuffing', name: 'Credential Stuffing', how: 'استخدام بيانات اعتماد مسربة من موقع آخر لتسجيل الدخول في خدمات مختلفة.', where: 'المنصات الشعبية ذات قاعدة مستخدمين كبيرة.', tools: ['Sentry MBA (abuse)', 'OpenBullet (abuse)', 'Custom automation'], protection: ['MFA', 'كشف الأنماط الآلية والبوتات', 'فحص بيانات الاعتماد المسربة', 'تنبيه المستخدم عند نشاط غير معتاد'] },
+                    { id: 'password-spraying', name: 'Password Spraying', how: 'تجربة كلمة شائعة واحدة على عدد كبير من الحسابات لتجنب قفل حساب واحد.', where: 'Active Directory وSSO portals.', tools: ['Spray tools', 'Kerbrute', 'Custom scripts'], protection: ['Smart lockout policies', 'MFA', 'مراقبة محاولات فشل موزعة', 'منع كلمات المرور القابلة للتخمين'] },
+                    { id: 'rainbow-table', name: 'Rainbow Table Attack', how: 'مطابقة الـ hash مع جداول محسوبة مسبقاً لكلمات مرور معروفة.', where: 'قواعد بيانات مسربة تستخدم hashing ضعيف بلا salt.', tools: ['RainbowCrack', 'Hash lookup datasets', 'Offline cracking suites'], protection: ['Hashing قوي مثل Argon2/bcrypt/scrypt', 'Salt فريد لكل كلمة مرور', 'Pepper على مستوى الخادم', 'منع تخزين كلمات المرور بنص واضح'] }
+                ]
+            },
+            {
+                id: 'social-engineering',
+                title: 'هجمات الهندسة الاجتماعية (Social Engineering)',
+                items: [
+                    { id: 'phishing', name: 'Phishing', how: 'رسائل مزورة تدفع الضحية للنقر أو إدخال بيانات حساسة.', where: 'البريد الإلكتروني، صفحات تسجيل مزيفة، وروابط مختصرة.', tools: ['Email spoofing kits', 'Typosquatting domains', 'Phishing simulation platforms'], protection: ['بوابة بريد آمنة', 'DMARC/SPF/DKIM', 'تدريب توعوي دوري', 'التحقق من الروابط قبل النقر'] },
+                    { id: 'spear-phishing', name: 'Spear Phishing', how: 'تصيّد مخصص لشخص أو فريق بناءً على معلومات دقيقة عنه.', where: 'الموظفون ذوو الصلاحيات، المالية، الموارد البشرية، الإدارة.', tools: ['OSINT tooling', 'Email crafting suites', 'Social profiling tools'], protection: ['توعية موجهة للأدوار الحساسة', 'إجراءات تحقق إضافية للطلبات الحرجة', 'تقليل المعلومات العلنية عن الموظفين', 'مراجعة ثنائية للعمليات المالية'] },
+                    { id: 'vishing', name: 'Vishing', how: 'اتصال هاتفي انتحالي لانتزاع OTP أو بيانات دخول أو تحويلات.', where: 'خدمة العملاء، فرق الدعم، والموظفين الجدد.', tools: ['Caller ID spoofing', 'VoIP automation', 'Social scripts'], protection: ['سياسة عدم مشاركة OTP نهائياً', 'Call-back verification', 'توثيق إجراءات الدعم', 'تدريب على التحقق الصوتي'] },
+                    { id: 'smishing', name: 'Smishing', how: 'رسائل SMS مزيفة تتضمن روابط أو طلبات عاجلة خادعة.', where: 'هواتف الموظفين والعملاء، حملات بنوك وشحن وهمية.', tools: ['SMS gateways (abuse)', 'Short-link cloaking', 'Fraud kits'], protection: ['حظر روابط SMS غير الموثوقة', 'بوابات حماية للهاتف المؤسسي', 'توعية المستخدمين', 'قنوات تواصل رسمية موحدة'] },
+                    { id: 'whaling', name: 'Whaling', how: 'استهداف القيادات التنفيذية برسائل عالية الإقناع (مثل BEC).', where: 'حسابات C-level، الإدارة المالية، التعاقدات.', tools: ['Business email impersonation', 'Deep reconnaissance', 'Lookalike domains'], protection: ['تدقيق مالي متعدد المستويات', 'MFA وحماية البريد التنفيذي', 'تحقق خارج القناة للمدفوعات', 'تنبيهات قوية على قواعد البريد'] },
+                    { id: 'baiting', name: 'Baiting', how: 'إغراء الضحية بوسيط مغرٍ (USB/ملف مجاني) يحوي حمولة خبيثة.', where: 'مواقف السيارات، المكاتب، ومشاركة ملفات غير موثوقة.', tools: ['USB drop techniques', 'Malicious media payloads', 'Social lure content'], protection: ['تعطيل AutoRun', 'حظر وسائط USB غير المعتمدة', 'EDR على endpoints', 'حملات توعية واقعية'] },
+                    { id: 'pretexting', name: 'Pretexting', how: 'بناء قصة مصدّقة للحصول على معلومات حساسة أو تنفيذ طلب.', where: 'مكالمات الدعم، طلبات الموارد البشرية، والتحقق من الهوية.', tools: ['Identity spoofing', 'Scripted conversation playbooks', 'Profile harvesting'], protection: ['إجراءات تحقق هوية متعددة', 'مبدأ أقل معرفة للبيانات', 'توثيق جميع طلبات المعلومات الحساسة', 'توعية الموظفين ضد الثقة العاطفية'] }
+                ]
+            },
+            {
+                id: 'malware',
+                title: 'البرمجيات الخبيثة (Malware)',
+                items: [
+                    { id: 'ransomware', name: 'Ransomware', how: 'تشفير بيانات الضحية ثم طلب فدية مقابل مفتاح فك التشفير.', where: 'أجهزة المستخدمين، خوادم الملفات، والنسخ المشتركة.', tools: ['Ransomware families', 'Initial access brokers', 'Command-and-control infrastructure'], protection: ['نسخ احتياطية معزولة ومجربة', 'EDR + segmentation', 'إدارة ترقيعات قوية', 'خطة IR واختبارات تعافي'] },
+                    { id: 'trojan', name: 'Trojan Horse', how: 'برنامج يبدو شرعياً لكنه ينفذ سلوكاً خبيثاً في الخلفية.', where: 'مرفقات البريد، البرامج المقرصنة، installers المقلدة.', tools: ['Packers', 'Dropper frameworks', 'Remote access malware'], protection: ['Application allowlisting', 'تنزيل البرامج من مصادر موثوقة', 'فحص سلوكي للملفات', 'تقييد صلاحيات المستخدم'] },
+                    { id: 'spyware', name: 'Spyware', how: 'يجمع نشاط المستخدم وبياناته ويرسلها خفية لمهاجم.', where: 'أنظمة تشغيل غير محدثة، تطبيقات مجهولة، إضافات متصفح مشبوهة.', tools: ['Infostealer families', 'Browser data grabbers', 'Persistence modules'], protection: ['مكافحة برمجيات خبيثة حديثة', 'تحديث دائم للأنظمة', 'مراقبة outbound traffic', 'تقليل تثبيت البرامج غير المعتمدة'] },
+                    { id: 'keylogger', name: 'Keyloggers', how: 'تسجيل ضغطات لوحة المفاتيح لسرقة كلمات المرور والبيانات الحساسة.', where: 'أجهزة endpoint المخترقة أو عبر ملحقات hardware.', tools: ['Software keyloggers', 'USB hardware loggers', 'RAT plugins'], protection: ['MFA يقلل ضرر التسريب', 'EDR ورقابة kernel hooks', 'فحص مادي للأجهزة الحساسة', 'لوحات مفاتيح افتراضية للحالات الحرجة'] },
+                    { id: 'rootkit', name: 'Rootkits', how: 'إخفاء مكونات خبيثة عميقاً داخل النظام لضمان بقاء طويل الأمد.', where: 'Kernel/boot layers على أجهزة ذات حماية ضعيفة.', tools: ['Kernel-mode rootkits', 'Bootkits', 'Persistence toolsets'], protection: ['Secure Boot', 'قياسات سلامة النظام', 'Re-image للأجهزة المصابة', 'تحديثات kernel والبرامج الثابتة'] },
+                    { id: 'adware', name: 'Adware', how: 'حقن إعلانات مزعجة وتتبع سلوك المستخدم لتحقيق ربح غير مشروع.', where: 'متصفحات المستخدمين، تطبيقات مجانية غير موثوقة.', tools: ['Browser hijackers', 'Bundled installers', 'Ad injection SDK abuse'], protection: ['حظر الإضافات غير الموثوقة', 'Application control', 'تنظيف دوري للمتصفحات', 'توعية المستخدم قبل التثبيت'] },
+                    { id: 'botnet', name: 'Botnets', how: 'تحويل الأجهزة المصابة إلى شبكة روبوتات تنفذ أوامر مركزية.', where: 'IoT، endpoints، خوادم مكشوفة وضعيفة.', tools: ['C2 frameworks', 'Malware loaders', 'Propagation scripts'], protection: ['تقسيم الشبكة', 'تغيير كلمات المرور الافتراضية للأجهزة', 'مراقبة سلوك beaconing', 'تعطيل الخدمات غير اللازمة'] },
+                    { id: 'fileless', name: 'Fileless Malware', how: 'تنفيذ الحمولة في الذاكرة باستخدام أدوات النظام الشرعية لتفادي الكشف التقليدي.', where: 'Windows endpoints عبر scripting engines والعمليات الداخلية.', tools: ['PowerShell abuse', 'WMI abuse', 'In-memory loaders'], protection: ['EDR سلوكي', 'تقييد scripting policies', 'حماية AMSI', 'مراقبة العمليات غير الطبيعية'] }
+                ]
+            },
+            {
+                id: 'advanced-technical',
+                title: 'هجمات متقدمة وثغرات تقنية (Advanced & Technical)',
+                items: [
+                    { id: 'zero-day', name: 'Zero-Day Exploit', how: 'استغلال ثغرة غير معروفة للمطور قبل توفر تصحيح رسمي.', where: 'المتصفحات، الأنظمة، منتجات المؤسسات، وسلاسل البرمجيات.', tools: ['Exploit brokers ecosystems', 'Advanced exploit frameworks', 'Vulnerability research tooling'], protection: ['Defense in depth', 'EDR/XDR', 'virtual patching عبر WAF/IPS', 'استجابة سريعة وتجزئة بيئة الإنتاج'] },
+                    { id: 'buffer-overflow', name: 'Buffer Overflow', how: 'كتابة بيانات أكثر من سعة الذاكرة المخصصة مما يغير مسار التنفيذ.', where: 'برمجيات C/C++ غير المحمية، خدمات شبكية قديمة.', tools: ['Fuzzers', 'Debugger suites', 'Static analyzers'], protection: ['استخدام لغات/مكتبات آمنة', 'Compiler protections مثل ASLR/DEP/Canaries', 'اختبارات fuzzing دورية', 'مراجعة ذاكرة دقيقة'] },
+                    { id: 'supply-chain', name: 'Supply Chain Attack', how: 'اختراق مورد أو مكتبة موثوقة للوصول لعدد كبير من الضحايا عبر التحديثات.', where: 'مستودعات الحزم، CI/CD، تحديثات الموردين.', tools: ['Dependency confusion techniques', 'Typosquatting packages', 'Build pipeline abuse'], protection: ['SBOM', 'توقيع الحزم والتحقق منها', 'قفل الإصدارات واعتماد registry موثوق', 'مراقبة سلوك التحديثات'] },
+                    { id: 'side-channel', name: 'Side-Channel Attack', how: 'استنتاج معلومات حساسة عبر قياسات جانبية مثل الزمن أو الطاقة أو الإشعاع.', where: 'أجهزة مشفرة، شرائح، بيئات متعددة المستأجرين.', tools: ['Timing analysis tooling', 'Power analysis labs', 'Hardware probes'], protection: ['خوارزميات constant-time', 'عزل فيزيائي عند الحاجة', 'تقليل تسريبات التوقيت', 'تدقيق أمني للأجهزة عالية الحساسية'] },
+                    { id: 'cryptojacking', name: 'Cryptojacking', how: 'استغلال قدرة المعالجة لتعدين العملات دون موافقة المستخدم.', where: 'خوادم مخترقة، متصفحات، حاويات Cloud.', tools: ['Mining malware', 'Browser mining scripts', 'Cloud abuse automation'], protection: ['مراقبة CPU/GPU anomalies', 'حظر mining domains/signatures', 'تقوية cloud IAM', 'تنبيهات استهلاك موارد غير طبيعي'] },
+                    { id: 'api-hacking', name: 'API Hacking', how: 'استغلال ضعف التوثيق أو التحقق أو الصلاحيات في واجهات API.', where: 'REST/GraphQL endpoints خاصة mobile وmicroservices.', tools: ['Postman', 'Burp Suite', 'OWASP ZAP'], protection: ['OAuth/JWT مضبوط', 'Rate limiting', 'BOLA/BFLA testing', 'Schema validation وlogging شامل'] },
+                    { id: 'sim-swapping', name: 'SIM Swapping', how: 'نقل رقم الضحية إلى شريحة المهاجم للاستحواذ على OTP والرسائل.', where: 'حسابات تعتمد SMS MFA فقط.', tools: ['Social engineering against carrier', 'Identity fraud kits', 'Account takeover workflows'], protection: ['استخدام MFA غير SMS', 'PIN لدى شركة الاتصالات', 'تنبيهات فورية لتغيير الشريحة', 'تأمين الحسابات بقنوات بديلة'] },
+                    { id: 'replay', name: 'Replay Attack', how: 'إعادة إرسال رسالة/رمز صحيح التقط مسبقاً لخداع النظام وتنفيذ نفس العملية.', where: 'بروتوكولات مصادقة ضعيفة، APIs بلا nonce/timestamp.', tools: ['Traffic capture tools', 'Proxy repeaters', 'Custom replayers'], protection: ['Nonce وTimestamp', 'Session binding', 'توقيع الطلبات', 'رفض الطلبات المكررة'] },
+                    { id: 'exploit-kits', name: 'Exploit Kits', how: 'منصات جاهزة تستهدف ثغرات المتصفح/الملحقات تلقائياً عند زيارة صفحة مصابة.', where: 'إعلانات مخترقة، مواقع مصابة، صفحات redirect خبيثة.', tools: ['Exploit kit frameworks', 'Drive-by delivery chains', 'Malvertising infrastructure'], protection: ['تحديث المتصفح والإضافات', 'Ad/script blocking policies', 'Network filtering', 'عزل المتصفح في بيئات حساسة'] },
+                    { id: 'bluetooth', name: 'Bluejacking / Bluesnarfing', how: 'استغلال إعدادات أو ثغرات Bluetooth للوصول إلى بيانات أو إرسال محتوى غير مرغوب.', where: 'هواتف وأجهزة قريبة مع بلوتوث مكشوف أو إعدادات ضعيفة.', tools: ['Bluetooth scanners', 'BlueZ utilities', 'Specialized RF toolkits'], protection: ['إخفاء الجهاز وإيقاف discoverability', 'تحديث firmware', 'اقتران آمن برمز قوي', 'تعطيل Bluetooth عند عدم الحاجة'] }
+                ]
             }
-            return rows.map((x, idx) => `<div class="text-fuchsia-100">${idx + 1}. ${_resultEscape(x)}</div>`).join('');
+        ];
+
+        let __learningCatalogReady = false;
+        let __learningSelectedAttackId = '';
+
+        const LEARNING_SEVERITY_BY_ATTACK = {
+            'sqli': 'high', 'xss': 'high', 'csrf': 'medium', 'idor': 'high', 'broken-access': 'critical',
+            'ssrf': 'critical', 'dir-traversal': 'high', 'cmd-injection': 'critical', 'xxe': 'high', 'file-inclusion': 'high',
+            'ddos': 'high', 'mitm': 'high', 'arp-spoof': 'medium', 'dns-spoof': 'high', 'port-scan': 'medium',
+            'packet-sniff': 'high', 'evil-twin': 'high', 'rogue-ap': 'high', 'vlan-hopping': 'high', 'bgp-hijack': 'critical',
+            'bruteforce': 'medium', 'dictionary': 'medium', 'credential-stuffing': 'high', 'password-spraying': 'high', 'rainbow-table': 'high',
+            'phishing': 'high', 'spear-phishing': 'high', 'vishing': 'medium', 'smishing': 'medium', 'whaling': 'critical', 'baiting': 'medium', 'pretexting': 'medium',
+            'ransomware': 'critical', 'trojan': 'high', 'spyware': 'high', 'keylogger': 'high', 'rootkit': 'critical', 'adware': 'medium', 'botnet': 'critical', 'fileless': 'critical',
+            'zero-day': 'critical', 'buffer-overflow': 'high', 'supply-chain': 'critical', 'side-channel': 'high', 'cryptojacking': 'medium',
+            'api-hacking': 'high', 'sim-swapping': 'high', 'replay': 'medium', 'exploit-kits': 'high', 'bluetooth': 'medium'
+        };
+
+        function _learningSeverityMeta(level) {
+            const key = String(level || 'medium').toLowerCase();
+            if (key === 'critical') return { label: 'Critical', cls: 'text-rose-200 border-rose-700/60 bg-rose-900/30' };
+            if (key === 'high') return { label: 'High', cls: 'text-orange-200 border-orange-700/60 bg-orange-900/30' };
+            if (key === 'low') return { label: 'Low', cls: 'text-emerald-200 border-emerald-700/60 bg-emerald-900/30' };
+            return { label: 'Medium', cls: 'text-amber-200 border-amber-700/60 bg-amber-900/30' };
         }
 
-        function learningRenderTrainingChecklist() {
-            const box = document.getElementById('learningTrainingChecklist');
-            if (!box) return;
-            const sim = (__learningLastSimulation && typeof __learningLastSimulation === 'object') ? __learningLastSimulation : {};
-            const items = Array.isArray(sim.training_checklist) ? sim.training_checklist : [];
-            const title = _resultEscape(sim.title || 'الخطة التدريبية');
-            box.innerHTML = `
-                <div class="text-xs font-bold text-fuchsia-300 mb-2">Checklist: ${title}</div>
-                <div class="space-y-1">${_learningChecklistHtml(items)}</div>
-            `;
-            box.classList.remove('hidden');
-        }
+        function _learningBuildPlaybook(item) {
+            const attackName = String(item?.name || 'الهجمة');
+            const category = String(item?.category_id || 'general');
 
-        function _learningListHtml(items, emptyText = 'N/A') {
-            const rows = Array.isArray(items) ? items.filter(Boolean) : [];
-            if (!rows.length) {
-                return `<div class="text-gray-400 text-xs">${_resultEscape(emptyText)}</div>`;
-            }
-            return rows.map((x) => `<div class="text-xs text-gray-100">• ${_resultEscape(x)}</div>`).join('');
-        }
-
-        function _learningNormalizeLang(raw) {
-            return String(raw || '').trim().toLowerCase() === 'en' ? 'en' : 'ar';
-        }
-
-        function _learningTranslateResultHtmlToEnglish(html) {
-            let out = String(html || '');
-            const pairs = [
-                ['شرح كامل للثغرة (أولاً)', 'Full Vulnerability Brief (First)'],
-                ['الجذور المحتملة', 'Root Causes'],
-                ['سلسلة الأثر', 'Impact Chain'],
-                ['درجة الخطورة', 'Risk Score'],
-                ['نوع الهجمة المخصص:', 'Custom Attack Type:'],
-                ['هدف التمرين:', 'Exercise Objective:'],
-                ['وضع الصلاحية:', 'Authority Mode:'],
-                ['صلاحيات كاملة داخل بيئة محاكاة', 'Full simulated authority'],
-                ['طريقة الهجوم (توعوي)', 'Attack Method (Awareness)'],
-                ['كيف يتم استغلال الثغرة؟ (توعوي بدون أوامر)', 'How Exploitation Happens (Awareness, no offensive commands)'],
-                ['مراحل الهجوم (محاكاة توعوية)', 'Attack Journey (Awareness Simulation)'],
-                ['محاكاة واقعية', 'Realistic Simulation'],
-                ['مسار الدخول الأولي:', 'Initial Access Vector:'],
-                ['إيجاز قائد غرفة العمليات', 'War Room Commander Brief'],
-                ['الخط الزمني (T+)', 'Timeline (T+)'],
-                ['حقن الأحداث أثناء التمرين', 'Exercise Injects'],
-                ['نقاط القرار الحرجة', 'Critical Decision Points'],
-                ['الأدلة المتوقعة للتحقق', 'Expected Evidence Artifacts'],
-                ['البث الحي لغرفة العمليات', 'Live War Room Stream'],
-                ['الخط الزمني المباشر', 'Live Timeline'],
-                ['تحديثات الحادث', 'Incident Feed'],
-                ['بطاقات الضغط', 'Pressure Cards'],
-                ['مؤشرات التهديد المحتملة (IOC)', 'Potential IOCs'],
-                ['ضوابط التحصين', 'Hardening Controls'],
-                ['خطة الكشف', 'Detection Plan'],
-                ['خطة الاستجابة', 'Response Plan'],
-                ['سياق Metasploit (مرجعي دفاعي فقط)', 'Metasploit Context (Defensive Reference Only)'],
-                ['شرح AI التفصيلي', 'AI Deep Explanation'],
-                ['مؤشرات نجاح التمرين', 'Exercise KPIs'],
-                ['شروط الفوز', 'Win Conditions'],
-                ['أشهر الأدوات المرتبطة بالسيناريو', 'Common Tools Used in This Attack'],
-                ['أوامر شائعة (بشكل مبسط)', 'Common Commands (Simplified)'],
-                ['كيف أعرف أن المحاولة نجحت؟', 'How to tell the attempt likely succeeded?'],
-                ['كيف أعرف أنها لم تنجح؟', 'How to tell the attempt likely failed?'],
-                ['لا توجد مؤشرات', 'No indicators'],
-                ['لا توجد شروط فوز', 'No win conditions'],
-                ['لا توجد مؤشرات نجاح', 'No success indicators'],
-                ['لا توجد مؤشرات فشل', 'No failure indicators'],
-                ['لا توجد خطة كشف', 'No detection plan'],
-                ['لا توجد خطة استجابة', 'No response plan'],
-                ['لا توجد مؤشرات تهديد', 'No IOCs'],
-                ['لا توجد ضوابط', 'No controls'],
-            ];
-            pairs.forEach(([ar, en]) => {
-                out = out.split(ar).join(en);
-            });
-            return out;
-        }
-
-        function learningApplySuggestedAttack(rawValue) {
-            const inp = document.getElementById('learningCustomAttackType');
-            const out = document.getElementById('learningResult');
-            const value = String(rawValue || '').trim();
-            if (inp && value) {
-                inp.value = value;
-                inp.focus();
-            }
-            if (out && value) {
-                out.textContent = 'تم تطبيق الاقتراح. اضغط تشغيل المحاكاة.';
-            }
-        }
-
-        function _learningStopWarRoomStream() {
-            if (__learningWarRoomTimer) {
-                clearInterval(__learningWarRoomTimer);
-                __learningWarRoomTimer = null;
-            }
-        }
-
-        function _learningPrimeWarRoomAudio() {
-            try {
-                const Ctx = window.AudioContext || window.webkitAudioContext;
-                if (!Ctx) return;
-                if (!__learningAudioCtx) {
-                    __learningAudioCtx = new Ctx();
-                }
-                if (__learningAudioCtx && __learningAudioCtx.state === 'suspended') {
-                    __learningAudioCtx.resume().catch(() => {});
-                }
-            } catch (_) {
-                // ignore audio errors
-            }
-        }
-
-        function _learningPlayWarRoomTone() {
-            try {
-                if (!__learningAudioCtx) return;
-                if (__learningAudioCtx.state === 'suspended') {
-                    __learningAudioCtx.resume().catch(() => {});
-                }
-                const now = __learningAudioCtx.currentTime;
-                const osc = __learningAudioCtx.createOscillator();
-                const gain = __learningAudioCtx.createGain();
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(880, now);
-                gain.gain.setValueAtTime(0.0001, now);
-                gain.gain.linearRampToValueAtTime(0.028, now + 0.02);
-                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-                osc.connect(gain);
-                gain.connect(__learningAudioCtx.destination);
-                osc.start(now);
-                osc.stop(now + 0.17);
-            } catch (_) {
-                // ignore audio errors
-            }
-        }
-
-        function _learningFlashWarRoom(wrap) {
-            if (!wrap) return;
-            wrap.classList.add('ring-2', 'ring-red-400/80', 'animate-pulse');
-            setTimeout(() => {
-                wrap.classList.remove('ring-2', 'ring-red-400/80', 'animate-pulse');
-            }, 520);
-        }
-
-        function _learningRenderWarRoomStream() {
-            const wrap = document.getElementById('learningWarRoomStream');
-            const timelineEl = document.getElementById('learningLiveTimeline');
-            const feedEl = document.getElementById('learningLiveFeed');
-            const pressureEl = document.getElementById('learningLivePressure');
-            const statusEl = document.getElementById('learningLiveStatus');
-            const progressEl = document.getElementById('learningLiveProgress');
-            const toggleBtn = document.getElementById('learningLiveToggleBtn');
-            if (!wrap || !timelineEl || !feedEl || !pressureEl || !statusEl || !progressEl) return;
-            if (!__learningWarRoomState) return;
-
-            const st = __learningWarRoomState;
-            const tRows = st.timeline.slice(0, Math.min(st.timeline.length, st.step + 1));
-            const fRows = st.feed.slice(0, Math.min(st.feed.length, st.step + 1));
-            const pVisible = Math.max(0, Math.min(st.pressure.length, Math.floor((st.step + 1) / 2)));
-            const pRows = st.pressure.slice(0, pVisible);
-
-            const lastPressureVisible = Number(st.lastPressureVisible || 0);
-            const hasNewInject = pVisible > lastPressureVisible;
-            st.lastPressureVisible = pVisible;
-
-            timelineEl.innerHTML = _learningListHtml(tRows, 'بانتظار أول تحديث...');
-            feedEl.innerHTML = _learningListHtml(fRows, 'بانتظار أول تحديث...');
-            pressureEl.innerHTML = _learningListHtml(pRows, 'لا توجد بطاقات ضغط بعد.');
-
-            if (hasNewInject) {
-                _learningFlashWarRoom(wrap);
-                _learningPlayWarRoomTone();
-            }
-
-            const total = Math.max(1, st.maxSteps);
-            const current = Math.min(total, st.step + 1);
-            const pct = Math.round((current / total) * 100);
-            progressEl.style.width = pct + '%';
-            const isAr = _learningNormalizeLang(st.lang) === 'ar';
-            statusEl.textContent = isAr
-                ? `الخطوة ${current}/${total} • ${st.isPlaying ? 'بث مباشر' : 'متوقف مؤقتا'}`
-                : `Step ${current}/${total} • ${st.isPlaying ? 'Streaming' : 'Paused'}`;
-            if (toggleBtn) toggleBtn.textContent = st.isPlaying ? 'إيقاف مؤقت' : 'استكمال';
-            if (toggleBtn && !isAr) toggleBtn.textContent = st.isPlaying ? 'Pause' : 'Resume';
-        }
-
-        function _learningWarRoomTick() {
-            if (!__learningWarRoomState) return;
-            const st = __learningWarRoomState;
-            if (st.step + 1 >= st.maxSteps) {
-                st.step = st.maxSteps - 1;
-                st.isPlaying = false;
-                _learningStopWarRoomStream();
-                _learningRenderWarRoomStream();
-                return;
-            }
-            st.step += 1;
-            _learningRenderWarRoomStream();
-        }
-
-        function learningWarRoomTogglePlay() {
-            if (!__learningWarRoomState) return;
-            const st = __learningWarRoomState;
-            st.isPlaying = !st.isPlaying;
-            if (st.isPlaying) {
-                _learningStopWarRoomStream();
-                __learningWarRoomTimer = setInterval(_learningWarRoomTick, 2200);
-            } else {
-                _learningStopWarRoomStream();
-            }
-            _learningRenderWarRoomStream();
-        }
-
-        function learningWarRoomNextStep() {
-            if (!__learningWarRoomState) return;
-            const st = __learningWarRoomState;
-            st.isPlaying = false;
-            _learningStopWarRoomStream();
-            if (st.step + 1 < st.maxSteps) st.step += 1;
-            _learningRenderWarRoomStream();
-        }
-
-        function _learningStartWarRoomStream(sim, lang) {
-            const timeline = Array.isArray(sim?.scenario_timeline) ? sim.scenario_timeline.filter(Boolean) : [];
-            const feed = Array.isArray(sim?.live_feed) ? sim.live_feed.filter(Boolean) : [];
-            const pressure = Array.isArray(sim?.pressure_cards) ? sim.pressure_cards.filter(Boolean) : [];
-            const maxSteps = Math.max(timeline.length, feed.length, pressure.length * 2, 1);
-
-            __learningWarRoomState = {
-                timeline,
-                feed,
-                pressure,
-                step: 0,
-                maxSteps,
-                isPlaying: true,
-                lastPressureVisible: 0,
-                lang: _learningNormalizeLang(lang),
+            const base = {
+                detect: [
+                    `مراقبة سجلات النظام بحثاً عن أنماط مرتبطة بـ ${attackName}.`,
+                    'إعداد تنبيه SIEM عند ظهور مؤشرات سلوك غير طبيعي.',
+                    'ربط التنبيهات مع سياق المستخدم/الجهاز/التطبيق لتقليل الإنذارات الكاذبة.'
+                ],
+                contain: [
+                    `عزل الأصل المتأثر فوراً عند الاشتباه بنشاط ${attackName}.`,
+                    'تعطيل الجلسات والتوكنات النشطة للحسابات المتأثرة.',
+                    'تفعيل قواعد WAF/Firewall أو ACLs مؤقتة لوقف الانتشار.'
+                ],
+                respond: [
+                    'جمع الأدلة الرقمية (Logs, Timeline, IOCs) وتوثيقها.',
+                    'تنفيذ خطة الاستجابة حسب الأولوية وتأثير الأعمال.',
+                    'إبلاغ أصحاب المصلحة وتحديث حالة الحادث بشكل دوري.'
+                ],
+                harden: [
+                    `إغلاق السبب الجذري الذي سمح بحدوث ${attackName}.`,
+                    'تحديث الضوابط الوقائية وكشف الفجوات في playbook.',
+                    'إعادة اختبار البيئة بعد الإصلاح وتحديث الدروس المستفادة.'
+                ]
             };
 
-            _learningStopWarRoomStream();
-            _learningRenderWarRoomStream();
-            __learningWarRoomTimer = setInterval(_learningWarRoomTick, 2200);
+            if (category === 'web-attacks') {
+                base.detect.unshift('مراقبة WAF وHTTP logs بحثاً عن payload patterns غير اعتيادية.');
+                base.harden.unshift('فرض Secure SDLC مع SAST/DAST وCode Review أمني قبل النشر.');
+            } else if (category === 'network-attacks') {
+                base.detect.unshift('تحليل NetFlow/IDS لاكتشاف spikes أو lateral movement مبكر.');
+                base.harden.unshift('تقسيم الشبكة وتطبيق Zero Trust بين المقاطع الداخلية.');
+            } else if (category === 'password-attacks') {
+                base.detect.unshift('مراقبة محاولات تسجيل دخول فاشلة موزعة زمنياً وجغرافياً.');
+                base.harden.unshift('فرض MFA وسياسات كلمات مرور مقاومة للهجمات الآلية.');
+            } else if (category === 'social-engineering') {
+                base.detect.unshift('تفعيل تدقيق رسائل البريد والرسائل النصية المشبوهة داخلياً.');
+                base.harden.unshift('تشغيل برامج توعية دورية ومحاكاة تصيد مع قياس الأداء.');
+            } else if (category === 'malware') {
+                base.detect.unshift('مراقبة سلوك endpoint (process injection, persistence, C2 beaconing).');
+                base.harden.unshift('تعزيز EDR ونسخ احتياطي معزول ومختبر بشكل دوري.');
+            } else if (category === 'advanced-technical') {
+                base.detect.unshift('استخدام Threat Intelligence ومراقبة استباقية للمؤشرات المتقدمة.');
+                base.harden.unshift('تطبيق Defense-in-Depth وpatch governance صارم للمكونات الحرجة.');
+            }
+
+            return base;
         }
 
-        async function learningRunSimulation() {
-            const contextEl = document.getElementById('learningOrgContext');
-            const levelEl = document.getElementById('learningLevel');
-            const uiLangEl = document.getElementById('learningUiLang');
-            const customAttackEl = document.getElementById('learningCustomAttackType');
-            const customObjectiveEl = document.getElementById('learningCustomObjective');
-            const out = document.getElementById('learningResult');
-            const badge = document.getElementById('learningLastAttackBadge');
-            if (!out) return;
+        function _learningAllAttacks() {
+            const rows = [];
+            LEARNING_ATTACK_CATALOG.forEach((cat) => {
+                (cat.items || []).forEach((item) => {
+                    const severity = LEARNING_SEVERITY_BY_ATTACK[item.id] || 'medium';
+                    rows.push({
+                        ...item,
+                        category_id: cat.id,
+                        category_title: cat.title,
+                        severity,
+                        playbook: _learningBuildPlaybook({ ...item, category_id: cat.id })
+                    });
+                });
+            });
+            return rows;
+        }
 
-            const orgContext = String(contextEl?.value || '').trim();
-            const trainingLevel = String(levelEl?.value || 'intermediate').trim().toLowerCase();
-            const resultLang = _learningNormalizeLang(uiLangEl?.value || 'ar');
-            const customAttackType = String(customAttackEl?.value || '').trim();
-            const customObjective = String(customObjectiveEl?.value || '').trim();
-            if (!customAttackType) {
-                out.textContent = 'اكتب نوع الهجمة المخصص أولاً.';
+        function _learningRenderStats(filtered, total) {
+            const box = document.getElementById('learningCatalogStats');
+            if (!box) return;
+            const families = new Set((filtered || []).map((x) => x.category_id)).size;
+            const critical = (filtered || []).filter((x) => String(x.severity) === 'critical').length;
+            box.innerHTML = `
+                <span class="text-cyan-300 font-bold">نتائج العرض: ${_resultEscape(filtered.length)}</span>
+                <span class="text-gray-500"> / ${_resultEscape(total)} هجمة</span>
+                <span class="mx-2 text-gray-600">|</span>
+                <span class="text-fuchsia-300 font-bold">العائلات الظاهرة: ${_resultEscape(families)}</span>
+                <span class="mx-2 text-gray-600">|</span>
+                <span class="text-rose-300 font-bold">Critical: ${_resultEscape(critical)}</span>
+            `;
+        }
+
+        function _learningRenderAttackCards(attacks) {
+            const box = document.getElementById('learningAttackCards');
+            if (!box) return;
+            if (!attacks.length) {
+                box.innerHTML = '<div class="text-xs text-gray-500 p-3 rounded border border-slate-700 bg-black/30">لا توجد نتائج مطابقة للفلتر الحالي.</div>';
                 return;
             }
 
-            out.textContent = 'جاري تشغيل المحاكاة الدفاعية وطلب شرح AI...';
-            _learningPrimeWarRoomAudio();
-            _learningStopWarRoomStream();
-            __learningWarRoomState = null;
-            __learningLastSimulation = null;
+            box.innerHTML = attacks.map((a) => {
+                const active = a.id === __learningSelectedAttackId;
+                const sev = _learningSeverityMeta(a.severity);
+                return `<button onclick="learningCatalogOpen('${_resultEscape(a.id)}')" class="text-right p-3 rounded-lg border transition-all ${active ? 'border-cyan-600 bg-cyan-900/20' : 'border-slate-700 bg-black/30 hover:border-cyan-800/60 hover:bg-cyan-950/10'}">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="text-xs font-bold ${active ? 'text-cyan-200' : 'text-gray-100'}">${_resultEscape(a.name)}</div>
+                        <span class="text-[10px] px-2 py-0.5 rounded border ${sev.cls}">${_resultEscape(sev.label)}</span>
+                    </div>
+                    <div class="text-[10px] text-gray-400 mt-1">${_resultEscape(a.category_title)}</div>
+                    <div class="text-[10px] text-gray-500 mt-1">Tools: ${_resultEscape((a.tools || []).slice(0, 3).join(' | '))}</div>
+                </button>`;
+            }).join('');
+        }
 
-            try {
-                const res = await fetch('/api/learning/simulate', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        org_context: orgContext,
-                        training_level: trainingLevel,
-                        result_lang: resultLang,
-                        custom_attack_type: customAttackType,
-                        custom_objective: customObjective,
-                    })
-                });
-                const contentType = String(res.headers.get('content-type') || '').toLowerCase();
-                let data = null;
-                if (contentType.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const rawText = await res.text();
-                    throw new Error(`HTTP ${res.status} - ${rawText.slice(0, 240) || 'Unexpected non-JSON response'}`);
-                }
+        function _learningRenderListItems(items, toneCls, emptyText) {
+            const rows = Array.isArray(items) ? items.filter(Boolean) : [];
+            if (!rows.length) return `<div class="text-[11px] text-gray-500">${_resultEscape(emptyText)}</div>`;
+            return rows.map((x) => `<div class="text-[11px] ${toneCls}">• ${_resultEscape(x)}</div>`).join('');
+        }
 
-                if (!res.ok || !data || !data.success) {
-                    if (data.code === 'attack_type_suggestion') {
-                        const rows = Array.isArray(data.suggestions) ? data.suggestions : [];
-                        const picked = rows.length ? rows : [{ canonical: String(data.suggested_attack_type || '').trim() }];
-                        const safeMsg = _resultEscape(data.error || 'الاسم غير واضح، هل تقصد الهجمة المقترحة؟');
-                        const optionsHtml = picked
-                            .filter((x) => String(x?.canonical || '').trim())
-                            .slice(0, 3)
-                            .map((x) => {
-                                const canonical = String(x.canonical || '').trim();
-                                const label = resultLang === 'en'
-                                    ? String(x.label_en || canonical)
-                                    : String(x.label_ar || canonical);
-                                const encoded = encodeURIComponent(canonical);
-                                return `<button onclick="learningApplySuggestedAttack(decodeURIComponent('${encoded}'))" class="px-3 py-1.5 rounded bg-amber-900/40 border border-amber-700/60 text-amber-100 text-xs font-bold">${_resultEscape(label)} (${_resultEscape(canonical)})</button>`;
-                            })
-                            .join('');
-                        out.innerHTML = `
-                            <div class="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3 space-y-2">
-                                <div class="text-xs text-amber-200">${safeMsg}</div>
-                                <div class="flex flex-wrap gap-2">${optionsHtml || `<span class="text-xs text-amber-200">${_resultEscape(String(data.suggested_attack_type || 'N/A'))}</span>`}</div>
-                            </div>
-                        `;
-                    } else {
-                        const errMsg = String(data?.error || `فشل تشغيل المحاكاة (HTTP ${res.status}).`);
-                        out.textContent = errMsg;
-                    }
-                    return;
-                }
+        function learningCatalogOpen(attackId) {
+            const all = _learningAllAttacks();
+            const hit = all.find((x) => x.id === attackId);
+            const box = document.getElementById('learningAttackDetail');
+            const badge = document.getElementById('learningSelectedAttackBadge');
+            if (!hit || !box) return;
 
-                const sim = data.simulation || {};
-                __learningLastSimulation = sim;
-                if (badge) {
-                    const t = sim.title || customAttackType;
-                    badge.textContent = String(t || '-');
-                }
+            __learningSelectedAttackId = hit.id;
+            if (badge) badge.textContent = hit.name;
+            const sev = _learningSeverityMeta(hit.severity);
+            const playbook = hit.playbook || {};
 
-                const html = `
-                    <div class="space-y-3">
-                        <div class="rounded-xl border border-indigo-800/50 bg-indigo-950/20 p-3">
-                            <div class="flex items-center justify-between gap-2 flex-wrap">
-                                <div class="text-sm font-bold text-indigo-200">${_resultEscape(sim.title || '-')}</div>
-                                <div class="text-[11px] text-slate-300">${_resultEscape(String(sim.severity || '').toUpperCase())} • ${_resultEscape(sim.category || '-')}</div>
-                            </div>
-                            <div class="text-xs text-slate-300 mt-2">${_resultEscape(sim.summary || '-')}</div>
-                            ${sim.custom_attack_type ? `<div class="text-[11px] text-cyan-300 mt-2">نوع الهجمة المخصص: ${_resultEscape(sim.custom_attack_type)}</div>` : ''}
+            box.innerHTML = `
+                <div class="space-y-3">
+                    <div class="rounded-lg border border-indigo-800/40 bg-indigo-950/20 p-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="text-sm font-bold text-indigo-200">${_resultEscape(hit.name)}</div>
+                            <span class="text-[10px] px-2 py-0.5 rounded border ${sev.cls}">${_resultEscape(sev.label)}</span>
                         </div>
+                        <div class="text-[11px] text-indigo-300 mt-1">${_resultEscape(hit.category_title)}</div>
+                    </div>
 
-                        <div class="rounded-xl border border-pink-800/50 bg-pink-950/20 p-3">
-                            <div class="text-xs font-bold text-pink-300 mb-2">شرح الثغرة: وين بتصير وكيف بتصير</div>
-                            <div class="text-[11px] text-pink-200/85 mb-2">${_resultEscape(sim.vulnerability_title || 'ملف الثغرة')}</div>
-                            <div class="text-xs text-pink-100 whitespace-pre-wrap leading-6">${_resultEscape(sim.vulnerability_master_brief || '-')}</div>
-                        </div>
+                    <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                        <div class="text-[11px] font-bold text-cyan-300 mb-1">كيف بتصير؟</div>
+                        <div class="text-[11px] text-gray-200 leading-6">${_resultEscape(hit.how)}</div>
+                    </div>
 
-                        <div class="rounded-xl border border-purple-800/50 bg-purple-950/20 p-3">
-                            <div class="text-xs font-bold text-purple-300 mb-2">وين بتصير وكيف بتصير</div>
-                            <div class="text-xs text-purple-100 leading-6">${_resultEscape(sim.exploit_pattern || '-')}</div>
-                        </div>
+                    <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                        <div class="text-[11px] font-bold text-amber-300 mb-1">وين بتصير؟</div>
+                        <div class="text-[11px] text-gray-200 leading-6">${_resultEscape(hit.where)}</div>
+                    </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div class="rounded-xl border border-cyan-800/50 bg-cyan-950/20 p-3">
-                                <div class="text-xs font-bold text-cyan-300 mb-2">أشهر الأدوات</div>
-                                ${_learningListHtml(sim.common_tools, 'لا توجد أدوات')}
+                    <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                        <div class="text-[11px] font-bold text-fuchsia-300 mb-1">أشهر الأدوات المستخدمة فيها</div>
+                        <div class="space-y-1">${_learningRenderListItems(hit.tools, 'text-fuchsia-100', 'لا توجد أدوات')}</div>
+                    </div>
+
+                    <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                        <div class="text-[11px] font-bold text-emerald-300 mb-1">إجراءات الحماية منها</div>
+                        <div class="space-y-1">${_learningRenderListItems(hit.protection, 'text-emerald-100', 'لا توجد إجراءات')}</div>
+                    </div>
+
+                    <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                        <div class="text-[11px] font-bold text-violet-300 mb-2">Defensive Playbook عملي (مرتبط بهذه الهجمة)</div>
+                        <div class="grid grid-cols-1 gap-2">
+                            <div class="p-2 rounded border border-slate-700 bg-slate-900/50">
+                                <div class="text-[10px] font-bold text-cyan-300 mb-1">1) Detect</div>
+                                <div class="space-y-1">${_learningRenderListItems(playbook.detect, 'text-cyan-100', 'N/A')}</div>
                             </div>
-                            <div class="rounded-xl border border-indigo-800/50 bg-indigo-950/20 p-3">
-                                <div class="text-xs font-bold text-indigo-300 mb-2">أشهر الأوامر</div>
-                                ${_learningListHtml(sim.common_commands, 'لا توجد أوامر')}
+                            <div class="p-2 rounded border border-slate-700 bg-slate-900/50">
+                                <div class="text-[10px] font-bold text-amber-300 mb-1">2) Contain</div>
+                                <div class="space-y-1">${_learningRenderListItems(playbook.contain, 'text-amber-100', 'N/A')}</div>
+                            </div>
+                            <div class="p-2 rounded border border-slate-700 bg-slate-900/50">
+                                <div class="text-[10px] font-bold text-fuchsia-300 mb-1">3) Respond</div>
+                                <div class="space-y-1">${_learningRenderListItems(playbook.respond, 'text-fuchsia-100', 'N/A')}</div>
+                            </div>
+                            <div class="p-2 rounded border border-slate-700 bg-slate-900/50">
+                                <div class="text-[10px] font-bold text-emerald-300 mb-1">4) Harden</div>
+                                <div class="space-y-1">${_learningRenderListItems(playbook.harden, 'text-emerald-100', 'N/A')}</div>
                             </div>
                         </div>
                     </div>
-                `;
-                out.innerHTML = resultLang === 'en' ? _learningTranslateResultHtmlToEnglish(html) : html;
-                _learningStopWarRoomStream();
-                __learningWarRoomState = null;
-            } catch (e) {
-                _learningStopWarRoomStream();
-                __learningWarRoomState = null;
-                const msg = (e && e.message) ? String(e.message) : 'فشل الاتصال بالخادم أثناء تشغيل المحاكاة.';
-                out.textContent = msg;
+                </div>
+            `;
+
+            learningCatalogApplyFilters(true);
+        }
+
+        function learningCatalogApplyFilters(skipDetailRefresh) {
+            const query = String(document.getElementById('learningSearchInput')?.value || '').trim().toLowerCase();
+            const category = String(document.getElementById('learningCategoryFilter')?.value || 'all');
+            const severity = String(document.getElementById('learningSeverityFilter')?.value || 'all').toLowerCase();
+            const all = _learningAllAttacks();
+            const filtered = all.filter((a) => {
+                if (category !== 'all' && a.category_id !== category) return false;
+                if (severity !== 'all' && String(a.severity || '').toLowerCase() !== severity) return false;
+                if (!query) return true;
+                const play = a.playbook || {};
+                const hay = [
+                    a.name,
+                    a.how,
+                    a.where,
+                    a.category_title,
+                    a.severity,
+                    ...(a.tools || []),
+                    ...(a.protection || []),
+                    ...(play.detect || []),
+                    ...(play.contain || []),
+                    ...(play.respond || []),
+                    ...(play.harden || [])
+                ].join(' ').toLowerCase();
+                return hay.includes(query);
+            });
+
+            _learningRenderStats(filtered, all.length);
+            _learningRenderAttackCards(filtered);
+
+            if (skipDetailRefresh) return;
+            if (!filtered.length) {
+                const detail = document.getElementById('learningAttackDetail');
+                const badge = document.getElementById('learningSelectedAttackBadge');
+                if (detail) detail.innerHTML = 'لا توجد نتائج حالياً. جرّب تغيير البحث أو التصنيف.';
+                if (badge) badge.textContent = 'لا نتائج';
+                return;
             }
+
+            const stillVisible = filtered.some((x) => x.id === __learningSelectedAttackId);
+            if (!stillVisible) {
+                learningCatalogOpen(filtered[0].id);
+            }
+        }
+
+        function learningCatalogResetFilters() {
+            const q = document.getElementById('learningSearchInput');
+            const c = document.getElementById('learningCategoryFilter');
+            const s = document.getElementById('learningSeverityFilter');
+            if (q) q.value = '';
+            if (c) c.value = 'all';
+            if (s) s.value = 'all';
+            learningCatalogApplyFilters(false);
+        }
+
+        function learningInitCatalog() {
+            if (__learningCatalogReady) {
+                learningCatalogApplyFilters(false);
+                return;
+            }
+
+            const categorySelect = document.getElementById('learningCategoryFilter');
+            const severitySelect = document.getElementById('learningSeverityFilter');
+            if (categorySelect) {
+                categorySelect.innerHTML = '<option value="all">كل العائلات</option>' + LEARNING_ATTACK_CATALOG.map((c) => `<option value="${_resultEscape(c.id)}">${_resultEscape(c.title)}</option>`).join('');
+            }
+            if (severitySelect) {
+                severitySelect.innerHTML = [
+                    '<option value="all">كل مستويات الخطورة</option>',
+                    '<option value="critical">Critical</option>',
+                    '<option value="high">High</option>',
+                    '<option value="medium">Medium</option>',
+                    '<option value="low">Low</option>'
+                ].join('');
+            }
+
+            __learningCatalogReady = true;
+            learningCatalogApplyFilters(false);
         }
 
         function _resultGetElement(target) {
@@ -9065,13 +8940,156 @@ HTML_TEMPLATE = """
             return 'unknown';
         }
 
+        function _osintRiskTone(score) {
+            const n = Number(score) || 0;
+            if (n >= 70) return { cls: 'text-rose-300 border-rose-800/50 bg-rose-900/20', label: 'High Risk' };
+            if (n >= 35) return { cls: 'text-amber-300 border-amber-800/50 bg-amber-900/20', label: 'Medium Risk' };
+            return { cls: 'text-emerald-300 border-emerald-800/50 bg-emerald-900/20', label: 'Low Risk' };
+        }
+
+        let _osintActivityLog = [];
+        let _osintLastUnified = null;
+
+        function _osintLoadActivityLog() {
+            try {
+                _osintActivityLog = JSON.parse(localStorage.getItem('titan_osint_activity') || '[]');
+                if (!Array.isArray(_osintActivityLog)) _osintActivityLog = [];
+            } catch (_) {
+                _osintActivityLog = [];
+            }
+        }
+
+        function _osintSaveActivityLog() {
+            localStorage.setItem('titan_osint_activity', JSON.stringify((_osintActivityLog || []).slice(0, 80)));
+        }
+
+        function _osintRenderActivityFeed() {
+            const box = document.getElementById('osintActivityFeed');
+            if (!box) return;
+            if (!_osintActivityLog.length) {
+                box.innerHTML = '<div class="text-xs text-gray-500 bg-black/30 border border-slate-700 rounded-lg p-3">لا يوجد نشاط OSINT حتى الآن.</div>';
+                return;
+            }
+            box.innerHTML = _osintActivityLog.slice(0, 25).map((row) => {
+                const tone = _osintRiskTone(row.risk_score || 0);
+                return `<div class="rounded-lg border border-slate-700 bg-black/35 p-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="font-mono text-[11px] text-cyan-300 break-all" dir="ltr">${_osintEscape(row.target || '')}</div>
+                        <span class="text-[10px] px-2 py-0.5 rounded border ${tone.cls}">${_osintEscape(String(row.risk_score || 0))}</span>
+                    </div>
+                    <div class="text-[10px] text-gray-400 mt-1">${_osintEscape((row.action || 'lookup').toUpperCase())} | ${_osintEscape((row.target_type || 'unknown').toUpperCase())} | ${_osintEscape(row.label || '')}</div>
+                    <div class="text-[10px] text-gray-600 mt-0.5">${_osintEscape(row.created_at || '')}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function _osintUpdateMissionStats() {
+            const log = Array.isArray(_osintActivityLog) ? _osintActivityLog : [];
+            const total = log.length;
+            const high = log.filter((x) => Number(x.risk_score || 0) >= 70).length;
+            const avg = total ? (log.reduce((a, b) => a + (Number(b.risk_score || 0) || 0), 0) / total) : 0;
+            const lastType = (log[0]?.target_type || '--').toUpperCase();
+            const totalEl = document.getElementById('osintMissionTotal');
+            const highEl = document.getElementById('osintMissionHigh');
+            const avgEl = document.getElementById('osintMissionAvg');
+            const lastEl = document.getElementById('osintMissionLast');
+            if (totalEl) totalEl.innerText = String(total);
+            if (highEl) highEl.innerText = String(high);
+            if (avgEl) avgEl.innerText = String(Math.round(avg));
+            if (lastEl) lastEl.innerText = lastType;
+        }
+
+        function _osintTrackActivity(action, payload) {
+            const row = {
+                action,
+                target: String(payload?.target || ''),
+                target_type: String(payload?.targetType || 'unknown'),
+                risk_score: Math.max(0, Math.min(100, Number(payload?.risk || 0) || 0)),
+                label: String(payload?.label || ''),
+                created_at: new Date().toLocaleString()
+            };
+            _osintActivityLog.unshift(row);
+            _osintActivityLog = _osintActivityLog.slice(0, 80);
+            _osintSaveActivityLog();
+            _osintRenderActivityFeed();
+            _osintUpdateMissionStats();
+        }
+
+        async function _osintLookupTarget(rawTarget) {
+            const target = String(rawTarget || '').trim();
+            const targetType = _osintDetectTargetType(target);
+            if (!target) throw new Error('Target is empty');
+            if (targetType === 'unknown') throw new Error('Unsupported target type');
+
+            let data = null;
+            let risk = 0;
+            let label = 'Low';
+
+            if (targetType === 'ip') {
+                const res = await fetch('/api/ip', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ip: target})
+                });
+                data = await res.json();
+                risk = data.proxy ? 75 : 20;
+                label = data.proxy ? 'Proxy/VPN Suspected' : 'Clean IP';
+            } else if (targetType === 'email') {
+                const res = await fetch('/api/scan/email', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email: target})
+                });
+                data = await res.json();
+                risk = Number(data.fraud_score || 0);
+                label = risk >= 70 ? 'High Fraud Probability' : (risk >= 35 ? 'Suspicious' : 'Likely Safe');
+            } else if (targetType === 'phone') {
+                const res = await fetch('/api/scan/phone', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({phone: target})
+                });
+                data = await res.json();
+                risk = Number(data.fraud_score || 0);
+                label = risk >= 70 ? 'High Abuse Probability' : (risk >= 35 ? 'Suspicious' : 'Likely Safe');
+            } else if (targetType === 'domain' || targetType === 'url') {
+                const finalUrl = targetType === 'domain' ? `https://${target}` : target;
+                const res = await fetch('/api/scan/url', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: finalUrl})
+                });
+                data = await res.json();
+                risk = Number(data.risk_score || 0);
+                label = risk >= 70 ? 'High Threat URL' : (risk >= 35 ? 'Potentially Suspicious' : 'Likely Safe URL');
+            }
+
+            return { target, targetType, data, risk, label };
+        }
+
+        function osintApplyPreset(kind) {
+            const map = {
+                ip: '8.8.8.8',
+                domain: 'example.com',
+                url: 'https://example.com/login',
+                email: 'security@example.com',
+                phone: '+12025550123'
+            };
+            const value = map[String(kind || '').toLowerCase()] || '';
+            const input = document.getElementById('osintTargetInput');
+            if (input) {
+                input.value = value;
+                input.focus();
+            }
+        }
+
         function _osintRenderRisk(score, label) {
             const box = document.getElementById('osintRiskScore');
             if (!box) return;
             const n = Math.max(0, Math.min(100, Number(score) || 0));
-            const color = n >= 70 ? 'text-red-400 border-red-800 bg-red-900/20' : (n >= 35 ? 'text-amber-300 border-amber-800 bg-amber-900/20' : 'text-green-400 border-green-800 bg-green-900/20');
-            box.className = `mt-3 p-3 rounded-xl border text-sm font-bold ${color}`;
-            box.innerText = `Risk Score: ${n}/100 - ${label}`;
+            const tone = _osintRiskTone(n);
+            box.className = `mt-3 p-3 rounded-xl border text-sm font-bold ${tone.cls}`;
+            box.innerHTML = `<div class="flex items-center justify-between gap-2"><span>Risk Score: ${_osintEscape(n)}/100</span><span class="text-[10px] uppercase tracking-wider">${_osintEscape(tone.label)}</span></div><div class="text-[11px] mt-1">${_osintEscape(label || '')}</div>`;
             box.classList.remove('hidden');
         }
 
@@ -9306,67 +9324,50 @@ HTML_TEMPLATE = """
             if (!out) return;
 
             setResultLoading(out, 'Unified OSINT', 'Running unified OSINT lookup...');
-            const targetType = _osintDetectTargetType(target);
-            let data = null;
-            let risk = 0;
-            let label = 'Low';
-
             try {
-                if (targetType === 'ip') {
-                    const res = await fetch('/api/ip', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ip: target}) });
-                    data = await res.json();
-                    risk = data.proxy ? 75 : 20;
-                    label = data.proxy ? 'Proxy/VPN Suspected' : 'Clean IP';
-                } else if (targetType === 'email') {
-                    const res = await fetch('/api/scan/email', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: target}) });
-                    data = await res.json();
-                    risk = Number(data.fraud_score || 0);
-                    label = risk >= 70 ? 'High Fraud Probability' : (risk >= 35 ? 'Suspicious' : 'Likely Safe');
-                } else if (targetType === 'phone') {
-                    const res = await fetch('/api/scan/phone', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({phone: target}) });
-                    data = await res.json();
-                    risk = Number(data.fraud_score || 0);
-                    label = risk >= 70 ? 'High Abuse Probability' : (risk >= 35 ? 'Suspicious' : 'Likely Safe');
-                } else if (targetType === 'domain' || targetType === 'url') {
-                    const finalUrl = targetType === 'domain' ? `https://${target}` : target;
-                    const res = await fetch('/api/scan/url', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: finalUrl}) });
-                    data = await res.json();
-                    risk = Number(data.risk_score || 0);
-                    label = risk >= 70 ? 'High Threat URL' : (risk >= 35 ? 'Potentially Suspicious' : 'Likely Safe URL');
-                } else {
-                    setResultError(out, 'نوع الهدف غير مدعوم. استخدم: IP, URL, Domain, Email, Phone');
-                    return;
-                }
+                const res = await _osintLookupTarget(target);
+                const { targetType, data, risk, label } = res;
 
                 _osintRenderRisk(risk, label);
                 setResultMarkup(out, 'Unified OSINT', _osintRenderUnifiedResult(target, targetType, data), { badge: targetType.toUpperCase() });
+                _osintLastUnified = {
+                    target,
+                    target_type: targetType,
+                    risk_score: risk,
+                    label,
+                    data
+                };
+                _osintTrackActivity('unified_lookup', { target, targetType, risk, label });
                 soundManager.success();
             } catch (e) {
-                setResultError(out, `Lookup failed: ${e.message || e}`);
+                setResultError(out, `Lookup failed: ${e.message || e}. Supported: IP, URL, Domain, Email, Phone`);
                 soundManager.error();
             }
         }
 
         async function huntUsername() {
             const username = (document.getElementById('osintUsernameInput')?.value || '').trim();
+            const mode = (document.getElementById('osintUsernameMode')?.value || 'deep').toLowerCase();
             const out = document.getElementById('osintUsernameResult');
             if (!username) return titanAlert('ادخل اسم مستخدم أولاً.');
             if (!out) return;
 
-            setResultLoading(out, 'Username Hunt', 'جاري فحص أشهر منصات التواصل الاجتماعي...');
+            setResultLoading(out, 'Username Hunt', `جاري فحص المنصات الاجتماعية (${mode.toUpperCase()})...`);
             try {
                 const res = await fetch('/api/osint/username', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username})
+                    body: JSON.stringify({username, mode})
                 });
                 const data = await res.json();
                 const badge = data.success ? 'SOCIAL' : 'Failed';
                 setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge });
                 if (data.found_count > 0) {
                     _osintRenderRisk(60, 'Public Username Footprint Detected');
+                    _osintTrackActivity('username_hunt', { target: username, targetType: 'username', risk: 60, label: 'Public footprint detected' });
                 } else {
                     _osintRenderRisk(15, 'No Immediate Public Presence');
+                    _osintTrackActivity('username_hunt', { target: username, targetType: 'username', risk: 15, label: 'No immediate public presence' });
                 }
             } catch (e) {
                 setResultError(out, `Username scan failed: ${e.message || e}`);
@@ -9374,8 +9375,28 @@ HTML_TEMPLATE = """
         }
 
         function updateUsernameModeHint() {
-            // Kept for backward compatibility with older init calls.
-            return;
+            if (window.__osintKeybindInit) return;
+            window.__osintKeybindInit = true;
+
+            const targetInput = document.getElementById('osintTargetInput');
+            if (targetInput) {
+                targetInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        runUnifiedOsint();
+                    }
+                });
+            }
+
+            const userInput = document.getElementById('osintUsernameInput');
+            if (userInput) {
+                userInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        huntUsername();
+                    }
+                });
+            }
         }
 
         function loadOsintWatchlist() {
@@ -9384,14 +9405,20 @@ HTML_TEMPLATE = """
             const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
             if (!list.length) {
                 setResultList(box, 'OSINT Watchlist', [], { badge: '0', emptyText: 'لا يوجد عناصر محفوظة بعد.' });
+                _osintLoadActivityLog();
+                _osintRenderActivityFeed();
+                _osintUpdateMissionStats();
                 return;
             }
             setResultList(
                 box,
                 'OSINT Watchlist',
-                list.map((x, i) => `<div class="flex items-center justify-between gap-2"><span class="font-mono text-[11px] text-indigo-200" dir="ltr">${_resultEscape(x)}</span><button onclick="removeOsintWatchItem(${i})" class="text-red-400 text-[10px]">حذف</button></div>`),
+                list.map((x, i) => `<div class="flex items-center justify-between gap-2"><span class="font-mono text-[11px] text-indigo-200" dir="ltr">${_resultEscape(x)}</span><div class="flex items-center gap-2"><button onclick="runWatchlistTarget(${i})" class="text-cyan-300 text-[10px]">تشغيل</button><button onclick="setCompareFromWatchItem(${i}, 'a')" class="text-fuchsia-300 text-[10px]">A</button><button onclick="setCompareFromWatchItem(${i}, 'b')" class="text-fuchsia-300 text-[10px]">B</button><button onclick="removeOsintWatchItem(${i})" class="text-red-400 text-[10px]">حذف</button></div></div>`),
                 { badge: `${list.length} Targets` }
             );
+            _osintLoadActivityLog();
+            _osintRenderActivityFeed();
+            _osintUpdateMissionStats();
         }
 
         function saveCurrentOsintTarget() {
@@ -9404,6 +9431,38 @@ HTML_TEMPLATE = """
             titanAlert('تمت إضافة الهدف إلى الـ Watchlist.');
         }
 
+        function clearOsintWatchlist() {
+            localStorage.setItem('titan_osint_watchlist', JSON.stringify([]));
+            loadOsintWatchlist();
+            titanAlert('تم تفريغ الـ Watchlist.');
+        }
+
+        async function runWatchlistTarget(idx) {
+            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
+            const target = list[idx];
+            if (!target) return;
+            const input = document.getElementById('osintTargetInput');
+            if (input) input.value = target;
+            await runUnifiedOsint();
+        }
+
+        function setCompareFromWatchItem(idx, side) {
+            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
+            const target = list[idx];
+            if (!target) return;
+            const id = side === 'b' ? 'osintCompareB' : 'osintCompareA';
+            const el = document.getElementById(id);
+            if (el) el.value = target;
+        }
+
+        function runWatchlistBatch() {
+            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
+            if (!list.length) return titanAlert('لا توجد أهداف في الـ Watchlist.');
+            const input = document.getElementById('osintBatchInput');
+            if (input) input.value = list.slice(0, 12).join('\\n');
+            runBatchOsint();
+        }
+
         function removeOsintWatchItem(idx) {
             const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
             list.splice(idx, 1);
@@ -9411,19 +9470,126 @@ HTML_TEMPLATE = """
             loadOsintWatchlist();
         }
 
+        async function runBatchOsint() {
+            const src = (document.getElementById('osintBatchInput')?.value || '');
+            const box = document.getElementById('osintBatchResult');
+            if (!box) return;
+
+            const targets = Array.from(new Set(src.split(/\\r?\\n/).map((x) => x.trim()).filter(Boolean))).slice(0, 20);
+            if (!targets.length) return titanAlert('أدخل هدفًا واحدًا على الأقل في التحليل الدفعي.');
+
+            setResultLoading(box, 'Batch Analyzer', `تحليل ${targets.length} هدف...`);
+
+            const rows = [];
+            for (let i = 0; i < targets.length; i += 1) {
+                const t = targets[i];
+                try {
+                    const res = await _osintLookupTarget(t);
+                    rows.push({ target: t, ok: true, ...res });
+                    _osintTrackActivity('batch_lookup', { target: t, targetType: res.targetType, risk: res.risk, label: res.label });
+                } catch (e) {
+                    rows.push({ target: t, ok: false, error: e.message || String(e), targetType: 'unknown', risk: 0, label: 'Failed' });
+                }
+            }
+
+            const okRows = rows.filter((r) => r.ok);
+            const avgRisk = okRows.length ? Math.round(okRows.reduce((a, b) => a + (Number(b.risk || 0) || 0), 0) / okRows.length) : 0;
+            const highCount = okRows.filter((r) => Number(r.risk || 0) >= 70).length;
+
+            const html = `
+                <div class="space-y-3">
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="p-2 rounded border border-slate-700 bg-slate-900/50 text-center"><div class="text-[10px] text-gray-500">Targets</div><div class="text-lg font-black text-cyan-300">${_osintEscape(rows.length)}</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-slate-900/50 text-center"><div class="text-[10px] text-gray-500">High Risk</div><div class="text-lg font-black text-rose-300">${_osintEscape(highCount)}</div></div>
+                        <div class="p-2 rounded border border-slate-700 bg-slate-900/50 text-center"><div class="text-[10px] text-gray-500">Avg Risk</div><div class="text-lg font-black text-amber-300">${_osintEscape(avgRisk)}</div></div>
+                    </div>
+                    <div class="space-y-2">
+                        ${rows.map((r) => {
+                            if (!r.ok) {
+                                return `<div class="p-2 rounded border border-rose-800/40 bg-rose-900/10"><div class="font-mono text-xs text-rose-300 break-all" dir="ltr">${_osintEscape(r.target)}</div><div class="text-[10px] text-rose-200 mt-1">${_osintEscape(r.error || 'failed')}</div></div>`;
+                            }
+                            const tone = _osintRiskTone(r.risk);
+                            return `<div class="p-2 rounded border border-slate-700 bg-black/30">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="font-mono text-xs text-cyan-300 break-all" dir="ltr">${_osintEscape(r.target)}</div>
+                                    <span class="text-[10px] px-2 py-0.5 rounded border ${tone.cls}">${_osintEscape(r.risk)}</span>
+                                </div>
+                                <div class="text-[10px] text-gray-400 mt-1">${_osintEscape(r.targetType.toUpperCase())} | ${_osintEscape(r.label)}</div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+            setResultMarkup(box, 'Batch Analyzer', html, { badge: `${rows.length} Targets` });
+        }
+
+        async function compareOsintTargets() {
+            const a = (document.getElementById('osintCompareA')?.value || '').trim();
+            const b = (document.getElementById('osintCompareB')?.value || '').trim();
+            const out = document.getElementById('osintCompareResult');
+            if (!out) return;
+            if (!a || !b) return titanAlert('أدخل الهدفين للمقارنة.');
+
+            setResultLoading(out, 'Target Comparison', 'جاري تحليل الهدفين...');
+            try {
+                const [ra, rb] = await Promise.all([_osintLookupTarget(a), _osintLookupTarget(b)]);
+                const winner = Number(ra.risk || 0) >= Number(rb.risk || 0) ? ra : rb;
+                const delta = Math.abs(Number(ra.risk || 0) - Number(rb.risk || 0));
+                const card = (x, label) => {
+                    const tone = _osintRiskTone(x.risk);
+                    return `<div class="p-3 rounded-lg border border-slate-700 bg-black/30 space-y-1">
+                        <div class="text-[10px] text-gray-500 uppercase">${_osintEscape(label)}</div>
+                        <div class="font-mono text-xs text-cyan-300 break-all" dir="ltr">${_osintEscape(x.target)}</div>
+                        <div class="text-[10px] text-gray-400">${_osintEscape(x.targetType.toUpperCase())} | ${_osintEscape(x.label)}</div>
+                        <div><span class="text-[10px] px-2 py-0.5 rounded border ${tone.cls}">${_osintEscape(x.risk)}</span></div>
+                    </div>`;
+                };
+
+                const html = `
+                    <div class="space-y-3">
+                        <div class="p-2 rounded-lg border border-fuchsia-800/40 bg-fuchsia-900/10 text-fuchsia-200 text-xs">
+                            الأعلى خطورة: <span class="font-bold">${_osintEscape(winner.target)}</span> | فرق المخاطرة: <span class="font-bold">${_osintEscape(delta)}</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            ${card(ra, 'Target A')}
+                            ${card(rb, 'Target B')}
+                        </div>
+                    </div>
+                `;
+                setResultMarkup(out, 'Target Comparison', html, { badge: 'COMPARE' });
+                _osintTrackActivity('target_compare', { target: `${a} <-> ${b}`, targetType: 'compare', risk: Math.max(Number(ra.risk || 0), Number(rb.risk || 0)), label: 'Comparison completed' });
+            } catch (e) {
+                setResultError(out, `Comparison failed: ${e.message || e}`);
+            }
+        }
+
+        function clearOsintActivityLog() {
+            _osintActivityLog = [];
+            _osintSaveActivityLog();
+            _osintRenderActivityFeed();
+            _osintUpdateMissionStats();
+        }
+
         function exportOsintReport() {
             const watchlist = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
+            const activity = JSON.parse(localStorage.getItem('titan_osint_activity') || '[]');
             const latestUnified = document.getElementById('osintUnifiedResult')?.innerText || '';
             const latestThreat = document.getElementById('osintThreatResult')?.innerText || '';
             const latestUsername = document.getElementById('osintUsernameResult')?.innerText || '';
             const latestHash = document.getElementById('osintHashResult')?.innerText || '';
+            const latestBatch = document.getElementById('osintBatchResult')?.innerText || '';
+            const latestCompare = document.getElementById('osintCompareResult')?.innerText || '';
             const report = {
                 generated_at: new Date().toISOString(),
                 watchlist,
+                activity_timeline: activity,
+                latest_unified_object: _osintLastUnified,
                 latest_unified_lookup: latestUnified,
                 latest_threat_intel: latestThreat,
                 latest_username_hunt: latestUsername,
-                latest_hash_analysis: latestHash
+                latest_hash_analysis: latestHash,
+                latest_batch_analysis: latestBatch,
+                latest_target_comparison: latestCompare
             };
             const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
