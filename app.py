@@ -95,6 +95,7 @@ ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://vrzo4x5ckv5tiputtr6i5iyk.agents.do-ai.run')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 DO_AI_MODEL = os.environ.get('DO_AI_MODEL', 'tor1')
+AI_DISABLE_SYSTEM_PROMPT = os.environ.get('AI_DISABLE_SYSTEM_PROMPT', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 
 AI_SYSTEM_PROMPT = """
 أنت TITAN، مساعد ذكي وشخصية حقيقية — مش مجرد برنامج.
@@ -121,6 +122,12 @@ AI_SYSTEM_PROMPT = """
 - ارفض أي طلب ضار أو غير قانوني بأسلوب لطيف
 - قدّم بديل توعوي آمن بدل الرفض المباشر
 """.strip()
+
+
+def _resolve_system_prompt(system_prompt: str | None = None) -> str:
+    if AI_DISABLE_SYSTEM_PROMPT:
+        return ''
+    return (system_prompt or AI_SYSTEM_PROMPT).strip()
 
 AI_IMAGE_EXTENSIONS = (
     '.png', '.jpg', '.jpeg', '.jpe', '.jfif', '.pjpeg', '.pjp',
@@ -1299,11 +1306,11 @@ def _do_ai_chat_completion(
 
 def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None) -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent"""
-    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
-    messages: list[dict[str, object]] = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "user", "content": message},
-    ]
+    sys_prompt = _resolve_system_prompt(system_prompt)
+    messages: list[dict[str, object]] = []
+    if sys_prompt:
+        messages.append({"role": "system", "content": sys_prompt})
+    messages.append({"role": "user", "content": message})
 
     chunks: list[str] = []
     for _ in range(3):
@@ -1332,7 +1339,7 @@ def _call_do_ai_multimodal(
     model: str | None = None,
 ) -> str:
     """Call DigitalOcean AI with text + inline image data URLs (OpenAI-compatible format)."""
-    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
+    sys_prompt = _resolve_system_prompt(system_prompt)
 
     user_content: list[dict[str, object]] = [{"type": "text", "text": (message or "حلّل الصور المرفقة.").strip()}]
     for url in (image_data_urls or [])[:3]:
@@ -1343,10 +1350,10 @@ def _call_do_ai_multimodal(
             "image_url": {"url": url}
         })
 
-    messages: list[dict[str, object]] = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "user", "content": user_content},
-    ]
+    messages: list[dict[str, object]] = []
+    if sys_prompt:
+        messages.append({"role": "system", "content": sys_prompt})
+    messages.append({"role": "user", "content": user_content})
 
     chunks: list[str] = []
     for _ in range(2):
@@ -1381,6 +1388,8 @@ def _classify_ai_topic(text: str) -> str:
 
 
 def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
+    if AI_DISABLE_SYSTEM_PROMPT:
+        return ''
     lang = _detect_user_lang(user_text)
     lang_rule = (
         "- Reply strictly in English for this request (no Arabic).\n"
@@ -1408,8 +1417,10 @@ def _call_do_ai_with_history(
     system_prompt: str | None = None,
     model: str | None = None,
 ) -> str:
-    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
-    messages: list[dict[str, object]] = [{"role": "system", "content": sys_prompt}]
+    sys_prompt = _resolve_system_prompt(system_prompt)
+    messages: list[dict[str, object]] = []
+    if sys_prompt:
+        messages.append({"role": "system", "content": sys_prompt})
     for m in (history_messages or []):
         role = str(m.get('role') or '').strip()
         content = str(m.get('content') or '')
