@@ -12593,7 +12593,7 @@ HTML_TEMPLATE = """
                 }
 
                 const analysisText = data?.analysis || data?.error || 'فشل التحليل';
-                const sourceTag = data?.source === 'fallback' ? '\n\n[تم استخدام التحليل السريع المحلي لتحسين السرعة]' : '';
+                const sourceTag = data?.source === 'fallback' ? '\\n\\n[تم استخدام التحليل السريع المحلي لتحسين السرعة]' : '';
                 result.textContent = analysisText + sourceTag;
             } catch(e) {
                 if (e && e.name === 'AbortError') {
@@ -12631,7 +12631,7 @@ HTML_TEMPLATE = """
                 }
 
                 const analysisText = data?.analysis || data?.error || 'فشل التحليل';
-                const sourceTag = data?.source === 'fallback' ? '\n\n[تم استخدام التحليل السريع المحلي لتحسين السرعة]' : '';
+                const sourceTag = data?.source === 'fallback' ? '\\n\\n[تم استخدام التحليل السريع المحلي لتحسين السرعة]' : '';
                 result.textContent = analysisText + sourceTag;
             } catch(e) {
                 if (e && e.name === 'AbortError') {
@@ -13273,10 +13273,11 @@ def _has_local_tailwind_css() -> bool:
 @app.route('/')
 def index():
     html = HTML_TEMPLATE.replace('__TAILWIND_V__', _tailwind_version_token())
-    # Ensure full UI utility coverage when local compiled CSS is incomplete.
+    # Do not load Tailwind Play CDN in production by default.
+    enable_tailwind_play = os.environ.get('TAILWIND_PLAY_CDN', '').strip().lower() in ('1', 'true', 'yes', 'on')
     html = html.replace(
         '__TAILWIND_PLAY_CDN__',
-        '<script src="https://cdn.tailwindcss.com"></script>'
+        '<script src="https://cdn.tailwindcss.com"></script>' if enable_tailwind_play else ''
     )
     resp = Response(render_template_string(html), mimetype='text/html')
     # Prevent stale HTML from pinning an old CSS version on custom domains/CDNs.
