@@ -7946,7 +7946,7 @@ HTML_TEMPLATE = """
                 const sensitivity = document.getElementById('cryptSensitivity')?.value || 'high';
                 const purpose = (document.getElementById('cryptPurpose')?.value || '').trim() || 'عام';
                 _cryptAdvisorRenderBubble('assistant',
-                    'أنا TITAN AI داخل Crypto Studio. اكتب سيناريو الاستخدام وسأعطيك أفضل إعداد متاح داخل المنصة.\n' +
+                    'أنا TITAN AI داخل Crypto Studio. اكتب سيناريو الاستخدام وسأعطيك أفضل إعداد متاح داخل المنصة.\\n' +
                     'الحساسية الحالية: ' + sensitivity + ' | الغرض: ' + purpose + '\\n' +
                     'بعد كل رد، أقدر أطبق الإعدادات تلقائيًا على خيارات التشفير.'
                 );
