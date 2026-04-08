@@ -9262,7 +9262,7 @@ HTML_TEMPLATE = """
             } else {
                 row.className = 'flex justify-end items-end gap-2';
                 row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border border-cyan-600/50 ctf-bidi">' +
-                    _osintEscape(String(text || '')).replace(/\n/g, '<br>') +
+                    _osintEscape(String(text || '')).replace(/\\n/g, '<br>') +
                     '</div><div class="w-6 h-6 rounded-full bg-cyan-900/40 border border-cyan-700/40 flex items-center justify-center text-[10px]">👤</div>';
             }
             flow.appendChild(row);
@@ -13252,15 +13252,8 @@ def _has_local_tailwind_css() -> bool:
 @app.route('/')
 def index():
     html = HTML_TEMPLATE.replace('__TAILWIND_V__', _tailwind_version_token())
-    # If compiled Tailwind is missing on production slug, use Play CDN to generate
-    # required utility classes (including arbitrary values used by this UI).
-    if _has_local_tailwind_css():
-        html = html.replace('__TAILWIND_PLAY_CDN__', '')
-    else:
-        html = html.replace(
-            '__TAILWIND_PLAY_CDN__',
-            '<script src="https://cdn.tailwindcss.com"></script>'
-        )
+    # Keep production deterministic: no Play CDN injection.
+    html = html.replace('__TAILWIND_PLAY_CDN__', '')
     resp = Response(render_template_string(html), mimetype='text/html')
     # Prevent stale HTML from pinning an old CSS version on custom domains/CDNs.
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
