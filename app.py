@@ -92,7 +92,7 @@ SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 
 # --- DigitalOcean AI Agent Config ---
-DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://vrzo4x5ckv5tiputtr6i5iyk.agents.do-ai.run')
+DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://vrzo4x5ckv5tiputtr6i5iyk.agents.do-ai.run').rstrip('/')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 DO_AI_MODEL = os.environ.get('DO_AI_MODEL', 'tor1')
 
@@ -1546,7 +1546,7 @@ def _ensure_ai_chat_tables(c) -> None:
             conversation_id TEXT NOT NULL,
             title TEXT DEFAULT 'محادثة جديدة',
             classification TEXT DEFAULT 'general_support',
-            model TEXT DEFAULT 'titan_ultimate',
+            model TEXT DEFAULT 'tor1',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             last_message_preview TEXT DEFAULT '',
@@ -2002,7 +2002,7 @@ def init_db():
             conversation_id TEXT NOT NULL,
             title TEXT DEFAULT 'محادثة جديدة',
             classification TEXT DEFAULT 'general_support',
-            model TEXT DEFAULT 'titan_ultimate',
+            model TEXT DEFAULT 'tor1',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             last_message_preview TEXT DEFAULT '',
@@ -4238,8 +4238,7 @@ HTML_TEMPLATE = """
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-400 font-bold">النموذج:</span>
                         <select id="ai-model-select" class="bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-lg p-2 outline-none">
-                            <option value="titan_ultimate">TITAN ULTIMATE</option>
-                            <option value="titan_sec">TITAN SEC</option>
+                            <option value="tor1" selected>TITAN</option>
                         </select>
                     </div>
                     <div class="flex items-center justify-end gap-2 ml-auto">
@@ -4255,7 +4254,7 @@ HTML_TEMPLATE = """
                         <div class="text-xs font-bold text-purple-300">المحادثات السابقة</div>
                         <button type="button" onclick="loadAiConversations()" class="text-[11px] px-2 py-1 rounded border border-slate-700 text-gray-300 hover:bg-slate-800">تحديث</button>
                     </div>
-                    <div id="ai-conv-list" class="max-h-28 overflow-y-auto space-y-1 text-xs text-gray-300"></div>
+                    <div id="ai-conv-list" class="max-h-28 overflow-y-auto overflow-x-hidden space-y-1 text-xs text-gray-300"></div>
                 </div>
                 <div id="ai-chat-shell" class="bg-slate-900/70 rounded-2xl border border-purple-900/30 overflow-hidden h-[34rem] flex flex-col">
                     <div class="p-3 border-b border-slate-700 flex items-center justify-between gap-2">
@@ -12055,12 +12054,12 @@ HTML_TEMPLATE = """
                 }
                 box.innerHTML = rows.map(r => {
                     const active = (window.__titanAiConversationId && window.__titanAiConversationId === r.conversation_id) ? 'border-purple-500/70 bg-purple-900/25' : 'border-slate-700 bg-slate-900/40';
-                    return '<div class="w-full p-2 rounded border ' + active + ' transition-all">' +
-                        '<div class="flex items-start gap-2">' +
-                            '<button onclick="openAiConversation(' + "'" + _osintEscape(r.conversation_id) + "'" + ')" class="flex-1 text-right hover:text-white transition-colors">' +
-                                '<div class="font-bold text-gray-200 truncate">' + _osintEscape(r.title || 'محادثة جديدة') + '</div>' +
+                    return '<div class="w-full p-2 rounded border ' + active + ' transition-all overflow-hidden">' +
+                        '<div class="flex items-start gap-2 min-w-0">' +
+                            '<button onclick="openAiConversation(' + "'" + _osintEscape(r.conversation_id) + "'" + ')" class="flex-1 min-w-0 text-right hover:text-white transition-colors overflow-hidden">' +
+                                '<div class="font-bold text-gray-200 truncate w-full">' + _osintEscape(r.title || 'محادثة جديدة') + '</div>' +
                                 '<div class="text-[10px] text-purple-300">' + _osintEscape(aiTopicLabel(r.classification)) + '</div>' +
-                                '<div class="text-[10px] text-gray-500 truncate">' + _osintEscape(r.last_message_preview || '') + '</div>' +
+                                '<div class="text-[10px] text-gray-500 truncate w-full">' + _osintEscape(r.last_message_preview || '') + '</div>' +
                             '</button>' +
                             '<button onclick="deleteAiConversation(' + "'" + _osintEscape(r.conversation_id) + "'" + ')" title="حذف المحادثة" class="shrink-0 px-2 py-1 text-[10px] rounded border border-rose-700/60 bg-rose-900/20 text-rose-300 hover:bg-rose-800/30">حذف</button>' +
                         '</div>' +
@@ -12130,7 +12129,7 @@ HTML_TEMPLATE = """
             var btn = document.getElementById('ai-send-btn');
             var meta = document.getElementById('ai-chat-meta');
             var modelEl = document.getElementById('ai-model-select');
-            var model = modelEl ? modelEl.value : 'titan_ultimate';
+            var model = modelEl ? modelEl.value : 'tor1';
             var msg = input.value.trim();
             if (!msg) return;
 
@@ -18171,7 +18170,7 @@ def ctf_ai_assistant_route():
 
 
 # =====================================================================
-# === AI Routes (Ollama) ===
+# === AI Routes (DigitalOcean Agent) ===
 # =====================================================================
 
 @app.route('/api/ai/chat', methods=['POST'])
@@ -18283,7 +18282,7 @@ def ai_conversations_route():
                     "conversation_id": str(r[0]),
                     "title": str(r[1] or ''),
                     "classification": str(r[2] or 'general_support'),
-                    "model": str(r[3] or 'titan_ultimate'),
+                    "model": str(r[3] or DO_AI_MODEL or 'tor1'),
                     "updated_at": str(r[4] or ''),
                     "last_message_preview": str(r[5] or '')
                 }
@@ -18335,7 +18334,7 @@ def ai_conversation_messages_route(conversation_id):
             "conversation_id": conversation_id,
             "title": str(thread[0] or ''),
             "classification": str(thread[1] or 'general_support'),
-            "model": str(thread[2] or 'titan_ultimate'),
+            "model": str(thread[2] or DO_AI_MODEL or 'tor1'),
             "messages": [
                 {"role": str(r[0] or ''), "content": str(r[1] or ''), "created_at": str(r[2] or '')}
                 for r in rows
