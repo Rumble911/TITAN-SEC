@@ -1718,12 +1718,19 @@ def _attacksim_storyboard_fallback(question: str, difficulty: str = 'intermediat
 
 
 def _attacksim_generate_storyboard_safe(question: str, difficulty: str = 'intermediate', timeout_seconds: int = 35) -> dict:
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    fut = ex.submit(_attacksim_generate_storyboard, question, difficulty)
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            fut = ex.submit(_attacksim_generate_storyboard, question, difficulty)
-            return fut.result(timeout=max(10, int(timeout_seconds)))
+        return fut.result(timeout=max(10, int(timeout_seconds)))
     except Exception:
+        fut.cancel()
         return _attacksim_storyboard_fallback(question, difficulty)
+    finally:
+        # Do not wait for blocked network calls; return fallback immediately on timeout.
+        try:
+            ex.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            ex.shutdown(wait=False)
 
 
 def _attacksim_ensure_logo() -> str:
