@@ -1574,132 +1574,9 @@ def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
         + f"- تصنيف الموضوع الحالي: {topic}. حافظ على الاستمرارية مع نفس سياق المحادثة.\n"
         + "- عند السؤال عن آلية عمل TITAN أو مكوناته أو أدواته، اشرحها كوحدات: المعمارية، المصادقة، الحماية، الأدوات، API، وتدفقات العمل.\n"
         + "- عند ذكر عمليات المنصة، اذكر مسارات API ذات الصلة عندما تكون مفيدة.\n\n"
-        + "- إذا السؤال متعلق بالأمن السيبراني أو الهجمات: اختم الرد دائماً بقسمين واضحين:\n"
-        + "  1) خيارات هجمات تدريبية مقترحة (3-5 خيارات للدراسة الدفاعية)\n"
-        + "  2) كويز سريع من 3 أسئلة متعددة الخيارات (A/B/C/D) مع الإجابات الصحيحة في النهاية.\n"
         + "- اجعل الشرح مرتب بعناوين قصيرة ونقاط عملية.\n\n"
         + (kb_context or "Knowledge context from TITAN KB is unavailable right now.")
     )
-
-
-def _ai_attack_suggestions_for_text(user_text: str, lang: str = 'ar', max_items: int = 5) -> list[dict[str, str]]:
-    text = str(user_text or '').strip()
-    suggestions: list[dict[str, str]] = []
-    seen: set[str] = set()
-
-    top = _learning_suggest_attack_type(text)
-    if isinstance(top, dict):
-        canonical = str(top.get('canonical') or '').strip().lower()
-        if canonical:
-            suggestions.append({
-                'canonical': canonical,
-                'title': str(top.get('label_ar') or canonical) if lang == 'ar' else str(top.get('label_en') or canonical),
-            })
-            seen.add(canonical)
-
-    q = _learning_norm_for_match(text)
-    scored: list[tuple[float, dict[str, object]]] = []
-    for item in _LEARNING_ATTACK_NAME_CATALOG:
-        canonical = str(item.get('canonical') or '').strip().lower()
-        if not canonical or canonical in seen:
-            continue
-        aliases_obj = item.get('aliases')
-        aliases_src = aliases_obj if isinstance(aliases_obj, list) else []
-        aliases = [canonical] + [str(x).strip() for x in aliases_src if str(x).strip()]
-        best = 0.0
-        for a in aliases:
-            norm_a = _learning_norm_for_match(a)
-            if not norm_a:
-                continue
-            s = difflib.SequenceMatcher(None, q, norm_a).ratio() if q else 0.0
-            if q and (q in norm_a or norm_a in q):
-                s = max(s, 0.82)
-            if s > best:
-                best = s
-        scored.append((best, item))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    for score, item in scored:
-        if len(suggestions) >= max_items:
-            break
-        canonical = str(item.get('canonical') or '').strip().lower()
-        if not canonical or canonical in seen:
-            continue
-        # Keep at least some meaningful relevance when query exists; otherwise use curated defaults.
-        if q and score < 0.28 and len(suggestions) >= 2:
-            continue
-        suggestions.append({
-            'canonical': canonical,
-            'title': str(item.get('label_ar') or canonical) if lang == 'ar' else str(item.get('label_en') or canonical),
-        })
-        seen.add(canonical)
-
-    if not suggestions:
-        defaults = ['phishing', 'ransomware', 'xss', 'sql injection', 'ddos']
-        for can in defaults:
-            if len(suggestions) >= max_items:
-                break
-            hit = next((x for x in _LEARNING_ATTACK_NAME_CATALOG if str(x.get('canonical') or '').strip().lower() == can), None)
-            if not hit:
-                continue
-            suggestions.append({
-                'canonical': can,
-                'title': str(hit.get('label_ar') or can) if lang == 'ar' else str(hit.get('label_en') or can),
-            })
-
-    return suggestions[:max_items]
-
-
-def _ai_quiz_for_suggestions(suggestions: list[dict[str, str]], lang: str = 'ar') -> list[dict[str, object]]:
-    picks = suggestions[:3] if suggestions else []
-    if len(picks) < 3:
-        fallback = [
-            {'canonical': 'phishing', 'title': 'تصيد احتيالي' if lang == 'ar' else 'Phishing'},
-            {'canonical': 'ransomware', 'title': 'هجوم فدية' if lang == 'ar' else 'Ransomware'},
-            {'canonical': 'xss', 'title': 'ثغرة XSS' if lang == 'ar' else 'XSS'},
-        ]
-        for f in fallback:
-            if len(picks) >= 3:
-                break
-            if not any(str(x.get('canonical')) == f['canonical'] for x in picks):
-                picks.append(f)
-
-    if lang == 'en':
-        return [
-            {
-                'q': 'What is the safest first step before handling a suspected attack?',
-                'options': ['A) Ignore low alerts', 'B) Validate indicators and scope quickly', 'C) Restart all systems', 'D) Share credentials internally'],
-                'answer': 'B'
-            },
-            {
-                'q': f"Which control best reduces risk from {picks[0].get('title', 'this attack')}?",
-                'options': ['A) Disable logging', 'B) Least privilege + monitoring', 'C) Publicly expose admin port', 'D) Reuse old passwords'],
-                'answer': 'B'
-            },
-            {
-                'q': 'After containment, what should happen next?',
-                'options': ['A) Skip root-cause analysis', 'B) Immediate production rollback without checks', 'C) Root-cause fix and hardening validation', 'D) Delete all evidence'],
-                'answer': 'C'
-            },
-        ]
-
-    return [
-        {
-            'q': 'ما أول خطوة آمنة عند الاشتباه بهجوم؟',
-            'options': ['A) تجاهل التنبيه', 'B) التحقق السريع من المؤشرات ونطاق الأثر', 'C) حذف السجلات', 'D) مشاركة كلمات المرور'],
-            'answer': 'B'
-        },
-        {
-            'q': f"أي ضابط دفاعي أفضل لتقليل خطر {picks[0].get('title', 'الهجمة')}؟",
-            'options': ['A) تعطيل المراقبة', 'B) أقل صلاحية + مراقبة مستمرة', 'C) فتح المنافذ الإدارية للعامة', 'D) إعادة استخدام كلمات المرور'],
-            'answer': 'B'
-        },
-        {
-            'q': 'بعد الاحتواء، ما الخطوة الصحيحة؟',
-            'options': ['A) إغلاق الحادث بدون تحليل', 'B) تجاهل السبب الجذري', 'C) إصلاح السبب الجذري والتحصين والتحقق', 'D) حذف الأدلة'],
-            'answer': 'C'
-        },
-    ]
 
 
 def _call_do_ai_with_history(
@@ -4567,7 +4444,7 @@ HTML_TEMPLATE = """
                             <button onclick="aiQuickPrompt('اعطني خطة تعلم امن سيبراني لمدة 30 يوم بطريقة عملية')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">خطة تعلم 30 يوم</button>
                             <button onclick="aiQuickPrompt('اشرح لي الفرق بين XSS و SQLi مع مثال دفاعي مختصر')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">XSS vs SQLi</button>
                             <button onclick="aiQuickPrompt('عندي تنبيه مشبوه في الشبكة، اعطني خطوات Incident Response مرتبة')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">Incident Response</button>
-                            <button onclick="aiQuickPrompt('اعطني اختبار سريع 3 اسئلة عن phishing وكيف اكتشفه')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">Quiz عن التصيّد</button>
+                            <button onclick="aiQuickPrompt('اشرح لي التصيد الاحتيالي بشكل دفاعي: مؤشرات الكشف، الاحتواء، وخطة التحصين')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">دفاع ضد التصيّد</button>
                         </div>
                     </div>
                 </div>
@@ -12992,10 +12869,6 @@ HTML_TEMPLATE = """
                         meta.textContent = 'الموضوع: ' + lbl + ' • الذاكرة: فعالة • Conversation: ' + (window.__titanAiConversationId || '-');
                     }
                     await typeAiReplyPretty(replyInner, data.reply);
-                    const extrasHtml = renderAiLearningExtras(data.suggested_attacks, data.quiz);
-                    if (extrasHtml) {
-                        replyInner.innerHTML += extrasHtml;
-                    }
                     loadAiConversations();
                 } else {
                     replyInner.textContent = data.error || ('فشل الطلب (HTTP ' + res.status + ')');
@@ -13056,57 +12929,6 @@ HTML_TEMPLATE = """
             }
             closeListIfOpen();
             return out.join('');
-        }
-
-        function _aiShortEscape(v) {
-            return _osintEscape(String(v || ''));
-        }
-
-        function renderAiLearningExtras(attacks, quiz) {
-            const attackRows = Array.isArray(attacks) ? attacks : [];
-            const quizRows = Array.isArray(quiz) ? quiz : [];
-            if (!attackRows.length && !quizRows.length) return '';
-
-            let html = '<div class="mt-3 space-y-3">';
-            if (attackRows.length) {
-                html += '<div class="p-2 rounded-xl border border-cyan-800/40 bg-cyan-950/20">'
-                    + '<div class="text-[11px] font-bold text-cyan-300 mb-2">خيارات هجمات مقترحة للتعلم الدفاعي</div>'
-                    + '<div class="flex flex-wrap gap-2">'
-                    + attackRows.map((a) => {
-                        const title = _aiShortEscape(a?.title || a?.canonical || 'Attack');
-                        const canonical = _aiShortEscape(a?.canonical || '');
-                        return '<button onclick="applyAiAttackSuggestion(' + "'" + canonical + "'" + ')" class="px-2 py-1 rounded-lg border border-cyan-700/50 bg-cyan-900/25 text-cyan-200 text-[11px] hover:bg-cyan-800/35">' + title + '</button>';
-                    }).join('')
-                    + '</div></div>';
-            }
-
-            if (quizRows.length) {
-                html += '<div class="p-2 rounded-xl border border-fuchsia-800/40 bg-fuchsia-950/20">'
-                    + '<div class="text-[11px] font-bold text-fuchsia-300 mb-2">Quiz سريع بعد الشرح</div>'
-                    + quizRows.map((q, idx) => {
-                        const qText = _aiShortEscape(q?.q || ('سؤال ' + (idx + 1)));
-                        const opts = Array.isArray(q?.options) ? q.options : [];
-                        const ans = _aiShortEscape(q?.answer || '');
-                        return '<div class="mb-2 p-2 rounded border border-slate-700 bg-black/25">'
-                            + '<div class="text-[11px] text-fuchsia-100 font-bold">' + (idx + 1) + ') ' + qText + '</div>'
-                            + '<div class="mt-1 space-y-1">' + opts.map((op) => '<div class="text-[11px] text-gray-200">• ' + _aiShortEscape(op) + '</div>').join('') + '</div>'
-                            + '<div class="mt-1 text-[10px] text-emerald-300">الإجابة الصحيحة: ' + ans + '</div>'
-                            + '</div>';
-                    }).join('')
-                    + '</div>';
-            }
-
-            html += '</div>';
-            return html;
-        }
-
-        function applyAiAttackSuggestion(canonical) {
-            const input = document.getElementById('ai-chat-input');
-            if (!input) return;
-            const can = String(canonical || '').trim();
-            if (!can) return;
-            input.value = 'اشرحلي هجمة ' + can + ' بشكل دفاعي كامل، وبالآخر اعطني كويز 3 اسئلة.';
-            input.focus();
         }
 
         function aiQuickPrompt(text) {
@@ -19121,9 +18943,6 @@ def ai_chat():
 
         system_prompt = _build_ai_system_prompt(topic, user_text=message)
         reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt, model=model)
-        detected_lang = _detect_user_lang(message)
-        suggested_attacks = _ai_attack_suggestions_for_text(message, lang=detected_lang, max_items=5)
-        quiz = _ai_quiz_for_suggestions(suggested_attacks, lang=detected_lang)
 
         now = datetime.datetime.now().isoformat()
         preview = _ai_trim_title(reply, 120)
@@ -19157,8 +18976,6 @@ def ai_chat():
             "reply": reply,
             "conversation_id": conversation_id,
             "classification": topic,
-            "suggested_attacks": suggested_attacks,
-            "quiz": quiz,
         })
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
