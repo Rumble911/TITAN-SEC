@@ -15,6 +15,7 @@ import qrcode  # type: ignore
 import datetime
 import time
 import tempfile
+import asyncio
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.exceptions import HTTPException
@@ -45,6 +46,13 @@ from email.mime.text import MIMEText
 import urllib.request
 import json as _json
 import html
+
+try:
+    import edge_tts  # type: ignore
+    _HAS_EDGE_TTS = True
+except Exception:
+    edge_tts = None  # type: ignore
+    _HAS_EDGE_TTS = False
 
 try:
     from reportlab.pdfgen import canvas  # type: ignore
@@ -4210,6 +4218,7 @@ HTML_TEMPLATE = """
                     <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
                     <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
                     <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
+                    <button onclick="showTab('attacksim')" id="btn-attacksim" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🗣️</span> محاكاة الهجمات</button>
                 </div>
                 </div>
 
@@ -5116,6 +5125,84 @@ HTML_TEMPLATE = """
                         <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
                         <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
                     </div>
+                </div>
+            </div>
+
+            <div id="attacksim-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-orange-400 border-b border-slate-700 pb-2">🗣️ محاكاة الهجمات بالصوت</h2>
+
+                <div class="bg-orange-950/20 border border-orange-900/40 p-4 rounded-xl text-xs text-orange-100/90 leading-6">
+                    هذا المختبر يولد سيناريو هجوم دفاعي واقعي بصيغة تدريبية، ثم يقرأه لك بصوت عربي أو إنجليزي.
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-orange-900/40 space-y-3">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input id="attackSimAttackType" type="text" placeholder="نوع الهجمة: phishing, ransomware, web attack..." class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
+                            <input id="attackSimObjective" type="text" placeholder="هدف التدريب (اختياري)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                        </div>
+                        <textarea id="attackSimOrgContext" rows="3" placeholder="سياق الجهة/الفريق المستهدف في التمرين..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <select id="attackSimTrainingLevel" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="beginner">Level: Beginner</option>
+                                <option value="intermediate" selected>Level: Intermediate</option>
+                                <option value="advanced">Level: Advanced</option>
+                            </select>
+                            <select id="attackSimLang" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="ar" selected>اللغة: العربية</option>
+                                <option value="en">Language: English</option>
+                            </select>
+                            <button onclick="attackSimUsePreset()" class="px-3 py-2 rounded bg-orange-900/40 border border-orange-800/50 text-orange-300 text-xs font-bold">تعبئة مثال سريع</button>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                            <button onclick="attackSimApplyPreset('phishing')" class="px-2 py-1.5 rounded bg-orange-900/20 border border-orange-800/40 text-orange-200 text-[11px] font-bold">Phishing</button>
+                            <button onclick="attackSimApplyPreset('ransomware')" class="px-2 py-1.5 rounded bg-orange-900/20 border border-orange-800/40 text-orange-200 text-[11px] font-bold">Ransomware</button>
+                            <button onclick="attackSimApplyPreset('web')" class="px-2 py-1.5 rounded bg-orange-900/20 border border-orange-800/40 text-orange-200 text-[11px] font-bold">Web Attack</button>
+                            <button onclick="attackSimApplyPreset('insider')" class="px-2 py-1.5 rounded bg-orange-900/20 border border-orange-800/40 text-orange-200 text-[11px] font-bold">Insider</button>
+                            <button onclick="attackSimApplyPreset('ddos')" class="px-2 py-1.5 rounded bg-orange-900/20 border border-orange-800/40 text-orange-200 text-[11px] font-bold">DDoS</button>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="attackSimGenerateScenario()" class="px-4 py-2 rounded bg-orange-900/45 hover:bg-orange-800/55 border border-orange-800/50 text-orange-200 text-xs font-bold">توليد سيناريو الهجمة</button>
+                            <button onclick="attackSimSpeak()" class="px-4 py-2 rounded bg-cyan-900/40 hover:bg-cyan-800/50 border border-cyan-800/50 text-cyan-200 text-xs font-bold">تشغيل الصوت</button>
+                            <button onclick="attackSimPlayCloudVoice()" class="px-4 py-2 rounded bg-indigo-900/40 hover:bg-indigo-800/50 border border-indigo-800/50 text-indigo-200 text-xs font-bold">تشغيل صوت احترافي</button>
+                            <button onclick="attackSimDownloadCloudVoice()" class="px-4 py-2 rounded bg-emerald-900/40 hover:bg-emerald-800/50 border border-emerald-800/50 text-emerald-200 text-xs font-bold">تنزيل MP3</button>
+                            <button onclick="attackSimStop()" class="px-4 py-2 rounded bg-rose-900/35 hover:bg-rose-800/45 border border-rose-800/50 text-rose-200 text-xs font-bold">إيقاف الصوت</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
+                        <h3 class="text-sm font-bold text-cyan-300">إعدادات الصوت</h3>
+                        <select id="attackSimVoice" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
+                        <div>
+                            <div class="text-[11px] text-gray-400 mb-1">السرعة</div>
+                            <input id="attackSimRate" type="range" min="0.7" max="1.3" step="0.1" value="1" class="w-full accent-cyan-500">
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-gray-400 mb-1">حدة الصوت</div>
+                            <input id="attackSimPitch" type="range" min="0.8" max="1.2" step="0.1" value="1" class="w-full accent-cyan-500">
+                        </div>
+                        <div id="attackSimNarrationStatus" class="text-[11px] text-cyan-200/90 bg-cyan-950/20 border border-cyan-900/30 rounded-lg px-3 py-2">جاهز للتشغيل الصوتي.</div>
+                    </div>
+                </div>
+
+                <div id="attackSimResult" class="hidden p-3 bg-black/40 border border-slate-700 rounded-xl text-xs leading-6"></div>
+                <audio id="attackSimCloudAudio" class="hidden w-full" controls></audio>
+
+                <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40 space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-fuchsia-300">اختبار تفاعلي بعد المحاكاة</h3>
+                        <button onclick="attackSimResetQuiz()" class="px-3 py-1 rounded bg-fuchsia-900/30 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">إعادة الاختبار</button>
+                    </div>
+                    <div id="attackSimQuizMeta" class="text-[11px] text-gray-400">ولّد سيناريو أولاً ليتم بناء أسئلة تلقائية.</div>
+                    <div id="attackSimQuizQuestion" class="p-2 rounded bg-black/40 border border-slate-700 text-xs text-gray-100"></div>
+                    <div id="attackSimQuizOptions" class="space-y-2"></div>
+                    <div class="flex gap-2">
+                        <button onclick="attackSimNextQuiz()" class="flex-1 py-2 rounded bg-fuchsia-900/40 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">التالي</button>
+                    </div>
+                    <div id="attackSimQuizFeedback" class="text-[11px] text-gray-400"></div>
                 </div>
             </div>
 
@@ -6853,7 +6940,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','training','ctf','ir','forensics','se','audio','video','qr','identity','admin'];
+        const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','training','attacksim','ctf','ir','forensics','se','audio','video','qr','identity','admin'];
         const TRAINING_SUB_TABS = ['learninglab', 'ctf', 'se'];
         let __trainingSubTab = 'learninglab';
         let _aiActiveSubTab = 'chat';
@@ -7250,6 +7337,7 @@ HTML_TEMPLATE = """
             if(type === 'ir' && typeof irInitSection === 'function') irInitSection();
             if(type === 'forensics' && typeof forensicsInitSection === 'function') forensicsInitSection();
             if(type === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
+            if(type === 'attacksim' && typeof attackSimInit === 'function') attackSimInit();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
             if(type === 'crypt' && typeof startCryptAdvisorChat === 'function') startCryptAdvisorChat(false);
             if(type === 'training') {
@@ -10710,6 +10798,506 @@ HTML_TEMPLATE = """
             } catch (e) {
                 setResultError(out, e.message || 'Failed to generate scenario');
             }
+        }
+
+        let __attackSimLastNarration = '';
+        let __attackSimLastSimulation = null;
+        let __attackSimVoicesBound = false;
+        let __attackSimQuiz = { questions: [], index: 0, score: 0, answered: 0 };
+
+        const ATTACK_SIM_PRESETS = {
+            phishing: {
+                attack_type: 'phishing',
+                objective_ar: 'تدريب الفريق على كشف رسائل التصيد العاجلة قبل تسريب OTP.',
+                objective_en: 'Train analysts to detect urgent phishing before OTP disclosure.',
+                context_ar: 'شركة لديها بوابة موظفين داخلية وتتلقى حملات بريد تتظاهر بأنها من قسم الـ IT.',
+                context_en: 'A company with an internal employee portal receiving fake IT urgent emails.'
+            },
+            ransomware: {
+                attack_type: 'ransomware',
+                objective_ar: 'اختبار سرعة العزل والاستجابة لمنع انتشار التشفير عبر الشبكة.',
+                objective_en: 'Test containment speed to stop encryption spread across the network.',
+                context_ar: 'مؤسسة تعتمد على ملفات مشاركة ونسخ احتياطية يومية مع حساسية تشغيلية عالية.',
+                context_en: 'An organization with shared file servers and daily backups under high operational pressure.'
+            },
+            web: {
+                attack_type: 'web attack',
+                objective_ar: 'تقييم قدرة الفريق على اكتشاف استغلال مدخلات التطبيق قبل تسريب البيانات.',
+                objective_en: 'Assess team ability to detect web input exploitation before data leakage.',
+                context_ar: 'تطبيق ويب يقدم خدمات حسابات المستخدمين ويحتوي نقاط API عامة.',
+                context_en: 'A web application serving user accounts with public API endpoints.'
+            },
+            insider: {
+                attack_type: 'insider threat',
+                objective_ar: 'رفع جاهزية المراقبة الداخلية لاكتشاف إساءة استخدام الصلاحيات.',
+                objective_en: 'Improve internal monitoring readiness for privileged misuse.',
+                context_ar: 'بيئة عمل مختلطة مع وصول موظفين عن بعد إلى أنظمة حساسة.',
+                context_en: 'A hybrid workplace with remote staff access to sensitive systems.'
+            },
+            ddos: {
+                attack_type: 'ddos',
+                objective_ar: 'اختبار استمرارية الخدمة مع ضغط طلبات مرتفع وخطة تخفيف تدريجية.',
+                objective_en: 'Stress-test service continuity under high request flooding and staged mitigation.',
+                context_ar: 'بوابة عامة حساسة للزمن تستقبل زيارات مرتفعة في أوقات الذروة.',
+                context_en: 'A public time-sensitive portal with heavy peak traffic.'
+            }
+        };
+
+        function attackSimApplyPreset(kind) {
+            const preset = ATTACK_SIM_PRESETS[String(kind || '').toLowerCase()];
+            if (!preset) return;
+            const lang = String(document.getElementById('attackSimLang')?.value || 'ar').toLowerCase();
+            const type = document.getElementById('attackSimAttackType');
+            const objective = document.getElementById('attackSimObjective');
+            const context = document.getElementById('attackSimOrgContext');
+
+            if (type) type.value = preset.attack_type;
+            if (objective) objective.value = lang === 'en' ? preset.objective_en : preset.objective_ar;
+            if (context) context.value = lang === 'en' ? preset.context_en : preset.context_ar;
+        }
+
+        function attackSimUsePreset() {
+            attackSimApplyPreset('phishing');
+        }
+
+        function attackSimBuildNarration(simulation, analysis, lang) {
+            const s = simulation || {};
+            const a = analysis || {};
+            const journey = Array.isArray(s.attack_journey) ? s.attack_journey : [];
+            const detect = Array.isArray(a.detection_plan) ? a.detection_plan : [];
+            const response = Array.isArray(a.response_plan) ? a.response_plan : [];
+            const hardening = Array.isArray(a.hardening_plan) ? a.hardening_plan : [];
+
+            if (String(lang || 'ar') === 'en') {
+                return [
+                    `Attack Simulation: ${s.title || 'Untitled Scenario'}`,
+                    `Category: ${s.category || 'general'} | Severity: ${s.severity || 'medium'} | Risk Score: ${a.risk_score ?? 0}/100`,
+                    '',
+                    `Summary: ${s.summary || ''}`,
+                    `Attack Method: ${s.attack_method || ''}`,
+                    `Conceptual Exploit Pattern: ${s.exploit_pattern || ''}`,
+                    '',
+                    'Attack Journey:',
+                    ...journey.map((x, i) => `${i + 1}. ${x}`),
+                    '',
+                    'Detection Plan:',
+                    ...detect.map((x, i) => `${i + 1}. ${x}`),
+                    '',
+                    'Response Plan:',
+                    ...response.map((x, i) => `${i + 1}. ${x}`),
+                    '',
+                    'Hardening Plan:',
+                    ...hardening.map((x, i) => `${i + 1}. ${x}`),
+                    '',
+                    'AI Defensive Brief:',
+                    String(s.ai_explanation || '').trim()
+                ].join('\n');
+            }
+
+            return [
+                `محاكاة الهجمة: ${s.title || 'سيناريو غير مسمى'}`,
+                `التصنيف: ${s.category || 'عام'} | الشدة: ${s.severity || 'متوسط'} | درجة الخطورة: ${a.risk_score ?? 0}/100`,
+                '',
+                `الملخص: ${s.summary || ''}`,
+                `طريقة الهجوم: ${s.attack_method || ''}`,
+                `نمط الاستغلال المفاهيمي: ${s.exploit_pattern || ''}`,
+                '',
+                'رحلة الهجوم:',
+                ...journey.map((x, i) => `${i + 1}. ${x}`),
+                '',
+                'خطة الاكتشاف:',
+                ...detect.map((x, i) => `${i + 1}. ${x}`),
+                '',
+                'خطة الاستجابة:',
+                ...response.map((x, i) => `${i + 1}. ${x}`),
+                '',
+                'خطة التحصين:',
+                ...hardening.map((x, i) => `${i + 1}. ${x}`),
+                '',
+                'الشرح الدفاعي من AI:',
+                String(s.ai_explanation || '').trim()
+            ].join('\n');
+        }
+
+        function attackSimLoadVoices() {
+            const langEl = document.getElementById('attackSimLang');
+            const voiceEl = document.getElementById('attackSimVoice');
+            if (!langEl || !voiceEl) return;
+
+            const wanted = String(langEl.value || 'ar').toLowerCase();
+            const hasBrowserTTS = ('speechSynthesis' in window);
+
+            if (!hasBrowserTTS) {
+                voiceEl.innerHTML = '<option value="">المتصفح لا يدعم الأصوات المحلية</option>';
+                return;
+            }
+
+            const voices = window.speechSynthesis.getVoices() || [];
+            const filtered = voices.filter((v) => String(v.lang || '').toLowerCase().startsWith(wanted));
+            const rows = filtered.length ? filtered : voices;
+
+            voiceEl.innerHTML = rows.length
+                ? rows.map((v, idx) => `<option value="browser:${_resultEscape(v.name)}" ${idx === 0 ? 'selected' : ''}>${_resultEscape(v.name)} (${_resultEscape(v.lang)}) - Browser</option>`).join('')
+                : '<option value="">لا توجد أصوات متاحة</option>';
+
+            attackSimLoadCloudVoices();
+        }
+
+        async function attackSimLoadCloudVoices() {
+            const langEl = document.getElementById('attackSimLang');
+            const voiceEl = document.getElementById('attackSimVoice');
+            if (!langEl || !voiceEl) return;
+
+            try {
+                const lang = String(langEl.value || 'ar').toLowerCase();
+                const res = await fetch(`/api/attacksim/voices?lang=${encodeURIComponent(lang)}`);
+                const data = await res.json();
+                if (!res.ok || !data.success || !Array.isArray(data.voices)) return;
+
+                const cloudOptions = data.voices.slice(0, 20).map((v, idx) => {
+                    const n = String(v.short_name || v.name || '');
+                    const g = String(v.gender || 'Unknown');
+                    return `<option value="cloud:${_resultEscape(n)}" ${idx === 0 ? 'selected' : ''}>${_resultEscape(n)} (${_resultEscape(g)}) - Cloud</option>`;
+                });
+
+                if (cloudOptions.length) {
+                    const divider = '<option value="" disabled>────────────</option>';
+                    voiceEl.innerHTML = cloudOptions.join('') + divider + voiceEl.innerHTML;
+                }
+            } catch (_) {
+                // Keep browser voices only.
+            }
+        }
+
+        function attackSimStop() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            const audio = document.getElementById('attackSimCloudAudio');
+            if (audio) {
+                try {
+                    audio.pause();
+                    audio.currentTime = 0;
+                } catch (_) {}
+            }
+            const status = document.getElementById('attackSimNarrationStatus');
+            if (status) status.textContent = 'تم إيقاف الصوت.';
+        }
+
+        function attackSimSpeak() {
+            const status = document.getElementById('attackSimNarrationStatus');
+            const langEl = document.getElementById('attackSimLang');
+            const voiceEl = document.getElementById('attackSimVoice');
+            const rateEl = document.getElementById('attackSimRate');
+            const pitchEl = document.getElementById('attackSimPitch');
+            const text = String(__attackSimLastNarration || '').trim();
+
+            if (!text) return titanAlert('ولّد سيناريو أولاً قبل تشغيل الصوت.');
+            if (!('speechSynthesis' in window)) return titanAlert('المتصفح الحالي لا يدعم SpeechSynthesis.');
+
+            const utter = new SpeechSynthesisUtterance(text);
+            const wantedLang = String(langEl?.value || 'ar').toLowerCase();
+            const voices = window.speechSynthesis.getVoices() || [];
+            const selectedRaw = String(voiceEl?.value || '');
+            if (selectedRaw.startsWith('cloud:')) {
+                attackSimPlayCloudVoice();
+                return;
+            }
+
+            const selectedName = selectedRaw.replace(/^browser:/, '');
+            const voice = voices.find((v) => v.name === selectedName) || voices.find((v) => String(v.lang || '').toLowerCase().startsWith(wantedLang)) || null;
+
+            if (voice) {
+                utter.voice = voice;
+                utter.lang = voice.lang || (wantedLang === 'ar' ? 'ar-SA' : 'en-US');
+            } else {
+                utter.lang = wantedLang === 'ar' ? 'ar-SA' : 'en-US';
+            }
+
+            utter.rate = Math.max(0.7, Math.min(1.3, Number(rateEl?.value || 1)));
+            utter.pitch = Math.max(0.8, Math.min(1.2, Number(pitchEl?.value || 1)));
+
+            utter.onstart = () => {
+                if (status) status.textContent = wantedLang === 'ar' ? 'جاري تشغيل السيناريو صوتياً...' : 'Playing simulation narration...';
+            };
+            utter.onend = () => {
+                if (status) status.textContent = wantedLang === 'ar' ? 'اكتمل تشغيل الصوت.' : 'Narration completed.';
+            };
+            utter.onerror = () => {
+                if (status) status.textContent = wantedLang === 'ar' ? 'حدث خطأ أثناء تشغيل الصوت.' : 'Voice playback failed.';
+            };
+
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utter);
+        }
+
+        async function attackSimGetCloudAudioUrl(downloadMode = false) {
+            const text = String(__attackSimLastNarration || '').trim();
+            if (!text) throw new Error('ولّد سيناريو أولاً.');
+
+            const lang = String(document.getElementById('attackSimLang')?.value || 'ar').toLowerCase();
+            const voiceRaw = String(document.getElementById('attackSimVoice')?.value || '');
+            const voice = voiceRaw.startsWith('cloud:') ? voiceRaw.replace(/^cloud:/, '') : '';
+            const rate = Math.max(0.7, Math.min(1.3, Number(document.getElementById('attackSimRate')?.value || 1)));
+            const pitch = Math.max(0.8, Math.min(1.2, Number(document.getElementById('attackSimPitch')?.value || 1)));
+
+            const res = await fetch('/api/attacksim/tts', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    text,
+                    lang,
+                    voice,
+                    rate,
+                    pitch,
+                    download: !!downloadMode
+                })
+            });
+            if (!res.ok) {
+                let msg = 'فشل توليد الصوت';
+                try {
+                    const err = await res.json();
+                    msg = err.error || msg;
+                } catch (_) {}
+                throw new Error(msg);
+            }
+            const blob = await res.blob();
+            return URL.createObjectURL(blob);
+        }
+
+        async function attackSimPlayCloudVoice() {
+            const status = document.getElementById('attackSimNarrationStatus');
+            const audio = document.getElementById('attackSimCloudAudio');
+            if (!audio) return;
+            try {
+                if (status) status.textContent = 'جاري توليد الصوت الاحترافي...';
+                const url = await attackSimGetCloudAudioUrl(false);
+                audio.src = url;
+                audio.classList.remove('hidden');
+                await audio.play();
+                if (status) status.textContent = 'يتم الآن تشغيل الصوت الاحترافي.';
+            } catch (e) {
+                if (status) status.textContent = 'تعذر تشغيل الصوت الاحترافي.';
+                titanAlert(e.message || 'فشل تشغيل الصوت الاحترافي');
+            }
+        }
+
+        async function attackSimDownloadCloudVoice() {
+            try {
+                const url = await attackSimGetCloudAudioUrl(true);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'attack-simulation.mp3';
+                a.click();
+                URL.revokeObjectURL(url);
+                const status = document.getElementById('attackSimNarrationStatus');
+                if (status) status.textContent = 'تم تنزيل ملف الصوت بنجاح.';
+            } catch (e) {
+                titanAlert(e.message || 'فشل تنزيل الصوت');
+            }
+        }
+
+        function attackSimBuildQuiz(simulation, analysis, lang) {
+            const s = simulation || {};
+            const a = analysis || {};
+            const detection = Array.isArray(a.detection_plan) ? a.detection_plan : [];
+            const response = Array.isArray(a.response_plan) ? a.response_plan : [];
+            const hardening = Array.isArray(a.hardening_plan) ? a.hardening_plan : [];
+            const firstDet = detection[0] || (lang === 'en' ? 'Enable SIEM alerting.' : 'تفعيل تنبيه SIEM.');
+            const firstResp = response[0] || (lang === 'en' ? 'Isolate impacted systems.' : 'عزل الأنظمة المتأثرة.');
+            const firstHard = hardening[0] || (lang === 'en' ? 'Patch and enforce MFA.' : 'تحديث الأنظمة وتفعيل MFA.');
+
+            if (String(lang || 'ar') === 'en') {
+                return [
+                    {
+                        question: `What is the first defensive action for scenario: ${s.title || 'simulation'}?`,
+                        options: [firstResp, 'Share credentials to verify source', 'Disable all logging immediately'],
+                        answer: 0,
+                        explain: 'Containment first reduces blast radius and prevents lateral spread.'
+                    },
+                    {
+                        question: 'Which detection action best matches this simulation?',
+                        options: [firstDet, 'Ignore unusual alerts for 24h', 'Delete suspicious logs'],
+                        answer: 0,
+                        explain: 'Early detection improves response time and evidence quality.'
+                    },
+                    {
+                        question: 'What is the best hardening follow-up step?',
+                        options: [firstHard, 'Reuse old weak passwords', 'Turn off MFA for convenience'],
+                        answer: 0,
+                        explain: 'Hardening closes root causes and lowers recurrence probability.'
+                    }
+                ];
+            }
+
+            return [
+                {
+                    question: `ما أول إجراء دفاعي مناسب لسيناريو: ${s.title || 'المحاكاة'}؟`,
+                    options: [firstResp, 'مشاركة بيانات الدخول للتحقق بسرعة', 'تعطيل السجلات الأمنية فوراً'],
+                    answer: 0,
+                    explain: 'الاحتواء المبكر يقلل الانتشار ويحد من الأثر التشغيلي.'
+                },
+                {
+                    question: 'أي خطوة اكتشاف هي الأنسب في هذا السيناريو؟',
+                    options: [firstDet, 'تجاهل التنبيهات الشاذة ليوم كامل', 'حذف السجلات المريبة'],
+                    answer: 0,
+                    explain: 'الاكتشاف المبكر يسرّع الاستجابة ويحافظ على الأدلة.'
+                },
+                {
+                    question: 'ما أفضل خطوة تحصين بعد انتهاء الحادثة؟',
+                    options: [firstHard, 'الاستمرار بنفس الإعدادات الضعيفة', 'إلغاء MFA لتسهيل العمل'],
+                    answer: 0,
+                    explain: 'التحصين الصحيح يعالج السبب الجذري ويمنع التكرار.'
+                }
+            ];
+        }
+
+        function attackSimRenderQuiz() {
+            const qBox = document.getElementById('attackSimQuizQuestion');
+            const oBox = document.getElementById('attackSimQuizOptions');
+            const meta = document.getElementById('attackSimQuizMeta');
+            const feedback = document.getElementById('attackSimQuizFeedback');
+            if (!qBox || !oBox || !meta || !feedback) return;
+
+            const q = __attackSimQuiz.questions[__attackSimQuiz.index];
+            if (!q) {
+                qBox.innerHTML = 'انتهى الاختبار.';
+                oBox.innerHTML = '';
+                meta.innerText = `Score: ${__attackSimQuiz.score}/${__attackSimQuiz.answered}`;
+                return;
+            }
+
+            meta.innerText = `Question ${__attackSimQuiz.index + 1} / ${__attackSimQuiz.questions.length}`;
+            qBox.innerHTML = _resultEscape(q.question || '');
+            oBox.innerHTML = (q.options || []).map((opt, idx) => `<button onclick="attackSimAnswerQuiz(${idx})" class="w-full text-right p-2 rounded border border-slate-700 bg-slate-900/50 hover:bg-slate-800 text-xs">${_resultEscape(opt)}</button>`).join('');
+            feedback.innerText = '';
+        }
+
+        function attackSimAnswerQuiz(choice) {
+            const feedback = document.getElementById('attackSimQuizFeedback');
+            const q = __attackSimQuiz.questions[__attackSimQuiz.index];
+            if (!q || !feedback) return;
+            __attackSimQuiz.answered += 1;
+            const ok = Number(choice) === Number(q.answer);
+            if (ok) __attackSimQuiz.score += 1;
+            feedback.innerText = (ok ? '✅ ' : '❌ ') + (q.explain || '');
+        }
+
+        function attackSimNextQuiz() {
+            if (!__attackSimQuiz.questions.length) return;
+            __attackSimQuiz.index += 1;
+            attackSimRenderQuiz();
+        }
+
+        function attackSimResetQuiz() {
+            __attackSimQuiz = { questions: [], index: 0, score: 0, answered: 0 };
+            const qBox = document.getElementById('attackSimQuizQuestion');
+            const oBox = document.getElementById('attackSimQuizOptions');
+            const meta = document.getElementById('attackSimQuizMeta');
+            const feedback = document.getElementById('attackSimQuizFeedback');
+            if (qBox) qBox.innerHTML = '';
+            if (oBox) oBox.innerHTML = '';
+            if (meta) meta.innerText = 'ولّد سيناريو أولاً ليتم بناء أسئلة تلقائية.';
+            if (feedback) feedback.innerText = '';
+        }
+
+        async function attackSimGenerateScenario() {
+            const attackType = (document.getElementById('attackSimAttackType')?.value || '').trim();
+            const objective = (document.getElementById('attackSimObjective')?.value || '').trim();
+            const orgContext = (document.getElementById('attackSimOrgContext')?.value || '').trim();
+            const trainingLevel = (document.getElementById('attackSimTrainingLevel')?.value || 'intermediate').trim();
+            const resultLang = (document.getElementById('attackSimLang')?.value || 'ar').trim();
+            const out = document.getElementById('attackSimResult');
+
+            if (!out) return;
+            if (!attackType) return titanAlert('اكتب نوع الهجمة أولاً.');
+
+            setResultLoading(out, 'Attack Simulation', 'Generating defensive attack simulation...');
+
+            try {
+                const res = await fetch('/api/learning/simulate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        custom_attack_type: attackType,
+                        custom_objective: objective,
+                        org_context: orgContext,
+                        training_level: trainingLevel,
+                        result_lang: resultLang
+                    })
+                });
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    if (data.code === 'attack_type_suggestion') {
+                        const suggested = Array.isArray(data.suggestions) ? data.suggestions : [];
+                        setResultMarkup(
+                            out,
+                            'Attack Type Suggestion',
+                            `<div class="space-y-2 text-xs">
+                                <div class="text-amber-300 font-bold">${_resultEscape(data.error || 'اسم الهجمة يحتاج توضيح')}</div>
+                                <div class="text-gray-300">اقتراح أساسي: <span class="text-cyan-300 font-bold">${_resultEscape(data.suggested_label_ar || data.suggested_attack_type || '')}</span></div>
+                                <div class="text-gray-200">${suggested.map((s, i) => `${i + 1}. ${_resultEscape(s)}`).join('<br>') || 'لا توجد اقتراحات إضافية'}</div>
+                            </div>`,
+                            { badge: 'Suggestion' }
+                        );
+                    } else {
+                        setResultError(out, data.error || 'فشل توليد المحاكاة');
+                    }
+                    return;
+                }
+
+                const simulation = data.simulation || {};
+                const analysis = data.analysis || {};
+                const narration = attackSimBuildNarration(simulation, analysis, resultLang);
+                __attackSimLastNarration = narration;
+                __attackSimLastSimulation = simulation;
+
+                setResultMarkup(
+                    out,
+                    'Attack Simulation Result',
+                    `<div class="space-y-3">
+                        <div class="rounded border border-slate-700 bg-slate-900/60 p-2">
+                            <div class="text-[10px] text-orange-300 uppercase tracking-wider">Scenario</div>
+                            <div class="text-sm font-bold text-gray-100">${_resultEscape(simulation.title || 'Simulation')}</div>
+                            <div class="text-[11px] text-gray-400 mt-1">${_resultEscape(simulation.category || 'general')} | ${_resultEscape(simulation.severity || 'medium')} | Risk ${_resultEscape(String(analysis.risk_score ?? 0))}/100</div>
+                        </div>
+                        <div class="rounded border border-cyan-900/40 bg-cyan-950/10 p-2">
+                            <div class="text-[10px] text-cyan-300 uppercase tracking-wider mb-1">Narration Script</div>
+                            <div class="text-xs text-gray-200 whitespace-pre-wrap">${_resultEscape(narration)}</div>
+                        </div>
+                    </div>`,
+                    { badge: 'Generated', riskScore: Number(analysis.risk_score || 0) }
+                );
+
+                const status = document.getElementById('attackSimNarrationStatus');
+                if (status) status.textContent = resultLang === 'ar' ? 'تم توليد السيناريو. يمكنك تشغيل الصوت الآن.' : 'Scenario generated. You can play voice now.';
+
+                __attackSimQuiz = {
+                    questions: attackSimBuildQuiz(simulation, analysis, resultLang),
+                    index: 0,
+                    score: 0,
+                    answered: 0
+                };
+                attackSimRenderQuiz();
+            } catch (e) {
+                setResultError(out, e.message || 'فشل غير متوقع أثناء توليد المحاكاة');
+            }
+        }
+
+        function attackSimInit() {
+            if (!__attackSimVoicesBound) {
+                const langEl = document.getElementById('attackSimLang');
+                if (langEl) {
+                    langEl.addEventListener('change', attackSimLoadVoices);
+                }
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.onvoiceschanged = attackSimLoadVoices;
+                }
+                __attackSimVoicesBound = true;
+            }
+            attackSimLoadVoices();
+            if (!__attackSimQuiz.questions.length) attackSimResetQuiz();
         }
 
         function seUpdateIntelSummary(items) {
@@ -18559,6 +19147,157 @@ def ai_analyze():
 @app.route('/api/ai/models', methods=['GET'])
 def ai_models():
     return jsonify({"models": ["TITAN-SEC AI (DigitalOcean)"], "success": True})
+
+
+_ATTACKSIM_VOICE_CACHE = {
+    'ts': 0.0,
+    'voices': []
+}
+
+
+def _run_async_coro(coro):
+    try:
+        return asyncio.run(coro)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
+
+
+async def _edge_list_voices_async():
+    if not _HAS_EDGE_TTS:
+        return []
+    try:
+        return await edge_tts.list_voices()  # type: ignore[attr-defined]
+    except Exception:
+        return []
+
+
+def _get_attacksim_voices():
+    now = time.time()
+    if (now - float(_ATTACKSIM_VOICE_CACHE.get('ts') or 0.0)) < 3600 and _ATTACKSIM_VOICE_CACHE.get('voices'):
+        return _ATTACKSIM_VOICE_CACHE.get('voices') or []
+    voices = _run_async_coro(_edge_list_voices_async()) or []
+    _ATTACKSIM_VOICE_CACHE['ts'] = now
+    _ATTACKSIM_VOICE_CACHE['voices'] = voices
+    return voices
+
+
+def _filter_attacksim_voices(lang: str):
+    voices = _get_attacksim_voices()
+    if not voices:
+        fallback = [
+            {'short_name': 'ar-SA-HamedNeural', 'gender': 'Male', 'locale': 'ar-SA'},
+            {'short_name': 'ar-SA-ZariyahNeural', 'gender': 'Female', 'locale': 'ar-SA'},
+            {'short_name': 'en-US-AriaNeural', 'gender': 'Female', 'locale': 'en-US'},
+            {'short_name': 'en-US-GuyNeural', 'gender': 'Male', 'locale': 'en-US'},
+        ]
+        if str(lang).lower().startswith('ar'):
+            return [x for x in fallback if str(x.get('locale', '')).lower().startswith('ar')]
+        return [x for x in fallback if str(x.get('locale', '')).lower().startswith('en')]
+
+    wanted = 'ar' if str(lang).lower().startswith('ar') else 'en'
+    rows = []
+    for v in voices:
+        loc = str(v.get('Locale') or v.get('locale') or '').strip()
+        name = str(v.get('ShortName') or v.get('short_name') or '').strip()
+        gender = str(v.get('Gender') or v.get('gender') or 'Unknown').strip()
+        if not name:
+            continue
+        if not loc.lower().startswith(wanted):
+            continue
+        rows.append({'short_name': name, 'gender': gender, 'locale': loc})
+
+    if rows:
+        rows.sort(key=lambda x: (x.get('locale', ''), x.get('short_name', '')))
+    return rows
+
+
+@app.route('/api/attacksim/voices', methods=['GET'])
+def attacksim_voices_route():
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': 'غير مصرح'}), 401
+    lang = (request.args.get('lang') or 'ar').strip().lower()
+    rows = _filter_attacksim_voices(lang)
+    return jsonify({'success': True, 'voices': rows, 'provider': 'edge-tts'})
+
+
+async def _edge_synthesize_to_mp3_async(text: str, voice: str, rate: str, pitch: str) -> bytes:
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+    tmp_path = tmp.name
+    tmp.close()
+    try:
+        speaker = edge_tts.Communicate(text=text, voice=voice, rate=rate, pitch=pitch)  # type: ignore[attr-defined]
+        await speaker.save(tmp_path)
+        with open(tmp_path, 'rb') as f:
+            return f.read()
+    finally:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+
+@app.route('/api/attacksim/tts', methods=['POST'])
+def attacksim_tts_route():
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': 'غير مصرح'}), 401
+    if not _HAS_EDGE_TTS:
+        return jsonify({'success': False, 'error': 'edge-tts غير متوفر على الخادم'}), 503
+
+    data = request.get_json(silent=True) or {}
+    text = str(data.get('text') or '').strip()
+    lang = str(data.get('lang') or 'ar').strip().lower()
+    requested_voice = str(data.get('voice') or '').strip()
+    download_mode = bool(data.get('download', False))
+    if not text:
+        return jsonify({'success': False, 'error': 'text مطلوب'}), 400
+
+    voices = _filter_attacksim_voices(lang)
+    if not voices:
+        return jsonify({'success': False, 'error': 'لا توجد أصوات متاحة حالياً'}), 503
+
+    valid_names = {str(v.get('short_name') or '') for v in voices}
+    if requested_voice and requested_voice in valid_names:
+        voice_name = requested_voice
+    else:
+        voice_name = str(voices[0].get('short_name') or '')
+
+    try:
+        rate_value = float(data.get('rate', 1.0))
+    except Exception:
+        rate_value = 1.0
+    try:
+        pitch_value = float(data.get('pitch', 1.0))
+    except Exception:
+        pitch_value = 1.0
+
+    rate_value = max(0.7, min(1.3, rate_value))
+    pitch_value = max(0.8, min(1.2, pitch_value))
+    rate_pct = int(round((rate_value - 1.0) * 100))
+    pitch_pct = int(round((pitch_value - 1.0) * 100))
+    rate_str = f"{rate_pct:+d}%"
+    pitch_str = f"{pitch_pct:+d}%"
+
+    try:
+        audio_bytes = _run_async_coro(_edge_synthesize_to_mp3_async(text, voice_name, rate_str, pitch_str))
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'فشل توليد الصوت: {str(e)}'}), 500
+
+    filename = f"attack-simulation-{lang}.mp3"
+    headers = {
+        'Content-Type': 'audio/mpeg',
+        'X-TTS-Provider': 'edge-tts',
+        'X-TTS-Voice': voice_name,
+        'Cache-Control': 'no-store',
+    }
+    if download_mode:
+        headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    else:
+        headers['Content-Disposition'] = f'inline; filename="{filename}"'
+    return Response(audio_bytes, headers=headers)
 
 
 @app.route('/api/learning/simulate', methods=['POST'])
