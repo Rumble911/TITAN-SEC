@@ -1297,13 +1297,7 @@ def _do_ai_chat_completion(
     finish_reason = str(choice.get('finish_reason') or '')
     return content, finish_reason
 
-def _call_do_ai(
-    message: str,
-    system_prompt: str | None = None,
-    model: str | None = None,
-    timeout_seconds: int = 45,
-    max_tokens: int = 1400,
-) -> str:
+def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None) -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     messages: list[dict[str, object]] = [
@@ -1313,7 +1307,7 @@ def _call_do_ai(
 
     chunks: list[str] = []
     for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=timeout_seconds, max_tokens=max_tokens, model=model)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1400, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -1413,8 +1407,6 @@ def _call_do_ai_with_history(
     history_messages: list[dict[str, object]],
     system_prompt: str | None = None,
     model: str | None = None,
-    timeout_seconds: int = 45,
-    max_tokens: int = 1600,
 ) -> str:
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     messages: list[dict[str, object]] = [{"role": "system", "content": sys_prompt}]
@@ -1426,7 +1418,7 @@ def _call_do_ai_with_history(
 
     chunks: list[str] = []
     for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=timeout_seconds, max_tokens=max_tokens, model=model)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1600, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -3835,47 +3827,15 @@ HTML_TEMPLATE = """
                 gap: 0.45rem;
             }
 
-            .tab-nav-modern .tab-grid button[data-tab-accent='purple'],
-            .training-subtab-btn[data-tab-accent='purple'] { --tab-accent: 139, 92, 246; --tab-accent-soft: 168, 85, 247; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='blue'],
-            .training-subtab-btn[data-tab-accent='blue'] { --tab-accent: 59, 130, 246; --tab-accent-soft: 96, 165, 250; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='amber'],
-            .training-subtab-btn[data-tab-accent='amber'] { --tab-accent: 245, 158, 11; --tab-accent-soft: 251, 191, 36; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='emerald'],
-            .training-subtab-btn[data-tab-accent='emerald'] { --tab-accent: 16, 185, 129; --tab-accent-soft: 52, 211, 153; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='cyan'],
-            .training-subtab-btn[data-tab-accent='cyan'] { --tab-accent: 6, 182, 212; --tab-accent-soft: 34, 211, 238; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='pink'],
-            .training-subtab-btn[data-tab-accent='pink'] { --tab-accent: 236, 72, 153; --tab-accent-soft: 244, 114, 182; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='indigo'],
-            .training-subtab-btn[data-tab-accent='indigo'] { --tab-accent: 99, 102, 241; --tab-accent-soft: 129, 140, 248; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='red'],
-            .training-subtab-btn[data-tab-accent='red'] { --tab-accent: 239, 68, 68; --tab-accent-soft: 248, 113, 113; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='teal'],
-            .training-subtab-btn[data-tab-accent='teal'] { --tab-accent: 20, 184, 166; --tab-accent-soft: 45, 212, 191; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='orange'],
-            .training-subtab-btn[data-tab-accent='orange'] { --tab-accent: 249, 115, 22; --tab-accent-soft: 251, 146, 60; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='rose'],
-            .training-subtab-btn[data-tab-accent='rose'] { --tab-accent: 244, 63, 94; --tab-accent-soft: 251, 113, 133; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='green'],
-            .training-subtab-btn[data-tab-accent='green'] { --tab-accent: 34, 197, 94; --tab-accent-soft: 74, 222, 128; }
-            .tab-nav-modern .tab-grid button[data-tab-accent='sky'],
-            .training-subtab-btn[data-tab-accent='sky'] { --tab-accent: 14, 165, 233; --tab-accent-soft: 56, 189, 248; }
-
             .tab-nav-modern .tab-grid button {
                 width: 100%;
                 justify-content: center;
                 text-align: center;
                 min-height: 2.3rem;
-                border: 1px solid rgba(148, 163, 184, 0.24) !important;
-                background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.92)) !important;
-                color: #cbd5e1 !important;
+                border: 1px solid rgba(148, 163, 184, 0.18);
+                background: rgba(15, 23, 42, 0.55);
+                color: #cbd5e1;
                 transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-            }
-
-            .tab-nav-modern .tab-grid button:not(.tab-active):not(.tab-active-vault) {
-                background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.92)) !important;
-                color: #cbd5e1 !important;
             }
 
             @keyframes tabIconPulse {
@@ -3897,15 +3857,15 @@ HTML_TEMPLATE = """
 
             .tab-nav-modern .tab-grid button:hover {
                 transform: translateY(-1px);
-                border-color: rgba(var(--tab-accent-soft, 168, 85, 247), 0.45);
-                box-shadow: 0 8px 18px rgba(var(--tab-accent, 139, 92, 246), 0.28);
+                border-color: rgba(168, 85, 247, 0.45);
+                box-shadow: 0 8px 18px rgba(88, 28, 135, 0.28);
             }
 
             .tab-nav-modern .tab-grid button.tab-active {
-                background: linear-gradient(135deg, rgba(var(--tab-accent, 139, 92, 246), 0.95), rgba(var(--tab-accent-soft, 168, 85, 247), 0.95));
-                border-color: rgba(var(--tab-accent-soft, 168, 85, 247), 0.75);
+                background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(109, 40, 217, 0.95));
+                border-color: rgba(196, 181, 253, 0.7);
                 color: #ffffff;
-                box-shadow: 0 0 0 1px rgba(var(--tab-accent-soft, 168, 85, 247), 0.3), 0 0 18px rgba(var(--tab-accent, 139, 92, 246), 0.45);
+                box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.25), 0 0 18px rgba(139, 92, 246, 0.45);
             }
 
             .tab-nav-modern .tab-grid button.tab-active-vault {
@@ -3923,24 +3883,24 @@ HTML_TEMPLATE = """
 
             .training-subtab-btn {
                 width: 100%;
-                border: 1px solid rgba(125, 211, 252, 0.36) !important;
-                background: linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.96)) !important;
-                color: #e2e8f0 !important;
+                border: 1px solid rgba(125, 211, 252, 0.32);
+                background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+                color: #e2e8f0;
                 min-height: 2.3rem;
                 box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.16), 0 1px 0 rgba(15, 23, 42, 0.9);
             }
 
             .training-subtab-btn:hover {
                 transform: translateY(-1px);
-                border-color: rgba(var(--tab-accent-soft, 168, 85, 247), 0.45);
-                box-shadow: 0 8px 18px rgba(var(--tab-accent, 139, 92, 246), 0.28);
+                border-color: rgba(168, 85, 247, 0.45);
+                box-shadow: 0 8px 18px rgba(88, 28, 135, 0.28);
             }
 
             .training-subtab-btn.training-subtab-active {
-                background: linear-gradient(135deg, rgba(var(--tab-accent, 139, 92, 246), 0.95), rgba(var(--tab-accent-soft, 168, 85, 247), 0.95));
-                border-color: rgba(var(--tab-accent-soft, 168, 85, 247), 0.75);
+                background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(109, 40, 217, 0.95));
+                border-color: rgba(196, 181, 253, 0.7);
                 color: #ffffff;
-                box-shadow: 0 0 0 1px rgba(var(--tab-accent-soft, 168, 85, 247), 0.3), 0 0 18px rgba(var(--tab-accent, 139, 92, 246), 0.45);
+                box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.25), 0 0 18px rgba(139, 92, 246, 0.45);
             }
 
             .result-panel {
@@ -4099,355 +4059,6 @@ HTML_TEMPLATE = """
                 line-height: 1.75;
             }
 
-            #ctf-section {
-                --ctf-border-main: rgba(245, 158, 11, 0.78);
-                --ctf-border-soft: rgba(148, 163, 184, 0.82);
-            }
-
-            #ctf-section [class*='border-'] {
-                border-style: solid !important;
-                border-width: 1px !important;
-            }
-
-            #ctf-section .ctf-border-sync {
-                border-color: var(--ctf-border-soft) !important;
-            }
-
-            #ctf-section .ctf-header-sync {
-                border-color: var(--ctf-border-main) !important;
-            }
-
-            .training-intro-note {
-                border: 1px solid rgba(245, 158, 11, 0.9) !important;
-                background: linear-gradient(135deg, rgba(120, 53, 15, 0.42), rgba(113, 63, 18, 0.28)) !important;
-                box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 10px 24px rgba(120, 53, 15, 0.28);
-            }
-
-            .ctf-card.ctf-diff-easy {
-                --ctf-border-main: rgba(16, 185, 129, 0.92);
-                --ctf-border-soft: rgba(52, 211, 153, 0.76);
-                border-color: rgba(16, 185, 129, 0.9) !important;
-                background: linear-gradient(145deg, rgba(6, 95, 70, 0.58), rgba(15, 23, 42, 0.94)) !important;
-                box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.24), 0 12px 26px rgba(6, 78, 59, 0.32);
-            }
-
-            .ctf-card.ctf-diff-medium {
-                --ctf-border-main: rgba(245, 158, 11, 0.94);
-                --ctf-border-soft: rgba(251, 191, 36, 0.78);
-                border-color: rgba(245, 158, 11, 0.92) !important;
-                background: linear-gradient(145deg, rgba(146, 64, 14, 0.6), rgba(15, 23, 42, 0.94)) !important;
-                box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.24), 0 12px 26px rgba(146, 64, 14, 0.34);
-            }
-
-            .ctf-card.ctf-diff-hard {
-                --ctf-border-main: rgba(248, 113, 113, 0.96);
-                --ctf-border-soft: rgba(252, 165, 165, 0.8);
-                border-color: rgba(248, 113, 113, 0.96) !important;
-                background: linear-gradient(145deg, rgba(185, 28, 28, 0.68), rgba(127, 29, 29, 0.48), rgba(15, 23, 42, 0.94)) !important;
-                box-shadow: 0 0 0 1px rgba(252, 165, 165, 0.26), 0 12px 28px rgba(153, 27, 27, 0.4);
-            }
-
-            /* Category palette for better visual separation between challenges. */
-            .ctf-card.ctf-cat-web {
-                --ctf-border-main: rgba(59, 130, 246, 0.92);
-                --ctf-border-soft: rgba(125, 211, 252, 0.76);
-                background: linear-gradient(145deg, rgba(30, 64, 175, 0.56), rgba(15, 23, 42, 0.94)) !important;
-            }
-
-            .ctf-card.ctf-cat-crypto {
-                --ctf-border-main: rgba(139, 92, 246, 0.92);
-                --ctf-border-soft: rgba(196, 181, 253, 0.78);
-                background: linear-gradient(145deg, rgba(91, 33, 182, 0.56), rgba(15, 23, 42, 0.94)) !important;
-            }
-
-            .ctf-card.ctf-cat-forensics {
-                --ctf-border-main: rgba(20, 184, 166, 0.92);
-                --ctf-border-soft: rgba(94, 234, 212, 0.76);
-                background: linear-gradient(145deg, rgba(13, 148, 136, 0.52), rgba(15, 23, 42, 0.94)) !important;
-            }
-
-            .ctf-card.ctf-cat-osint {
-                --ctf-border-main: rgba(236, 72, 153, 0.92);
-                --ctf-border-soft: rgba(244, 114, 182, 0.78);
-                background: linear-gradient(145deg, rgba(157, 23, 77, 0.54), rgba(15, 23, 42, 0.94)) !important;
-            }
-
-            .ctf-card.ctf-cat-rev {
-                --ctf-border-main: rgba(249, 115, 22, 0.92);
-                --ctf-border-soft: rgba(253, 186, 116, 0.78);
-                background: linear-gradient(145deg, rgba(154, 52, 18, 0.55), rgba(15, 23, 42, 0.94)) !important;
-            }
-
-            .ctf-card.ctf-cat-misc {
-                --ctf-border-main: rgba(100, 116, 139, 0.92);
-                --ctf-border-soft: rgba(148, 163, 184, 0.76);
-                background: linear-gradient(145deg, rgba(51, 65, 85, 0.58), rgba(15, 23, 42, 0.94)) !important;
-            }
-
-            .ctf-card .ctf-badge-category {
-                color: #e2e8f0 !important;
-                background: rgba(2, 6, 23, 0.58) !important;
-                border-color: var(--ctf-border-soft) !important;
-            }
-
-            #ctf-section .ctf-card .ctf-details-panel.ctf-border-sync {
-                background: linear-gradient(145deg, rgba(3, 37, 65, 0.64), rgba(2, 6, 23, 0.84)) !important;
-                border-color: rgba(56, 189, 248, 0.68) !important;
-                box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.18), 0 10px 22px rgba(3, 37, 65, 0.28);
-            }
-
-            #ctf-section .ctf-card .ctf-method-panel.ctf-border-sync {
-                background: linear-gradient(145deg, rgba(59, 7, 100, 0.62), rgba(2, 6, 23, 0.84)) !important;
-                border-color: rgba(192, 132, 252, 0.68) !important;
-                box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.18), 0 10px 22px rgba(59, 7, 100, 0.28);
-            }
-
-            #ctf-section .ctf-card .ctf-hints-panel.ctf-border-sync {
-                background: linear-gradient(145deg, rgba(120, 53, 15, 0.62), rgba(2, 6, 23, 0.84)) !important;
-                border-color: rgba(251, 191, 36, 0.72) !important;
-                box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18), 0 10px 22px rgba(120, 53, 15, 0.28);
-            }
-
-            .ctf-card.ctf-diff-easy .ctf-card-title,
-            .ctf-card .ctf-diff-badge-easy {
-                color: #86efac !important;
-            }
-
-            .ctf-card.ctf-diff-medium .ctf-card-title,
-            .ctf-card .ctf-diff-badge-medium {
-                color: #fbbf24 !important;
-            }
-
-            .ctf-card.ctf-diff-hard .ctf-card-title,
-            .ctf-card .ctf-diff-badge-hard {
-                color: #fca5a5 !important;
-            }
-
-            .ctf-card .ctf-diff-badge-easy {
-                border-color: rgba(16, 185, 129, 0.82) !important;
-                background: rgba(6, 78, 59, 0.42) !important;
-            }
-
-            .ctf-card .ctf-diff-badge-medium {
-                border-color: rgba(245, 158, 11, 0.84) !important;
-                background: rgba(120, 53, 15, 0.42) !important;
-            }
-
-            .ctf-card .ctf-diff-badge-hard {
-                border-color: rgba(248, 113, 113, 0.86) !important;
-                background: rgba(127, 29, 29, 0.44) !important;
-            }
-
-            .ctf-card.ctf-diff-easy:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 0 0 1px rgba(110, 231, 183, 0.32), 0 16px 32px rgba(6, 95, 70, 0.42);
-            }
-
-            .ctf-card.ctf-diff-medium:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 0 0 1px rgba(252, 211, 77, 0.34), 0 16px 32px rgba(180, 83, 9, 0.45);
-            }
-
-            .ctf-card.ctf-diff-hard:hover {
-                transform: translateY(-3px);
-                box-shadow: 0 0 0 1px rgba(252, 165, 165, 0.38), 0 0 26px rgba(248, 113, 113, 0.34), 0 18px 36px rgba(153, 27, 27, 0.56);
-            }
-
-            .ctf-ai-btn {
-                background: #7c3aed;
-                border: 1px solid #c4b5fd;
-                color: #ffffff;
-                box-shadow: 0 8px 18px rgba(91, 33, 182, 0.42);
-                opacity: 1;
-            }
-
-            .ctf-ai-btn:hover {
-                background: #6d28d9;
-                border-color: #ddd6fe;
-                box-shadow: 0 10px 22px rgba(109, 40, 217, 0.5);
-            }
-
-            .ctf-submit-btn {
-                background: #d97706;
-                border: 1px solid #fbbf24;
-                color: #fff7ed;
-                box-shadow: 0 8px 18px rgba(180, 83, 9, 0.4);
-                opacity: 1;
-            }
-
-            .ctf-submit-btn:hover {
-                background: #b45309;
-                border-color: #fde68a;
-                box-shadow: 0 10px 22px rgba(180, 83, 9, 0.5);
-            }
-
-            .crypt-reco-btn {
-                background: linear-gradient(135deg, #6d28d9, #7c3aed);
-                border: 1px solid #a78bfa;
-                color: #f5f3ff;
-                box-shadow: 0 8px 18px rgba(91, 33, 182, 0.34);
-            }
-
-            .crypt-reco-btn:hover {
-                background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-                border-color: #c4b5fd;
-                color: #ffffff;
-            }
-
-            .crypt-chat-shell {
-                border: 1px solid #0e7490;
-                background: #020617;
-            }
-
-            .crypt-chat-assistant {
-                border: 1px solid #06b6d4;
-                background: #0f172a;
-            }
-
-            .crypt-chat-user {
-                border: 1px solid #22d3ee;
-                background: #0e7490;
-            }
-
-            .crypt-chat-avatar-ai {
-                border: 1px solid #06b6d4;
-                background: #0e7490;
-            }
-
-            .crypt-chat-avatar-user {
-                border: 1px solid #22d3ee;
-                background: #155e75;
-            }
-
-            .learning-attack-card {
-                border-style: solid;
-                border-width: 1px;
-                transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-            }
-
-            .learning-attack-card:hover {
-                transform: translateY(-1px);
-            }
-
-            .learning-attack-card-active {
-                box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.28), 0 10px 24px rgba(8, 47, 73, 0.35);
-            }
-
-            .learning-sev-critical-card {
-                border-color: rgba(244, 63, 94, 0.78) !important;
-                background: linear-gradient(145deg, rgba(127, 29, 29, 0.38), rgba(15, 23, 42, 0.92)) !important;
-            }
-
-            .learning-sev-high-card {
-                border-color: rgba(249, 115, 22, 0.76) !important;
-                background: linear-gradient(145deg, rgba(124, 45, 18, 0.34), rgba(15, 23, 42, 0.92)) !important;
-            }
-
-            .learning-sev-medium-card {
-                border-color: rgba(245, 158, 11, 0.72) !important;
-                background: linear-gradient(145deg, rgba(120, 53, 15, 0.3), rgba(15, 23, 42, 0.92)) !important;
-            }
-
-            .learning-sev-low-card {
-                border-color: rgba(16, 185, 129, 0.74) !important;
-                background: linear-gradient(145deg, rgba(6, 95, 70, 0.32), rgba(15, 23, 42, 0.92)) !important;
-            }
-
-            .learning-sev-critical-badge { color: #fecdd3 !important; border-color: rgba(190, 24, 93, 0.65) !important; background: rgba(136, 19, 55, 0.4) !important; }
-            .learning-sev-high-badge { color: #fed7aa !important; border-color: rgba(194, 65, 12, 0.62) !important; background: rgba(124, 45, 18, 0.38) !important; }
-            .learning-sev-medium-badge { color: #fde68a !important; border-color: rgba(180, 83, 9, 0.6) !important; background: rgba(120, 53, 15, 0.36) !important; }
-            .learning-sev-low-badge { color: #bbf7d0 !important; border-color: rgba(5, 150, 105, 0.6) !important; background: rgba(6, 78, 59, 0.35) !important; }
-
-            .learning-sev-critical-detail { border-color: rgba(244, 63, 94, 0.7) !important; background: linear-gradient(135deg, rgba(136, 19, 55, 0.36), rgba(15, 23, 42, 0.9)) !important; }
-            .learning-sev-high-detail { border-color: rgba(249, 115, 22, 0.68) !important; background: linear-gradient(135deg, rgba(124, 45, 18, 0.34), rgba(15, 23, 42, 0.9)) !important; }
-            .learning-sev-medium-detail { border-color: rgba(245, 158, 11, 0.66) !important; background: linear-gradient(135deg, rgba(120, 53, 15, 0.3), rgba(15, 23, 42, 0.9)) !important; }
-            .learning-sev-low-detail { border-color: rgba(16, 185, 129, 0.68) !important; background: linear-gradient(135deg, rgba(6, 95, 70, 0.3), rgba(15, 23, 42, 0.9)) !important; }
-
-            #ctf-section .ctf-solid-field,
-            #ctf-section #ctfMeta,
-            #ctf-section [id^='ctf-ai-'],
-            #ctf-section [id^='ctf-res-'] {
-                border-color: var(--ctf-border-soft) !important;
-            }
-
-            /* Solid panel fallbacks for sections that must never appear transparent. */
-            .titan-solid-hero {
-                background: linear-gradient(145deg, rgba(10, 18, 34, 0.96), rgba(15, 23, 42, 0.94)) !important;
-                border: 1px solid rgba(71, 85, 105, 0.68) !important;
-                box-shadow: 0 10px 28px rgba(2, 6, 23, 0.5), inset 0 1px 0 rgba(148, 163, 184, 0.08);
-            }
-
-            .titan-solid-panel {
-                background: linear-gradient(140deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.94)) !important;
-                border: 1px solid rgba(71, 85, 105, 0.62) !important;
-                box-shadow: 0 10px 24px rgba(2, 6, 23, 0.45);
-            }
-
-            .titan-solid-stat {
-                background: rgba(2, 6, 23, 0.82) !important;
-                border: 1px solid rgba(71, 85, 105, 0.74) !important;
-            }
-
-            /* CTF hardening: prevent transparent cards/fields when utility CSS is missing. */
-            #ctf-section .ctf-card,
-            #ctf-section .ctf-card.titan-solid-panel {
-                background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.95)) !important;
-                border-color: rgba(71, 85, 105, 0.74) !important;
-                box-shadow: 0 10px 24px rgba(2, 6, 23, 0.45);
-            }
-
-            #ctf-section .ctf-card .rounded-xl,
-            #ctf-section .ctf-card .rounded-lg,
-            #ctf-section #ctfMeta,
-            #ctf-section [id^='ctf-ai-'],
-            #ctf-section [id^='ctf-res-'] {
-                background: rgba(2, 6, 23, 0.82) !important;
-                border-color: rgba(71, 85, 105, 0.74) !important;
-            }
-
-            #ctf-section .ctf-solid-field {
-                background: rgba(2, 6, 23, 0.86) !important;
-                color: #e5e7eb !important;
-                border: 1px solid rgba(71, 85, 105, 0.8) !important;
-            }
-
-            /* Global production safety net: keep panels/cards solid even if utility CSS fails on server. */
-            [class*='bg-slate-950/'] {
-                background-color: rgba(2, 6, 23, 0.96) !important;
-            }
-
-            [class*='bg-slate-900/'] {
-                background-color: rgba(15, 23, 42, 0.82) !important;
-            }
-
-            [class*='bg-slate-800/'] {
-                background-color: rgba(30, 41, 59, 0.78) !important;
-            }
-
-            [class*='bg-black/'] {
-                background-color: rgba(0, 0, 0, 0.46) !important;
-            }
-
-            [class*='border-slate-'] {
-                border-color: rgba(51, 65, 85, 0.95) !important;
-            }
-
-            [class*='border-purple-'] {
-                border-color: rgba(126, 34, 206, 0.62) !important;
-            }
-
-            [class*='border-cyan-'] {
-                border-color: rgba(8, 145, 178, 0.62) !important;
-            }
-
-            [class*='border-fuchsia-'] {
-                border-color: rgba(162, 28, 175, 0.62) !important;
-            }
-
-            [class*='border-emerald-'] {
-                border-color: rgba(5, 150, 105, 0.62) !important;
-            }
-
             @media (max-width: 640px) {
                 .ctf-main-title {
                     font-size: 1.2rem;
@@ -4580,37 +4191,37 @@ HTML_TEMPLATE = """
                 <div class="tab-group">
                     <div class="tab-group-title px-1"><span>🧱</span> الأدوات الأساسية</div>
                     <div class="tab-grid">
-                    <button onclick="showTab('dash')" id="btn-dash" data-tab-accent="purple" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>📊</span> الإحصائيات</button>
-                    <button onclick="showTab('pass')" id="btn-pass" data-tab-accent="blue" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🔑</span> كلمات السر</button>
-                    <button onclick="showTab('vault'); checkVaultPasswordSetup();" id="btn-vault" data-tab-accent="amber" class="px-3 py-1.5 rounded-lg hover:bg-yellow-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-yellow-500/30"><span>🗄️</span> القبو</button>
-                    <button onclick="showTab('fileprotect')" id="btn-fileprotect" data-tab-accent="emerald" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🛡️</span> حماية الملفات</button>
-                    <button onclick="showTab('identity')" id="btn-identity" data-tab-accent="cyan" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
+                    <button onclick="showTab('dash')" id="btn-dash" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>📊</span> الإحصائيات</button>
+                    <button onclick="showTab('pass')" id="btn-pass" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🔑</span> كلمات السر</button>
+                    <button onclick="showTab('vault'); checkVaultPasswordSetup();" id="btn-vault" class="px-3 py-1.5 rounded-lg hover:bg-yellow-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-yellow-500/30"><span>🗄️</span> القبو</button>
+                    <button onclick="showTab('fileprotect')" id="btn-fileprotect" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🛡️</span> حماية الملفات</button>
+                    <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
                 </div>
                 </div>
 
                 <div class="tab-group">
                     <div class="tab-group-title px-1"><span>🧭</span> التحليل والاستقصاء</div>
                     <div class="tab-grid">
-                    <button onclick="showTab('tools')" id="btn-tools" data-tab-accent="purple" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
-                    <button onclick="showTab('ghost')" id="btn-ghost" data-tab-accent="pink" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
-                    <button onclick="showTab('osint')" id="btn-osint" data-tab-accent="indigo" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
-                    <button onclick="showTab('ir')" id="btn-ir" data-tab-accent="red" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
-                    <button onclick="showTab('forensics')" id="btn-forensics" data-tab-accent="teal" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
-                    <button onclick="showTab('training')" id="btn-training" data-tab-accent="amber" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
+                    <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
+                    <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
+                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
+                    <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
+                    <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
+                    <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
                 </div>
                 </div>
 
                 <div class="tab-group">
                     <div class="tab-group-title px-1"><span>🧪</span> مختبر التشفير</div>
                     <div class="tab-grid">
-                    <button onclick="showTab('crypt')" id="btn-crypt" data-tab-accent="blue" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
-                    <button onclick="showTab('filelab')" id="btn-filelab" data-tab-accent="emerald" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span class="inline-block animate-pulse">📝</span> إخفاء نص TXT</button>
-                    <button onclick="showTab('suite')" id="btn-suite" data-tab-accent="purple" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> تشفير الصور</button>
-                    <button onclick="showTab('audio')" id="btn-audio" data-tab-accent="orange" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
-                    <button onclick="showTab('video')" id="btn-video" data-tab-accent="rose" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> اخفاء نص داخل فيديو</button>
-                    <button onclick="showTab('qr')" id="btn-qr" data-tab-accent="green" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
-                    <button onclick="openAiSection()" id="btn-ai" data-tab-accent="purple" class="hidden px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
-                    <button onclick="showAdminTab()" id="btn-admin" data-tab-accent="red" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
+                    <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
+                    <button onclick="showTab('filelab')" id="btn-filelab" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span class="inline-block animate-pulse">📝</span> إخفاء نص TXT</button>
+                    <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> تشفير الصور</button>
+                    <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
+                    <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> اخفاء نص داخل فيديو</button>
+                    <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
+                    <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
+                    <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
                 </div>
                 </div>
             </div>
@@ -4856,7 +4467,7 @@ HTML_TEMPLATE = """
                 <!-- ===== CRYPTOGRAPHY SECTION ===== -->
                 <div id="crypt-section" class="hidden">
                     <div class="space-y-4">
-                        <div class="titan-solid-hero rounded-2xl border border-cyan-900/40 bg-gradient-to-r from-cyan-950/25 via-slate-900/80 to-fuchsia-950/20 p-4">
+                        <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-r from-cyan-950/25 via-slate-900/80 to-fuchsia-950/20 p-4">
                             <div class="flex items-center justify-between gap-3 flex-wrap">
                                 <div>
                                     <h3 class="text-sm font-black text-cyan-300 tracking-wide">TITAN Crypto Studio</h3>
@@ -4868,7 +4479,7 @@ HTML_TEMPLATE = """
 
                         <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                             <div class="xl:col-span-2 space-y-4">
-                                <div class="titan-solid-panel rounded-2xl border border-fuchsia-800/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-fuchsia-950/20 p-4">
+                                <div class="rounded-2xl border border-fuchsia-800/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-fuchsia-950/20 p-4">
                                     <h3 class="text-sm font-black text-fuchsia-300 mb-3">إعدادات التشفير الأساسية</h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
@@ -4903,7 +4514,7 @@ HTML_TEMPLATE = """
                                     <div id="cryptAdvisorLastConfig" class="mt-3 text-[11px] text-cyan-300 bg-cyan-950/15 border border-cyan-900/35 rounded-lg px-3 py-2">لا توجد توصية مطبقة بعد.</div>
                                 </div>
 
-                                <div class="titan-solid-panel rounded-2xl border border-violet-900/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-violet-950/20 p-4">
+                                <div class="rounded-2xl border border-violet-900/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-violet-950/20 p-4">
                                     <h3 class="text-sm font-black text-violet-300 mb-3">لوحة النص والنتيجة</h3>
                                     <textarea id="cryptText" rows="6" class="w-full p-3 rounded-xl bg-slate-950/80 border border-violet-900/40 mb-3 text-sm outline-none focus:ring-2 focus:ring-violet-600/50" placeholder="اكتب النص هنا (تشفير/فك/نسخ)..."></textarea>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -4916,7 +4527,7 @@ HTML_TEMPLATE = """
                             </div>
 
                             <div class="space-y-4">
-                                <div class="titan-solid-panel rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-slate-900/85 via-slate-900/70 to-cyan-950/25 p-4 space-y-3">
+                                <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-slate-900/85 via-slate-900/70 to-cyan-950/25 p-4 space-y-3">
                                     <h3 class="text-sm font-black text-cyan-300">توصية TITAN AI للتشفير</h3>
                                     <div class="grid grid-cols-1 gap-2">
                                         <select id="cryptSensitivity" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none">
@@ -4930,10 +4541,10 @@ HTML_TEMPLATE = """
 
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                                         <button onclick="startCryptAdvisorChat(true)" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">تهيئة سياق AI</button>
-                                        <button onclick="applyCryptRecommendation()" class="crypt-reco-btn px-3 py-2 rounded-lg text-xs font-bold border">تطبيق التوصية</button>
+                                        <button onclick="applyCryptRecommendation()" class="px-3 py-2 rounded-lg bg-fuchsia-800/40 hover:bg-fuchsia-700/50 text-xs font-bold border border-fuchsia-700/50 text-fuchsia-200">تطبيق التوصية</button>
                                     </div>
 
-                                    <div id="cryptAiChatFlow" class="crypt-chat-shell h-64 overflow-y-auto rounded-xl border p-3 space-y-2 text-sm"></div>
+                                    <div id="cryptAiChatFlow" class="h-64 overflow-y-auto rounded-xl border border-cyan-900/40 bg-black/35 p-3 space-y-2 text-sm"></div>
 
                                     <div class="flex gap-2">
                                         <input id="cryptAiChatInput" type="text" class="flex-1 p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-sm outline-none" placeholder="اسأل TITAN AI عن أفضل إعداد تشفير لهذه الحالة...">
@@ -5374,7 +4985,7 @@ HTML_TEMPLATE = """
             <div id="osint-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🕵️ OSINT Mission Center</h2>
 
-                <div class="titan-solid-hero relative overflow-hidden rounded-2xl border border-indigo-900/50 bg-gradient-to-r from-indigo-950/35 via-slate-950/60 to-cyan-950/30 p-4">
+                <div class="relative overflow-hidden rounded-2xl border border-indigo-900/50 bg-gradient-to-r from-indigo-950/35 via-slate-950/60 to-cyan-950/30 p-4">
                     <div class="absolute -top-10 -right-6 w-44 h-44 rounded-full bg-indigo-600/10 blur-3xl"></div>
                     <div class="absolute -bottom-10 -left-6 w-44 h-44 rounded-full bg-cyan-600/10 blur-3xl"></div>
                     <div class="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -5383,19 +4994,19 @@ HTML_TEMPLATE = """
                             <div class="text-sm text-gray-300 mt-1">تحليل موحد + مقارنة هدفين + تحليل دفعي + سجل نشاط حي في لوحة واحدة.</div>
                         </div>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-0">
-                            <div class="titan-solid-stat rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
                                 <div class="text-[10px] text-gray-500">Total Runs</div>
                                 <div id="osintMissionTotal" class="text-base font-black text-indigo-300">0</div>
                             </div>
-                            <div class="titan-solid-stat rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
                                 <div class="text-[10px] text-gray-500">High Risk</div>
                                 <div id="osintMissionHigh" class="text-base font-black text-rose-300">0</div>
                             </div>
-                            <div class="titan-solid-stat rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
                                 <div class="text-[10px] text-gray-500">Avg Risk</div>
                                 <div id="osintMissionAvg" class="text-base font-black text-amber-300">0</div>
                             </div>
-                            <div class="titan-solid-stat rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
                                 <div class="text-[10px] text-gray-500">Last Type</div>
                                 <div id="osintMissionLast" class="text-sm font-black text-cyan-300">--</div>
                             </div>
@@ -5404,7 +5015,7 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="titan-solid-panel xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
+                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
                         <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
                             <h3 class="text-sm font-bold text-indigo-300">البحث الموحد (IP / Domain / URL / Email / Phone)</h3>
                             <div class="text-[10px] text-gray-500">Enter = تحليل مباشر</div>
@@ -5425,7 +5036,7 @@ HTML_TEMPLATE = """
                         <div id="osintUnifiedResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-80 overflow-y-auto" dir="ltr"></div>
                     </div>
 
-                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-2">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-2">
                         <h3 class="text-sm font-bold text-indigo-300">Watchlist</h3>
                         <p class="text-[11px] text-gray-500">احفظ الأهداف، شغّلها بنقرة، وصدّر تقريرًا شاملًا.</p>
                         <div class="grid grid-cols-2 gap-2">
@@ -5439,7 +5050,7 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-violet-900/40">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-violet-900/40">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-sm font-bold text-violet-300">Batch Analyzer</h3>
                             <button onclick="runBatchOsint()" class="px-3 py-1.5 rounded-lg bg-violet-900/40 hover:bg-violet-800 border border-violet-800/50 text-violet-300 text-xs font-bold">تشغيل دفعة</button>
@@ -5449,7 +5060,7 @@ HTML_TEMPLATE = """
                         <div id="osintBatchResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs max-h-80 overflow-y-auto"></div>
                     </div>
 
-                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-sm font-bold text-fuchsia-300">Target Comparison</h3>
                             <button onclick="compareOsintTargets()" class="px-3 py-1.5 rounded-lg bg-fuchsia-900/40 hover:bg-fuchsia-800 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">مقارنة</button>
@@ -5464,7 +5075,7 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
                         <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter</h3>
                         <p class="text-[11px] text-gray-500 mb-3">فحص اليوزرنيم على المنصات الأشهر مع وضع سريع أو عميق.</p>
                         <div class="flex flex-col md:flex-row gap-2">
@@ -5481,7 +5092,7 @@ HTML_TEMPLATE = """
                         <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
                     </div>
 
-                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-sm font-bold text-amber-300">Activity Timeline</h3>
                             <button onclick="clearOsintActivityLog()" class="px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تنظيف السجل</button>
@@ -5494,20 +5105,20 @@ HTML_TEMPLATE = """
 
             <div id="training-section" class="hidden space-y-4">
                 <h2 class="text-xl font-bold text-amber-300 border-b border-slate-700 pb-2">🎯 قسم التدريب</h2>
-                <div class="training-intro-note bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl text-xs text-amber-100/90 leading-6">
+                <div class="bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl text-xs text-amber-100/90 leading-6">
                     هذا القسم يجمع 3 مسارات تدريبية في مكان واحد: التعلم والمحاكاة، CTF، والهندسة الاجتماعية.
                 </div>
                 <div class="training-subtabs-shell rounded-xl p-2">
                     <div class="grid grid-cols-3 gap-2">
-                        <button id="btn-training-learninglab" data-tab-accent="sky" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 التعلم والمحاكاة</button>
-                        <button id="btn-training-ctf" data-tab-accent="amber" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
-                        <button id="btn-training-se" data-tab-accent="rose" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
+                        <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 التعلم والمحاكاة</button>
+                        <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
+                        <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
                     </div>
                 </div>
             </div>
 
             <div id="ctf-section" class="hidden space-y-6 ctf-ui">
-                <div class="titan-solid-hero ctf-header-sync rounded-2xl border border-amber-900/40 bg-gradient-to-r from-amber-950/25 via-slate-900/85 to-violet-950/20 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
+                <div class="rounded-2xl border border-amber-900/40 bg-gradient-to-r from-amber-950/25 via-slate-900/85 to-violet-950/20 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
                     <div class="flex flex-col items-start gap-3">
                         <div>
                             <h2 class="ctf-main-title font-bold text-amber-300 border-b border-transparent pb-0 flex items-center gap-2"><span class="inline-block animate-pulse">🏁</span> TITAN CTF ARENA</h2>
@@ -5517,26 +5128,26 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <div class="titan-solid-panel ctf-border-sync rounded-2xl border border-slate-700/70 bg-slate-950/35 p-3 space-y-2">
+                <div class="rounded-2xl border border-slate-700/70 bg-slate-950/35 p-3 space-y-2">
                     <div class="text-[10px] text-slate-400 uppercase tracking-[0.12em]">Session Snapshot</div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2">
-                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Active Challenges</div>
                             <div id="ctfStatActive" class="text-base font-black text-amber-300">0</div>
                         </div>
-                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Solved This Cycle</div>
                             <div id="ctfStatSolvedCycle" class="text-base font-black text-emerald-300">0</div>
                         </div>
-                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Total Solved</div>
                             <div id="ctfStatSolvedTotal" class="text-base font-black text-cyan-300">0</div>
                         </div>
-                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Total Points</div>
                             <div id="ctfStatPoints" class="text-base font-black text-violet-300">0</div>
                         </div>
-                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Rotation</div>
                             <div id="ctfStatRotation" class="text-sm font-black text-amber-200">--</div>
                         </div>
@@ -5544,7 +5155,7 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="space-y-4">
-                    <div class="titan-solid-panel ctf-header-sync bg-slate-900/60 p-4 rounded-2xl border border-amber-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.28)]">
+                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-amber-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.28)]">
                         <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-3">
                             <div>
                                 <div class="ctf-section-label text-amber-300">Challenge Filters</div>
@@ -5555,18 +5166,18 @@ HTML_TEMPLATE = """
                             </div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
-                            <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="ctf-solid-field p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none w-full md:col-span-2">
-                            <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="ctf-solid-field p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none w-full md:col-span-2">
+                            <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
                                 <option value="all" selected>كل الصعوبات</option>
                                 <option value="easy">Easy</option>
                                 <option value="medium">Medium</option>
                                 <option value="hard">Hard</option>
                             </select>
-                            <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="ctf-solid-field p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
                                 <option value="all" selected>كل التصنيفات</option>
                             </select>
                         </div>
-                        <label class="ctf-border-sync flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/60 w-fit">
+                        <label class="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/60 w-fit">
                             <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
                             <span class="text-gray-300">عرض غير المحلولة فقط</span>
                         </label>
@@ -7608,7 +7219,7 @@ HTML_TEMPLATE = """
                     if(t === type) {
                         btn.classList.add('tab-active');
                         btn.classList.remove('text-gray-400');
-                        btn.classList.add('text-white');
+                        btn.classList.add('bg-purple-600/90', 'text-white');
                     } else {
                         btn.classList.remove('tab-active', 'tab-active-vault', 'bg-purple-600/90', 'text-white', 'bg-yellow-600/90', 'text-slate-900');
                         btn.classList.add('text-gray-400');
@@ -7621,8 +7232,8 @@ HTML_TEMPLATE = """
                 if(type === 'vault') {
                     vBtn.classList.remove('tab-active');
                     vBtn.classList.add('tab-active-vault');
-                    vBtn.classList.add('text-slate-900');
-                    vBtn.classList.remove('text-gray-400');
+                    vBtn.classList.add('bg-yellow-600/90', 'text-slate-900');
+                    vBtn.classList.remove('text-gray-400', 'bg-purple-600/90');
                 }
             }
             if(type === 'dash') {
@@ -7781,10 +7392,10 @@ HTML_TEMPLATE = """
 
         function _learningSeverityMeta(level) {
             const key = String(level || 'medium').toLowerCase();
-            if (key === 'critical') return { label: 'Critical', cls: 'learning-sev-critical-badge', badgeCls: 'learning-sev-critical-badge', cardCls: 'learning-sev-critical-card', detailCls: 'learning-sev-critical-detail' };
-            if (key === 'high') return { label: 'High', cls: 'learning-sev-high-badge', badgeCls: 'learning-sev-high-badge', cardCls: 'learning-sev-high-card', detailCls: 'learning-sev-high-detail' };
-            if (key === 'low') return { label: 'Low', cls: 'learning-sev-low-badge', badgeCls: 'learning-sev-low-badge', cardCls: 'learning-sev-low-card', detailCls: 'learning-sev-low-detail' };
-            return { label: 'Medium', cls: 'learning-sev-medium-badge', badgeCls: 'learning-sev-medium-badge', cardCls: 'learning-sev-medium-card', detailCls: 'learning-sev-medium-detail' };
+            if (key === 'critical') return { label: 'Critical', cls: 'text-rose-200 border-rose-700/60 bg-rose-900/30' };
+            if (key === 'high') return { label: 'High', cls: 'text-orange-200 border-orange-700/60 bg-orange-900/30' };
+            if (key === 'low') return { label: 'Low', cls: 'text-emerald-200 border-emerald-700/60 bg-emerald-900/30' };
+            return { label: 'Medium', cls: 'text-amber-200 border-amber-700/60 bg-amber-900/30' };
         }
 
         function _learningBuildPlaybook(item) {
@@ -7880,10 +7491,10 @@ HTML_TEMPLATE = """
             box.innerHTML = attacks.map((a) => {
                 const active = a.id === __learningSelectedAttackId;
                 const sev = _learningSeverityMeta(a.severity);
-                return `<button onclick="learningCatalogOpen('${_resultEscape(a.id)}')" class="learning-attack-card ${sev.cardCls} ${active ? 'learning-attack-card-active' : ''} text-right p-3 rounded-lg border transition-all">
+                return `<button onclick="learningCatalogOpen('${_resultEscape(a.id)}')" class="text-right p-3 rounded-lg border transition-all ${active ? 'border-cyan-600 bg-cyan-900/20' : 'border-slate-700 bg-black/30 hover:border-cyan-800/60 hover:bg-cyan-950/10'}">
                     <div class="flex items-center justify-between gap-2">
                         <div class="text-xs font-bold ${active ? 'text-cyan-200' : 'text-gray-100'}">${_resultEscape(a.name)}</div>
-                        <span class="text-[10px] px-2 py-0.5 rounded border ${sev.badgeCls}">${_resultEscape(sev.label)}</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded border ${sev.cls}">${_resultEscape(sev.label)}</span>
                     </div>
                     <div class="text-[10px] text-gray-400 mt-1">${_resultEscape(a.category_title)}</div>
                     <div class="text-[10px] text-gray-500 mt-1">Tools: ${_resultEscape((a.tools || []).slice(0, 3).join(' | '))}</div>
@@ -7905,19 +7516,16 @@ HTML_TEMPLATE = """
             if (!hit || !box) return;
 
             __learningSelectedAttackId = hit.id;
+            if (badge) badge.textContent = hit.name;
             const sev = _learningSeverityMeta(hit.severity);
-            if (badge) {
-                badge.textContent = hit.name;
-                badge.className = `text-[10px] px-2 py-1 rounded border ${sev.badgeCls}`;
-            }
             const playbook = hit.playbook || {};
 
             box.innerHTML = `
                 <div class="space-y-3">
-                    <div class="rounded-lg border p-3 ${sev.detailCls}">
+                    <div class="rounded-lg border border-indigo-800/40 bg-indigo-950/20 p-3">
                         <div class="flex items-center justify-between gap-2">
                             <div class="text-sm font-bold text-indigo-200">${_resultEscape(hit.name)}</div>
-                            <span class="text-[10px] px-2 py-0.5 rounded border ${sev.badgeCls}">${_resultEscape(sev.label)}</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded border ${sev.cls}">${_resultEscape(sev.label)}</span>
                         </div>
                         <div class="text-[11px] text-indigo-300 mt-1">${_resultEscape(hit.category_title)}</div>
                     </div>
@@ -8003,10 +7611,7 @@ HTML_TEMPLATE = """
                 const detail = document.getElementById('learningAttackDetail');
                 const badge = document.getElementById('learningSelectedAttackBadge');
                 if (detail) detail.innerHTML = 'لا توجد نتائج حالياً. جرّب تغيير البحث أو التصنيف.';
-                if (badge) {
-                    badge.textContent = 'لا نتائج';
-                    badge.className = 'text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300';
-                }
+                if (badge) badge.textContent = 'لا نتائج';
                 return;
             }
 
@@ -8280,13 +7885,13 @@ HTML_TEMPLATE = """
             const row = document.createElement('div');
             if (role === 'assistant') {
                 row.className = 'flex justify-start items-end gap-2';
-                row.innerHTML = '<div class="crypt-chat-avatar-ai w-6 h-6 rounded-full border flex items-center justify-center text-[10px]">🤖</div>' +
-                    '<div class="crypt-chat-assistant text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] text-xs border leading-6">' + renderAiReplyPretty(text) + '</div>';
+                row.innerHTML = '<div class="w-6 h-6 rounded-full bg-cyan-900/50 border border-cyan-700/50 flex items-center justify-center text-[10px]">🤖</div>' +
+                    '<div class="bg-slate-800/90 text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] text-xs border border-slate-700/60 leading-6">' + renderAiReplyPretty(text) + '</div>';
             } else {
                 row.className = 'flex justify-end items-end gap-2';
-                row.innerHTML = '<div class="crypt-chat-user text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border">' +
+                row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border border-cyan-600/50">' +
                     _osintEscape(String(text || '')).replace(/\\n/g, '<br>') +
-                    '</div><div class="crypt-chat-avatar-user w-6 h-6 rounded-full border flex items-center justify-center text-[10px]">👤</div>';
+                    '</div><div class="w-6 h-6 rounded-full bg-cyan-900/40 border border-cyan-700/40 flex items-center justify-center text-[10px]">👤</div>';
             }
             flow.appendChild(row);
             flow.scrollTop = flow.scrollHeight;
@@ -8352,8 +7957,6 @@ HTML_TEMPLATE = """
             if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 22000);
                 const res = await fetch('/api/crypt/recommend/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -8361,28 +7964,9 @@ HTML_TEMPLATE = """
                         message,
                         conversation_id: window.__cryptAdvisorConversationId,
                         context: { audience, sensitivity, purpose }
-                    }),
-                    signal: controller.signal
+                    })
                 });
-                clearTimeout(timeoutId);
-                const ct = (res.headers.get('content-type') || '').toLowerCase();
-                let data = null;
-                if (ct.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const raw = await res.text();
-                    if (raw && raw.trim().startsWith('<!DOCTYPE')) {
-                        if (res.status === 401 || res.redirected) {
-                            throw new Error('انتهت الجلسة أو يلزم تسجيل الدخول من جديد.');
-                        }
-                        throw new Error('الخادم أعاد صفحة HTML بدل JSON. تحقق من المسار /api/crypt/recommend/chat.');
-                    }
-                    try {
-                        data = JSON.parse(raw || '{}');
-                    } catch (_) {
-                        throw new Error('استجابة غير صالحة من الخادم.');
-                    }
-                }
+                const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || 'تعذر فتح الدردشة');
 
                 window.__cryptAdvisorConversationId = data.conversation_id || window.__cryptAdvisorConversationId;
@@ -8398,11 +7982,7 @@ HTML_TEMPLATE = """
                 if (kdf && rec.kdf_profile) kdf.value = rec.kdf_profile;
                 if (out && rec.output_format) out.value = rec.output_format;
             } catch (e) {
-                if (e && e.name === 'AbortError') {
-                    _cryptAdvisorRenderBubble('assistant', 'انتهت مهلة الرد. أرسل طلبًا أقصر للحصول على نتيجة أسرع.');
-                } else {
-                    _cryptAdvisorRenderBubble('assistant', 'تعذر فتح الدردشة الآن. ' + ((e && e.message) ? e.message : ''));
-                }
+                _cryptAdvisorRenderBubble('assistant', 'تعذر فتح الدردشة الآن. ' + ((e && e.message) ? e.message : ''));
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'إرسال'; }
             }
@@ -9603,26 +9183,9 @@ HTML_TEMPLATE = """
 
         function _ctfDifficultyClass(level) {
             const t = String(level || '').toLowerCase();
-            if (t === 'easy') return 'ctf-diff-badge-easy';
-            if (t === 'hard') return 'ctf-diff-badge-hard';
-            return 'ctf-diff-badge-medium';
-        }
-
-        function _ctfCardTheme(level) {
-            const t = String(level || '').toLowerCase();
-            if (t === 'easy') return 'ctf-diff-easy';
-            if (t === 'hard') return 'ctf-diff-hard';
-            return 'ctf-diff-medium';
-        }
-
-        function _ctfCategoryTheme(category) {
-            const c = String(category || '').toLowerCase();
-            if (c.includes('web') || c.includes('xss') || c.includes('sqli')) return 'ctf-cat-web';
-            if (c.includes('crypto') || c.includes('cipher')) return 'ctf-cat-crypto';
-            if (c.includes('forensic') || c.includes('memory') || c.includes('disk')) return 'ctf-cat-forensics';
-            if (c.includes('osint') || c.includes('intel') || c.includes('social')) return 'ctf-cat-osint';
-            if (c.includes('reverse') || c.includes('rev') || c.includes('pwn') || c.includes('binary')) return 'ctf-cat-rev';
-            return 'ctf-cat-misc';
+            if (t === 'easy') return 'text-emerald-300 border-emerald-800/50 bg-emerald-900/20';
+            if (t === 'hard') return 'text-rose-300 border-rose-800/50 bg-rose-900/20';
+            return 'text-amber-300 border-amber-800/50 bg-amber-900/20';
         }
 
         function ctfApplyFilters() {
@@ -9690,62 +9253,60 @@ HTML_TEMPLATE = """
                     ? hints.map((h, i) => `<li class="text-sm text-gray-200 ctf-bidi"><span class="text-amber-300 font-mono ctf-ltr">${i + 1}.</span> ${_osintEscape(h)}</li>`).join('')
                     : '<li class="text-sm text-gray-400 ctf-bidi">لا توجد تلميحات إضافية.</li>';
                 const fileBlock = c.download_required
-                    ? `<div class="titan-solid-panel ctf-border-sync space-y-2 rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
+                    ? `<div class="space-y-2 rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
                             <div class="text-sm font-bold text-amber-300 ctf-bidi">ملف التحدي الإجباري</div>
                             <div class="text-sm text-gray-200 ctf-bidi">هذا التحدي يتطلب تنزيل ملف المعطيات أولاً ثم استخراج المطلوب منه.</div>
                             <div class="flex flex-wrap items-center gap-2 text-sm">
-                                <span class="titan-solid-stat ctf-border-sync px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-cyan-300 font-mono ctf-ltr">${_osintEscape(c.download_name || 'challenge.txt')}</span>
+                                <span class="px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-cyan-300 font-mono ctf-ltr">${_osintEscape(c.download_name || 'challenge.txt')}</span>
                                 <button onclick="ctfDownloadAsset('${_osintEscape(c.id)}')" class="px-3 py-1.5 rounded-lg bg-amber-900/50 border border-amber-800/50 text-amber-200 text-xs font-bold hover:bg-amber-800/60">تنزيل الملف</button>
                             </div>
                         </div>`
                     : '';
                 const solvedBadge = solved
-                    ? '<span class="titan-solid-stat ctf-border-sync text-[10px] px-2 py-1 rounded border border-emerald-800/50 bg-emerald-900/20 text-emerald-300">Solved</span>'
-                    : '<span class="titan-solid-stat ctf-border-sync text-[10px] px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">Unsolved</span>';
-                const cardTheme = _ctfCardTheme(c.difficulty);
-                const categoryTheme = _ctfCategoryTheme(c.category);
+                    ? '<span class="text-[10px] px-2 py-1 rounded border border-emerald-800/50 bg-emerald-900/20 text-emerald-300">Solved</span>'
+                    : '<span class="text-[10px] px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">Unsolved</span>';
                 return `
-                    <div class="ctf-card titan-solid-panel ${cardTheme} ${categoryTheme} bg-slate-900/55 p-4 rounded-2xl border border-amber-900/30 space-y-3">
+                    <div class="ctf-card bg-slate-900/55 p-4 rounded-2xl border border-amber-900/30 space-y-3">
                         <div class="flex items-center justify-between gap-2">
-                            <h3 class="ctf-card-title ctf-bidi">${_osintEscape(c.title || 'Challenge')}</h3>
+                            <h3 class="ctf-card-title text-amber-300 ctf-bidi">${_osintEscape(c.title || 'Challenge')}</h3>
                             ${solvedBadge}
                         </div>
                         <div class="flex flex-wrap gap-2 text-[11px]">
-                            <span class="ctf-badge-category titan-solid-stat ctf-border-sync px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">${_osintEscape(c.category || 'misc')}</span>
+                            <span class="px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">${_osintEscape(c.category || 'misc')}</span>
                             <span class="px-2 py-1 rounded border ${_ctfDifficultyClass(c.difficulty)}">${_osintEscape(String(c.difficulty || '').toUpperCase())}</span>
-                            <span class="titan-solid-stat ctf-border-sync px-2 py-1 rounded border border-violet-800/50 bg-violet-900/20 text-violet-300">${_osintEscape(c.points || 0)} pts</span>
+                            <span class="px-2 py-1 rounded border border-violet-800/50 bg-violet-900/20 text-violet-300">${_osintEscape(c.points || 0)} pts</span>
                         </div>
 
-                        <div class="ctf-details-panel titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+                        <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-cyan-300 ctf-bidi">تفاصيل التحدي</div>
                             <div class="ctf-bidi text-gray-200 whitespace-pre-wrap">${_osintEscape(c.description || '')}</div>
                             <div class="text-sm text-gray-300 ctf-bidi">صيغة العلم: <span class="font-mono text-amber-300 ctf-ltr">${_osintEscape(c.flag_format || 'TITAN{...}')}</span></div>
                         </div>
 
-                        <div class="ctf-method-panel titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+                        <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-violet-300 ctf-bidi">كيف أفكر بالحل؟</div>
                             <div class="ctf-bidi text-gray-200">${_osintEscape(c.method || 'ابدأ بتحليل المعطيات وتقسيم المشكلة لخطوات صغيرة.')}</div>
                         </div>
 
                         ${fileBlock}
 
-                        <div class="ctf-hints-panel titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+                        <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-amber-300 ctf-bidi">تلميحات سريعة</div>
                             <ol class="space-y-1">${hintsHtml}</ol>
                         </div>
 
                         <div class="space-y-2">
-                            <input id="ctf-flag-${_osintEscape(c.id)}" type="text" placeholder="أدخل العلم هنا..." class="ctf-solid-field w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm font-mono ctf-ltr" dir="ltr">
+                            <input id="ctf-flag-${_osintEscape(c.id)}" type="text" placeholder="أدخل العلم هنا..." class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm font-mono ctf-ltr" dir="ltr">
                             <div class="flex flex-col gap-2">
-                                <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="ctf-submit-btn w-full py-2.5 rounded-xl text-xs font-bold">تحقق من الحل</button>
-                                <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="ctf-ai-btn w-full py-2.5 rounded-xl text-xs font-bold">مساعد AI</button>
+                                <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="w-full py-2.5 rounded-xl bg-amber-900/35 hover:bg-amber-800/50 border border-amber-800/50 text-amber-200 text-xs font-bold">تحقق من الحل</button>
+                                <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="w-full py-2.5 rounded-xl bg-violet-900/35 hover:bg-violet-800/50 border border-violet-800/50 text-violet-200 text-xs font-bold">مساعد AI</button>
                             </div>
                         </div>
 
                         <div class="space-y-1">
-                            <textarea id="ctf-q-${_osintEscape(c.id)}" rows="2" placeholder="اسأل مساعد AI: مثال ما أول خطوة؟" class="ctf-solid-field w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm ctf-bidi"></textarea>
-                            <div id="ctf-ai-${_osintEscape(c.id)}" class="hidden titan-solid-stat ctf-border-sync p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi"></div>
-                            <div id="ctf-res-${_osintEscape(c.id)}" class="hidden titan-solid-stat ctf-border-sync p-2 rounded-lg bg-black/40 border border-slate-700 text-sm ctf-bidi"></div>
+                            <textarea id="ctf-q-${_osintEscape(c.id)}" rows="2" placeholder="اسأل مساعد AI: مثال ما أول خطوة؟" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm ctf-bidi"></textarea>
+                            <div id="ctf-ai-${_osintEscape(c.id)}" class="hidden p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi"></div>
+                            <div id="ctf-res-${_osintEscape(c.id)}" class="hidden p-2 rounded-lg bg-black/40 border border-slate-700 text-sm ctf-bidi"></div>
                         </div>
                     </div>
                 `;
@@ -9864,41 +9425,18 @@ HTML_TEMPLATE = """
             out.className = 'p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi';
             out.innerText = 'AI يفكر...';
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 22000);
                 const res = await fetch('/api/ctf/assistant', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ challenge_id: challengeId, question, attempt }),
-                    signal: controller.signal
+                    body: JSON.stringify({ challenge_id: challengeId, question, attempt })
                 });
-                clearTimeout(timeoutId);
-
-                const ct = (res.headers.get('content-type') || '').toLowerCase();
-                let data = null;
-                if (ct.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const raw = await res.text();
-                    if (raw && raw.trim().startsWith('<!DOCTYPE')) {
-                        throw new Error('الخادم أعاد صفحة HTML بدل JSON');
-                    }
-                    try {
-                        data = JSON.parse(raw || '{}');
-                    } catch (_) {
-                        throw new Error('استجابة غير صالحة من الخادم');
-                    }
-                }
+                const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || 'فشل مساعد AI.');
                 out.className = 'p-2 rounded-lg bg-violet-900/20 border border-violet-800/50 text-sm text-violet-200 whitespace-pre-wrap ctf-bidi';
                 out.innerText = data.reply || 'لا يوجد رد.';
             } catch (e) {
                 out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 whitespace-pre-wrap ctf-bidi';
-                if (e && e.name === 'AbortError') {
-                    out.innerText = 'انتهت مهلة الرد. جرّب صياغة أقصر أو سؤال خطوة واحدة.';
-                } else {
-                    out.innerText = `فشل الاتصال: ${e.message || e}`;
-                }
+                out.innerText = `فشل الاتصال: ${e.message || e}`;
             }
         }
 
@@ -12745,8 +12283,6 @@ HTML_TEMPLATE = """
             messages.scrollTop = messages.scrollHeight;
 
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 28000);
                 const res = await fetch('/api/ai/chat', {
                     method: 'POST',
                     cache: 'no-store',
@@ -12754,26 +12290,9 @@ HTML_TEMPLATE = """
                     body: JSON.stringify({
                         message: msg,
                         conversation_id: window.__titanAiConversationId
-                    }),
-                    signal: controller.signal
+                    })
                 });
-                clearTimeout(timeoutId);
-
-                const ct = (res.headers.get('content-type') || '').toLowerCase();
-                let data = null;
-                if (ct.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const raw = await res.text();
-                    if (raw && raw.trim().startsWith('<!DOCTYPE')) {
-                        throw new Error('الخادم أعاد صفحة HTML بدل JSON');
-                    }
-                    try {
-                        data = JSON.parse(raw || '{}');
-                    } catch (_) {
-                        throw new Error('استجابة غير صالحة من الخادم');
-                    }
-                }
+                var data = await res.json();
                 if (data.reply) {
                     window.__titanAiConversationId = data.conversation_id || window.__titanAiConversationId;
                     if (meta) {
@@ -12786,11 +12305,7 @@ HTML_TEMPLATE = """
                     replyInner.textContent = data.error || 'حدث خطأ';
                 }
             } catch(e) {
-                if (e && e.name === 'AbortError') {
-                    replyInner.textContent = 'انتهت مهلة الطلب. حاول سؤالًا أقصر.';
-                } else {
-                    replyInner.textContent = 'فشل الاتصال';
-                }
+                replyInner.textContent = 'فشل الاتصال';
             }
             btn.disabled = false;
             btn.textContent = 'إرسال';
@@ -12977,36 +12492,17 @@ HTML_TEMPLATE = """
             const result = document.getElementById('ai-pass-result');
             if (!pass) return titanAlert('أدخل كلمة السر للتحليل');
             result.classList.remove('hidden');
-            result.textContent = 'جاري التحليل الذكي... عادة خلال 5-15 ثانية ⏳';
+            result.textContent = 'جاري التحليل... قد يستغرق 30-60 ثانية ⏳';
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 22000);
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'password', content: pass}),
-                    signal: controller.signal
+                    body: JSON.stringify({type: 'password', content: pass})
                 });
-                clearTimeout(timeoutId);
-
-                const contentType = (res.headers.get('content-type') || '').toLowerCase();
-                let data = null;
-                if (contentType.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const txt = await res.text();
-                    throw new Error(txt && txt.startsWith('<!DOCTYPE') ? 'الخادم أعاد صفحة HTML بدل JSON' : 'استجابة غير متوقعة من الخادم');
-                }
-
-                const analysisText = data?.analysis || data?.error || 'فشل التحليل';
-                const sourceTag = data?.source === 'fallback' ? '\\n\\n[تم استخدام التحليل السريع المحلي لتحسين السرعة]' : '';
-                result.textContent = analysisText + sourceTag;
+                const data = await res.json();
+                result.textContent = data.analysis || data.error || 'فشل التحليل';
             } catch(e) {
-                if (e && e.name === 'AbortError') {
-                    result.textContent = 'انتهت مهلة الطلب. تم تقليل وقت الانتظار، جرّب مرة أخرى.';
-                } else {
-                    result.textContent = 'فشل الاتصال - حاول مرة أخرى';
-                }
+                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
             }
         }
 
@@ -13015,36 +12511,17 @@ HTML_TEMPLATE = """
             const result = document.getElementById('ai-security-result');
             if (!secVal) return titanAlert('أدخل البيانات للتحليل');
             result.classList.remove('hidden');
-            result.textContent = 'جاري التحليل الأمني... عادة خلال 5-15 ثانية ⏳';
+            result.textContent = 'جاري التحليل الأمني... قد يستغرق 30-60 ثانية ⏳';
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 22000);
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'security', content: secVal}),
-                    signal: controller.signal
+                    body: JSON.stringify({type: 'security', content: secVal})
                 });
-                clearTimeout(timeoutId);
-
-                const contentType = (res.headers.get('content-type') || '').toLowerCase();
-                let data = null;
-                if (contentType.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const txt = await res.text();
-                    throw new Error(txt && txt.startsWith('<!DOCTYPE') ? 'الخادم أعاد صفحة HTML بدل JSON' : 'استجابة غير متوقعة من الخادم');
-                }
-
-                const analysisText = data?.analysis || data?.error || 'فشل التحليل';
-                const sourceTag = data?.source === 'fallback' ? '\\n\\n[تم استخدام التحليل السريع المحلي لتحسين السرعة]' : '';
-                result.textContent = analysisText + sourceTag;
+                const data = await res.json();
+                result.textContent = data.analysis || data.error || 'فشل التحليل';
             } catch(e) {
-                if (e && e.name === 'AbortError') {
-                    result.textContent = 'انتهت مهلة الطلب. تم تقليل وقت الانتظار، جرّب مرة أخرى.';
-                } else {
-                    result.textContent = 'فشل الاتصال - حاول مرة أخرى';
-                }
+                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
             }
         }
 
@@ -13630,9 +13107,8 @@ def tailwind_css():
         with open(css_path, 'r', encoding='utf-8') as f:
             css = f.read()
         resp = Response(css, mimetype='text/css')
-        # Prevent stale CSS on custom domains/CDNs where old assets can persist.
-        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        resp.headers['Pragma'] = 'no-cache'
+        # Keep CSS cache short so production updates propagate quickly.
+        resp.headers['Cache-Control'] = 'public, max-age=300'
         return resp
     except Exception:
         # Production safety net: when compiled CSS file is missing in slug,
@@ -13644,8 +13120,7 @@ def tailwind_css():
             )
             if cdn_res.status_code == 200 and len(cdn_res.text) > 10000:
                 resp = Response(cdn_res.text, mimetype='text/css')
-                resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-                resp.headers['Pragma'] = 'no-cache'
+                resp.headers['Cache-Control'] = 'public, max-age=1800'
                 return resp
         except Exception:
             pass
@@ -13658,62 +13133,6 @@ html,body{margin:0;padding:0;font-family:'Tajawal',sans-serif;background:#070b19
 .glass{background:rgba(10,15,30,.85);border:1px solid rgba(168,85,247,.2);border-radius:1rem}
 .tab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.45rem}
 button,input,textarea,select{font:inherit}
-        /* Keep tab and panel backgrounds visible even without full Tailwind build. */
-        .tab-nav-modern .tab-grid button{border:1px solid rgba(148,163,184,.24)!important;background:linear-gradient(135deg,rgba(30,41,59,.92),rgba(15,23,42,.92))!important;color:#cbd5e1!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='purple'].tab-active{background:linear-gradient(135deg,rgba(139,92,246,.95),rgba(168,85,247,.95))!important;color:#fff!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='blue'].tab-active{background:linear-gradient(135deg,rgba(59,130,246,.95),rgba(96,165,250,.95))!important;color:#fff!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='amber'].tab-active{background:linear-gradient(135deg,rgba(245,158,11,.95),rgba(251,191,36,.95))!important;color:#0f172a!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='emerald'].tab-active{background:linear-gradient(135deg,rgba(16,185,129,.95),rgba(52,211,153,.95))!important;color:#fff!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='cyan'].tab-active{background:linear-gradient(135deg,rgba(6,182,212,.95),rgba(34,211,238,.95))!important;color:#0f172a!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='pink'].tab-active{background:linear-gradient(135deg,rgba(236,72,153,.95),rgba(244,114,182,.95))!important;color:#fff!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='indigo'].tab-active{background:linear-gradient(135deg,rgba(99,102,241,.95),rgba(129,140,248,.95))!important;color:#fff!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='red'].tab-active{background:linear-gradient(135deg,rgba(239,68,68,.95),rgba(248,113,113,.95))!important;color:#fff!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='teal'].tab-active{background:linear-gradient(135deg,rgba(20,184,166,.95),rgba(45,212,191,.95))!important;color:#0f172a!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='orange'].tab-active{background:linear-gradient(135deg,rgba(249,115,22,.95),rgba(251,146,60,.95))!important;color:#fff!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='rose'].tab-active{background:linear-gradient(135deg,rgba(244,63,94,.95),rgba(251,113,133,.95))!important;color:#fff!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='green'].tab-active{background:linear-gradient(135deg,rgba(34,197,94,.95),rgba(74,222,128,.95))!important;color:#0f172a!important}
-        .tab-nav-modern .tab-grid button[data-tab-accent='sky'].tab-active{background:linear-gradient(135deg,rgba(14,165,233,.95),rgba(56,189,248,.95))!important;color:#0f172a!important}
-        .tab-nav-modern .tab-grid button.tab-active-vault{background:linear-gradient(135deg,rgba(245,158,11,.95),rgba(217,119,6,.95))!important;color:#0f172a!important}
-        .training-subtab-btn{border:1px solid rgba(125,211,252,.36)!important;background:linear-gradient(135deg,rgba(30,41,59,.96),rgba(15,23,42,.96))!important;color:#e2e8f0!important}
-        .training-subtab-btn[data-tab-accent='sky'].training-subtab-active{background:linear-gradient(135deg,rgba(14,165,233,.95),rgba(56,189,248,.95))!important;color:#0f172a!important}
-        .training-subtab-btn[data-tab-accent='amber'].training-subtab-active{background:linear-gradient(135deg,rgba(245,158,11,.95),rgba(251,191,36,.95))!important;color:#0f172a!important}
-        .training-subtab-btn[data-tab-accent='rose'].training-subtab-active{background:linear-gradient(135deg,rgba(244,63,94,.95),rgba(251,113,133,.95))!important;color:#fff!important}
-        .ctf-submit-btn{background:#d97706!important;border:1px solid #fbbf24!important;color:#fff7ed!important;box-shadow:0 8px 18px rgba(180,83,9,.4)!important;opacity:1!important}
-        .ctf-submit-btn:hover{background:#b45309!important;border-color:#fde68a!important;box-shadow:0 10px 22px rgba(180,83,9,.5)!important}
-        .ctf-ai-btn{background:#7c3aed!important;border:1px solid #c4b5fd!important;color:#fff!important;box-shadow:0 8px 18px rgba(91,33,182,.42)!important;opacity:1!important}
-        .ctf-ai-btn:hover{background:#6d28d9!important;border-color:#ddd6fe!important;box-shadow:0 10px 22px rgba(109,40,217,.5)!important}
-        .crypt-reco-btn{background:linear-gradient(135deg,#6d28d9,#7c3aed)!important;border:1px solid #a78bfa!important;color:#f5f3ff!important;box-shadow:0 8px 18px rgba(91,33,182,.34)!important}
-        .crypt-reco-btn:hover{background:linear-gradient(135deg,#7c3aed,#8b5cf6)!important;border-color:#c4b5fd!important;color:#fff!important}
-        .crypt-chat-shell{border:1px solid #0e7490!important;background:#020617!important}
-        .crypt-chat-assistant{border:1px solid #06b6d4!important;background:#0f172a!important}
-        .crypt-chat-user{border:1px solid #22d3ee!important;background:#0e7490!important}
-        .crypt-chat-avatar-ai{border:1px solid #06b6d4!important;background:#0e7490!important}
-        .crypt-chat-avatar-user{border:1px solid #22d3ee!important;background:#155e75!important}
-        .bg-slate-950\\/96{background-color:rgba(2,6,23,.96)!important}
-        .bg-slate-900\\/70{background-color:rgba(15,23,42,.70)!important}
-        .bg-slate-900\\/60{background-color:rgba(15,23,42,.60)!important}
-        .bg-slate-900\\/50{background-color:rgba(15,23,42,.50)!important}
-        .bg-slate-900\\/40{background-color:rgba(15,23,42,.40)!important}
-        .bg-slate-800\\/60{background-color:rgba(30,41,59,.60)!important}
-        .bg-purple-900\\/40{background-color:rgba(88,28,135,.40)!important}
-        .bg-purple-900\\/30{background-color:rgba(88,28,135,.30)!important}
-        .bg-purple-900\\/20{background-color:rgba(88,28,135,.20)!important}
-        .bg-purple-600\\/90{background-color:rgba(147,51,234,.90)!important}
-        .bg-yellow-600\\/90{background-color:rgba(202,138,4,.90)!important}
-        .border-slate-700{border-color:rgba(51,65,85,1)!important}
-        .border-purple-900\\/40{border-color:rgba(88,28,135,.40)!important}
-        .border-purple-900\\/30{border-color:rgba(88,28,135,.30)!important}
-        .border-purple-700\\/50{border-color:rgba(126,34,206,.50)!important}
-        /* Broad emergency mapping for utility classes to stop transparent UI in production. */
-        [class*='bg-slate-950/']{background-color:rgba(2,6,23,.96)!important}
-        [class*='bg-slate-900/']{background-color:rgba(15,23,42,.78)!important}
-        [class*='bg-slate-800/']{background-color:rgba(30,41,59,.74)!important}
-        [class*='bg-black/']{background-color:rgba(0,0,0,.45)!important}
-        [class*='border-slate-']{border-color:rgba(51,65,85,1)!important}
-        [class*='border-purple-']{border-color:rgba(126,34,206,.56)!important}
-        [class*='border-cyan-']{border-color:rgba(8,145,178,.56)!important}
-        [class*='border-fuchsia-']{border-color:rgba(162,28,175,.56)!important}
-        [class*='border-emerald-']{border-color:rgba(5,150,105,.56)!important}
 """
         resp = Response(fallback_css, mimetype='text/css')
         resp.headers['Cache-Control'] = 'no-store, max-age=0'
@@ -13737,11 +13156,10 @@ def _has_local_tailwind_css() -> bool:
 @app.route('/')
 def index():
     html = HTML_TEMPLATE.replace('__TAILWIND_V__', _tailwind_version_token())
-    # Do not load Tailwind Play CDN in production by default.
-    enable_tailwind_play = os.environ.get('TAILWIND_PLAY_CDN', '').strip().lower() in ('1', 'true', 'yes', 'on')
+    # Ensure full UI utility coverage when local compiled CSS is incomplete.
     html = html.replace(
         '__TAILWIND_PLAY_CDN__',
-        '<script src="https://cdn.tailwindcss.com"></script>' if enable_tailwind_play else ''
+        '<script src="https://cdn.tailwindcss.com"></script>'
     )
     resp = Response(render_template_string(html), mimetype='text/html')
     # Prevent stale HTML from pinning an old CSS version on custom domains/CDNs.
@@ -18823,15 +18241,8 @@ def ctf_challenge_file_route(challenge_id):
 def ctf_ai_assistant_route():
     if 'user_id' not in session:
         return jsonify({"success": False, "error": "غير مصرح"}), 401
-    fallback_hint = (
-        "دليل سريع للحل بدون كشف الإجابة:\n"
-        "1) اقرأ وصف التحدي واكتب المطلوب حرفيًا.\n"
-        "2) حدّد النوع (Web/Pwn/Crypto/Forensics) ثم اختر أداة واحدة مناسبة.\n"
-        "3) جرّب خطوة صغيرة، راقب المخرجات، وعدّل الفرضية.\n"
-        "4) تجنّب التخمين العشوائي للـ flag؛ ابنِ الدليل خطوة خطوة."
-    )
     if not DO_AI_KEY:
-        return jsonify({"success": True, "reply": fallback_hint, "source": "fallback"})
+        return jsonify({"success": False, "error": "DO_AI_KEY غير مضبوط"}), 500
 
     data = request.json or {}
     challenge_id = (data.get('challenge_id') or '').strip()
@@ -18869,7 +18280,7 @@ def ctf_ai_assistant_route():
     )
 
     try:
-        reply = _call_do_ai(user_prompt, system_prompt=ctf_system, timeout_seconds=16, max_tokens=700)
+        reply = _call_do_ai(user_prompt, system_prompt=ctf_system)
         add_audit_log("CTF AI Hint", f"challenge={challenge_id}", username=session.get('username', ''))
         return jsonify({
             "success": True,
@@ -18878,7 +18289,7 @@ def ctf_ai_assistant_route():
             "model": (DO_AI_MODEL or 'tor1')
         })
     except Exception as e:
-        return jsonify({"success": True, "reply": fallback_hint, "source": "fallback"})
+        return jsonify({"success": False, "error": f"AI hint failed: {str(e)}"}), 500
 
 
 # =====================================================================
@@ -18901,8 +18312,7 @@ def ai_chat():
     if not message:
         return jsonify({"error": "الرسالة مطلوبة"}), 400
     if not DO_AI_KEY:
-        fallback = "خدمة AI غير متاحة حالياً. اكتب سؤالك بشكل مختصر وسأحاول مجددًا بعد لحظات."
-        return jsonify({"success": True, "reply": fallback, "conversation_id": conversation_id or '', "classification": "general_support", "source": "fallback"})
+        return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
 
     try:
         if not conversation_id:
@@ -18928,13 +18338,7 @@ def ai_chat():
         context_messages.append({"role": "user", "content": message})
 
         system_prompt = _build_ai_system_prompt(topic, user_text=message)
-        reply = _call_do_ai_with_history(
-            context_messages,
-            system_prompt=system_prompt,
-            model=model,
-            timeout_seconds=22,
-            max_tokens=1100,
-        )
+        reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt, model=model)
 
         now = datetime.datetime.now().isoformat()
         preview = _ai_trim_title(reply, 120)
@@ -18971,8 +18375,7 @@ def ai_chat():
         })
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
-        fallback = "حصل ضغط مؤقت على خدمة AI. أعد إرسال السؤال بصياغة أقصر وسأكمل معك خطوة بخطوة."
-        return jsonify({"success": True, "reply": fallback, "conversation_id": conversation_id or '', "classification": "general_support", "source": "fallback"})
+        return jsonify({"error": f"فشل الاتصال بـ TITAN AI: {str(e)}"}), 500
 
 
 @app.route('/api/ai/conversations', methods=['GET'])
@@ -19121,104 +18524,22 @@ def ai_analyze():
     if not content_to_analyze:
         return jsonify({"error": "المحتوى مطلوب"}), 400
 
-    def _local_password_analysis(password: str) -> str:
-        pwd = str(password or '')
-        strength_label, strength_score = get_strength_details(pwd)
-        leaked_count = check_hibp_leak(pwd)
-
-        tips = []
-        if len(pwd) < 12:
-            tips.append('طوّل كلمة السر إلى 12-16+ حرف.')
-        if not re.search(r"[A-Z]", pwd):
-            tips.append('أضف حرفًا كبيرًا واحدًا على الأقل.')
-        if not re.search(r"[a-z]", pwd):
-            tips.append('أضف أحرفًا صغيرة لزيادة التنوع.')
-        if not re.search(r"[0-9]", pwd):
-            tips.append('أضف أرقامًا عشوائية غير متوقعة.')
-        if not re.search(r"[!@#$%^&*()_+\-={}\[\]:;""'<>?,./\\|~`]", pwd):
-            tips.append('أضف رمزًا خاصًا واحدًا على الأقل.')
-        if leaked_count > 0:
-            tips.append('كلمة السر ظهرت في تسريبات؛ استبدلها فورًا ولا تعيد استخدامها.')
-        if not tips:
-            tips.append('المستوى ممتاز، حافظ على عدم إعادة الاستخدام وتفعيل MFA.')
-
-        exposure = (
-            f"🚨 ظهرت في تسريبات معروفة {leaked_count} مرة." if leaked_count > 0
-            else "✅ لم تُرصد في التسريبات المعروفة حالياً."
-        )
-
-        return (
-            "تحليل سريع لكلمة السر:\n"
-            f"- مستوى الأمان: {strength_label} ({strength_score}/5)\n"
-            f"- الطول: {len(pwd)}\n"
-            f"- التسريبات: {exposure}\n"
-            "- توصيات عملية:\n"
-            + "\n".join([f"  • {t}" for t in tips])
-            + "\n- خطوة إضافية موصى بها: فعّل المصادقة الثنائية (MFA)."
-        )
-
-    def _local_security_analysis(raw_text: str) -> str:
-        txt = str(raw_text or '').strip()
-        if not txt:
-            return 'لا يوجد محتوى كافٍ للتحليل.'
-        signals = []
-        low = txt.lower()
-        if any(k in low for k in ['http://', 'bit.ly', 'tinyurl', 't.co']):
-            signals.append('روابط قد تكون قصيرة/غير موثوقة.')
-        if any(k in low for k in ['otp', 'password', 'كلمة السر', 'رمز تحقق']):
-            signals.append('طلب بيانات حساسة.')
-        if any(k in low for k in ['urgent', 'immediately', 'فوري', 'حالاً']):
-            signals.append('لهجة استعجال غير طبيعية.')
-        if any(k in low for k in ['attach', '.exe', '.js', '.scr', 'مرفق']):
-            signals.append('مرفقات/ملفات قابلة للتنفيذ.')
-
-        risk = 'منخفض'
-        if len(signals) >= 3:
-            risk = 'مرتفع'
-        elif len(signals) >= 1:
-            risk = 'متوسط'
-
-        lines = [
-            'تحليل أمني سريع (Fallback):',
-            f'- تقييم المخاطر: {risk}',
-            '- المؤشرات المرصودة:'
-        ]
-        lines.extend([f'  • {s}' for s in (signals or ['لا مؤشرات عالية واضحة في النص.'])])
-        lines.append('- توصية: لا تنفذ أي إجراء حساس قبل التحقق من المصدر عبر قناة مستقلة.')
-        return "\n".join(lines)
-
     prompts = {
-        'password': (
-            'قدّم تحليل كلمة السر بالعربية وباختصار: '
-            '1) المستوى 2) نقاط الضعف 3) خطوات تحسين عملية. '
-            f'كلمة السر: {content_to_analyze}'
-        ),
-        'ip': f"حلل بيانات IP هذه أمنياً بالعربية وأعطني تقييمًا مختصرًا وتوصيات مباشرة: {content_to_analyze}",
-        'security': f"حلل هذه البيانات الأمنية بالعربية بإيجاز مفيد (مخاطر + توصيات): {content_to_analyze}"
+        'password': f"حلل كلمة السر هذه أمنياً بالعربية: مستوى الأمان، نقاط الضعف، اقتراحات للتحسين. كلمة السر: {content_to_analyze}",
+        'ip': f"حلل بيانات IP هذه أمنياً بالعربية وأعطني تقييم وتوصيات: {content_to_analyze}",
+        'security': f"حلل هذه البيانات الأمنية بالعربية وأعطني تقييماً شاملاً وتوصيات عملية: {content_to_analyze}"
     }
 
     prompt = prompts.get(analyze_type, prompts['security'])
     if not DO_AI_KEY:
-        fallback = _local_password_analysis(content_to_analyze) if analyze_type == 'password' else _local_security_analysis(content_to_analyze)
-        return jsonify({"success": True, "analysis": fallback, "source": "fallback"})
+        return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
     try:
-        fast_system = (
-            'أنت محلل أمني عملي. أعطِ إجابة مباشرة ومختصرة (6-10 أسطر)، '
-            'بدون إطالة، وبنقاط واضحة قابلة للتنفيذ.'
-        )
-        messages: list[dict[str, object]] = [
-            {"role": "system", "content": fast_system},
-            {"role": "user", "content": prompt},
-        ]
-        analysis, _ = _do_ai_chat_completion(messages, timeout_seconds=14, max_tokens=520)
-        if not str(analysis or '').strip():
-            raise RuntimeError('empty_ai_reply')
+        analysis = _call_do_ai(prompt, system_prompt=AI_SYSTEM_PROMPT)
         add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
-        return jsonify({"success": True, "analysis": analysis, "source": "ai"})
+        return jsonify({"success": True, "analysis": analysis})
     except Exception as e:
         print(f"[TITAN AI] Analyze error: {e}")
-        fallback = _local_password_analysis(content_to_analyze) if analyze_type == 'password' else _local_security_analysis(content_to_analyze)
-        return jsonify({"success": True, "analysis": fallback, "source": "fallback"})
+        return jsonify({"error": f"فشل التحليل: {str(e)}"}), 500
 
 
 @app.route('/api/ai/models', methods=['GET'])
