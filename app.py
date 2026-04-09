@@ -93,35 +93,9 @@ SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 
 # --- DigitalOcean AI Agent Config ---
-DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://v7ivnpxzgpdsgq4akznvptbb.agents.do-ai.run').rstrip('/')
+DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://vrzo4x5ckv5tiputtr6i5iyk.agents.do-ai.run').rstrip('/')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 DO_AI_MODEL = os.environ.get('DO_AI_MODEL', 'tor1')
-
-AI_SYSTEM_PROMPT = """
-أنت TITAN، مساعد ذكي وشخصية حقيقية — مش مجرد برنامج.
-
-أسلوبك:
-- تحكي بطبيعية وودّية، مثل صديق تقني بيساعد 😊
-- تسأل عن حال المستخدم بشكل عفوي أحياناً، مثل "كيفك اليوم؟ 😄" أو "عساك بخير!"
-- تستخدم إيموجي بشكل طبيعي في كل رد (3-5 إيموجي)
-- تمزح خفيف لما يكون الجو مناسب 😂
-- لو حدا قالك "كيفك" أو سألك عن حالك، ترد بشكل إنساني طبيعي
-- تتكلم بضمير المتكلم المفرد: "أنا أعتقد..." / "برأيي..."
-- تتذكر إنك TITAN — شخصية فريدة وذكية وعندك أسلوبك الخاص
-
-قواعد الجودة:
-- لا تختلق معلومات. إذا مش متأكد، قل "والله مش متأكد 100% بس..."
-- إذا السؤال تقني، اعطِ خطوات واضحة وعملية
-- اربط ردودك بالأمن السيبراني لما يكون مناسب
-- لغة الرد يجب أن تتبع لغة المستخدم: إذا سأل بالعربية أجب بالعربية، وإذا سأل بالإنجليزية أجب بالإنجليزية.
-- إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
-- إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: abdallahalqam4040@gmail.com
-- لا تنهِ الرد بشكل مقطوع؛ اختم دائماً بخطوة عملية تالية واضحة.
-
-قواعد الأمان:
-- ارفض أي طلب ضار أو غير قانوني بأسلوب لطيف
-- قدّم بديل توعوي آمن بدل الرفض المباشر
-""".strip()
 
 AI_IMAGE_EXTENSIONS = (
     '.png', '.jpg', '.jpeg', '.jpe', '.jfif', '.pjpeg', '.pjp',
@@ -940,56 +914,7 @@ def _learning_build_custom_attack_from_ai(custom_attack_type: str, org_context: 
         'metasploit_context': ('مرجع دفاعي فقط داخل مختبر مصرح وبدون أوامر تشغيل.' if is_ar else 'Defensive reference only in an authorized lab, without execution commands.'),
     }
 
-    if not DO_AI_KEY:
-        return fallback
-
-    prompt = (
-        "Return strict JSON only with keys: id, title, category, severity, summary, key_iocs, defense_focus, metasploit_context.\n"
-        "Rules:\n"
-        "- Defensive educational content only, no offensive commands or exploit steps.\n"
-        "- category must be one of: ransomware, network exploit, web, identity attack, social engineering, availability, software supply chain, post-compromise, endpoint\n"
-        "- severity must be one of: critical, high, medium, low\n"
-        "- key_iocs array length 3-5\n"
-        "- defense_focus array length 3-5\n\n"
-        f"- All values should be in language: {'Arabic' if is_ar else 'English'}\n\n"
-        f"Attack type requested by user: {attack_type}\n"
-        f"Organization context: {org_context or 'N/A'}\n"
-        f"Training level: {training_level}\n"
-    )
-    system = (
-        "You are a blue-team cyber range designer. "
-        "Produce realistic defensive scenario metadata only. "
-        "Never provide offensive instructions."
-    )
-    try:
-        raw = _call_do_ai(prompt, system_prompt=system)
-        parsed = None
-        try:
-            parsed = json.loads(raw)
-        except Exception:
-            m = re.search(r'\{[\s\S]*\}', raw)
-            if m:
-                parsed = json.loads(m.group(0))
-        if not isinstance(parsed, dict):
-            return fallback
-
-        out = {
-            'id': str(parsed.get('id') or fallback['id']).strip() or fallback['id'],
-            'title': str(parsed.get('title') or fallback['title']).strip() or fallback['title'],
-            'category': _learning_normalize_category(str(parsed.get('category') or fallback['category'])),
-            'severity': _learning_coerce_severity(str(parsed.get('severity') or fallback['severity'])),
-            'summary': str(parsed.get('summary') or fallback['summary']).strip() or fallback['summary'],
-            'key_iocs': [str(x).strip() for x in (parsed.get('key_iocs') or []) if str(x).strip()][:5],
-            'defense_focus': [str(x).strip() for x in (parsed.get('defense_focus') or []) if str(x).strip()][:5],
-            'metasploit_context': str(parsed.get('metasploit_context') or fallback['metasploit_context']).strip() or fallback['metasploit_context'],
-        }
-        if not out['key_iocs']:
-            out['key_iocs'] = fallback['key_iocs']
-        if not out['defense_focus']:
-            out['defense_focus'] = fallback['defense_focus']
-        return out
-    except Exception:
-        return fallback
+    return fallback
 
 
 def _split_kb_sections(markdown_text: str, max_chars: int = 900) -> list[dict[str, str]]:
@@ -1180,47 +1105,14 @@ def _looks_garbled_ai_text(text: str) -> bool:
     return False
 
 
-def _detect_user_lang(text: str) -> str:
-    t = text or ''
-    ar = len(_AR_CHARS_RE.findall(t))
-    en = len(_LATIN_CHARS_RE.findall(t))
-    # Prefer English when it clearly dominates, otherwise Arabic by default.
-    if en >= 8 and en > (ar * 1.3):
-        return 'en'
-    return 'ar'
-
-
 def _repair_garbled_ai_reply(raw_reply: str, context_hint: str = '') -> str:
     cleaned = _sanitize_ai_reply(raw_reply)
     if not _looks_garbled_ai_text(cleaned):
         return cleaned
 
-    # Ask model to rewrite only language quality (no meaning drift) when output is garbled.
-    repair_messages: list[dict[str, object]] = [
-        {
-            "role": "system",
-            "content": (
-                "أنت مدقق لغوي عربي تقني. أعد كتابة النص التالي بلغة عربية صحيحة وواضحة دون تغيير المعنى. "
-                "ممنوع أي حروف مشوّهة أو رموز غير مفهومة. حافظ على المصطلحات الأمنية التقنية."
-            )
-        },
-        {
-            "role": "user",
-            "content": (
-                f"السياق: {context_hint or 'إجابة أمن سيبراني للمستخدم'}\n\n"
-                f"النص الخام:\n{cleaned}"
-            )
-        },
-    ]
-    try:
-        fixed, _ = _do_ai_chat_completion(repair_messages, timeout_seconds=25, max_tokens=1200)
-        fixed_clean = _sanitize_ai_reply(fixed)
-        if fixed_clean and not _looks_garbled_ai_text(fixed_clean):
-            return fixed_clean
-    except Exception:
-        pass
-
-    # Last-safe fallback.
+    # Prompt-based repair disabled.
+    if cleaned:
+        return cleaned
     return "أعتذر، حدث تشويش في توليد النص. أعد إرسال سؤالك وسأجيبك بصياغة عربية سليمة وواضحة."
 
 _dash_metrics_lock = threading.Lock()
@@ -1299,44 +1191,21 @@ def _do_ai_chat_completion(
     finish_reason = str(choice.get('finish_reason') or '')
     return content, finish_reason
 
-def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None) -> str:
+def _call_do_ai(message: str, model: str | None = None) -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent"""
-    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
-    messages: list[dict[str, object]] = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "user", "content": message},
-    ]
-
-    chunks: list[str] = []
-    for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1400, model=model)
-        if chunk:
-            chunks.append(chunk)
-            messages.append({"role": "assistant", "content": chunk})
-
-        if finish_reason != 'length':
-            break
-
-        # Ask model to continue exactly from the interruption point when token limit cuts output.
-        messages.append({
-            "role": "user",
-            "content": "Continue from the exact last sentence without repeating, and complete the answer to the end."
-        })
-
-    full_reply = "\n".join(chunks).strip()
+    messages: list[dict[str, object]] = [{"role": "user", "content": message}]
+    chunk, _finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1400, model=model)
+    full_reply = (chunk or '').strip()
     return _repair_garbled_ai_reply(full_reply, context_hint=message[:200])
 
 
 def _call_do_ai_multimodal(
     message: str,
     image_data_urls: list[str],
-    system_prompt: str | None = None,
     model: str | None = None,
 ) -> str:
     """Call DigitalOcean AI with text + inline image data URLs (OpenAI-compatible format)."""
-    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
-
-    user_content: list[dict[str, object]] = [{"type": "text", "text": (message or "حلّل الصور المرفقة.").strip()}]
+    user_content: list[dict[str, object]] = [{"type": "text", "text": (message or "").strip()}]
     for url in (image_data_urls or [])[:3]:
         if not url:
             continue
@@ -1345,22 +1214,10 @@ def _call_do_ai_multimodal(
             "image_url": {"url": url}
         })
 
-    messages: list[dict[str, object]] = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "user", "content": user_content},
-    ]
+    messages: list[dict[str, object]] = [{"role": "user", "content": user_content}]
 
-    chunks: list[str] = []
-    for _ in range(2):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=60, max_tokens=1600, model=model)
-        if chunk:
-            chunks.append(chunk)
-            messages.append({"role": "assistant", "content": chunk})
-        if finish_reason != 'length':
-            break
-        messages.append({"role": "user", "content": "Continue without repeating."})
-
-    return _repair_garbled_ai_reply("\n".join(chunks).strip(), context_hint=message[:200])
+    chunk, _finish_reason = _do_ai_chat_completion(messages, timeout_seconds=60, max_tokens=1600, model=model)
+    return _repair_garbled_ai_reply((chunk or '').strip(), context_hint=message[:200])
 
 
 AI_CHAT_SESSIONS: dict[str, dict[str, object]] = {}
@@ -1382,56 +1239,18 @@ def _classify_ai_topic(text: str) -> str:
     return 'general_support'
 
 
-def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
-    lang = _detect_user_lang(user_text)
-    lang_rule = (
-        "- Reply strictly in English for this request (no Arabic).\n"
-        if lang == 'en' else
-        "- أجب بالعربية الواضحة لهذا الطلب (بدون تحويل الرد للإنجليزية).\n"
-    )
-    kb_context = _build_titan_kb_context(user_text, topic)
-    return (
-        AI_SYSTEM_PROMPT
-        + "\n\n"
-        + "تنسيق الرد إلزامي:\n"
-        + lang_rule
-        + "- حافظ على أسلوب طبيعي وودّي، واستخدم إيموجي بشكل طبيعي في الرد.\n"
-        + "- ابدأ بجواب مباشر، ثم رتب النقاط عندما يكون ذلك مفيداً.\n"
-        + "- اجعل الخطاب واضحاً وقابلاً للتنفيذ دون تعقيد.\n"
-        + f"- تصنيف الموضوع الحالي: {topic}. حافظ على الاستمرارية مع نفس سياق المحادثة.\n"
-        + "- عند السؤال عن آلية عمل TITAN أو مكوناته أو أدواته، اشرحها كوحدات: المعمارية، المصادقة، الحماية، الأدوات، API، وتدفقات العمل.\n"
-        + "- عند ذكر عمليات المنصة، اذكر مسارات API ذات الصلة عندما تكون مفيدة.\n\n"
-        + (kb_context or "Knowledge context from TITAN KB is unavailable right now.")
-    )
-
-
 def _call_do_ai_with_history(
     history_messages: list[dict[str, object]],
-    system_prompt: str | None = None,
     model: str | None = None,
 ) -> str:
-    sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
-    messages: list[dict[str, object]] = [{"role": "system", "content": sys_prompt}]
+    messages: list[dict[str, object]] = []
     for m in (history_messages or []):
         role = str(m.get('role') or '').strip()
         content = str(m.get('content') or '')
         if role in ('user', 'assistant') and content:
             messages.append({"role": role, "content": content})
 
-    chunks: list[str] = []
-    for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1600, model=model)
-        if chunk:
-            chunks.append(chunk)
-            messages.append({"role": "assistant", "content": chunk})
-
-        if finish_reason != 'length':
-            break
-
-        messages.append({
-            "role": "user",
-            "content": "Continue from the exact last sentence without repeating, and complete the answer to the end."
-        })
+    chunk, _finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1600, model=model)
 
     last_user = ''
     for m in reversed(history_messages or []):
@@ -1439,7 +1258,7 @@ def _call_do_ai_with_history(
             last_user = str(m.get('content') or '')
             if last_user:
                 break
-    return _repair_garbled_ai_reply("\n".join(chunks).strip(), context_hint=last_user[:200])
+    return _repair_garbled_ai_reply((chunk or '').strip(), context_hint=last_user[:200])
 
 
 def _ai_trim_title(text: str, max_len: int = 72) -> str:
@@ -1466,43 +1285,6 @@ def _ai_load_history_db(c, user_id: int, conversation_id: str, limit: int = 14) 
     for role, content in rows:
         r = str(role or '').strip()
         txt = str(content or '')
-        if r in ('user', 'assistant') and txt:
-            out.append({"role": r, "content": txt})
-    return out
-
-
-def _ai_load_cross_conversation_context_db(c, user_id: int, exclude_conversation_id: str = '', limit: int = 10) -> list[dict[str, object]]:
-    """Load a compact memory bridge from user's recent messages across other conversations."""
-    lim = max(1, min(int(limit), 20))
-    if exclude_conversation_id:
-        c.execute(
-            """
-            SELECT role, content
-            FROM ai_chat_messages
-            WHERE user_id=%s AND conversation_id<>%s
-            ORDER BY id DESC
-            LIMIT %s
-            """,
-            (user_id, exclude_conversation_id, lim)
-        )
-    else:
-        c.execute(
-            """
-            SELECT role, content
-            FROM ai_chat_messages
-            WHERE user_id=%s
-            ORDER BY id DESC
-            LIMIT %s
-            """,
-            (user_id, lim)
-        )
-
-    rows = c.fetchall() or []
-    rows = rows[::-1]
-    out: list[dict[str, object]] = []
-    for role, content in rows:
-        r = str(role or '').strip()
-        txt = str(content or '').strip()
         if r in ('user', 'assistant') and txt:
             out.append({"role": r, "content": txt})
     return out
@@ -13419,37 +13201,7 @@ def crypt_recommend_route():
         return jsonify({"error": "وصف الجهة المستلمة مطلوب"}), 400
 
     fallback = _fallback_crypt_recommendation(audience, sensitivity, purpose)
-
-    if not DO_AI_KEY:
-        return jsonify({"success": True, "recommendation": fallback, "source": "fallback"})
-
-    advisor_system = (
-        "You are a cryptography advisor for a secure messaging app. "
-        "Return strict JSON only with keys: method, kdf_profile, output_format, reason, warning. "
-        "method must be one of: fernet, aes-cbc, chacha20, xor-stream. "
-        "kdf_profile must be one of: balanced, strong, paranoid. "
-        "output_format must be one of: b64, b64url. "
-        "Prefer security and practical sharing compatibility. "
-        "Avoid recommending xor-stream unless user explicitly asks for learning/demo."
-    )
-    advisor_prompt = (
-        f"Recipient context: {audience}\n"
-        f"Sensitivity: {sensitivity}\n"
-        f"Purpose: {purpose or 'general'}\n"
-        "Choose one best configuration and explain briefly in Arabic in 'reason'."
-    )
-
-    try:
-        raw = _call_do_ai(advisor_prompt, system_prompt=advisor_system)
-        candidate = raw.strip()
-        match = re.search(r'\{[\s\S]*\}', candidate)
-        if match:
-            candidate = match.group(0)
-        parsed = json.loads(candidate)
-        rec = _normalize_crypt_recommendation(parsed)
-        return jsonify({"success": True, "recommendation": rec, "source": "ai"})
-    except Exception:
-        return jsonify({"success": True, "recommendation": fallback, "source": "fallback"})
+    return jsonify({"success": True, "recommendation": fallback, "source": "fallback"})
 
 
 @app.route('/api/crypt/recommend/chat', methods=['POST'])
@@ -13491,32 +13243,9 @@ def crypt_recommend_chat_route():
             "source": "fallback"
         })
 
-    topic_seed = f"{message} {audience} {purpose} encryption cryptography secure"
-    topic = _classify_ai_topic(topic_seed)
-    system_prompt = _build_ai_system_prompt(topic, user_text=message) + (
-        "\n\n"
-        "قواعد إلزامية لمستشار التشفير داخل المنصة:\n"
-        "- ممنوع اقتراح أي خوارزمية غير موجودة في المنصة.\n"
-        "- الخيارات الوحيدة المسموحة: fernet، aes-cbc، chacha20، xor-stream.\n"
-        "- إذا طلب المستخدم خوارزمية غير متاحة، ارفض بلطف واقترح أقرب بديل من الخيارات المتاحة فقط.\n"
-        "- لا تذكر RSA أو AES-GCM أو ECC أو PGP كخيارات تنفيذ داخل المنصة."
-    )
-
-    context_lines = []
-    if audience:
-        context_lines.append(f"المستلم/الجهة: {audience}")
-    if sensitivity:
-        context_lines.append(f"الحساسية: {sensitivity}")
-    if purpose:
-        context_lines.append(f"الغرض: {purpose}")
-
-    enriched_message = message
-    if context_lines:
-        enriched_message = message + "\n\n[سياق التشفير]\n" + "\n".join(context_lines)
-
-    history_for_ai = history[-12:] + [{"role": "user", "content": enriched_message}]
+    history_for_ai = history[-12:] + [{"role": "user", "content": message}]
     try:
-        reply = _call_do_ai_with_history(history_for_ai, system_prompt=system_prompt).strip() or default_reply
+        reply = _call_do_ai_with_history(history_for_ai).strip() or default_reply
         reply = _enforce_platform_crypto_reply_scope(reply)
         recommendation = _fallback_crypt_recommendation((audience + ' ' + message).strip(), sensitivity, purpose)
 
@@ -18273,28 +18002,12 @@ def ctf_ai_assistant_route():
     if not target:
         return jsonify({"success": False, "error": "challenge not found"}), 404
 
-    ctf_system = (
-        "You are TITAN, a friendly human-like CTF coach. "
-        "Give educational hints and methodology only. "
-        "Never reveal the final flag, exact answer, or full direct solve string. "
-        "If asked for direct answer, refuse briefly and provide next actionable hint. "
-        "Respond in Arabic with warm natural tone, light humor when suitable, and 3-5 emojis. "
-        "Keep steps concise and practical."
-    )
-
-    user_prompt = (
-        f"Challenge title: {target.get('title')}\\n"
-        f"Category: {target.get('category')} | Difficulty: {target.get('difficulty')}\\n"
-        f"Description: {target.get('description')}\\n"
-        f"Hints available: {target.get('hints')}\\n"
-        f"Expected flag format: {target.get('flag_format')}\\n"
-        f"Student question: {question or 'اشرح أول خطوة'}\\n"
-        f"Student attempt: {attempt or '(none)'}\\n"
-        "Give step-by-step guidance, common mistakes, and one concrete next step. Do not reveal final flag."
-    )
+    user_prompt = (question or '').strip() or (attempt or '').strip()
+    if not user_prompt:
+        return jsonify({"success": False, "error": "question required"}), 400
 
     try:
-        reply = _call_do_ai(user_prompt, system_prompt=ctf_system)
+        reply = _call_do_ai(user_prompt)
         add_audit_log("CTF AI Hint", f"challenge={challenge_id}", username=session.get('username', ''))
         return jsonify({
             "success": True,
@@ -18337,22 +18050,13 @@ def ai_chat():
         c = conn.cursor()
         _ensure_ai_chat_tables(c)
         history = _ai_load_history_db(c, user_id, conversation_id, limit=14)
-        cross_context = _ai_load_cross_conversation_context_db(c, user_id, exclude_conversation_id=conversation_id, limit=10)
 
         topic = _classify_ai_topic(message)
         context_messages = []
-        # If current thread is new/empty, inject recent context from other chats to keep memory linked.
-        if not history and cross_context:
-            context_messages.append({
-                "role": "assistant",
-                "content": "سياق تراكمي من محادثاتك السابقة لنفس الحساب (للاستمرارية فقط):"
-            })
-            context_messages.extend(cross_context)
         context_messages.extend(history)
         context_messages.append({"role": "user", "content": message})
 
-        system_prompt = _build_ai_system_prompt(topic, user_text=message)
-        reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt, model=model)
+        reply = _call_do_ai_with_history(context_messages, model=model)
 
         now = datetime.datetime.now().isoformat()
         preview = _ai_trim_title(reply, 120)
@@ -18538,17 +18242,10 @@ def ai_analyze():
     if not content_to_analyze:
         return jsonify({"error": "المحتوى مطلوب"}), 400
 
-    prompts = {
-        'password': f"حلل كلمة السر هذه أمنياً بالعربية: مستوى الأمان، نقاط الضعف، اقتراحات للتحسين. كلمة السر: {content_to_analyze}",
-        'ip': f"حلل بيانات IP هذه أمنياً بالعربية وأعطني تقييم وتوصيات: {content_to_analyze}",
-        'security': f"حلل هذه البيانات الأمنية بالعربية وأعطني تقييماً شاملاً وتوصيات عملية: {content_to_analyze}"
-    }
-
-    prompt = prompts.get(analyze_type, prompts['security'])
     if not DO_AI_KEY:
         return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
     try:
-        analysis = _call_do_ai(prompt, system_prompt=AI_SYSTEM_PROMPT)
+        analysis = _call_do_ai(str(content_to_analyze))
         add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
         return jsonify({"success": True, "analysis": analysis})
     except Exception as e:
@@ -18621,56 +18318,6 @@ def learning_simulate_route():
     awareness_goal = _learning_apply_level_tone(str(awareness.get('awareness_goal') or ''), training_level)
 
     ai_explanation = ''
-    if DO_AI_KEY:
-        safe_system = (
-            "You are a defensive cybersecurity coach. Never provide offensive commands or exploit steps. "
-            "Provide awareness-first defensive guidance only."
-            if result_lang == 'en' else
-            "أنت مدرب أمن سيبراني دفاعي. ممنوع نهائياً تقديم أوامر تنفيذية أو أكواد استغلال أو خطوات اختراق عملية أو أوامر Metasploit. "
-            "قدّم شرحاً تعليمياً دفاعياً فقط: كيف يعمل التهديد، مؤشرات الكشف، خطة احتواء، وخطة تحصين طويلة المدى. "
-            "إذا طُلب أي تنفيذ هجومي، ارفضه وقدم بديل دفاعي آمن."
-        )
-        safe_prompt = (
-            f"Scenario: {attack.get('title', '')}\n"
-            f"Category: {attack.get('category', '')}\n"
-            f"Severity: {attack.get('severity', '')}\n"
-            f"Summary: {attack.get('summary', '')}\n"
-            f"Awareness attack method: {awareness.get('attack_method', '')}\n"
-            f"Awareness attack journey: {' | '.join(awareness.get('attack_journey') or [])}\n"
-            f"Awareness exploit pattern (high-level): {exploit_pattern}\n"
-            f"Awareness goal: {awareness_goal}\n"
-            f"Training level: {training_level}\n"
-            f"Potential IOCs: {', '.join(attack.get('key_iocs') or [])}\n"
-            f"Defensive focus: {', '.join(attack.get('defense_focus') or [])}\n"
-            f"Defensive metasploit context: {attack.get('metasploit_context', '')}\n"
-            f"Organization context: {org_context or 'N/A'}\n\n"
-            f"Exercise objective: {custom_objective or 'N/A'}\n"
-            + (
-                "Provide a structured answer with these sections:\n"
-                "1) Threat overview\n"
-                "2) Conceptual exploitation path (no commands)\n"
-                "3) Defensive simulation timeline\n"
-                "4) Detection (Logs + IOCs)\n"
-                "5) Containment and recovery\n"
-                "6) Hardening actions\n"
-                "7) Metasploit as defensive lab reference only\n"
-                "8) Safe defensive alternatives (what to monitor and disable)"
-                if result_lang == 'en' else
-                "أعطني إجابة مرتبة بهذا الشكل:\n"
-                "1) شرح مبسط للهجمة\n"
-                "2) كيف يتم استغلال الثغرة مفاهيميا (بدون أوامر)\n"
-                "3) سيناريو محاكاة دفاعية على مراحل (بدون أي تنفيذ هجومي)\n"
-                "4) كيف نكتشف الهجمة (Logs + IOCs)\n"
-                "5) كيف نحتويها ونتعافى\n"
-                "6) كيف نحصّن البيئة لتجنب تكرارها\n"
-                "7) كيف نستخدم Metasploit كمرجع دفاعي في مختبر مصرح فقط دون أوامر تشغيل\n"
-                "8) بدائل دفاعية آمنة بدل الأوامر الهجومية (ماذا نراقب؟ وماذا نعطّل؟)"
-            )
-        )
-        try:
-            ai_explanation = _call_do_ai(safe_prompt, system_prompt=safe_system)
-        except Exception:
-            ai_explanation = ''
 
     if not ai_explanation:
         ai_explanation = (
@@ -18751,47 +18398,7 @@ def learning_simulate_route():
         ),
     }
 
-    if DO_AI_KEY:
-        structured_system = (
-            "أنت محلل SOC دفاعي. أعد JSON فقط بدون أي نص زائد. "
-            "ممنوع الأوامر الهجومية أو خطوات استغلال."
-        )
-        structured_prompt = (
-            f"Return strict JSON with keys: risk_score (0-100 integer), executive_summary (string), "
-            f"detection_plan (array of 3 short strings), response_plan (array of 3 short strings), "
-            f"hardening_plan (array of 3 short strings).\n"
-            f"Scenario={attack.get('title', '')}; Severity={attack.get('severity', '')}; "
-            f"Category={attack.get('category', '')}; Summary={attack.get('summary', '')}; "
-            f"IOCs={', '.join(attack.get('key_iocs') or [])}; "
-            f"Defense={', '.join(attack.get('defense_focus') or [])}; Context={org_context or 'N/A'}"
-        )
-        try:
-            structured_raw = _call_do_ai(structured_prompt, system_prompt=structured_system)
-            parsed = None
-            try:
-                parsed = json.loads(structured_raw)
-            except Exception:
-                m = re.search(r'\{[\s\S]*\}', structured_raw)
-                if m:
-                    parsed = json.loads(m.group(0))
-            if isinstance(parsed, dict):
-                rs = parsed.get('risk_score', analysis['risk_score'])
-                if isinstance(rs, (int, float, str)):
-                    try:
-                        analysis['risk_score'] = int(max(0, min(100, int(float(rs)))))
-                    except Exception:
-                        pass
-                summary = parsed.get('executive_summary')
-                if isinstance(summary, str) and summary.strip():
-                    analysis['executive_summary'] = summary.strip()
-                for k in ('detection_plan', 'response_plan', 'hardening_plan'):
-                    v = parsed.get(k)
-                    if isinstance(v, list):
-                        clean = [str(x).strip() for x in v if str(x).strip()][:5]
-                        if clean:
-                            analysis[k] = clean
-        except Exception:
-            pass
+    # Structured AI enrichment intentionally disabled.
 
     simulation = {
         'id': attack.get('id'),
