@@ -3835,15 +3835,47 @@ HTML_TEMPLATE = """
                 gap: 0.45rem;
             }
 
+            .tab-nav-modern .tab-grid button[data-tab-accent='purple'],
+            .training-subtab-btn[data-tab-accent='purple'] { --tab-accent: 139, 92, 246; --tab-accent-soft: 168, 85, 247; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='blue'],
+            .training-subtab-btn[data-tab-accent='blue'] { --tab-accent: 59, 130, 246; --tab-accent-soft: 96, 165, 250; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='amber'],
+            .training-subtab-btn[data-tab-accent='amber'] { --tab-accent: 245, 158, 11; --tab-accent-soft: 251, 191, 36; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='emerald'],
+            .training-subtab-btn[data-tab-accent='emerald'] { --tab-accent: 16, 185, 129; --tab-accent-soft: 52, 211, 153; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='cyan'],
+            .training-subtab-btn[data-tab-accent='cyan'] { --tab-accent: 6, 182, 212; --tab-accent-soft: 34, 211, 238; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='pink'],
+            .training-subtab-btn[data-tab-accent='pink'] { --tab-accent: 236, 72, 153; --tab-accent-soft: 244, 114, 182; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='indigo'],
+            .training-subtab-btn[data-tab-accent='indigo'] { --tab-accent: 99, 102, 241; --tab-accent-soft: 129, 140, 248; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='red'],
+            .training-subtab-btn[data-tab-accent='red'] { --tab-accent: 239, 68, 68; --tab-accent-soft: 248, 113, 113; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='teal'],
+            .training-subtab-btn[data-tab-accent='teal'] { --tab-accent: 20, 184, 166; --tab-accent-soft: 45, 212, 191; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='orange'],
+            .training-subtab-btn[data-tab-accent='orange'] { --tab-accent: 249, 115, 22; --tab-accent-soft: 251, 146, 60; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='rose'],
+            .training-subtab-btn[data-tab-accent='rose'] { --tab-accent: 244, 63, 94; --tab-accent-soft: 251, 113, 133; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='green'],
+            .training-subtab-btn[data-tab-accent='green'] { --tab-accent: 34, 197, 94; --tab-accent-soft: 74, 222, 128; }
+            .tab-nav-modern .tab-grid button[data-tab-accent='sky'],
+            .training-subtab-btn[data-tab-accent='sky'] { --tab-accent: 14, 165, 233; --tab-accent-soft: 56, 189, 248; }
+
             .tab-nav-modern .tab-grid button {
                 width: 100%;
                 justify-content: center;
                 text-align: center;
                 min-height: 2.3rem;
-                border: 1px solid rgba(148, 163, 184, 0.18);
-                background: rgba(15, 23, 42, 0.55);
-                color: #cbd5e1;
+                border: 1px solid rgba(148, 163, 184, 0.24) !important;
+                background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.92)) !important;
+                color: #cbd5e1 !important;
                 transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+            }
+
+            .tab-nav-modern .tab-grid button:not(.tab-active):not(.tab-active-vault) {
+                background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.92)) !important;
+                color: #cbd5e1 !important;
             }
 
             @keyframes tabIconPulse {
@@ -3865,15 +3897,15 @@ HTML_TEMPLATE = """
 
             .tab-nav-modern .tab-grid button:hover {
                 transform: translateY(-1px);
-                border-color: rgba(168, 85, 247, 0.45);
-                box-shadow: 0 8px 18px rgba(88, 28, 135, 0.28);
+                border-color: rgba(var(--tab-accent-soft, 168, 85, 247), 0.45);
+                box-shadow: 0 8px 18px rgba(var(--tab-accent, 139, 92, 246), 0.28);
             }
 
             .tab-nav-modern .tab-grid button.tab-active {
-                background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(109, 40, 217, 0.95));
-                border-color: rgba(196, 181, 253, 0.7);
+                background: linear-gradient(135deg, rgba(var(--tab-accent, 139, 92, 246), 0.95), rgba(var(--tab-accent-soft, 168, 85, 247), 0.95));
+                border-color: rgba(var(--tab-accent-soft, 168, 85, 247), 0.75);
                 color: #ffffff;
-                box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.25), 0 0 18px rgba(139, 92, 246, 0.45);
+                box-shadow: 0 0 0 1px rgba(var(--tab-accent-soft, 168, 85, 247), 0.3), 0 0 18px rgba(var(--tab-accent, 139, 92, 246), 0.45);
             }
 
             .tab-nav-modern .tab-grid button.tab-active-vault {
@@ -3891,24 +3923,24 @@ HTML_TEMPLATE = """
 
             .training-subtab-btn {
                 width: 100%;
-                border: 1px solid rgba(125, 211, 252, 0.32);
-                background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-                color: #e2e8f0;
+                border: 1px solid rgba(125, 211, 252, 0.36) !important;
+                background: linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.96)) !important;
+                color: #e2e8f0 !important;
                 min-height: 2.3rem;
                 box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.16), 0 1px 0 rgba(15, 23, 42, 0.9);
             }
 
             .training-subtab-btn:hover {
                 transform: translateY(-1px);
-                border-color: rgba(168, 85, 247, 0.45);
-                box-shadow: 0 8px 18px rgba(88, 28, 135, 0.28);
+                border-color: rgba(var(--tab-accent-soft, 168, 85, 247), 0.45);
+                box-shadow: 0 8px 18px rgba(var(--tab-accent, 139, 92, 246), 0.28);
             }
 
             .training-subtab-btn.training-subtab-active {
-                background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(109, 40, 217, 0.95));
-                border-color: rgba(196, 181, 253, 0.7);
+                background: linear-gradient(135deg, rgba(var(--tab-accent, 139, 92, 246), 0.95), rgba(var(--tab-accent-soft, 168, 85, 247), 0.95));
+                border-color: rgba(var(--tab-accent-soft, 168, 85, 247), 0.75);
                 color: #ffffff;
-                box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.25), 0 0 18px rgba(139, 92, 246, 0.45);
+                box-shadow: 0 0 0 1px rgba(var(--tab-accent-soft, 168, 85, 247), 0.3), 0 0 18px rgba(var(--tab-accent, 139, 92, 246), 0.45);
             }
 
             .result-panel {
@@ -4067,6 +4099,210 @@ HTML_TEMPLATE = """
                 line-height: 1.75;
             }
 
+            #ctf-section {
+                --ctf-border-main: rgba(245, 158, 11, 0.78);
+                --ctf-border-soft: rgba(148, 163, 184, 0.82);
+            }
+
+            #ctf-section [class*='border-'] {
+                border-style: solid !important;
+                border-width: 1px !important;
+            }
+
+            #ctf-section .ctf-border-sync {
+                border-color: var(--ctf-border-soft) !important;
+            }
+
+            #ctf-section .ctf-header-sync {
+                border-color: var(--ctf-border-main) !important;
+            }
+
+            .training-intro-note {
+                border: 1px solid rgba(245, 158, 11, 0.9) !important;
+                background: linear-gradient(135deg, rgba(120, 53, 15, 0.42), rgba(113, 63, 18, 0.28)) !important;
+                box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 10px 24px rgba(120, 53, 15, 0.28);
+            }
+
+            .ctf-card.ctf-diff-easy {
+                border-color: rgba(16, 185, 129, 0.9) !important;
+                background: linear-gradient(145deg, rgba(6, 95, 70, 0.58), rgba(15, 23, 42, 0.94)) !important;
+                box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.24), 0 12px 26px rgba(6, 78, 59, 0.32);
+            }
+
+            .ctf-card.ctf-diff-medium {
+                border-color: rgba(245, 158, 11, 0.92) !important;
+                background: linear-gradient(145deg, rgba(146, 64, 14, 0.6), rgba(15, 23, 42, 0.94)) !important;
+                box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.24), 0 12px 26px rgba(146, 64, 14, 0.34);
+            }
+
+            .ctf-card.ctf-diff-hard {
+                border-color: rgba(248, 113, 113, 0.96) !important;
+                background: linear-gradient(145deg, rgba(185, 28, 28, 0.68), rgba(127, 29, 29, 0.48), rgba(15, 23, 42, 0.94)) !important;
+                box-shadow: 0 0 0 1px rgba(252, 165, 165, 0.26), 0 12px 28px rgba(153, 27, 27, 0.4);
+            }
+
+            .ctf-card.ctf-diff-easy .ctf-card-title { color: #86efac !important; }
+            .ctf-card.ctf-diff-medium .ctf-card-title { color: #fbbf24 !important; }
+            .ctf-card.ctf-diff-hard .ctf-card-title { color: #fca5a5 !important; }
+
+            .ctf-card.ctf-diff-easy:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 0 0 1px rgba(110, 231, 183, 0.32), 0 16px 32px rgba(6, 95, 70, 0.42);
+            }
+
+            .ctf-card.ctf-diff-medium:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 0 0 1px rgba(252, 211, 77, 0.34), 0 16px 32px rgba(180, 83, 9, 0.45);
+            }
+
+            .ctf-card.ctf-diff-hard:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 0 0 1px rgba(252, 165, 165, 0.38), 0 0 26px rgba(248, 113, 113, 0.34), 0 18px 36px rgba(153, 27, 27, 0.56);
+            }
+
+            .ctf-ai-btn {
+                background: linear-gradient(135deg, rgba(109, 40, 217, 0.82), rgba(147, 51, 234, 0.7));
+                border: 1px solid rgba(196, 181, 253, 0.74);
+                color: #faf5ff;
+                box-shadow: 0 8px 18px rgba(91, 33, 182, 0.34);
+            }
+
+            .ctf-ai-btn:hover {
+                background: linear-gradient(135deg, rgba(126, 34, 206, 0.9), rgba(168, 85, 247, 0.82));
+                border-color: rgba(221, 214, 254, 0.88);
+                box-shadow: 0 10px 22px rgba(126, 34, 206, 0.46);
+            }
+
+            .crypt-reco-btn {
+                background: linear-gradient(135deg, #6d28d9, #7c3aed);
+                border: 1px solid #a78bfa;
+                color: #f5f3ff;
+                box-shadow: 0 8px 18px rgba(91, 33, 182, 0.34);
+            }
+
+            .crypt-reco-btn:hover {
+                background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+                border-color: #c4b5fd;
+                color: #ffffff;
+            }
+
+            .crypt-chat-shell {
+                border: 1px solid #0e7490;
+                background: #020617;
+            }
+
+            .crypt-chat-assistant {
+                border: 1px solid #06b6d4;
+                background: #0f172a;
+            }
+
+            .crypt-chat-user {
+                border: 1px solid #22d3ee;
+                background: #0e7490;
+            }
+
+            .crypt-chat-avatar-ai {
+                border: 1px solid #06b6d4;
+                background: #0e7490;
+            }
+
+            .crypt-chat-avatar-user {
+                border: 1px solid #22d3ee;
+                background: #155e75;
+            }
+
+            .learning-attack-card {
+                border-style: solid;
+                border-width: 1px;
+                transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            }
+
+            .learning-attack-card:hover {
+                transform: translateY(-1px);
+            }
+
+            .learning-attack-card-active {
+                box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.28), 0 10px 24px rgba(8, 47, 73, 0.35);
+            }
+
+            .learning-sev-critical-card {
+                border-color: rgba(244, 63, 94, 0.78) !important;
+                background: linear-gradient(145deg, rgba(127, 29, 29, 0.38), rgba(15, 23, 42, 0.92)) !important;
+            }
+
+            .learning-sev-high-card {
+                border-color: rgba(249, 115, 22, 0.76) !important;
+                background: linear-gradient(145deg, rgba(124, 45, 18, 0.34), rgba(15, 23, 42, 0.92)) !important;
+            }
+
+            .learning-sev-medium-card {
+                border-color: rgba(245, 158, 11, 0.72) !important;
+                background: linear-gradient(145deg, rgba(120, 53, 15, 0.3), rgba(15, 23, 42, 0.92)) !important;
+            }
+
+            .learning-sev-low-card {
+                border-color: rgba(16, 185, 129, 0.74) !important;
+                background: linear-gradient(145deg, rgba(6, 95, 70, 0.32), rgba(15, 23, 42, 0.92)) !important;
+            }
+
+            .learning-sev-critical-badge { color: #fecdd3 !important; border-color: rgba(190, 24, 93, 0.65) !important; background: rgba(136, 19, 55, 0.4) !important; }
+            .learning-sev-high-badge { color: #fed7aa !important; border-color: rgba(194, 65, 12, 0.62) !important; background: rgba(124, 45, 18, 0.38) !important; }
+            .learning-sev-medium-badge { color: #fde68a !important; border-color: rgba(180, 83, 9, 0.6) !important; background: rgba(120, 53, 15, 0.36) !important; }
+            .learning-sev-low-badge { color: #bbf7d0 !important; border-color: rgba(5, 150, 105, 0.6) !important; background: rgba(6, 78, 59, 0.35) !important; }
+
+            .learning-sev-critical-detail { border-color: rgba(244, 63, 94, 0.7) !important; background: linear-gradient(135deg, rgba(136, 19, 55, 0.36), rgba(15, 23, 42, 0.9)) !important; }
+            .learning-sev-high-detail { border-color: rgba(249, 115, 22, 0.68) !important; background: linear-gradient(135deg, rgba(124, 45, 18, 0.34), rgba(15, 23, 42, 0.9)) !important; }
+            .learning-sev-medium-detail { border-color: rgba(245, 158, 11, 0.66) !important; background: linear-gradient(135deg, rgba(120, 53, 15, 0.3), rgba(15, 23, 42, 0.9)) !important; }
+            .learning-sev-low-detail { border-color: rgba(16, 185, 129, 0.68) !important; background: linear-gradient(135deg, rgba(6, 95, 70, 0.3), rgba(15, 23, 42, 0.9)) !important; }
+
+            #ctf-section .ctf-solid-field,
+            #ctf-section #ctfMeta,
+            #ctf-section [id^='ctf-ai-'],
+            #ctf-section [id^='ctf-res-'] {
+                border-color: var(--ctf-border-soft) !important;
+            }
+
+            /* Solid panel fallbacks for sections that must never appear transparent. */
+            .titan-solid-hero {
+                background: linear-gradient(145deg, rgba(10, 18, 34, 0.96), rgba(15, 23, 42, 0.94)) !important;
+                border: 1px solid rgba(71, 85, 105, 0.68) !important;
+                box-shadow: 0 10px 28px rgba(2, 6, 23, 0.5), inset 0 1px 0 rgba(148, 163, 184, 0.08);
+            }
+
+            .titan-solid-panel {
+                background: linear-gradient(140deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.94)) !important;
+                border: 1px solid rgba(71, 85, 105, 0.62) !important;
+                box-shadow: 0 10px 24px rgba(2, 6, 23, 0.45);
+            }
+
+            .titan-solid-stat {
+                background: rgba(2, 6, 23, 0.82) !important;
+                border: 1px solid rgba(71, 85, 105, 0.74) !important;
+            }
+
+            /* CTF hardening: prevent transparent cards/fields when utility CSS is missing. */
+            #ctf-section .ctf-card,
+            #ctf-section .ctf-card.titan-solid-panel {
+                background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.95)) !important;
+                border-color: rgba(71, 85, 105, 0.74) !important;
+                box-shadow: 0 10px 24px rgba(2, 6, 23, 0.45);
+            }
+
+            #ctf-section .ctf-card .rounded-xl,
+            #ctf-section .ctf-card .rounded-lg,
+            #ctf-section #ctfMeta,
+            #ctf-section [id^='ctf-ai-'],
+            #ctf-section [id^='ctf-res-'] {
+                background: rgba(2, 6, 23, 0.82) !important;
+                border-color: rgba(71, 85, 105, 0.74) !important;
+            }
+
+            #ctf-section .ctf-solid-field {
+                background: rgba(2, 6, 23, 0.86) !important;
+                color: #e5e7eb !important;
+                border: 1px solid rgba(71, 85, 105, 0.8) !important;
+            }
+
             @media (max-width: 640px) {
                 .ctf-main-title {
                     font-size: 1.2rem;
@@ -4199,37 +4435,37 @@ HTML_TEMPLATE = """
                 <div class="tab-group">
                     <div class="tab-group-title px-1"><span>🧱</span> الأدوات الأساسية</div>
                     <div class="tab-grid">
-                    <button onclick="showTab('dash')" id="btn-dash" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>📊</span> الإحصائيات</button>
-                    <button onclick="showTab('pass')" id="btn-pass" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🔑</span> كلمات السر</button>
-                    <button onclick="showTab('vault'); checkVaultPasswordSetup();" id="btn-vault" class="px-3 py-1.5 rounded-lg hover:bg-yellow-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-yellow-500/30"><span>🗄️</span> القبو</button>
-                    <button onclick="showTab('fileprotect')" id="btn-fileprotect" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🛡️</span> حماية الملفات</button>
-                    <button onclick="showTab('identity')" id="btn-identity" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
+                    <button onclick="showTab('dash')" id="btn-dash" data-tab-accent="purple" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>📊</span> الإحصائيات</button>
+                    <button onclick="showTab('pass')" id="btn-pass" data-tab-accent="blue" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🔑</span> كلمات السر</button>
+                    <button onclick="showTab('vault'); checkVaultPasswordSetup();" id="btn-vault" data-tab-accent="amber" class="px-3 py-1.5 rounded-lg hover:bg-yellow-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-yellow-500/30"><span>🗄️</span> القبو</button>
+                    <button onclick="showTab('fileprotect')" id="btn-fileprotect" data-tab-accent="emerald" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>🛡️</span> حماية الملفات</button>
+                    <button onclick="showTab('identity')" id="btn-identity" data-tab-accent="cyan" class="px-3 py-1.5 rounded-lg hover:bg-cyan-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-cyan-500/30"><span>🪪</span> هوية وهمية</button>
                 </div>
                 </div>
 
                 <div class="tab-group">
                     <div class="tab-group-title px-1"><span>🧭</span> التحليل والاستقصاء</div>
                     <div class="tab-grid">
-                    <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
-                    <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
-                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
-                    <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
-                    <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
-                    <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
+                    <button onclick="showTab('tools')" id="btn-tools" data-tab-accent="purple" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
+                    <button onclick="showTab('ghost')" id="btn-ghost" data-tab-accent="pink" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
+                    <button onclick="showTab('osint')" id="btn-osint" data-tab-accent="indigo" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
+                    <button onclick="showTab('ir')" id="btn-ir" data-tab-accent="red" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
+                    <button onclick="showTab('forensics')" id="btn-forensics" data-tab-accent="teal" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
+                    <button onclick="showTab('training')" id="btn-training" data-tab-accent="amber" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
                 </div>
                 </div>
 
                 <div class="tab-group">
                     <div class="tab-group-title px-1"><span>🧪</span> مختبر التشفير</div>
                     <div class="tab-grid">
-                    <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
-                    <button onclick="showTab('filelab')" id="btn-filelab" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span class="inline-block animate-pulse">📝</span> إخفاء نص TXT</button>
-                    <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> تشفير الصور</button>
-                    <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
-                    <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> اخفاء نص داخل فيديو</button>
-                    <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
-                    <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
-                    <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
+                    <button onclick="showTab('crypt')" id="btn-crypt" data-tab-accent="blue" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
+                    <button onclick="showTab('filelab')" id="btn-filelab" data-tab-accent="emerald" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span class="inline-block animate-pulse">📝</span> إخفاء نص TXT</button>
+                    <button onclick="showTab('suite')" id="btn-suite" data-tab-accent="purple" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> تشفير الصور</button>
+                    <button onclick="showTab('audio')" id="btn-audio" data-tab-accent="orange" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
+                    <button onclick="showTab('video')" id="btn-video" data-tab-accent="rose" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> اخفاء نص داخل فيديو</button>
+                    <button onclick="showTab('qr')" id="btn-qr" data-tab-accent="green" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
+                    <button onclick="openAiSection()" id="btn-ai" data-tab-accent="purple" class="hidden px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
+                    <button onclick="showAdminTab()" id="btn-admin" data-tab-accent="red" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
                 </div>
                 </div>
             </div>
@@ -4475,7 +4711,7 @@ HTML_TEMPLATE = """
                 <!-- ===== CRYPTOGRAPHY SECTION ===== -->
                 <div id="crypt-section" class="hidden">
                     <div class="space-y-4">
-                        <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-r from-cyan-950/25 via-slate-900/80 to-fuchsia-950/20 p-4">
+                        <div class="titan-solid-hero rounded-2xl border border-cyan-900/40 bg-gradient-to-r from-cyan-950/25 via-slate-900/80 to-fuchsia-950/20 p-4">
                             <div class="flex items-center justify-between gap-3 flex-wrap">
                                 <div>
                                     <h3 class="text-sm font-black text-cyan-300 tracking-wide">TITAN Crypto Studio</h3>
@@ -4487,7 +4723,7 @@ HTML_TEMPLATE = """
 
                         <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                             <div class="xl:col-span-2 space-y-4">
-                                <div class="rounded-2xl border border-fuchsia-800/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-fuchsia-950/20 p-4">
+                                <div class="titan-solid-panel rounded-2xl border border-fuchsia-800/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-fuchsia-950/20 p-4">
                                     <h3 class="text-sm font-black text-fuchsia-300 mb-3">إعدادات التشفير الأساسية</h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
@@ -4522,7 +4758,7 @@ HTML_TEMPLATE = """
                                     <div id="cryptAdvisorLastConfig" class="mt-3 text-[11px] text-cyan-300 bg-cyan-950/15 border border-cyan-900/35 rounded-lg px-3 py-2">لا توجد توصية مطبقة بعد.</div>
                                 </div>
 
-                                <div class="rounded-2xl border border-violet-900/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-violet-950/20 p-4">
+                                <div class="titan-solid-panel rounded-2xl border border-violet-900/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-violet-950/20 p-4">
                                     <h3 class="text-sm font-black text-violet-300 mb-3">لوحة النص والنتيجة</h3>
                                     <textarea id="cryptText" rows="6" class="w-full p-3 rounded-xl bg-slate-950/80 border border-violet-900/40 mb-3 text-sm outline-none focus:ring-2 focus:ring-violet-600/50" placeholder="اكتب النص هنا (تشفير/فك/نسخ)..."></textarea>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -4535,7 +4771,7 @@ HTML_TEMPLATE = """
                             </div>
 
                             <div class="space-y-4">
-                                <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-slate-900/85 via-slate-900/70 to-cyan-950/25 p-4 space-y-3">
+                                <div class="titan-solid-panel rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-slate-900/85 via-slate-900/70 to-cyan-950/25 p-4 space-y-3">
                                     <h3 class="text-sm font-black text-cyan-300">توصية TITAN AI للتشفير</h3>
                                     <div class="grid grid-cols-1 gap-2">
                                         <select id="cryptSensitivity" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none">
@@ -4549,10 +4785,10 @@ HTML_TEMPLATE = """
 
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                                         <button onclick="startCryptAdvisorChat(true)" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">تهيئة سياق AI</button>
-                                        <button onclick="applyCryptRecommendation()" class="px-3 py-2 rounded-lg bg-fuchsia-800/40 hover:bg-fuchsia-700/50 text-xs font-bold border border-fuchsia-700/50 text-fuchsia-200">تطبيق التوصية</button>
+                                        <button onclick="applyCryptRecommendation()" class="crypt-reco-btn px-3 py-2 rounded-lg text-xs font-bold border">تطبيق التوصية</button>
                                     </div>
 
-                                    <div id="cryptAiChatFlow" class="h-64 overflow-y-auto rounded-xl border border-cyan-900/40 bg-black/35 p-3 space-y-2 text-sm"></div>
+                                    <div id="cryptAiChatFlow" class="crypt-chat-shell h-64 overflow-y-auto rounded-xl border p-3 space-y-2 text-sm"></div>
 
                                     <div class="flex gap-2">
                                         <input id="cryptAiChatInput" type="text" class="flex-1 p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-sm outline-none" placeholder="اسأل TITAN AI عن أفضل إعداد تشفير لهذه الحالة...">
@@ -4993,7 +5229,7 @@ HTML_TEMPLATE = """
             <div id="osint-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🕵️ OSINT Mission Center</h2>
 
-                <div class="relative overflow-hidden rounded-2xl border border-indigo-900/50 bg-gradient-to-r from-indigo-950/35 via-slate-950/60 to-cyan-950/30 p-4">
+                <div class="titan-solid-hero relative overflow-hidden rounded-2xl border border-indigo-900/50 bg-gradient-to-r from-indigo-950/35 via-slate-950/60 to-cyan-950/30 p-4">
                     <div class="absolute -top-10 -right-6 w-44 h-44 rounded-full bg-indigo-600/10 blur-3xl"></div>
                     <div class="absolute -bottom-10 -left-6 w-44 h-44 rounded-full bg-cyan-600/10 blur-3xl"></div>
                     <div class="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -5002,19 +5238,19 @@ HTML_TEMPLATE = """
                             <div class="text-sm text-gray-300 mt-1">تحليل موحد + مقارنة هدفين + تحليل دفعي + سجل نشاط حي في لوحة واحدة.</div>
                         </div>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-0">
-                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                            <div class="titan-solid-stat rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
                                 <div class="text-[10px] text-gray-500">Total Runs</div>
                                 <div id="osintMissionTotal" class="text-base font-black text-indigo-300">0</div>
                             </div>
-                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                            <div class="titan-solid-stat rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
                                 <div class="text-[10px] text-gray-500">High Risk</div>
                                 <div id="osintMissionHigh" class="text-base font-black text-rose-300">0</div>
                             </div>
-                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                            <div class="titan-solid-stat rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
                                 <div class="text-[10px] text-gray-500">Avg Risk</div>
                                 <div id="osintMissionAvg" class="text-base font-black text-amber-300">0</div>
                             </div>
-                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
+                            <div class="titan-solid-stat rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
                                 <div class="text-[10px] text-gray-500">Last Type</div>
                                 <div id="osintMissionLast" class="text-sm font-black text-cyan-300">--</div>
                             </div>
@@ -5023,7 +5259,7 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
+                    <div class="titan-solid-panel xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
                         <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
                             <h3 class="text-sm font-bold text-indigo-300">البحث الموحد (IP / Domain / URL / Email / Phone)</h3>
                             <div class="text-[10px] text-gray-500">Enter = تحليل مباشر</div>
@@ -5044,7 +5280,7 @@ HTML_TEMPLATE = """
                         <div id="osintUnifiedResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-80 overflow-y-auto" dir="ltr"></div>
                     </div>
 
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-2">
+                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-2">
                         <h3 class="text-sm font-bold text-indigo-300">Watchlist</h3>
                         <p class="text-[11px] text-gray-500">احفظ الأهداف، شغّلها بنقرة، وصدّر تقريرًا شاملًا.</p>
                         <div class="grid grid-cols-2 gap-2">
@@ -5058,7 +5294,7 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-violet-900/40">
+                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-violet-900/40">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-sm font-bold text-violet-300">Batch Analyzer</h3>
                             <button onclick="runBatchOsint()" class="px-3 py-1.5 rounded-lg bg-violet-900/40 hover:bg-violet-800 border border-violet-800/50 text-violet-300 text-xs font-bold">تشغيل دفعة</button>
@@ -5068,7 +5304,7 @@ HTML_TEMPLATE = """
                         <div id="osintBatchResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs max-h-80 overflow-y-auto"></div>
                     </div>
 
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40">
+                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-sm font-bold text-fuchsia-300">Target Comparison</h3>
                             <button onclick="compareOsintTargets()" class="px-3 py-1.5 rounded-lg bg-fuchsia-900/40 hover:bg-fuchsia-800 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">مقارنة</button>
@@ -5083,7 +5319,7 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
+                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
                         <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter</h3>
                         <p class="text-[11px] text-gray-500 mb-3">فحص اليوزرنيم على المنصات الأشهر مع وضع سريع أو عميق.</p>
                         <div class="flex flex-col md:flex-row gap-2">
@@ -5100,7 +5336,7 @@ HTML_TEMPLATE = """
                         <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
                     </div>
 
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
+                    <div class="titan-solid-panel bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-sm font-bold text-amber-300">Activity Timeline</h3>
                             <button onclick="clearOsintActivityLog()" class="px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تنظيف السجل</button>
@@ -5113,20 +5349,20 @@ HTML_TEMPLATE = """
 
             <div id="training-section" class="hidden space-y-4">
                 <h2 class="text-xl font-bold text-amber-300 border-b border-slate-700 pb-2">🎯 قسم التدريب</h2>
-                <div class="bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl text-xs text-amber-100/90 leading-6">
+                <div class="training-intro-note bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl text-xs text-amber-100/90 leading-6">
                     هذا القسم يجمع 3 مسارات تدريبية في مكان واحد: التعلم والمحاكاة، CTF، والهندسة الاجتماعية.
                 </div>
                 <div class="training-subtabs-shell rounded-xl p-2">
                     <div class="grid grid-cols-3 gap-2">
-                        <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 التعلم والمحاكاة</button>
-                        <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
-                        <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
+                        <button id="btn-training-learninglab" data-tab-accent="sky" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 التعلم والمحاكاة</button>
+                        <button id="btn-training-ctf" data-tab-accent="amber" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
+                        <button id="btn-training-se" data-tab-accent="rose" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
                     </div>
                 </div>
             </div>
 
             <div id="ctf-section" class="hidden space-y-6 ctf-ui">
-                <div class="rounded-2xl border border-amber-900/40 bg-gradient-to-r from-amber-950/25 via-slate-900/85 to-violet-950/20 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
+                <div class="titan-solid-hero ctf-header-sync rounded-2xl border border-amber-900/40 bg-gradient-to-r from-amber-950/25 via-slate-900/85 to-violet-950/20 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
                     <div class="flex flex-col items-start gap-3">
                         <div>
                             <h2 class="ctf-main-title font-bold text-amber-300 border-b border-transparent pb-0 flex items-center gap-2"><span class="inline-block animate-pulse">🏁</span> TITAN CTF ARENA</h2>
@@ -5136,26 +5372,26 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <div class="rounded-2xl border border-slate-700/70 bg-slate-950/35 p-3 space-y-2">
+                <div class="titan-solid-panel ctf-border-sync rounded-2xl border border-slate-700/70 bg-slate-950/35 p-3 space-y-2">
                     <div class="text-[10px] text-slate-400 uppercase tracking-[0.12em]">Session Snapshot</div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2">
-                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Active Challenges</div>
                             <div id="ctfStatActive" class="text-base font-black text-amber-300">0</div>
                         </div>
-                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Solved This Cycle</div>
                             <div id="ctfStatSolvedCycle" class="text-base font-black text-emerald-300">0</div>
                         </div>
-                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Total Solved</div>
                             <div id="ctfStatSolvedTotal" class="text-base font-black text-cyan-300">0</div>
                         </div>
-                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Total Points</div>
                             <div id="ctfStatPoints" class="text-base font-black text-violet-300">0</div>
                         </div>
-                        <div class="rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
+                        <div class="titan-solid-stat ctf-border-sync rounded-lg border border-slate-700 bg-black/25 px-3 py-2">
                             <div class="text-[10px] text-gray-500">Rotation</div>
                             <div id="ctfStatRotation" class="text-sm font-black text-amber-200">--</div>
                         </div>
@@ -5163,7 +5399,7 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="space-y-4">
-                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-amber-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.28)]">
+                    <div class="titan-solid-panel ctf-header-sync bg-slate-900/60 p-4 rounded-2xl border border-amber-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.28)]">
                         <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-3">
                             <div>
                                 <div class="ctf-section-label text-amber-300">Challenge Filters</div>
@@ -5174,18 +5410,18 @@ HTML_TEMPLATE = """
                             </div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
-                            <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none w-full md:col-span-2">
-                            <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="ctf-solid-field p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none w-full md:col-span-2">
+                            <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="ctf-solid-field p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
                                 <option value="all" selected>كل الصعوبات</option>
                                 <option value="easy">Easy</option>
                                 <option value="medium">Medium</option>
                                 <option value="hard">Hard</option>
                             </select>
-                            <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="ctf-solid-field p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
                                 <option value="all" selected>كل التصنيفات</option>
                             </select>
                         </div>
-                        <label class="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/60 w-fit">
+                        <label class="ctf-border-sync flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/60 w-fit">
                             <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
                             <span class="text-gray-300">عرض غير المحلولة فقط</span>
                         </label>
@@ -7227,7 +7463,7 @@ HTML_TEMPLATE = """
                     if(t === type) {
                         btn.classList.add('tab-active');
                         btn.classList.remove('text-gray-400');
-                        btn.classList.add('bg-purple-600/90', 'text-white');
+                        btn.classList.add('text-white');
                     } else {
                         btn.classList.remove('tab-active', 'tab-active-vault', 'bg-purple-600/90', 'text-white', 'bg-yellow-600/90', 'text-slate-900');
                         btn.classList.add('text-gray-400');
@@ -7240,8 +7476,8 @@ HTML_TEMPLATE = """
                 if(type === 'vault') {
                     vBtn.classList.remove('tab-active');
                     vBtn.classList.add('tab-active-vault');
-                    vBtn.classList.add('bg-yellow-600/90', 'text-slate-900');
-                    vBtn.classList.remove('text-gray-400', 'bg-purple-600/90');
+                    vBtn.classList.add('text-slate-900');
+                    vBtn.classList.remove('text-gray-400');
                 }
             }
             if(type === 'dash') {
@@ -7400,10 +7636,10 @@ HTML_TEMPLATE = """
 
         function _learningSeverityMeta(level) {
             const key = String(level || 'medium').toLowerCase();
-            if (key === 'critical') return { label: 'Critical', cls: 'text-rose-200 border-rose-700/60 bg-rose-900/30' };
-            if (key === 'high') return { label: 'High', cls: 'text-orange-200 border-orange-700/60 bg-orange-900/30' };
-            if (key === 'low') return { label: 'Low', cls: 'text-emerald-200 border-emerald-700/60 bg-emerald-900/30' };
-            return { label: 'Medium', cls: 'text-amber-200 border-amber-700/60 bg-amber-900/30' };
+            if (key === 'critical') return { label: 'Critical', cls: 'learning-sev-critical-badge', badgeCls: 'learning-sev-critical-badge', cardCls: 'learning-sev-critical-card', detailCls: 'learning-sev-critical-detail' };
+            if (key === 'high') return { label: 'High', cls: 'learning-sev-high-badge', badgeCls: 'learning-sev-high-badge', cardCls: 'learning-sev-high-card', detailCls: 'learning-sev-high-detail' };
+            if (key === 'low') return { label: 'Low', cls: 'learning-sev-low-badge', badgeCls: 'learning-sev-low-badge', cardCls: 'learning-sev-low-card', detailCls: 'learning-sev-low-detail' };
+            return { label: 'Medium', cls: 'learning-sev-medium-badge', badgeCls: 'learning-sev-medium-badge', cardCls: 'learning-sev-medium-card', detailCls: 'learning-sev-medium-detail' };
         }
 
         function _learningBuildPlaybook(item) {
@@ -7499,10 +7735,10 @@ HTML_TEMPLATE = """
             box.innerHTML = attacks.map((a) => {
                 const active = a.id === __learningSelectedAttackId;
                 const sev = _learningSeverityMeta(a.severity);
-                return `<button onclick="learningCatalogOpen('${_resultEscape(a.id)}')" class="text-right p-3 rounded-lg border transition-all ${active ? 'border-cyan-600 bg-cyan-900/20' : 'border-slate-700 bg-black/30 hover:border-cyan-800/60 hover:bg-cyan-950/10'}">
+                return `<button onclick="learningCatalogOpen('${_resultEscape(a.id)}')" class="learning-attack-card ${sev.cardCls} ${active ? 'learning-attack-card-active' : ''} text-right p-3 rounded-lg border transition-all">
                     <div class="flex items-center justify-between gap-2">
                         <div class="text-xs font-bold ${active ? 'text-cyan-200' : 'text-gray-100'}">${_resultEscape(a.name)}</div>
-                        <span class="text-[10px] px-2 py-0.5 rounded border ${sev.cls}">${_resultEscape(sev.label)}</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded border ${sev.badgeCls}">${_resultEscape(sev.label)}</span>
                     </div>
                     <div class="text-[10px] text-gray-400 mt-1">${_resultEscape(a.category_title)}</div>
                     <div class="text-[10px] text-gray-500 mt-1">Tools: ${_resultEscape((a.tools || []).slice(0, 3).join(' | '))}</div>
@@ -7524,16 +7760,19 @@ HTML_TEMPLATE = """
             if (!hit || !box) return;
 
             __learningSelectedAttackId = hit.id;
-            if (badge) badge.textContent = hit.name;
             const sev = _learningSeverityMeta(hit.severity);
+            if (badge) {
+                badge.textContent = hit.name;
+                badge.className = `text-[10px] px-2 py-1 rounded border ${sev.badgeCls}`;
+            }
             const playbook = hit.playbook || {};
 
             box.innerHTML = `
                 <div class="space-y-3">
-                    <div class="rounded-lg border border-indigo-800/40 bg-indigo-950/20 p-3">
+                    <div class="rounded-lg border p-3 ${sev.detailCls}">
                         <div class="flex items-center justify-between gap-2">
                             <div class="text-sm font-bold text-indigo-200">${_resultEscape(hit.name)}</div>
-                            <span class="text-[10px] px-2 py-0.5 rounded border ${sev.cls}">${_resultEscape(sev.label)}</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded border ${sev.badgeCls}">${_resultEscape(sev.label)}</span>
                         </div>
                         <div class="text-[11px] text-indigo-300 mt-1">${_resultEscape(hit.category_title)}</div>
                     </div>
@@ -7619,7 +7858,10 @@ HTML_TEMPLATE = """
                 const detail = document.getElementById('learningAttackDetail');
                 const badge = document.getElementById('learningSelectedAttackBadge');
                 if (detail) detail.innerHTML = 'لا توجد نتائج حالياً. جرّب تغيير البحث أو التصنيف.';
-                if (badge) badge.textContent = 'لا نتائج';
+                if (badge) {
+                    badge.textContent = 'لا نتائج';
+                    badge.className = 'text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300';
+                }
                 return;
             }
 
@@ -7893,13 +8135,13 @@ HTML_TEMPLATE = """
             const row = document.createElement('div');
             if (role === 'assistant') {
                 row.className = 'flex justify-start items-end gap-2';
-                row.innerHTML = '<div class="w-6 h-6 rounded-full bg-cyan-900/50 border border-cyan-700/50 flex items-center justify-center text-[10px]">🤖</div>' +
-                    '<div class="bg-slate-800/90 text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] text-xs border border-slate-700/60 leading-6">' + renderAiReplyPretty(text) + '</div>';
+                row.innerHTML = '<div class="crypt-chat-avatar-ai w-6 h-6 rounded-full border flex items-center justify-center text-[10px]">🤖</div>' +
+                    '<div class="crypt-chat-assistant text-gray-100 px-3 py-2 rounded-xl rounded-bl-md max-w-[84%] text-xs border leading-6">' + renderAiReplyPretty(text) + '</div>';
             } else {
                 row.className = 'flex justify-end items-end gap-2';
-                row.innerHTML = '<div class="bg-cyan-700/60 text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border border-cyan-600/50">' +
+                row.innerHTML = '<div class="crypt-chat-user text-white px-3 py-2 rounded-xl rounded-br-md max-w-[82%] text-xs border">' +
                     _osintEscape(String(text || '')).replace(/\\n/g, '<br>') +
-                    '</div><div class="w-6 h-6 rounded-full bg-cyan-900/40 border border-cyan-700/40 flex items-center justify-center text-[10px]">👤</div>';
+                    '</div><div class="crypt-chat-avatar-user w-6 h-6 rounded-full border flex items-center justify-center text-[10px]">👤</div>';
             }
             flow.appendChild(row);
             flow.scrollTop = flow.scrollHeight;
@@ -9216,9 +9458,16 @@ HTML_TEMPLATE = """
 
         function _ctfDifficultyClass(level) {
             const t = String(level || '').toLowerCase();
-            if (t === 'easy') return 'text-emerald-300 border-emerald-800/50 bg-emerald-900/20';
-            if (t === 'hard') return 'text-rose-300 border-rose-800/50 bg-rose-900/20';
-            return 'text-amber-300 border-amber-800/50 bg-amber-900/20';
+            if (t === 'easy') return 'text-emerald-200 border-emerald-500/70 bg-emerald-900/35';
+            if (t === 'hard') return 'text-rose-100 border-red-400/80 bg-red-900/35';
+            return 'text-amber-200 border-amber-500/70 bg-amber-900/35';
+        }
+
+        function _ctfCardTheme(level) {
+            const t = String(level || '').toLowerCase();
+            if (t === 'easy') return 'ctf-diff-easy';
+            if (t === 'hard') return 'ctf-diff-hard';
+            return 'ctf-diff-medium';
         }
 
         function ctfApplyFilters() {
@@ -9286,60 +9535,61 @@ HTML_TEMPLATE = """
                     ? hints.map((h, i) => `<li class="text-sm text-gray-200 ctf-bidi"><span class="text-amber-300 font-mono ctf-ltr">${i + 1}.</span> ${_osintEscape(h)}</li>`).join('')
                     : '<li class="text-sm text-gray-400 ctf-bidi">لا توجد تلميحات إضافية.</li>';
                 const fileBlock = c.download_required
-                    ? `<div class="space-y-2 rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
+                    ? `<div class="titan-solid-panel ctf-border-sync space-y-2 rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
                             <div class="text-sm font-bold text-amber-300 ctf-bidi">ملف التحدي الإجباري</div>
                             <div class="text-sm text-gray-200 ctf-bidi">هذا التحدي يتطلب تنزيل ملف المعطيات أولاً ثم استخراج المطلوب منه.</div>
                             <div class="flex flex-wrap items-center gap-2 text-sm">
-                                <span class="px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-cyan-300 font-mono ctf-ltr">${_osintEscape(c.download_name || 'challenge.txt')}</span>
+                                <span class="titan-solid-stat ctf-border-sync px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-cyan-300 font-mono ctf-ltr">${_osintEscape(c.download_name || 'challenge.txt')}</span>
                                 <button onclick="ctfDownloadAsset('${_osintEscape(c.id)}')" class="px-3 py-1.5 rounded-lg bg-amber-900/50 border border-amber-800/50 text-amber-200 text-xs font-bold hover:bg-amber-800/60">تنزيل الملف</button>
                             </div>
                         </div>`
                     : '';
                 const solvedBadge = solved
-                    ? '<span class="text-[10px] px-2 py-1 rounded border border-emerald-800/50 bg-emerald-900/20 text-emerald-300">Solved</span>'
-                    : '<span class="text-[10px] px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">Unsolved</span>';
+                    ? '<span class="titan-solid-stat ctf-border-sync text-[10px] px-2 py-1 rounded border border-emerald-800/50 bg-emerald-900/20 text-emerald-300">Solved</span>'
+                    : '<span class="titan-solid-stat ctf-border-sync text-[10px] px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">Unsolved</span>';
+                const cardTheme = _ctfCardTheme(c.difficulty);
                 return `
-                    <div class="ctf-card bg-slate-900/55 p-4 rounded-2xl border border-amber-900/30 space-y-3">
+                    <div class="ctf-card titan-solid-panel ${cardTheme} bg-slate-900/55 p-4 rounded-2xl border border-amber-900/30 space-y-3">
                         <div class="flex items-center justify-between gap-2">
-                            <h3 class="ctf-card-title text-amber-300 ctf-bidi">${_osintEscape(c.title || 'Challenge')}</h3>
+                            <h3 class="ctf-card-title ctf-bidi">${_osintEscape(c.title || 'Challenge')}</h3>
                             ${solvedBadge}
                         </div>
                         <div class="flex flex-wrap gap-2 text-[11px]">
-                            <span class="px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">${_osintEscape(c.category || 'misc')}</span>
+                            <span class="titan-solid-stat ctf-border-sync px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">${_osintEscape(c.category || 'misc')}</span>
                             <span class="px-2 py-1 rounded border ${_ctfDifficultyClass(c.difficulty)}">${_osintEscape(String(c.difficulty || '').toUpperCase())}</span>
-                            <span class="px-2 py-1 rounded border border-violet-800/50 bg-violet-900/20 text-violet-300">${_osintEscape(c.points || 0)} pts</span>
+                            <span class="titan-solid-stat ctf-border-sync px-2 py-1 rounded border border-violet-800/50 bg-violet-900/20 text-violet-300">${_osintEscape(c.points || 0)} pts</span>
                         </div>
 
-                        <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+                        <div class="titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-cyan-300 ctf-bidi">تفاصيل التحدي</div>
                             <div class="ctf-bidi text-gray-200 whitespace-pre-wrap">${_osintEscape(c.description || '')}</div>
                             <div class="text-sm text-gray-300 ctf-bidi">صيغة العلم: <span class="font-mono text-amber-300 ctf-ltr">${_osintEscape(c.flag_format || 'TITAN{...}')}</span></div>
                         </div>
 
-                        <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+                        <div class="titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-violet-300 ctf-bidi">كيف أفكر بالحل؟</div>
                             <div class="ctf-bidi text-gray-200">${_osintEscape(c.method || 'ابدأ بتحليل المعطيات وتقسيم المشكلة لخطوات صغيرة.')}</div>
                         </div>
 
                         ${fileBlock}
 
-                        <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+                        <div class="titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-amber-300 ctf-bidi">تلميحات سريعة</div>
                             <ol class="space-y-1">${hintsHtml}</ol>
                         </div>
 
                         <div class="space-y-2">
-                            <input id="ctf-flag-${_osintEscape(c.id)}" type="text" placeholder="أدخل العلم هنا..." class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm font-mono ctf-ltr" dir="ltr">
+                            <input id="ctf-flag-${_osintEscape(c.id)}" type="text" placeholder="أدخل العلم هنا..." class="ctf-solid-field w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm font-mono ctf-ltr" dir="ltr">
                             <div class="flex flex-col gap-2">
                                 <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="w-full py-2.5 rounded-xl bg-amber-900/35 hover:bg-amber-800/50 border border-amber-800/50 text-amber-200 text-xs font-bold">تحقق من الحل</button>
-                                <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="w-full py-2.5 rounded-xl bg-violet-900/35 hover:bg-violet-800/50 border border-violet-800/50 text-violet-200 text-xs font-bold">مساعد AI</button>
+                                <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="ctf-ai-btn w-full py-2.5 rounded-xl text-xs font-bold">مساعد AI</button>
                             </div>
                         </div>
 
                         <div class="space-y-1">
-                            <textarea id="ctf-q-${_osintEscape(c.id)}" rows="2" placeholder="اسأل مساعد AI: مثال ما أول خطوة؟" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm ctf-bidi"></textarea>
-                            <div id="ctf-ai-${_osintEscape(c.id)}" class="hidden p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi"></div>
-                            <div id="ctf-res-${_osintEscape(c.id)}" class="hidden p-2 rounded-lg bg-black/40 border border-slate-700 text-sm ctf-bidi"></div>
+                            <textarea id="ctf-q-${_osintEscape(c.id)}" rows="2" placeholder="اسأل مساعد AI: مثال ما أول خطوة؟" class="ctf-solid-field w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm ctf-bidi"></textarea>
+                            <div id="ctf-ai-${_osintEscape(c.id)}" class="hidden titan-solid-stat ctf-border-sync p-2 rounded-lg bg-black/40 border border-slate-700 text-sm whitespace-pre-wrap ctf-bidi"></div>
+                            <div id="ctf-res-${_osintEscape(c.id)}" class="hidden titan-solid-stat ctf-border-sync p-2 rounded-lg bg-black/40 border border-slate-700 text-sm ctf-bidi"></div>
                         </div>
                     </div>
                 `;
@@ -13250,6 +13500,50 @@ html,body{margin:0;padding:0;font-family:'Tajawal',sans-serif;background:#070b19
 .glass{background:rgba(10,15,30,.85);border:1px solid rgba(168,85,247,.2);border-radius:1rem}
 .tab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.45rem}
 button,input,textarea,select{font:inherit}
+        /* Keep tab and panel backgrounds visible even without full Tailwind build. */
+        .tab-nav-modern .tab-grid button{border:1px solid rgba(148,163,184,.24)!important;background:linear-gradient(135deg,rgba(30,41,59,.92),rgba(15,23,42,.92))!important;color:#cbd5e1!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='purple'].tab-active{background:linear-gradient(135deg,rgba(139,92,246,.95),rgba(168,85,247,.95))!important;color:#fff!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='blue'].tab-active{background:linear-gradient(135deg,rgba(59,130,246,.95),rgba(96,165,250,.95))!important;color:#fff!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='amber'].tab-active{background:linear-gradient(135deg,rgba(245,158,11,.95),rgba(251,191,36,.95))!important;color:#0f172a!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='emerald'].tab-active{background:linear-gradient(135deg,rgba(16,185,129,.95),rgba(52,211,153,.95))!important;color:#fff!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='cyan'].tab-active{background:linear-gradient(135deg,rgba(6,182,212,.95),rgba(34,211,238,.95))!important;color:#0f172a!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='pink'].tab-active{background:linear-gradient(135deg,rgba(236,72,153,.95),rgba(244,114,182,.95))!important;color:#fff!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='indigo'].tab-active{background:linear-gradient(135deg,rgba(99,102,241,.95),rgba(129,140,248,.95))!important;color:#fff!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='red'].tab-active{background:linear-gradient(135deg,rgba(239,68,68,.95),rgba(248,113,113,.95))!important;color:#fff!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='teal'].tab-active{background:linear-gradient(135deg,rgba(20,184,166,.95),rgba(45,212,191,.95))!important;color:#0f172a!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='orange'].tab-active{background:linear-gradient(135deg,rgba(249,115,22,.95),rgba(251,146,60,.95))!important;color:#fff!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='rose'].tab-active{background:linear-gradient(135deg,rgba(244,63,94,.95),rgba(251,113,133,.95))!important;color:#fff!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='green'].tab-active{background:linear-gradient(135deg,rgba(34,197,94,.95),rgba(74,222,128,.95))!important;color:#0f172a!important}
+        .tab-nav-modern .tab-grid button[data-tab-accent='sky'].tab-active{background:linear-gradient(135deg,rgba(14,165,233,.95),rgba(56,189,248,.95))!important;color:#0f172a!important}
+        .tab-nav-modern .tab-grid button.tab-active-vault{background:linear-gradient(135deg,rgba(245,158,11,.95),rgba(217,119,6,.95))!important;color:#0f172a!important}
+        .training-subtab-btn{border:1px solid rgba(125,211,252,.36)!important;background:linear-gradient(135deg,rgba(30,41,59,.96),rgba(15,23,42,.96))!important;color:#e2e8f0!important}
+        .training-subtab-btn[data-tab-accent='sky'].training-subtab-active{background:linear-gradient(135deg,rgba(14,165,233,.95),rgba(56,189,248,.95))!important;color:#0f172a!important}
+        .training-subtab-btn[data-tab-accent='amber'].training-subtab-active{background:linear-gradient(135deg,rgba(245,158,11,.95),rgba(251,191,36,.95))!important;color:#0f172a!important}
+        .training-subtab-btn[data-tab-accent='rose'].training-subtab-active{background:linear-gradient(135deg,rgba(244,63,94,.95),rgba(251,113,133,.95))!important;color:#fff!important}
+        .ctf-ai-btn{background:linear-gradient(135deg,rgba(109,40,217,.82),rgba(147,51,234,.7))!important;border:1px solid rgba(196,181,253,.74)!important;color:#faf5ff!important;box-shadow:0 8px 18px rgba(91,33,182,.34)!important}
+        .ctf-ai-btn:hover{background:linear-gradient(135deg,rgba(126,34,206,.9),rgba(168,85,247,.82))!important;border-color:rgba(221,214,254,.88)!important;box-shadow:0 10px 22px rgba(126,34,206,.46)!important}
+        .crypt-reco-btn{background:linear-gradient(135deg,#6d28d9,#7c3aed)!important;border:1px solid #a78bfa!important;color:#f5f3ff!important;box-shadow:0 8px 18px rgba(91,33,182,.34)!important}
+        .crypt-reco-btn:hover{background:linear-gradient(135deg,#7c3aed,#8b5cf6)!important;border-color:#c4b5fd!important;color:#fff!important}
+        .crypt-chat-shell{border:1px solid #0e7490!important;background:#020617!important}
+        .crypt-chat-assistant{border:1px solid #06b6d4!important;background:#0f172a!important}
+        .crypt-chat-user{border:1px solid #22d3ee!important;background:#0e7490!important}
+        .crypt-chat-avatar-ai{border:1px solid #06b6d4!important;background:#0e7490!important}
+        .crypt-chat-avatar-user{border:1px solid #22d3ee!important;background:#155e75!important}
+        .bg-slate-950\\/96{background-color:rgba(2,6,23,.96)!important}
+        .bg-slate-900\\/70{background-color:rgba(15,23,42,.70)!important}
+        .bg-slate-900\\/60{background-color:rgba(15,23,42,.60)!important}
+        .bg-slate-900\\/50{background-color:rgba(15,23,42,.50)!important}
+        .bg-slate-900\\/40{background-color:rgba(15,23,42,.40)!important}
+        .bg-slate-800\\/60{background-color:rgba(30,41,59,.60)!important}
+        .bg-purple-900\\/40{background-color:rgba(88,28,135,.40)!important}
+        .bg-purple-900\\/30{background-color:rgba(88,28,135,.30)!important}
+        .bg-purple-900\\/20{background-color:rgba(88,28,135,.20)!important}
+        .bg-purple-600\\/90{background-color:rgba(147,51,234,.90)!important}
+        .bg-yellow-600\\/90{background-color:rgba(202,138,4,.90)!important}
+        .border-slate-700{border-color:rgba(51,65,85,1)!important}
+        .border-purple-900\\/40{border-color:rgba(88,28,135,.40)!important}
+        .border-purple-900\\/30{border-color:rgba(88,28,135,.30)!important}
+        .border-purple-700\\/50{border-color:rgba(126,34,206,.50)!important}
 """
         resp = Response(fallback_css, mimetype='text/css')
         resp.headers['Cache-Control'] = 'no-store, max-age=0'
