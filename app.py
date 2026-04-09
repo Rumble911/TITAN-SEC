@@ -17,6 +17,7 @@ import time
 import tempfile
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.exceptions import HTTPException
 from flask import Flask, request, jsonify, render_template_string, send_file, session, Response  # type: ignore
 from cryptography.fernet import Fernet  # type: ignore
 from cryptography.hazmat.primitives import hashes  # type: ignore
@@ -159,7 +160,8 @@ _CJK_CHARS_RE = re.compile(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufa
 _CTRL_CHARS_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
 _AR_CHARS_RE = re.compile(r'[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]')
 _LATIN_CHARS_RE = re.compile(r'[A-Za-z]')
-_MOJIBAKE_RE = re.compile(r'[ ]|[\u2500-\u257f\u2580-\u259f\u0370-\u03ff\u0400-\u04ff]')
+# Detect replacement-char artifacts and common mojibake unicode blocks.
+_MOJIBAKE_RE = re.compile(r'[\ufffd]|[\u2500-\u257f\u2580-\u259f\u0370-\u03ff\u0400-\u04ff]')
 _KB_TOKEN_RE = re.compile(r'[a-z0-9_+\-]{2,}|[\u0600-\u06ff]{2,}', flags=re.IGNORECASE)
 
 TITAN_KB_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'knowledge_base')
@@ -9313,13 +9315,25 @@ HTML_TEMPLATE = """
             }).join('');
         }
 
+        async function _parseJsonOrThrow(res, contextLabel) {
+            const raw = await res.text();
+            if (!raw) return {};
+            try {
+                return JSON.parse(raw);
+            } catch (_e) {
+                const status = (res && typeof res.status === 'number') ? `HTTP ${res.status}` : 'HTTP ?';
+                const snippet = String(raw).slice(0, 120).replace(/\\s+/g, ' ').trim();
+                throw new Error(`${contextLabel || 'طلب API'}: استجابة غير JSON (${status}). ${snippet}`);
+            }
+        }
+
         async function ctfLoadChallenges(forceRefresh) {
             const meta = document.getElementById('ctfMeta');
             if (meta) meta.innerText = 'جار تحميل تحديات CTF...';
             try {
                 const suffix = forceRefresh ? '?refresh=1' : '';
                 const res = await fetch('/api/ctf/challenges' + suffix);
-                const data = await res.json();
+                const data = await _parseJsonOrThrow(res, 'CTF challenges');
                 if (!data.success) {
                     if (meta) meta.innerText = data.error || 'فشل تحميل التحديات.';
                     return;
@@ -9374,7 +9388,7 @@ HTML_TEMPLATE = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ challenge_id: challengeId, answer })
                 });
-                const data = await res.json();
+                const data = await _parseJsonOrThrow(res, 'CTF submit');
                 if (data.correct) {
                     keepLocked = true;
                     out.className = 'p-2 rounded-lg bg-emerald-900/20 border border-emerald-800/50 text-sm text-emerald-300 ctf-bidi';
@@ -9430,7 +9444,7 @@ HTML_TEMPLATE = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ challenge_id: challengeId, question, attempt })
                 });
-                const data = await res.json();
+                const data = await _parseJsonOrThrow(res, 'CTF assistant');
                 if (!res.ok || !data.success) throw new Error(data.error || 'فشل مساعد AI.');
                 out.className = 'p-2 rounded-lg bg-violet-900/20 border border-violet-800/50 text-sm text-violet-200 whitespace-pre-wrap ctf-bidi';
                 out.innerText = data.reply || 'لا يوجد رد.';
@@ -18892,6 +18906,31 @@ def support_tickets_route():
     finally:
         if conn:
             conn.close()
+
+
+@app.errorhandler(HTTPException)
+def _api_http_exception(err):
+    if request.path.startswith('/api/'):
+        return jsonify({
+            "success": False,
+            "error": err.description or "HTTP error",
+            "status": int(err.code or 500),
+            "path": request.path,
+        }), int(err.code or 500)
+    return err
+
+
+@app.errorhandler(Exception)
+def _api_unhandled_exception(err):
+    if request.path.startswith('/api/'):
+        print(f"[TITAN] Unhandled API error on {request.path}: {err}")
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "status": 500,
+            "path": request.path,
+        }), 500
+    raise err
 
 
 # --- تهيئة قاعدة البيانات عند بدء التطبيق ---
