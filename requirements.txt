@@ -11,4 +11,9 @@ faker
 gunicorn
 opencv-python-headless
 numpy
+pytesseract
 psycopg2-binary
+reportlab
+arabic-reshaper
+python-bidi
+pyttsx3
