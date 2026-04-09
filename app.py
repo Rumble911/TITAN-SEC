@@ -7968,7 +7968,7 @@ HTML_TEMPLATE = """
                         context: { audience, sensitivity, purpose }
                     })
                 });
-                const data = await res.json();
+                const data = await _parseJsonOrThrow(res, 'Crypt advisor chat');
                 if (!res.ok || !data.success) throw new Error(data.error || 'تعذر فتح الدردشة');
 
                 window.__cryptAdvisorConversationId = data.conversation_id || window.__cryptAdvisorConversationId;
@@ -7984,7 +7984,7 @@ HTML_TEMPLATE = """
                 if (kdf && rec.kdf_profile) kdf.value = rec.kdf_profile;
                 if (out && rec.output_format) out.value = rec.output_format;
             } catch (e) {
-                _cryptAdvisorRenderBubble('assistant', 'تعذر فتح الدردشة الآن. ' + ((e && e.message) ? e.message : ''));
+                _cryptAdvisorRenderBubble('assistant', 'تعذر فتح الدردشة الآن. ' + ((e && e.message) ? e.message : 'خطأ غير معروف'));
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'إرسال'; }
             }
