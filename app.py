@@ -97,6 +97,19 @@ DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://v7ivnpxzgpdsgq4akznvp
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 DO_AI_MODEL = os.environ.get('DO_AI_MODEL', 'tor1')
 
+# --- ElevenLabs TTS Config ---
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', 'sk_09b6fc850135a1f18b2f5775ee3f8ca92b97a34b2957d92a').strip()
+ELEVENLABS_VOICE_ID = os.environ.get('ELEVENLABS_VOICE_ID', 'JBFqnCBsd6RMkjVDRZzb').strip()
+ELEVENLABS_MODEL_ID = os.environ.get('ELEVENLABS_MODEL_ID', 'eleven_multilingual_v2').strip()
+ELEVENLABS_OUTPUT_FORMAT = os.environ.get('ELEVENLABS_OUTPUT_FORMAT', 'mp3_44100_128').strip()
+_ELEVENLABS_AUDIO_CACHE_LOCK = threading.Lock()
+_ELEVENLABS_AUDIO_CACHE: dict[str, dict[str, object]] = {}
+_ELEVENLABS_AUDIO_CACHE_TTL_SECONDS = 1200
+_ELEVENLABS_AUDIO_CACHE_MAX_ITEMS = 48
+_ELEVENLABS_VOICES_CACHE_LOCK = threading.Lock()
+_ELEVENLABS_VOICES_CACHE: dict[str, object] = {'at': 0.0, 'voices': []}
+_ELEVENLABS_VOICES_CACHE_TTL_SECONDS = 900
+
 AI_SYSTEM_PROMPT = """
 أنت TITAN، مساعد ذكي وشخصية حقيقية — مش مجرد برنامج.
 
@@ -1363,6 +1376,166 @@ def _call_do_ai_multimodal(
     return _repair_garbled_ai_reply("\n".join(chunks).strip(), context_hint=message[:200])
 
 
+def _elevenlabs_tts_convert(
+    text: str,
+    voice_id: str | None = None,
+    model_id: str | None = None,
+    output_format: str | None = None,
+) -> tuple[bytes, str]:
+    def _to_float(value: object, default: float = 0.0) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except Exception:
+                return default
+        return default
+
+    api_key = (ELEVENLABS_API_KEY or '').strip()
+    if not api_key:
+        raise ValueError('ELEVENLABS_API_KEY is not set')
+
+    clean_text = str(text or '').strip()
+    if not clean_text:
+        raise ValueError('text is required')
+    if len(clean_text) > 5000:
+        clean_text = clean_text[:5000]
+
+    v_id = (voice_id or ELEVENLABS_VOICE_ID or '').strip()
+    if not v_id:
+        raise ValueError('voice_id is required')
+
+    effective_model_id = (model_id or ELEVENLABS_MODEL_ID or 'eleven_multilingual_v2').strip()
+    effective_output_format = (output_format or ELEVENLABS_OUTPUT_FORMAT or 'mp3_44100_128').strip()
+    cache_key = hashlib.sha256((v_id + '|' + effective_model_id + '|' + effective_output_format + '|' + clean_text).encode('utf-8')).hexdigest()
+    now_ts = time.time()
+
+    with _ELEVENLABS_AUDIO_CACHE_LOCK:
+        stale = [k for k, v in _ELEVENLABS_AUDIO_CACHE.items() if (now_ts - _to_float(v.get('at', 0), 0.0)) > _ELEVENLABS_AUDIO_CACHE_TTL_SECONDS]
+        for k in stale:
+            _ELEVENLABS_AUDIO_CACHE.pop(k, None)
+
+        cached = _ELEVENLABS_AUDIO_CACHE.get(cache_key)
+        if cached:
+            raw_audio = cached.get('audio')
+            if isinstance(raw_audio, (bytes, bytearray)):
+                return bytes(raw_audio), str(cached.get('content_type') or 'audio/mpeg')
+
+    body = {
+        'text': clean_text,
+        'model_id': effective_model_id,
+        'output_format': effective_output_format,
+    }
+    headers = {
+        'xi-api-key': api_key,
+        'Content-Type': 'application/json',
+        'Accept': 'audio/mpeg',
+    }
+
+    res = requests.post(
+        f'https://api.elevenlabs.io/v1/text-to-speech/{urllib.parse.quote(v_id)}',
+        headers=headers,
+        json=body,
+        timeout=75,
+    )
+    res.raise_for_status()
+    content_type = str(res.headers.get('content-type') or 'audio/mpeg').split(';')[0].strip().lower()
+    audio_data = res.content
+
+    with _ELEVENLABS_AUDIO_CACHE_LOCK:
+        if len(_ELEVENLABS_AUDIO_CACHE) >= _ELEVENLABS_AUDIO_CACHE_MAX_ITEMS:
+            oldest_key = None
+            oldest_at = now_ts
+            for k, v in _ELEVENLABS_AUDIO_CACHE.items():
+                at = _to_float(v.get('at', 0), 0.0)
+                if at <= oldest_at:
+                    oldest_at = at
+                    oldest_key = k
+            if oldest_key:
+                _ELEVENLABS_AUDIO_CACHE.pop(oldest_key, None)
+        _ELEVENLABS_AUDIO_CACHE[cache_key] = {
+            'at': now_ts,
+            'audio': audio_data,
+            'content_type': content_type,
+        }
+
+    return audio_data, content_type
+
+
+def _elevenlabs_list_voices(force_refresh: bool = False) -> list[dict[str, str]]:
+    api_key = (ELEVENLABS_API_KEY or '').strip()
+    if not api_key:
+        raise ValueError('ELEVENLABS_API_KEY is not set')
+
+    now_ts = time.time()
+    with _ELEVENLABS_VOICES_CACHE_LOCK:
+        cache_raw_at = _ELEVENLABS_VOICES_CACHE.get('at', 0.0)
+        cache_at = float(cache_raw_at) if isinstance(cache_raw_at, (int, float)) else 0.0
+        cache_voices = _ELEVENLABS_VOICES_CACHE.get('voices')
+        if (not force_refresh) and isinstance(cache_voices, list) and cache_voices and (now_ts - cache_at) <= _ELEVENLABS_VOICES_CACHE_TTL_SECONDS:
+            return [x for x in cache_voices if isinstance(x, dict)]
+
+    res = requests.get(
+        'https://api.elevenlabs.io/v1/voices',
+        headers={'xi-api-key': api_key, 'Accept': 'application/json'},
+        timeout=35,
+    )
+    res.raise_for_status()
+    data = res.json() if res.content else {}
+    raw_voices = data.get('voices') if isinstance(data, dict) else []
+    raw_voices = raw_voices if isinstance(raw_voices, list) else []
+
+    voices: list[dict[str, str]] = []
+    for item in raw_voices:
+        if not isinstance(item, dict):
+            continue
+        vid = str(item.get('voice_id') or '').strip()
+        if not vid:
+            continue
+        name = str(item.get('name') or vid).strip()
+        labels_raw = item.get('labels')
+        labels: dict[str, object] = labels_raw if isinstance(labels_raw, dict) else {}
+        lang = str(labels.get('language') or labels.get('accent') or '').strip()
+        gender = str(labels.get('gender') or '').strip()
+        category = str(item.get('category') or '').strip().lower()
+        desc = ' • '.join([x for x in [lang, gender] if x])
+        voices.append({
+            'voice_id': vid,
+            'name': name,
+            'description': desc,
+            'category': category,
+            'language': str(lang or '').strip().lower(),
+        })
+
+    with _ELEVENLABS_VOICES_CACHE_LOCK:
+        _ELEVENLABS_VOICES_CACHE['at'] = now_ts
+        _ELEVENLABS_VOICES_CACHE['voices'] = voices
+
+    return voices
+
+
+def _elevenlabs_pick_api_compatible_voice(exclude_voice_id: str = '') -> str:
+    voices = _elevenlabs_list_voices(force_refresh=False)
+    blocked = str(exclude_voice_id or '').strip()
+    if not isinstance(voices, list):
+        return ''
+
+    preferred = ''
+    for v in voices:
+        if not isinstance(v, dict):
+            continue
+        vid = str(v.get('voice_id') or '').strip()
+        if not vid or vid == blocked:
+            continue
+        category = str(v.get('category') or '').strip().lower()
+        if category == 'library':
+            continue
+        preferred = vid
+        break
+    return preferred
+
+
 AI_CHAT_SESSIONS: dict[str, dict[str, object]] = {}
 
 
@@ -1401,8 +1574,132 @@ def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
         + f"- تصنيف الموضوع الحالي: {topic}. حافظ على الاستمرارية مع نفس سياق المحادثة.\n"
         + "- عند السؤال عن آلية عمل TITAN أو مكوناته أو أدواته، اشرحها كوحدات: المعمارية، المصادقة، الحماية، الأدوات، API، وتدفقات العمل.\n"
         + "- عند ذكر عمليات المنصة، اذكر مسارات API ذات الصلة عندما تكون مفيدة.\n\n"
+        + "- إذا السؤال متعلق بالأمن السيبراني أو الهجمات: اختم الرد دائماً بقسمين واضحين:\n"
+        + "  1) خيارات هجمات تدريبية مقترحة (3-5 خيارات للدراسة الدفاعية)\n"
+        + "  2) كويز سريع من 3 أسئلة متعددة الخيارات (A/B/C/D) مع الإجابات الصحيحة في النهاية.\n"
+        + "- اجعل الشرح مرتب بعناوين قصيرة ونقاط عملية.\n\n"
         + (kb_context or "Knowledge context from TITAN KB is unavailable right now.")
     )
+
+
+def _ai_attack_suggestions_for_text(user_text: str, lang: str = 'ar', max_items: int = 5) -> list[dict[str, str]]:
+    text = str(user_text or '').strip()
+    suggestions: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    top = _learning_suggest_attack_type(text)
+    if isinstance(top, dict):
+        canonical = str(top.get('canonical') or '').strip().lower()
+        if canonical:
+            suggestions.append({
+                'canonical': canonical,
+                'title': str(top.get('label_ar') or canonical) if lang == 'ar' else str(top.get('label_en') or canonical),
+            })
+            seen.add(canonical)
+
+    q = _learning_norm_for_match(text)
+    scored: list[tuple[float, dict[str, object]]] = []
+    for item in _LEARNING_ATTACK_NAME_CATALOG:
+        canonical = str(item.get('canonical') or '').strip().lower()
+        if not canonical or canonical in seen:
+            continue
+        aliases_obj = item.get('aliases')
+        aliases_src = aliases_obj if isinstance(aliases_obj, list) else []
+        aliases = [canonical] + [str(x).strip() for x in aliases_src if str(x).strip()]
+        best = 0.0
+        for a in aliases:
+            norm_a = _learning_norm_for_match(a)
+            if not norm_a:
+                continue
+            s = difflib.SequenceMatcher(None, q, norm_a).ratio() if q else 0.0
+            if q and (q in norm_a or norm_a in q):
+                s = max(s, 0.82)
+            if s > best:
+                best = s
+        scored.append((best, item))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    for score, item in scored:
+        if len(suggestions) >= max_items:
+            break
+        canonical = str(item.get('canonical') or '').strip().lower()
+        if not canonical or canonical in seen:
+            continue
+        # Keep at least some meaningful relevance when query exists; otherwise use curated defaults.
+        if q and score < 0.28 and len(suggestions) >= 2:
+            continue
+        suggestions.append({
+            'canonical': canonical,
+            'title': str(item.get('label_ar') or canonical) if lang == 'ar' else str(item.get('label_en') or canonical),
+        })
+        seen.add(canonical)
+
+    if not suggestions:
+        defaults = ['phishing', 'ransomware', 'xss', 'sql injection', 'ddos']
+        for can in defaults:
+            if len(suggestions) >= max_items:
+                break
+            hit = next((x for x in _LEARNING_ATTACK_NAME_CATALOG if str(x.get('canonical') or '').strip().lower() == can), None)
+            if not hit:
+                continue
+            suggestions.append({
+                'canonical': can,
+                'title': str(hit.get('label_ar') or can) if lang == 'ar' else str(hit.get('label_en') or can),
+            })
+
+    return suggestions[:max_items]
+
+
+def _ai_quiz_for_suggestions(suggestions: list[dict[str, str]], lang: str = 'ar') -> list[dict[str, object]]:
+    picks = suggestions[:3] if suggestions else []
+    if len(picks) < 3:
+        fallback = [
+            {'canonical': 'phishing', 'title': 'تصيد احتيالي' if lang == 'ar' else 'Phishing'},
+            {'canonical': 'ransomware', 'title': 'هجوم فدية' if lang == 'ar' else 'Ransomware'},
+            {'canonical': 'xss', 'title': 'ثغرة XSS' if lang == 'ar' else 'XSS'},
+        ]
+        for f in fallback:
+            if len(picks) >= 3:
+                break
+            if not any(str(x.get('canonical')) == f['canonical'] for x in picks):
+                picks.append(f)
+
+    if lang == 'en':
+        return [
+            {
+                'q': 'What is the safest first step before handling a suspected attack?',
+                'options': ['A) Ignore low alerts', 'B) Validate indicators and scope quickly', 'C) Restart all systems', 'D) Share credentials internally'],
+                'answer': 'B'
+            },
+            {
+                'q': f"Which control best reduces risk from {picks[0].get('title', 'this attack')}?",
+                'options': ['A) Disable logging', 'B) Least privilege + monitoring', 'C) Publicly expose admin port', 'D) Reuse old passwords'],
+                'answer': 'B'
+            },
+            {
+                'q': 'After containment, what should happen next?',
+                'options': ['A) Skip root-cause analysis', 'B) Immediate production rollback without checks', 'C) Root-cause fix and hardening validation', 'D) Delete all evidence'],
+                'answer': 'C'
+            },
+        ]
+
+    return [
+        {
+            'q': 'ما أول خطوة آمنة عند الاشتباه بهجوم؟',
+            'options': ['A) تجاهل التنبيه', 'B) التحقق السريع من المؤشرات ونطاق الأثر', 'C) حذف السجلات', 'D) مشاركة كلمات المرور'],
+            'answer': 'B'
+        },
+        {
+            'q': f"أي ضابط دفاعي أفضل لتقليل خطر {picks[0].get('title', 'الهجمة')}؟",
+            'options': ['A) تعطيل المراقبة', 'B) أقل صلاحية + مراقبة مستمرة', 'C) فتح المنافذ الإدارية للعامة', 'D) إعادة استخدام كلمات المرور'],
+            'answer': 'B'
+        },
+        {
+            'q': 'بعد الاحتواء، ما الخطوة الصحيحة؟',
+            'options': ['A) إغلاق الحادث بدون تحليل', 'B) تجاهل السبب الجذري', 'C) إصلاح السبب الجذري والتحصين والتحقق', 'D) حذف الأدلة'],
+            'answer': 'C'
+        },
+    ]
 
 
 def _call_do_ai_with_history(
@@ -4230,17 +4527,21 @@ HTML_TEMPLATE = """
 
 
             <!-- ===== AI SECTION ===== -->
-            <div id="ai-section" class="hidden fixed right-4 bottom-24 z-[9998] w-[min(92vw,34rem)] max-h-[78vh] overflow-y-auto rounded-2xl border border-purple-900/40 bg-slate-950/96 shadow-[0_0_40px_rgba(139,92,246,0.24)] p-4 space-y-4" style="display:none;">
-                <div class="flex items-center justify-between border-b border-slate-700 pb-2">
-                    <h2 class="text-lg font-bold text-purple-300">&#129302; TITAN AI</h2>
+            <div id="ai-section" class="hidden fixed right-4 bottom-24 z-[9998] w-[min(96vw,42rem)] max-h-[84vh] overflow-y-auto rounded-2xl border border-purple-900/40 bg-slate-950/96 shadow-[0_0_40px_rgba(139,92,246,0.24)] p-4 space-y-4" style="display:none;">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+                    <div>
+                        <h2 class="text-lg font-black text-purple-300 tracking-wide">&#129302; TITAN AI</h2>
+                        <div class="text-[11px] text-gray-400">مساعد أمني ذكي: شرح، تنظيم، وأسئلة تدريبية</div>
+                    </div>
                     <button type="button" onclick="closeAiBubble()" class="text-xs px-2 py-1 rounded-lg border border-slate-700 text-gray-300 hover:bg-slate-800">✕</button>
                 </div>
 
                 <div class="flex flex-wrap items-center justify-start gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700">
                     <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-300 font-bold">TITAN</span>
+                        <span class="text-xs text-gray-300 font-bold">لوحة التحكم</span>
+                        <span class="text-[10px] px-2 py-1 rounded border border-emerald-700/50 bg-emerald-900/20 text-emerald-300">Online</span>
                     </div>
-                    <div class="flex items-center justify-end gap-2 ml-auto">
+                    <div class="grid grid-cols-3 gap-2 w-full sm:w-auto sm:ml-auto">
                         <button id="ai-subtab-support" onclick="showAiSubTab('support')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Support</button>
                         <button id="ai-subtab-analysis" onclick="showAiSubTab('analysis')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Analysis</button>
                         <button id="ai-subtab-chat" onclick="showAiSubTab('chat')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-purple-700/50 bg-purple-900/40 text-purple-300">Chat</button>
@@ -4248,17 +4549,33 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div id="ai-sub-content-chat" class="space-y-4">
-                <div class="bg-slate-900/60 rounded-xl border border-purple-900/30 p-3">
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="text-xs font-bold text-purple-300">المحادثات السابقة</div>
-                        <button type="button" onclick="loadAiConversations()" class="text-[11px] px-2 py-1 rounded border border-slate-700 text-gray-300 hover:bg-slate-800">تحديث</button>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                    <div class="lg:col-span-1 bg-slate-900/60 rounded-xl border border-purple-900/30 p-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="text-xs font-bold text-purple-300">المحادثات السابقة</div>
+                            <button type="button" onclick="loadAiConversations()" class="text-[11px] px-2 py-1 rounded border border-slate-700 text-gray-300 hover:bg-slate-800">تحديث</button>
+                        </div>
+                        <div id="ai-conv-list" class="max-h-44 overflow-y-auto overflow-x-hidden space-y-1 text-xs text-gray-300"></div>
                     </div>
-                    <div id="ai-conv-list" class="max-h-28 overflow-y-auto overflow-x-hidden space-y-1 text-xs text-gray-300"></div>
+
+                    <div class="lg:col-span-2 bg-slate-900/60 rounded-xl border border-indigo-900/30 p-3 space-y-2">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <div class="text-xs font-bold text-indigo-300">إجراءات سريعة</div>
+                            <button type="button" onclick="startNewAiConversation()" class="text-[11px] px-2.5 py-1 rounded-lg border border-indigo-800/50 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">+ محادثة جديدة</button>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button onclick="aiQuickPrompt('اعطني خطة تعلم امن سيبراني لمدة 30 يوم بطريقة عملية')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">خطة تعلم 30 يوم</button>
+                            <button onclick="aiQuickPrompt('اشرح لي الفرق بين XSS و SQLi مع مثال دفاعي مختصر')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">XSS vs SQLi</button>
+                            <button onclick="aiQuickPrompt('عندي تنبيه مشبوه في الشبكة، اعطني خطوات Incident Response مرتبة')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">Incident Response</button>
+                            <button onclick="aiQuickPrompt('اعطني اختبار سريع 3 اسئلة عن phishing وكيف اكتشفه')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">Quiz عن التصيّد</button>
+                        </div>
+                    </div>
                 </div>
-                <div id="ai-chat-shell" class="bg-slate-900/70 rounded-2xl border border-purple-900/30 overflow-hidden h-[34rem] flex flex-col">
+
+                <div id="ai-chat-shell" class="bg-slate-900/70 rounded-2xl border border-purple-900/30 overflow-hidden h-[32rem] md:h-[34rem] lg:h-[36rem] flex flex-col">
                     <div class="p-3 border-b border-slate-700 flex items-center justify-between gap-2">
                         <span class="text-purple-300 text-sm font-bold">&#128172; محادثة مع AI</span>
-                        <button type="button" onclick="startNewAiConversation()" class="text-xs px-2.5 py-1 rounded-lg border border-purple-800/50 bg-purple-900/20 text-purple-300 hover:bg-purple-800/30">+ محادثة جديدة</button>
+                        <span class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">اضغط Enter للإرسال</span>
                     </div>
                     <div id="ai-chat-meta" class="px-3 py-2 text-[11px] text-purple-200/90 bg-slate-950/70 border-b border-slate-800">الموضوع: عام • الذاكرة: فعالة</div>
                     <div id="ai-chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-slate-950/40 to-slate-900/20">
@@ -4279,6 +4596,11 @@ HTML_TEMPLATE = """
                             class="bg-purple-600 hover:bg-purple-500 text-white px-5 py-2 rounded-xl font-bold text-sm">
                             إرسال
                         </button>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button onclick="aiQuickPrompt('اشرحلي مبادئ Zero Trust بشكل بسيط')" class="px-2 py-1 text-[10px] rounded border border-slate-700 text-gray-300 bg-slate-900/40 hover:bg-slate-800">Zero Trust</button>
+                        <button onclick="aiQuickPrompt('اعطني checklist سريعة لتأمين سيرفر لينكس')" class="px-2 py-1 text-[10px] rounded border border-slate-700 text-gray-300 bg-slate-900/40 hover:bg-slate-800">Linux Hardening</button>
+                        <button onclick="aiQuickPrompt('كيف افحص ايميل مشبوه بطريقة دفاعية آمنة؟')" class="px-2 py-1 text-[10px] rounded border border-slate-700 text-gray-300 bg-slate-900/40 hover:bg-slate-800">Email Defense</button>
                     </div>
                     </div>
                 </div>
@@ -5111,8 +5433,9 @@ HTML_TEMPLATE = """
                     هذا القسم يجمع 3 مسارات تدريبية في مكان واحد: التعلم والمحاكاة، CTF، والهندسة الاجتماعية.
                 </div>
                 <div class="training-subtabs-shell rounded-xl p-2">
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                         <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 التعلم والمحاكاة</button>
+                        <button id="btn-training-ai-lab" onclick="setTrainingSubTab('ai-lab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🤖 AI Coach</button>
                         <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
                         <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
                     </div>
@@ -5473,6 +5796,68 @@ HTML_TEMPLATE = """
                         </div>
                         <div id="learningAttackDetail" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6">
                             اختر أي هجمة من القائمة لعرض شرح كامل عنها.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div id="ai-lab-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-cyan-300 border-b border-slate-700 pb-2">🤖 AI Training Coach</h2>
+
+                <div class="bg-cyan-950/20 border border-cyan-900/40 p-4 rounded-xl text-xs text-cyan-100/90 leading-6">
+                    هذا المسار مخصص للتوعية والمحاكاة الدفاعية فقط. يتم شرح الهجمات بشكل مفاهيمي مع خطة كشف واحتواء وتحصين، بدون أوامر هجومية أو خطوات اختراق تنفيذية.
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div class="p-2 rounded-lg border border-cyan-900/40 bg-cyan-950/20 text-[11px] text-cyan-200"><span class="font-black">1)</span> اختر نوع الهجمة ومستوى التدريب</div>
+                    <div class="p-2 rounded-lg border border-indigo-900/40 bg-indigo-950/20 text-[11px] text-indigo-200"><span class="font-black">2)</span> توليد سيناريو كامل + خطة دفاع</div>
+                    <div class="p-2 rounded-lg border border-emerald-900/40 bg-emerald-950/20 text-[11px] text-emerald-200"><span class="font-black">3)</span> اسأل المدرب الصوتي وخذ Quiz</div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3 shadow-[0_8px_22px_rgba(0,0,0,0.26)]">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <h3 class="text-sm font-bold text-cyan-300">AI Scenario Generator (Defensive)</h3>
+                            <span class="text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300">Safe Mode</span>
+                        </div>
+                        <div class="text-[11px] text-gray-400">ولّد سيناريو واقعي مرتب: مؤشرات، أثر، خطة احتواء، وخطوات التحصين.</div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                            <input id="trainingAiAttackType" type="text" placeholder="نوع الهجمة (مثال: phishing, ransomware, xss)" class="md:col-span-2 p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
+                            <select id="trainingAiLevel" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="beginner">Beginner</option>
+                                <option value="intermediate" selected>Intermediate</option>
+                                <option value="advanced">Advanced</option>
+                            </select>
+                            <select id="trainingAiLang" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                                <option value="ar" selected>العربية</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                        <textarea id="trainingAiObjective" rows="2" placeholder="هدف التمرين (اختياري)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
+                        <textarea id="trainingAiOrgContext" rows="2" placeholder="سياق المؤسسة/البيئة (اختياري)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
+                        <button onclick="trainingAiGenerateScenario()" class="w-full py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold hover:bg-cyan-800/40">توليد سيناريو تدريبي كامل</button>
+                        <div id="trainingAiResult" class="hidden p-3 rounded-lg bg-black/40 border border-slate-700 text-xs leading-6 max-h-[30rem] overflow-y-auto"></div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3 shadow-[0_8px_22px_rgba(0,0,0,0.26)]">
+                        <h3 class="text-sm font-bold text-indigo-300">AI Coach Chat</h3>
+                        <div class="text-[11px] text-gray-400">اسأل المدرب مباشرة عن الكشف والاحتواء والتحصين، ثم حوّل الرد إلى صوت.</div>
+                        <div id="trainingAiChatFlow" class="h-80 overflow-y-auto rounded-lg border border-slate-700 bg-black/35 p-3 space-y-2 text-xs"></div>
+                        <textarea id="trainingAiChatInput" rows="2" placeholder="اسأل AI Coach عن الكشف والاحتواء والتحصين..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
+                        <button onclick="trainingAiCoachSend()" class="w-full py-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold hover:bg-indigo-800/40">إرسال</button>
+
+                        <div class="pt-2 border-t border-slate-800 space-y-2">
+                            <div class="text-[11px] text-indigo-200/90 font-bold">ElevenLabs Voice</div>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                                <select id="trainingAiVoiceSelect" class="md:col-span-3 p-2 rounded bg-slate-900 border border-slate-700 text-[11px] outline-none"></select>
+                                <button onclick="trainingAiLoadVoices(true)" class="px-2 py-2 rounded bg-slate-800 border border-slate-700 text-[11px] font-bold text-gray-200 hover:bg-slate-700">تحديث الأصوات</button>
+                            </div>
+                            <input id="trainingAiVoiceId" type="text" placeholder="Voice ID يدوي (اختياري - يتجاوز القائمة)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-[11px] outline-none" dir="ltr">
+                            <textarea id="trainingAiTtsText" rows="2" placeholder="نص التحويل لصوت (إذا تركته فارغ سيتم استخدام آخر رد من AI Coach)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
+                            <button onclick="trainingAiSpeakLatest()" class="w-full py-2 rounded bg-emerald-900/35 border border-emerald-800/50 text-emerald-300 text-xs font-bold hover:bg-emerald-800/40">تشغيل بالصوت (ElevenLabs)</button>
+                            <audio id="trainingAiVoicePlayer" controls class="w-full hidden"></audio>
+                            <a id="trainingAiVoiceDownload" class="hidden w-full text-center py-2 rounded bg-cyan-900/25 border border-cyan-800/50 text-cyan-300 text-xs font-bold hover:bg-cyan-800/35" download="titan-elevenlabs-tts.mp3">تنزيل الصوت MP3</a>
                         </div>
                     </div>
                 </div>
@@ -6854,7 +7239,7 @@ HTML_TEMPLATE = """
 
         // --- التحكم بالتبويبات ---
         const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','training','ctf','ir','forensics','se','audio','video','qr','identity','admin'];
-        const TRAINING_SUB_TABS = ['learninglab', 'ctf', 'se'];
+        const TRAINING_SUB_TABS = ['learninglab', 'ai-lab', 'ctf', 'se'];
         let __trainingSubTab = 'learninglab';
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
@@ -7286,6 +7671,299 @@ HTML_TEMPLATE = """
             if (next === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if (next === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if (next === 'learninglab' && typeof learningInitCatalog === 'function') learningInitCatalog();
+            if (next === 'ai-lab' && typeof trainingAiCoachInit === 'function') trainingAiCoachInit();
+        }
+
+        function trainingAiCoachInit() {
+            const flow = document.getElementById('trainingAiChatFlow');
+            if (!flow) return;
+            if (flow.dataset.ready === '1') return;
+            flow.dataset.ready = '1';
+            window.__trainingAiLastAssistantReply = '';
+            window.__trainingAiLastAudioUrl = '';
+            const welcome = document.createElement('div');
+            welcome.className = 'p-2 rounded border border-cyan-900/40 bg-cyan-950/15 text-cyan-100';
+            welcome.textContent = 'مرحباً، أنا AI Coach الدفاعي. أقدر أشرح أي هجمة مفاهيمياً، وأبني لك خطة كشف/احتواء/تحصين بشكل تدريبي آمن.';
+            flow.appendChild(welcome);
+            trainingAiLoadVoices(false);
+        }
+
+        function _trainingAiEscape(v) {
+            const div = document.createElement('div');
+            div.textContent = String(v ?? '');
+            return div.innerHTML;
+        }
+
+        function _trainingAiList(items) {
+            const arr = Array.isArray(items) ? items.filter(Boolean) : [];
+            if (!arr.length) return '<div class="text-[11px] text-gray-500">N/A</div>';
+            return arr.map((x) => `<div class="text-[11px] text-gray-200">• ${_trainingAiEscape(x)}</div>`).join('');
+        }
+
+        function _trainingAiRenderScenario(sim, analysis) {
+            const title = _trainingAiEscape(sim?.title || 'Scenario');
+            const severity = _trainingAiEscape(sim?.severity || 'N/A');
+            const category = _trainingAiEscape(sim?.category || 'N/A');
+            const level = _trainingAiEscape(sim?.training_level_label || sim?.training_level || 'N/A');
+            const risk = Number(analysis?.risk_score || 0);
+            const riskTone = risk >= 75 ? 'text-rose-300 border-rose-800/40 bg-rose-900/15' : (risk >= 45 ? 'text-amber-300 border-amber-800/40 bg-amber-900/15' : 'text-emerald-300 border-emerald-800/40 bg-emerald-900/15');
+            return `
+                <div class="space-y-3">
+                    <div class="p-3 rounded border border-cyan-800/40 bg-cyan-950/20">
+                        <div class="text-sm font-bold text-cyan-200">${title}</div>
+                        <div class="text-[11px] text-cyan-300 mt-1">Category: ${category} • Severity: ${severity} • Level: ${level}</div>
+                        <div class="mt-2 inline-block px-2 py-1 rounded border ${riskTone} text-[11px] font-bold">Risk Score: ${_trainingAiEscape(risk)}</div>
+                    </div>
+
+                    <div class="p-3 rounded border border-slate-700 bg-black/30">
+                        <div class="text-[11px] font-bold text-violet-300 mb-1">شرح الهجمة (دفاعي)</div>
+                        <div class="text-[11px] text-gray-200 leading-6 whitespace-pre-wrap">${_trainingAiEscape(sim?.ai_explanation || sim?.summary || 'N/A')}</div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div class="p-2 rounded border border-slate-700 bg-slate-900/45">
+                            <div class="text-[10px] font-bold text-cyan-300 mb-1">Detection Plan</div>
+                            ${_trainingAiList(analysis?.detection_plan)}
+                        </div>
+                        <div class="p-2 rounded border border-slate-700 bg-slate-900/45">
+                            <div class="text-[10px] font-bold text-amber-300 mb-1">Containment & Response</div>
+                            ${_trainingAiList(analysis?.response_plan)}
+                        </div>
+                        <div class="p-2 rounded border border-slate-700 bg-slate-900/45 md:col-span-2">
+                            <div class="text-[10px] font-bold text-emerald-300 mb-1">Hardening Plan</div>
+                            ${_trainingAiList(analysis?.hardening_plan)}
+                        </div>
+                    </div>
+
+                    <div class="p-2 rounded border border-slate-700 bg-slate-900/45">
+                        <div class="text-[10px] font-bold text-fuchsia-300 mb-1">Training Checklist</div>
+                        ${_trainingAiList(sim?.training_checklist)}
+                    </div>
+                </div>
+            `;
+        }
+
+        async function trainingAiGenerateScenario() {
+            const attackType = String(document.getElementById('trainingAiAttackType')?.value || '').trim();
+            const objective = String(document.getElementById('trainingAiObjective')?.value || '').trim();
+            const orgContext = String(document.getElementById('trainingAiOrgContext')?.value || '').trim();
+            const trainingLevel = String(document.getElementById('trainingAiLevel')?.value || 'intermediate').trim();
+            const resultLang = String(document.getElementById('trainingAiLang')?.value || 'ar').trim();
+            const resultBox = document.getElementById('trainingAiResult');
+
+            if (!attackType) {
+                titanAlert('اكتب نوع الهجمة أولاً', 'error');
+                return;
+            }
+            if (!resultBox) return;
+
+            resultBox.classList.remove('hidden');
+            resultBox.innerHTML = '<div class="text-gray-400">جار توليد سيناريو تدريبي دفاعي...</div>';
+
+            try {
+                const res = await fetch('/api/learning/simulate', {
+                    method: 'POST',
+                    cache: 'no-store',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        custom_attack_type: attackType,
+                        custom_objective: objective,
+                        org_context: orgContext,
+                        training_level: trainingLevel,
+                        result_lang: resultLang
+                    })
+                });
+                const data = await _parseJsonOrThrow(res, 'Training AI simulate');
+                if (!data.success) {
+                    resultBox.innerHTML = `<div class="text-rose-300">${_trainingAiEscape(data.error || ('HTTP ' + res.status))}</div>`;
+                    return;
+                }
+                resultBox.innerHTML = _trainingAiRenderScenario(data.simulation || {}, data.analysis || {});
+                window.__trainingAiLastAssistantReply = String(data?.simulation?.ai_explanation || data?.simulation?.summary || '').trim();
+            } catch (e) {
+                resultBox.innerHTML = `<div class="text-rose-300">فشل الاتصال بالخادم: ${_trainingAiEscape(e?.message || String(e))}</div>`;
+            }
+        }
+
+        function _trainingAiAppendChat(role, text) {
+            const flow = document.getElementById('trainingAiChatFlow');
+            if (!flow) return;
+            const item = document.createElement('div');
+            const isAssistant = role === 'assistant';
+            item.className = 'p-2 rounded border text-[11px] leading-6 whitespace-pre-wrap ' + (isAssistant
+                ? 'border-cyan-800/40 bg-cyan-950/15 text-cyan-100'
+                : 'border-violet-800/40 bg-violet-950/20 text-violet-100');
+            item.innerHTML = (isAssistant ? '<div class="text-[10px] text-cyan-300 font-bold mb-1">AI Coach</div>' : '<div class="text-[10px] text-violet-300 font-bold mb-1">You</div>') + _trainingAiEscape(text || '');
+            flow.appendChild(item);
+            flow.scrollTop = flow.scrollHeight;
+        }
+
+        async function trainingAiLoadVoices(forceRefresh) {
+            const select = document.getElementById('trainingAiVoiceSelect');
+            const manualInput = document.getElementById('trainingAiVoiceId');
+            if (!select) return;
+
+            select.innerHTML = '<option value="">Loading voices...</option>';
+            try {
+                const url = '/api/tts/elevenlabs/voices' + (forceRefresh ? '?refresh=1' : '');
+                const res = await fetch(url, { cache: 'no-store' });
+                const data = await _parseJsonOrThrow(res, 'ElevenLabs voices');
+                if (!data.success) {
+                    select.innerHTML = '<option value="">Voice list unavailable</option>';
+                    return;
+                }
+
+                const voices = Array.isArray(data.voices) ? data.voices : [];
+                const defaultVoice = String(data.suggested_voice_id || data.default_voice_id || '');
+                if (!voices.length) {
+                    select.innerHTML = '<option value="">No voices found</option>';
+                    return;
+                }
+
+                const voiceRows = voices.filter((v) => String(v?.category || '').toLowerCase() !== 'library');
+                if (!voiceRows.length) {
+                    select.innerHTML = '<option value="">No API-compatible voices (library voices need paid plan)</option>';
+                    return;
+                }
+
+                const isArabicVoice = (v) => {
+                    const s = (String(v?.language || '') + ' ' + String(v?.description || '') + ' ' + String(v?.name || '')).toLowerCase();
+                    return s.includes('arabic') || s.includes(' ar') || s.startsWith('ar') || s.includes('(ar') || s.includes(' ar-');
+                };
+                const isEnglishVoice = (v) => {
+                    const s = (String(v?.language || '') + ' ' + String(v?.description || '') + ' ' + String(v?.name || '')).toLowerCase();
+                    return s.includes('english') || s.includes(' en') || s.startsWith('en') || s.includes('(en') || s.includes(' en-');
+                };
+
+                const arabicVoices = voiceRows.filter((v) => isArabicVoice(v));
+                const englishVoice = voiceRows.find((v) => isEnglishVoice(v) && !arabicVoices.some((a) => String(a?.voice_id || '') === String(v?.voice_id || '')));
+                const finalVoices = [...arabicVoices, ...(englishVoice ? [englishVoice] : [])];
+
+                if (!finalVoices.length) {
+                    select.innerHTML = '<option value="">No Arabic voices found (and no English fallback)</option>';
+                    return;
+                }
+
+                select.innerHTML = finalVoices.map((v) => {
+                    const vid = _trainingAiEscape(String(v.voice_id || ''));
+                    const name = _trainingAiEscape(String(v.name || v.voice_id || 'voice'));
+                    const desc = _trainingAiEscape(String(v.description || ''));
+                    const tag = isArabicVoice(v) ? 'AR' : (isEnglishVoice(v) ? 'EN' : 'VOICE');
+                    const label = desc ? `[${tag}] ${name} (${desc})` : `[${tag}] ${name}`;
+                    return `<option value="${vid}">${label}</option>`;
+                }).join('');
+
+                const wanted = String(manualInput?.value || '').trim() || defaultVoice;
+                if (wanted) {
+                    const exists = finalVoices.some((v) => String(v.voice_id || '') === wanted);
+                    if (exists) select.value = wanted;
+                }
+            } catch (e) {
+                select.innerHTML = '<option value="">Voice list unavailable</option>';
+            }
+        }
+
+        async function trainingAiCoachSend() {
+            const input = document.getElementById('trainingAiChatInput');
+            const msg = String(input?.value || '').trim();
+            if (!msg) return;
+
+            const attackType = String(document.getElementById('trainingAiAttackType')?.value || '').trim();
+            const orgContext = String(document.getElementById('trainingAiOrgContext')?.value || '').trim();
+            const trainingLevel = String(document.getElementById('trainingAiLevel')?.value || 'intermediate').trim();
+            const resultLang = String(document.getElementById('trainingAiLang')?.value || 'ar').trim();
+
+            _trainingAiAppendChat('user', msg);
+            if (input) input.value = '';
+
+            try {
+                const res = await fetch('/api/learning/coach/chat', {
+                    method: 'POST',
+                    cache: 'no-store',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: msg,
+                        custom_attack_type: attackType,
+                        org_context: orgContext,
+                        training_level: trainingLevel,
+                        result_lang: resultLang
+                    })
+                });
+                const data = await _parseJsonOrThrow(res, 'Training AI coach chat');
+                if (!data.success) {
+                    _trainingAiAppendChat('assistant', data.error || ('HTTP ' + res.status));
+                    return;
+                }
+                const replyText = String(data.reply || '');
+                window.__trainingAiLastAssistantReply = replyText;
+                _trainingAiAppendChat('assistant', replyText);
+            } catch (e) {
+                _trainingAiAppendChat('assistant', 'تعذر الاتصال بالخادم: ' + (e?.message || String(e)));
+            }
+        }
+
+        async function trainingAiSpeakLatest() {
+            const ttsInput = document.getElementById('trainingAiTtsText');
+            const player = document.getElementById('trainingAiVoicePlayer');
+            const manualVoiceId = String(document.getElementById('trainingAiVoiceId')?.value || '').trim();
+            const selectedVoiceId = String(document.getElementById('trainingAiVoiceSelect')?.value || '').trim();
+            const voiceId = manualVoiceId || selectedVoiceId;
+            const downloadLink = document.getElementById('trainingAiVoiceDownload');
+            const text = String(ttsInput?.value || '').trim() || String(window.__trainingAiLastAssistantReply || '').trim();
+
+            if (!text) {
+                titanAlert('لا يوجد نص للتحويل إلى صوت', 'error');
+                return;
+            }
+            if (!player) return;
+
+            try {
+                const res = await fetch('/api/tts/elevenlabs', {
+                    method: 'POST',
+                    cache: 'no-store',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text,
+                        voice_id: voiceId || undefined,
+                        model_id: 'eleven_multilingual_v2',
+                        output_format: 'mp3_44100_128'
+                    })
+                });
+
+                if (!res.ok) {
+                    let msg = 'فشل توليد الصوت';
+                    try {
+                        const data = await res.json();
+                        msg = String(data?.error || msg);
+                        if (String(data?.code || '').toLowerCase() === 'paid_plan_required') {
+                            msg = 'الصوت المختار من Library ويتطلب خطة مدفوعة. اختر صوتاً آخر من القائمة.';
+                            if (typeof trainingAiLoadVoices === 'function') trainingAiLoadVoices(false);
+                        }
+                    } catch (_) {
+                        msg = `HTTP ${res.status}`;
+                    }
+                    titanAlert(msg, 'error');
+                    return;
+                }
+
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const oldUrl = String(window.__trainingAiLastAudioUrl || '');
+                if (oldUrl) {
+                    try { URL.revokeObjectURL(oldUrl); } catch (_) {}
+                }
+                window.__trainingAiLastAudioUrl = url;
+                player.classList.remove('hidden');
+                player.src = url;
+                if (downloadLink) {
+                    downloadLink.classList.remove('hidden');
+                    downloadLink.href = url;
+                    downloadLink.download = 'titan-elevenlabs-tts.mp3';
+                }
+                await player.play();
+            } catch (e) {
+                titanAlert('تعذر الاتصال بخدمة الصوت: ' + (e?.message || String(e)), 'error');
+            }
         }
 
         const LEARNING_ATTACK_CATALOG = [
@@ -12313,7 +12991,11 @@ HTML_TEMPLATE = """
                         var lbl = aiTopicLabel(data.classification);
                         meta.textContent = 'الموضوع: ' + lbl + ' • الذاكرة: فعالة • Conversation: ' + (window.__titanAiConversationId || '-');
                     }
-                    replyInner.innerHTML = renderAiReplyPretty(data.reply);
+                    await typeAiReplyPretty(replyInner, data.reply);
+                    const extrasHtml = renderAiLearningExtras(data.suggested_attacks, data.quiz);
+                    if (extrasHtml) {
+                        replyInner.innerHTML += extrasHtml;
+                    }
                     loadAiConversations();
                 } else {
                     replyInner.textContent = data.error || ('فشل الطلب (HTTP ' + res.status + ')');
@@ -12374,6 +13056,92 @@ HTML_TEMPLATE = """
             }
             closeListIfOpen();
             return out.join('');
+        }
+
+        function _aiShortEscape(v) {
+            return _osintEscape(String(v || ''));
+        }
+
+        function renderAiLearningExtras(attacks, quiz) {
+            const attackRows = Array.isArray(attacks) ? attacks : [];
+            const quizRows = Array.isArray(quiz) ? quiz : [];
+            if (!attackRows.length && !quizRows.length) return '';
+
+            let html = '<div class="mt-3 space-y-3">';
+            if (attackRows.length) {
+                html += '<div class="p-2 rounded-xl border border-cyan-800/40 bg-cyan-950/20">'
+                    + '<div class="text-[11px] font-bold text-cyan-300 mb-2">خيارات هجمات مقترحة للتعلم الدفاعي</div>'
+                    + '<div class="flex flex-wrap gap-2">'
+                    + attackRows.map((a) => {
+                        const title = _aiShortEscape(a?.title || a?.canonical || 'Attack');
+                        const canonical = _aiShortEscape(a?.canonical || '');
+                        return '<button onclick="applyAiAttackSuggestion(' + "'" + canonical + "'" + ')" class="px-2 py-1 rounded-lg border border-cyan-700/50 bg-cyan-900/25 text-cyan-200 text-[11px] hover:bg-cyan-800/35">' + title + '</button>';
+                    }).join('')
+                    + '</div></div>';
+            }
+
+            if (quizRows.length) {
+                html += '<div class="p-2 rounded-xl border border-fuchsia-800/40 bg-fuchsia-950/20">'
+                    + '<div class="text-[11px] font-bold text-fuchsia-300 mb-2">Quiz سريع بعد الشرح</div>'
+                    + quizRows.map((q, idx) => {
+                        const qText = _aiShortEscape(q?.q || ('سؤال ' + (idx + 1)));
+                        const opts = Array.isArray(q?.options) ? q.options : [];
+                        const ans = _aiShortEscape(q?.answer || '');
+                        return '<div class="mb-2 p-2 rounded border border-slate-700 bg-black/25">'
+                            + '<div class="text-[11px] text-fuchsia-100 font-bold">' + (idx + 1) + ') ' + qText + '</div>'
+                            + '<div class="mt-1 space-y-1">' + opts.map((op) => '<div class="text-[11px] text-gray-200">• ' + _aiShortEscape(op) + '</div>').join('') + '</div>'
+                            + '<div class="mt-1 text-[10px] text-emerald-300">الإجابة الصحيحة: ' + ans + '</div>'
+                            + '</div>';
+                    }).join('')
+                    + '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function applyAiAttackSuggestion(canonical) {
+            const input = document.getElementById('ai-chat-input');
+            if (!input) return;
+            const can = String(canonical || '').trim();
+            if (!can) return;
+            input.value = 'اشرحلي هجمة ' + can + ' بشكل دفاعي كامل، وبالآخر اعطني كويز 3 اسئلة.';
+            input.focus();
+        }
+
+        function aiQuickPrompt(text) {
+            const input = document.getElementById('ai-chat-input');
+            if (!input) return;
+            input.value = String(text || '').trim();
+            input.focus();
+        }
+
+        async function typeAiReplyPretty(targetEl, text) {
+            if (!targetEl) return;
+            const src = String(text || '');
+            if (!src) {
+                targetEl.innerHTML = '';
+                return;
+            }
+            const speed = 12;
+            let i = 0;
+            const cursor = '<span class="animate-pulse text-purple-300">▋</span>';
+            return new Promise((resolve) => {
+                const tick = () => {
+                    i = Math.min(src.length, i + speed);
+                    const partial = src.slice(0, i);
+                    targetEl.innerHTML = renderAiReplyPretty(partial) + (i < src.length ? cursor : '');
+                    const box = document.getElementById('ai-chat-messages');
+                    if (box) box.scrollTop = box.scrollHeight;
+                    if (i < src.length) {
+                        requestAnimationFrame(tick);
+                    } else {
+                        targetEl.innerHTML = renderAiReplyPretty(src);
+                        resolve(true);
+                    }
+                };
+                tick();
+            });
         }
 
         function startNewAiConversation() {
@@ -18353,6 +19121,9 @@ def ai_chat():
 
         system_prompt = _build_ai_system_prompt(topic, user_text=message)
         reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt, model=model)
+        detected_lang = _detect_user_lang(message)
+        suggested_attacks = _ai_attack_suggestions_for_text(message, lang=detected_lang, max_items=5)
+        quiz = _ai_quiz_for_suggestions(suggested_attacks, lang=detected_lang)
 
         now = datetime.datetime.now().isoformat()
         preview = _ai_trim_title(reply, 120)
@@ -18385,7 +19156,9 @@ def ai_chat():
             "success": True,
             "reply": reply,
             "conversation_id": conversation_id,
-            "classification": topic
+            "classification": topic,
+            "suggested_attacks": suggested_attacks,
+            "quiz": quiz,
         })
     except Exception as e:
         print(f"[TITAN AI] Error: {e}")
@@ -18559,6 +19332,210 @@ def ai_analyze():
 @app.route('/api/ai/models', methods=['GET'])
 def ai_models():
     return jsonify({"models": ["TITAN-SEC AI (DigitalOcean)"], "success": True})
+
+
+@app.route('/api/tts/elevenlabs', methods=['POST'])
+def elevenlabs_tts_route():
+    user_id, err = _get_logged_in_user_id()
+    if err:
+        return err
+    assert user_id is not None
+
+    data = request.get_json(silent=True) or {}
+    text = str(data.get('text') or '').strip()
+    voice_id = str(data.get('voice_id') or ELEVENLABS_VOICE_ID).strip()
+    model_id = str(data.get('model_id') or ELEVENLABS_MODEL_ID).strip()
+    output_format = str(data.get('output_format') or ELEVENLABS_OUTPUT_FORMAT).strip()
+
+    if not text:
+        return jsonify({'success': False, 'error': 'text مطلوب'}), 400
+    if not ELEVENLABS_API_KEY:
+        return jsonify({'success': False, 'error': 'ELEVENLABS_API_KEY غير مضبوط'}), 500
+
+    try:
+        before_len = len(_ELEVENLABS_AUDIO_CACHE)
+        audio_bytes, content_type = _elevenlabs_tts_convert(
+            text=text,
+            voice_id=voice_id,
+            model_id=model_id,
+            output_format=output_format,
+        )
+        add_audit_log(
+            'ElevenLabs TTS',
+            f'voice={voice_id} chars={len(text)} format={output_format}',
+            username=session.get('username', ''),
+        )
+        resp = send_file(
+            io.BytesIO(audio_bytes),
+            mimetype=content_type or 'audio/mpeg',
+            as_attachment=False,
+            download_name='titan-elevenlabs-tts.mp3',
+        )
+        after_len = len(_ELEVENLABS_AUDIO_CACHE)
+        resp.headers['X-TITAN-TTS-Cache'] = 'hit-or-memory' if after_len == before_len else 'miss'
+        resp.headers['X-TITAN-TTS-Voice'] = voice_id
+        return resp
+    except requests.HTTPError as e:
+        status_code = 502
+        details = ''
+        code = ''
+        try:
+            status_code = int(e.response.status_code or 502)
+            details = str(e.response.text or '').strip()[:350]
+            raw = e.response.json() if e.response is not None else {}
+            if isinstance(raw, dict):
+                detail_obj = raw.get('detail')
+                if isinstance(detail_obj, dict):
+                    code = str(detail_obj.get('code') or '').strip().lower()
+        except Exception:
+            pass
+
+        if code == 'paid_plan_required':
+            try:
+                fallback_voice = _elevenlabs_pick_api_compatible_voice(exclude_voice_id=voice_id)
+                if fallback_voice:
+                    before_len_fb = len(_ELEVENLABS_AUDIO_CACHE)
+                    audio_bytes, content_type = _elevenlabs_tts_convert(
+                        text=text,
+                        voice_id=fallback_voice,
+                        model_id=model_id,
+                        output_format=output_format,
+                    )
+                    add_audit_log(
+                        'ElevenLabs TTS Fallback',
+                        f'fallback_voice={fallback_voice} from={voice_id} chars={len(text)}',
+                        username=session.get('username', ''),
+                    )
+                    resp = send_file(
+                        io.BytesIO(audio_bytes),
+                        mimetype=content_type or 'audio/mpeg',
+                        as_attachment=False,
+                        download_name='titan-elevenlabs-tts.mp3',
+                    )
+                    after_len_fb = len(_ELEVENLABS_AUDIO_CACHE)
+                    resp.headers['X-TITAN-TTS-Cache'] = 'hit-or-memory' if after_len_fb == before_len_fb else 'miss'
+                    resp.headers['X-TITAN-TTS-Voice'] = fallback_voice
+                    resp.headers['X-TITAN-TTS-Fallback'] = '1'
+                    return resp
+            except Exception:
+                pass
+
+            return jsonify({
+                'success': False,
+                'error': 'الصوت المختار من Library ويتطلب خطة مدفوعة للـ API. اختر صوتًا غير Library أو حدّث الاشتراك.',
+                'code': 'paid_plan_required',
+            }), 402
+
+        return jsonify({'success': False, 'error': f'ElevenLabs request failed: {details or str(e)}'}), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'فشل توليد الصوت: {str(e)}'}), 500
+
+
+@app.route('/api/tts/elevenlabs/voices', methods=['GET'])
+def elevenlabs_voices_route():
+    user_id, err = _get_logged_in_user_id()
+    if err:
+        return err
+    assert user_id is not None
+
+    if not ELEVENLABS_API_KEY:
+        return jsonify({'success': False, 'error': 'ELEVENLABS_API_KEY غير مضبوط'}), 500
+
+    force_refresh = str(request.args.get('refresh') or '').strip().lower() in ('1', 'true', 'yes')
+    try:
+        voices = _elevenlabs_list_voices(force_refresh=force_refresh)
+        api_compatible = [v for v in voices if isinstance(v, dict) and str(v.get('category') or '').strip().lower() != 'library']
+        suggested_voice_id = (
+            str(ELEVENLABS_VOICE_ID)
+            if any(str(v.get('voice_id') or '') == str(ELEVENLABS_VOICE_ID) for v in api_compatible)
+            else (str(api_compatible[0].get('voice_id') or '') if api_compatible else str(ELEVENLABS_VOICE_ID))
+        )
+        return jsonify({
+            'success': True,
+            'voices': voices,
+            'count': len(voices),
+            'api_compatible_count': len(api_compatible),
+            'default_voice_id': ELEVENLABS_VOICE_ID,
+            'suggested_voice_id': suggested_voice_id,
+        })
+    except requests.HTTPError as e:
+        details = ''
+        status_code = 502
+        try:
+            status_code = int(e.response.status_code or 502)
+            details = str(e.response.text or '').strip()[:350]
+        except Exception:
+            pass
+        return jsonify({'success': False, 'error': f'ElevenLabs voices request failed: {details or str(e)}'}), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'فشل تحميل الأصوات: {str(e)}'}), 500
+
+
+@app.route('/api/learning/coach/chat', methods=['POST'])
+def learning_coach_chat_route():
+    user_id, err = _get_logged_in_user_id()
+    if err:
+        return err
+    assert user_id is not None
+
+    data = request.get_json(silent=True) or {}
+    message = str(data.get('message') or '').strip()
+    if not message:
+        return jsonify({'success': False, 'error': 'message مطلوب'}), 400
+
+    custom_attack_type = str(data.get('custom_attack_type') or '').strip()
+    org_context = str(data.get('org_context') or '').strip()
+    training_level = str(data.get('training_level') or 'intermediate').strip().lower()
+    if training_level not in ('beginner', 'intermediate', 'advanced'):
+        training_level = 'intermediate'
+    result_lang = _learning_normalize_lang(data.get('result_lang') or 'ar')
+
+    if not DO_AI_KEY:
+        return jsonify({'success': False, 'error': 'DO_AI_KEY غير مضبوط'}), 500
+
+    safe_system = (
+        "You are a defensive cybersecurity training coach. "
+        "Never provide exploit code, payloads, attack commands, or operational misuse steps. "
+        "Keep guidance educational and defensive with detection, containment, and hardening."
+        if result_lang == 'en' else
+        "أنت مدرب تدريب أمن سيبراني دفاعي. ممنوع نهائياً إعطاء أوامر تنفيذ هجوم، أكواد استغلال، أو خطوات اختراق عملية. "
+        "أي سؤال هجومي يتم تحويله مباشرة إلى بديل دفاعي توعوي: كشف، احتواء، تعافي، وتحصين."
+    )
+    safe_prompt = (
+        (
+            f"User question: {message}\n"
+            f"Training level: {training_level}\n"
+            f"Attack focus (optional): {custom_attack_type or 'N/A'}\n"
+            f"Organization context (optional): {org_context or 'N/A'}\n\n"
+            "Answer in concise training format:\n"
+            "1) Conceptual explanation\n"
+            "2) What to monitor\n"
+            "3) Containment decision points\n"
+            "4) Hardening actions\n"
+            "5) Safe lab exercise (defensive only, no offensive commands)"
+        )
+        if result_lang == 'en' else
+        (
+            f"سؤال المستخدم: {message}\n"
+            f"مستوى التدريب: {training_level}\n"
+            f"نوع الهجمة (اختياري): {custom_attack_type or 'N/A'}\n"
+            f"سياق المؤسسة (اختياري): {org_context or 'N/A'}\n\n"
+            "أجب بصيغة تدريبية مختصرة كالتالي:\n"
+            "1) شرح مفاهيمي\n"
+            "2) ماذا نراقب؟\n"
+            "3) نقاط قرار الاحتواء\n"
+            "4) إجراءات التحصين\n"
+            "5) تمرين مختبر دفاعي آمن (بدون أوامر هجومية)"
+        )
+    )
+
+    try:
+        reply = _call_do_ai(safe_prompt, system_prompt=safe_system)
+        add_audit_log('Learning Coach Chat', f'level={training_level} attack={custom_attack_type[:80]}', username=session.get('username', ''))
+        return jsonify({'success': True, 'reply': reply, 'training_level': training_level, 'result_lang': result_lang})
+    except Exception as e:
+        print(f"[TITAN Learning Coach] chat error: {e}")
+        return jsonify({'success': False, 'error': f'فشل الرد من AI: {str(e)}'}), 500
 
 
 @app.route('/api/learning/simulate', methods=['POST'])
