@@ -12181,9 +12181,9 @@ HTML_TEMPLATE = """
             box.innerHTML = '<div class="text-gray-500">...loading</div>';
             try {
                 const res = await fetch('/api/ai/conversations', { cache: 'no-store' });
-                const data = await res.json();
+                const data = await _parseJsonOrThrow(res, 'AI conversations');
                 if (!data.success) {
-                    box.innerHTML = '<div class="text-rose-300">تعذر تحميل المحادثات</div>';
+                    box.innerHTML = '<div class="text-rose-300">تعذر تحميل المحادثات: ' + _osintEscape(data.error || ('HTTP ' + res.status)) + '</div>';
                     return;
                 }
                 const rows = data.conversations || [];
@@ -12205,7 +12205,7 @@ HTML_TEMPLATE = """
                     '</div>';
                 }).join('');
             } catch (e) {
-                box.innerHTML = '<div class="text-rose-300">فشل الاتصال بالخادم</div>';
+                box.innerHTML = '<div class="text-rose-300">فشل الاتصال بالخادم: ' + _osintEscape(e.message || String(e)) + '</div>';
             }
         }
 
@@ -12218,7 +12218,7 @@ HTML_TEMPLATE = """
                 if (res.status === 405) {
                     res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId) + '/delete', { method: 'POST', cache: 'no-store' });
                 }
-                const data = await res.json();
+                const data = await _parseJsonOrThrow(res, 'AI delete conversation');
                 if (!data.success) {
                     titanAlert(data.error || 'تعذر المسح', 'error');
                     return;
@@ -12230,7 +12230,7 @@ HTML_TEMPLATE = """
                 titanAlert('✅ تم حذف المحادثة', 'success');
                 loadAiConversations();
             } catch (e) {
-                titanAlert('تعذر المسح: فشل الاتصال بالخادم', 'error');
+                titanAlert('تعذر المسح: ' + (e.message || e), 'error');
             }
         }
 
@@ -12242,7 +12242,7 @@ HTML_TEMPLATE = """
             flow.innerHTML = '<div class="text-gray-500 text-xs">...loading chat</div>';
             try {
                 const res = await fetch('/api/ai/conversations/' + encodeURIComponent(conversationId), { cache: 'no-store' });
-                const data = await res.json();
+                const data = await _parseJsonOrThrow(res, 'AI open conversation');
                 if (!data.success) {
                     flow.innerHTML = '<div class="text-rose-300 text-xs">تعذر فتح الدردشة: ' + _osintEscape(data.error || 'unknown error') + '</div>';
                     if (res.status === 404) loadAiConversations();
@@ -12257,7 +12257,7 @@ HTML_TEMPLATE = """
                 scrollAiChatToBottom();
                 loadAiConversations();
             } catch (e) {
-                flow.innerHTML = '<div class="text-rose-300 text-xs">فشل الاتصال بالخادم</div>';
+                flow.innerHTML = '<div class="text-rose-300 text-xs">فشل الاتصال بالخادم: ' + _osintEscape(e.message || String(e)) + '</div>';
             }
         }
 
@@ -12306,7 +12306,7 @@ HTML_TEMPLATE = """
                         conversation_id: window.__titanAiConversationId
                     })
                 });
-                var data = await res.json();
+                var data = await _parseJsonOrThrow(res, 'AI chat');
                 if (data.reply) {
                     window.__titanAiConversationId = data.conversation_id || window.__titanAiConversationId;
                     if (meta) {
@@ -12316,10 +12316,10 @@ HTML_TEMPLATE = """
                     replyInner.innerHTML = renderAiReplyPretty(data.reply);
                     loadAiConversations();
                 } else {
-                    replyInner.textContent = data.error || 'حدث خطأ';
+                    replyInner.textContent = data.error || ('فشل الطلب (HTTP ' + res.status + ')');
                 }
             } catch(e) {
-                replyInner.textContent = 'فشل الاتصال';
+                replyInner.textContent = 'فشل الاتصال: ' + (e.message || e);
             }
             btn.disabled = false;
             btn.textContent = 'إرسال';
