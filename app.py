@@ -4161,16 +4161,17 @@ HTML_TEMPLATE = """
             }
 
             .ctf-ai-btn {
-                background: linear-gradient(135deg, rgba(109, 40, 217, 0.82), rgba(147, 51, 234, 0.7));
-                border: 1px solid rgba(196, 181, 253, 0.74);
-                color: #faf5ff;
-                box-shadow: 0 8px 18px rgba(91, 33, 182, 0.34);
+                background: #7c3aed;
+                border: 1px solid #c4b5fd;
+                color: #ffffff;
+                box-shadow: 0 8px 18px rgba(91, 33, 182, 0.42);
+                opacity: 1;
             }
 
             .ctf-ai-btn:hover {
-                background: linear-gradient(135deg, rgba(126, 34, 206, 0.9), rgba(168, 85, 247, 0.82));
-                border-color: rgba(221, 214, 254, 0.88);
-                box-shadow: 0 10px 22px rgba(126, 34, 206, 0.46);
+                background: #6d28d9;
+                border-color: #ddd6fe;
+                box-shadow: 0 10px 22px rgba(109, 40, 217, 0.5);
             }
 
             .crypt-reco-btn {
@@ -13474,8 +13475,9 @@ def tailwind_css():
         with open(css_path, 'r', encoding='utf-8') as f:
             css = f.read()
         resp = Response(css, mimetype='text/css')
-        # Keep CSS cache short so production updates propagate quickly.
-        resp.headers['Cache-Control'] = 'public, max-age=300'
+        # Prevent stale CSS on custom domains/CDNs where old assets can persist.
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
         return resp
     except Exception:
         # Production safety net: when compiled CSS file is missing in slug,
@@ -13487,7 +13489,8 @@ def tailwind_css():
             )
             if cdn_res.status_code == 200 and len(cdn_res.text) > 10000:
                 resp = Response(cdn_res.text, mimetype='text/css')
-                resp.headers['Cache-Control'] = 'public, max-age=1800'
+                resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+                resp.headers['Pragma'] = 'no-cache'
                 return resp
         except Exception:
             pass
@@ -13520,8 +13523,8 @@ button,input,textarea,select{font:inherit}
         .training-subtab-btn[data-tab-accent='sky'].training-subtab-active{background:linear-gradient(135deg,rgba(14,165,233,.95),rgba(56,189,248,.95))!important;color:#0f172a!important}
         .training-subtab-btn[data-tab-accent='amber'].training-subtab-active{background:linear-gradient(135deg,rgba(245,158,11,.95),rgba(251,191,36,.95))!important;color:#0f172a!important}
         .training-subtab-btn[data-tab-accent='rose'].training-subtab-active{background:linear-gradient(135deg,rgba(244,63,94,.95),rgba(251,113,133,.95))!important;color:#fff!important}
-        .ctf-ai-btn{background:linear-gradient(135deg,rgba(109,40,217,.82),rgba(147,51,234,.7))!important;border:1px solid rgba(196,181,253,.74)!important;color:#faf5ff!important;box-shadow:0 8px 18px rgba(91,33,182,.34)!important}
-        .ctf-ai-btn:hover{background:linear-gradient(135deg,rgba(126,34,206,.9),rgba(168,85,247,.82))!important;border-color:rgba(221,214,254,.88)!important;box-shadow:0 10px 22px rgba(126,34,206,.46)!important}
+        .ctf-ai-btn{background:#7c3aed!important;border:1px solid #c4b5fd!important;color:#fff!important;box-shadow:0 8px 18px rgba(91,33,182,.42)!important;opacity:1!important}
+        .ctf-ai-btn:hover{background:#6d28d9!important;border-color:#ddd6fe!important;box-shadow:0 10px 22px rgba(109,40,217,.5)!important}
         .crypt-reco-btn{background:linear-gradient(135deg,#6d28d9,#7c3aed)!important;border:1px solid #a78bfa!important;color:#f5f3ff!important;box-shadow:0 8px 18px rgba(91,33,182,.34)!important}
         .crypt-reco-btn:hover{background:linear-gradient(135deg,#7c3aed,#8b5cf6)!important;border-color:#c4b5fd!important;color:#fff!important}
         .crypt-chat-shell{border:1px solid #0e7490!important;background:#020617!important}
@@ -13544,6 +13547,16 @@ button,input,textarea,select{font:inherit}
         .border-purple-900\\/40{border-color:rgba(88,28,135,.40)!important}
         .border-purple-900\\/30{border-color:rgba(88,28,135,.30)!important}
         .border-purple-700\\/50{border-color:rgba(126,34,206,.50)!important}
+        /* Broad emergency mapping for utility classes to stop transparent UI in production. */
+        [class*='bg-slate-950/']{background-color:rgba(2,6,23,.96)!important}
+        [class*='bg-slate-900/']{background-color:rgba(15,23,42,.78)!important}
+        [class*='bg-slate-800/']{background-color:rgba(30,41,59,.74)!important}
+        [class*='bg-black/']{background-color:rgba(0,0,0,.45)!important}
+        [class*='border-slate-']{border-color:rgba(51,65,85,1)!important}
+        [class*='border-purple-']{border-color:rgba(126,34,206,.56)!important}
+        [class*='border-cyan-']{border-color:rgba(8,145,178,.56)!important}
+        [class*='border-fuchsia-']{border-color:rgba(162,28,175,.56)!important}
+        [class*='border-emerald-']{border-color:rgba(5,150,105,.56)!important}
 """
         resp = Response(fallback_css, mimetype='text/css')
         resp.headers['Cache-Control'] = 'no-store, max-age=0'
