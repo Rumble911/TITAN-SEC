@@ -4124,26 +4124,119 @@ HTML_TEMPLATE = """
             }
 
             .ctf-card.ctf-diff-easy {
+                --ctf-border-main: rgba(16, 185, 129, 0.92);
+                --ctf-border-soft: rgba(52, 211, 153, 0.76);
                 border-color: rgba(16, 185, 129, 0.9) !important;
                 background: linear-gradient(145deg, rgba(6, 95, 70, 0.58), rgba(15, 23, 42, 0.94)) !important;
                 box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.24), 0 12px 26px rgba(6, 78, 59, 0.32);
             }
 
             .ctf-card.ctf-diff-medium {
+                --ctf-border-main: rgba(245, 158, 11, 0.94);
+                --ctf-border-soft: rgba(251, 191, 36, 0.78);
                 border-color: rgba(245, 158, 11, 0.92) !important;
                 background: linear-gradient(145deg, rgba(146, 64, 14, 0.6), rgba(15, 23, 42, 0.94)) !important;
                 box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.24), 0 12px 26px rgba(146, 64, 14, 0.34);
             }
 
             .ctf-card.ctf-diff-hard {
+                --ctf-border-main: rgba(248, 113, 113, 0.96);
+                --ctf-border-soft: rgba(252, 165, 165, 0.8);
                 border-color: rgba(248, 113, 113, 0.96) !important;
                 background: linear-gradient(145deg, rgba(185, 28, 28, 0.68), rgba(127, 29, 29, 0.48), rgba(15, 23, 42, 0.94)) !important;
                 box-shadow: 0 0 0 1px rgba(252, 165, 165, 0.26), 0 12px 28px rgba(153, 27, 27, 0.4);
             }
 
-            .ctf-card.ctf-diff-easy .ctf-card-title { color: #86efac !important; }
-            .ctf-card.ctf-diff-medium .ctf-card-title { color: #fbbf24 !important; }
-            .ctf-card.ctf-diff-hard .ctf-card-title { color: #fca5a5 !important; }
+            /* Category palette for better visual separation between challenges. */
+            .ctf-card.ctf-cat-web {
+                --ctf-border-main: rgba(59, 130, 246, 0.92);
+                --ctf-border-soft: rgba(125, 211, 252, 0.76);
+                background: linear-gradient(145deg, rgba(30, 64, 175, 0.56), rgba(15, 23, 42, 0.94)) !important;
+            }
+
+            .ctf-card.ctf-cat-crypto {
+                --ctf-border-main: rgba(139, 92, 246, 0.92);
+                --ctf-border-soft: rgba(196, 181, 253, 0.78);
+                background: linear-gradient(145deg, rgba(91, 33, 182, 0.56), rgba(15, 23, 42, 0.94)) !important;
+            }
+
+            .ctf-card.ctf-cat-forensics {
+                --ctf-border-main: rgba(20, 184, 166, 0.92);
+                --ctf-border-soft: rgba(94, 234, 212, 0.76);
+                background: linear-gradient(145deg, rgba(13, 148, 136, 0.52), rgba(15, 23, 42, 0.94)) !important;
+            }
+
+            .ctf-card.ctf-cat-osint {
+                --ctf-border-main: rgba(236, 72, 153, 0.92);
+                --ctf-border-soft: rgba(244, 114, 182, 0.78);
+                background: linear-gradient(145deg, rgba(157, 23, 77, 0.54), rgba(15, 23, 42, 0.94)) !important;
+            }
+
+            .ctf-card.ctf-cat-rev {
+                --ctf-border-main: rgba(249, 115, 22, 0.92);
+                --ctf-border-soft: rgba(253, 186, 116, 0.78);
+                background: linear-gradient(145deg, rgba(154, 52, 18, 0.55), rgba(15, 23, 42, 0.94)) !important;
+            }
+
+            .ctf-card.ctf-cat-misc {
+                --ctf-border-main: rgba(100, 116, 139, 0.92);
+                --ctf-border-soft: rgba(148, 163, 184, 0.76);
+                background: linear-gradient(145deg, rgba(51, 65, 85, 0.58), rgba(15, 23, 42, 0.94)) !important;
+            }
+
+            .ctf-card .ctf-badge-category {
+                color: #e2e8f0 !important;
+                background: rgba(2, 6, 23, 0.58) !important;
+                border-color: var(--ctf-border-soft) !important;
+            }
+
+            #ctf-section .ctf-card .ctf-details-panel.ctf-border-sync {
+                background: linear-gradient(145deg, rgba(3, 37, 65, 0.64), rgba(2, 6, 23, 0.84)) !important;
+                border-color: rgba(56, 189, 248, 0.68) !important;
+                box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.18), 0 10px 22px rgba(3, 37, 65, 0.28);
+            }
+
+            #ctf-section .ctf-card .ctf-method-panel.ctf-border-sync {
+                background: linear-gradient(145deg, rgba(59, 7, 100, 0.62), rgba(2, 6, 23, 0.84)) !important;
+                border-color: rgba(192, 132, 252, 0.68) !important;
+                box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.18), 0 10px 22px rgba(59, 7, 100, 0.28);
+            }
+
+            #ctf-section .ctf-card .ctf-hints-panel.ctf-border-sync {
+                background: linear-gradient(145deg, rgba(120, 53, 15, 0.62), rgba(2, 6, 23, 0.84)) !important;
+                border-color: rgba(251, 191, 36, 0.72) !important;
+                box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18), 0 10px 22px rgba(120, 53, 15, 0.28);
+            }
+
+            .ctf-card.ctf-diff-easy .ctf-card-title,
+            .ctf-card .ctf-diff-badge-easy {
+                color: #86efac !important;
+            }
+
+            .ctf-card.ctf-diff-medium .ctf-card-title,
+            .ctf-card .ctf-diff-badge-medium {
+                color: #fbbf24 !important;
+            }
+
+            .ctf-card.ctf-diff-hard .ctf-card-title,
+            .ctf-card .ctf-diff-badge-hard {
+                color: #fca5a5 !important;
+            }
+
+            .ctf-card .ctf-diff-badge-easy {
+                border-color: rgba(16, 185, 129, 0.82) !important;
+                background: rgba(6, 78, 59, 0.42) !important;
+            }
+
+            .ctf-card .ctf-diff-badge-medium {
+                border-color: rgba(245, 158, 11, 0.84) !important;
+                background: rgba(120, 53, 15, 0.42) !important;
+            }
+
+            .ctf-card .ctf-diff-badge-hard {
+                border-color: rgba(248, 113, 113, 0.86) !important;
+                background: rgba(127, 29, 29, 0.44) !important;
+            }
 
             .ctf-card.ctf-diff-easy:hover {
                 transform: translateY(-2px);
@@ -4172,6 +4265,20 @@ HTML_TEMPLATE = """
                 background: #6d28d9;
                 border-color: #ddd6fe;
                 box-shadow: 0 10px 22px rgba(109, 40, 217, 0.5);
+            }
+
+            .ctf-submit-btn {
+                background: #d97706;
+                border: 1px solid #fbbf24;
+                color: #fff7ed;
+                box-shadow: 0 8px 18px rgba(180, 83, 9, 0.4);
+                opacity: 1;
+            }
+
+            .ctf-submit-btn:hover {
+                background: #b45309;
+                border-color: #fde68a;
+                box-shadow: 0 10px 22px rgba(180, 83, 9, 0.5);
             }
 
             .crypt-reco-btn {
@@ -4302,6 +4409,43 @@ HTML_TEMPLATE = """
                 background: rgba(2, 6, 23, 0.86) !important;
                 color: #e5e7eb !important;
                 border: 1px solid rgba(71, 85, 105, 0.8) !important;
+            }
+
+            /* Global production safety net: keep panels/cards solid even if utility CSS fails on server. */
+            [class*='bg-slate-950/'] {
+                background-color: rgba(2, 6, 23, 0.96) !important;
+            }
+
+            [class*='bg-slate-900/'] {
+                background-color: rgba(15, 23, 42, 0.82) !important;
+            }
+
+            [class*='bg-slate-800/'] {
+                background-color: rgba(30, 41, 59, 0.78) !important;
+            }
+
+            [class*='bg-black/'] {
+                background-color: rgba(0, 0, 0, 0.46) !important;
+            }
+
+            [class*='border-slate-'] {
+                border-color: rgba(51, 65, 85, 0.95) !important;
+            }
+
+            [class*='border-purple-'] {
+                border-color: rgba(126, 34, 206, 0.62) !important;
+            }
+
+            [class*='border-cyan-'] {
+                border-color: rgba(8, 145, 178, 0.62) !important;
+            }
+
+            [class*='border-fuchsia-'] {
+                border-color: rgba(162, 28, 175, 0.62) !important;
+            }
+
+            [class*='border-emerald-'] {
+                border-color: rgba(5, 150, 105, 0.62) !important;
             }
 
             @media (max-width: 640px) {
@@ -9459,9 +9603,9 @@ HTML_TEMPLATE = """
 
         function _ctfDifficultyClass(level) {
             const t = String(level || '').toLowerCase();
-            if (t === 'easy') return 'text-emerald-200 border-emerald-500/70 bg-emerald-900/35';
-            if (t === 'hard') return 'text-rose-100 border-red-400/80 bg-red-900/35';
-            return 'text-amber-200 border-amber-500/70 bg-amber-900/35';
+            if (t === 'easy') return 'ctf-diff-badge-easy';
+            if (t === 'hard') return 'ctf-diff-badge-hard';
+            return 'ctf-diff-badge-medium';
         }
 
         function _ctfCardTheme(level) {
@@ -9469,6 +9613,16 @@ HTML_TEMPLATE = """
             if (t === 'easy') return 'ctf-diff-easy';
             if (t === 'hard') return 'ctf-diff-hard';
             return 'ctf-diff-medium';
+        }
+
+        function _ctfCategoryTheme(category) {
+            const c = String(category || '').toLowerCase();
+            if (c.includes('web') || c.includes('xss') || c.includes('sqli')) return 'ctf-cat-web';
+            if (c.includes('crypto') || c.includes('cipher')) return 'ctf-cat-crypto';
+            if (c.includes('forensic') || c.includes('memory') || c.includes('disk')) return 'ctf-cat-forensics';
+            if (c.includes('osint') || c.includes('intel') || c.includes('social')) return 'ctf-cat-osint';
+            if (c.includes('reverse') || c.includes('rev') || c.includes('pwn') || c.includes('binary')) return 'ctf-cat-rev';
+            return 'ctf-cat-misc';
         }
 
         function ctfApplyFilters() {
@@ -9549,32 +9703,33 @@ HTML_TEMPLATE = """
                     ? '<span class="titan-solid-stat ctf-border-sync text-[10px] px-2 py-1 rounded border border-emerald-800/50 bg-emerald-900/20 text-emerald-300">Solved</span>'
                     : '<span class="titan-solid-stat ctf-border-sync text-[10px] px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">Unsolved</span>';
                 const cardTheme = _ctfCardTheme(c.difficulty);
+                const categoryTheme = _ctfCategoryTheme(c.category);
                 return `
-                    <div class="ctf-card titan-solid-panel ${cardTheme} bg-slate-900/55 p-4 rounded-2xl border border-amber-900/30 space-y-3">
+                    <div class="ctf-card titan-solid-panel ${cardTheme} ${categoryTheme} bg-slate-900/55 p-4 rounded-2xl border border-amber-900/30 space-y-3">
                         <div class="flex items-center justify-between gap-2">
                             <h3 class="ctf-card-title ctf-bidi">${_osintEscape(c.title || 'Challenge')}</h3>
                             ${solvedBadge}
                         </div>
                         <div class="flex flex-wrap gap-2 text-[11px]">
-                            <span class="titan-solid-stat ctf-border-sync px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">${_osintEscape(c.category || 'misc')}</span>
+                            <span class="ctf-badge-category titan-solid-stat ctf-border-sync px-2 py-1 rounded border border-slate-700 bg-slate-900/60 text-gray-300">${_osintEscape(c.category || 'misc')}</span>
                             <span class="px-2 py-1 rounded border ${_ctfDifficultyClass(c.difficulty)}">${_osintEscape(String(c.difficulty || '').toUpperCase())}</span>
                             <span class="titan-solid-stat ctf-border-sync px-2 py-1 rounded border border-violet-800/50 bg-violet-900/20 text-violet-300">${_osintEscape(c.points || 0)} pts</span>
                         </div>
 
-                        <div class="titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+                        <div class="ctf-details-panel titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-cyan-300 ctf-bidi">تفاصيل التحدي</div>
                             <div class="ctf-bidi text-gray-200 whitespace-pre-wrap">${_osintEscape(c.description || '')}</div>
                             <div class="text-sm text-gray-300 ctf-bidi">صيغة العلم: <span class="font-mono text-amber-300 ctf-ltr">${_osintEscape(c.flag_format || 'TITAN{...}')}</span></div>
                         </div>
 
-                        <div class="titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+                        <div class="ctf-method-panel titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-violet-300 ctf-bidi">كيف أفكر بالحل؟</div>
                             <div class="ctf-bidi text-gray-200">${_osintEscape(c.method || 'ابدأ بتحليل المعطيات وتقسيم المشكلة لخطوات صغيرة.')}</div>
                         </div>
 
                         ${fileBlock}
 
-                        <div class="titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+                        <div class="ctf-hints-panel titan-solid-panel ctf-border-sync space-y-2 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
                             <div class="text-sm font-bold text-amber-300 ctf-bidi">تلميحات سريعة</div>
                             <ol class="space-y-1">${hintsHtml}</ol>
                         </div>
@@ -9582,7 +9737,7 @@ HTML_TEMPLATE = """
                         <div class="space-y-2">
                             <input id="ctf-flag-${_osintEscape(c.id)}" type="text" placeholder="أدخل العلم هنا..." class="ctf-solid-field w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm font-mono ctf-ltr" dir="ltr">
                             <div class="flex flex-col gap-2">
-                                <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="w-full py-2.5 rounded-xl bg-amber-900/35 hover:bg-amber-800/50 border border-amber-800/50 text-amber-200 text-xs font-bold">تحقق من الحل</button>
+                                <button onclick="ctfSubmit('${_osintEscape(c.id)}')" class="ctf-submit-btn w-full py-2.5 rounded-xl text-xs font-bold">تحقق من الحل</button>
                                 <button onclick="ctfAskAi('${_osintEscape(c.id)}')" class="ctf-ai-btn w-full py-2.5 rounded-xl text-xs font-bold">مساعد AI</button>
                             </div>
                         </div>
@@ -13523,6 +13678,8 @@ button,input,textarea,select{font:inherit}
         .training-subtab-btn[data-tab-accent='sky'].training-subtab-active{background:linear-gradient(135deg,rgba(14,165,233,.95),rgba(56,189,248,.95))!important;color:#0f172a!important}
         .training-subtab-btn[data-tab-accent='amber'].training-subtab-active{background:linear-gradient(135deg,rgba(245,158,11,.95),rgba(251,191,36,.95))!important;color:#0f172a!important}
         .training-subtab-btn[data-tab-accent='rose'].training-subtab-active{background:linear-gradient(135deg,rgba(244,63,94,.95),rgba(251,113,133,.95))!important;color:#fff!important}
+        .ctf-submit-btn{background:#d97706!important;border:1px solid #fbbf24!important;color:#fff7ed!important;box-shadow:0 8px 18px rgba(180,83,9,.4)!important;opacity:1!important}
+        .ctf-submit-btn:hover{background:#b45309!important;border-color:#fde68a!important;box-shadow:0 10px 22px rgba(180,83,9,.5)!important}
         .ctf-ai-btn{background:#7c3aed!important;border:1px solid #c4b5fd!important;color:#fff!important;box-shadow:0 8px 18px rgba(91,33,182,.42)!important;opacity:1!important}
         .ctf-ai-btn:hover{background:#6d28d9!important;border-color:#ddd6fe!important;box-shadow:0 10px 22px rgba(109,40,217,.5)!important}
         .crypt-reco-btn{background:linear-gradient(135deg,#6d28d9,#7c3aed)!important;border:1px solid #a78bfa!important;color:#f5f3ff!important;box-shadow:0 8px 18px rgba(91,33,182,.34)!important}
