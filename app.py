@@ -69,15 +69,6 @@ except Exception:
     arabic_reshaper = None  # type: ignore
     get_display = None  # type: ignore
 
-try:
-    import pyttsx3  # type: ignore
-    _HAS_PYTTSX3 = True
-except Exception:
-    pyttsx3 = None  # type: ignore
-    _HAS_PYTTSX3 = False
-
-_ATTACKSIM_TTS_LOCAL_LOCK = threading.Lock()
-
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # حد أقصى للملفات 16 ميجابايت
@@ -104,13 +95,6 @@ ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://vrzo4x5ckv5tiputtr6i5iyk.agents.do-ai.run').rstrip('/')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 DO_AI_MODEL = os.environ.get('DO_AI_MODEL', 'tor1')
-
-# --- External TTS (for attack simulation video voice-over) ---
-ATTACKSIM_TTS_ENDPOINT = os.environ.get('ATTACKSIM_TTS_ENDPOINT', 'https://api.openai.com/v1/audio/speech').strip()
-ATTACKSIM_TTS_KEY = os.environ.get('ATTACKSIM_TTS_KEY', os.environ.get('OPENAI_API_KEY', '')).strip()
-ATTACKSIM_TTS_MODEL = os.environ.get('ATTACKSIM_TTS_MODEL', 'gpt-4o-mini-tts').strip()
-ATTACKSIM_TTS_VOICE_AR = os.environ.get('ATTACKSIM_TTS_VOICE_AR', 'alloy').strip()
-ATTACKSIM_TTS_VOICE_EN = os.environ.get('ATTACKSIM_TTS_VOICE_EN', 'alloy').strip()
 
 AI_SYSTEM_PROMPT = """
 أنت TITAN، مساعد ذكي وشخصية حقيقية — مش مجرد برنامج.
@@ -175,7 +159,7 @@ _CJK_CHARS_RE = re.compile(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufa
 _CTRL_CHARS_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
 _AR_CHARS_RE = re.compile(r'[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]')
 _LATIN_CHARS_RE = re.compile(r'[A-Za-z]')
-_MOJIBAKE_RE = re.compile(r'[�]|[\u2500-\u257f\u2580-\u259f\u0370-\u03ff\u0400-\u04ff]')
+_MOJIBAKE_RE = re.compile(r'[ ]|[\u2500-\u257f\u2580-\u259f\u0370-\u03ff\u0400-\u04ff]')
 _KB_TOKEN_RE = re.compile(r'[a-z0-9_+\-]{2,}|[\u0600-\u06ff]{2,}', flags=re.IGNORECASE)
 
 TITAN_KB_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'knowledge_base')
@@ -1312,86 +1296,6 @@ def _do_ai_chat_completion(
     content = str(msg.get('content') or '').strip()
     finish_reason = str(choice.get('finish_reason') or '')
     return content, finish_reason
-
-
-def _call_attacksim_tts(text: str, lang: str = 'ar') -> tuple[bytes, str]:
-    api_key = (ATTACKSIM_TTS_KEY or '').strip()
-    endpoint = (ATTACKSIM_TTS_ENDPOINT or '').strip()
-
-    def _call_attacksim_tts_local(free_text: str, local_lang: str) -> tuple[bytes, str]:
-        if not _HAS_PYTTSX3:
-            raise RuntimeError('local_tts_unavailable')
-
-        with _ATTACKSIM_TTS_LOCAL_LOCK:
-            engine = pyttsx3.init()  # type: ignore[attr-defined]
-            voices = engine.getProperty('voices') or []
-            prefer_ar = str(local_lang or 'ar').lower().startswith('ar')
-            pick_id = None
-            for v in voices:
-                probe = f"{getattr(v, 'id', '')} {getattr(v, 'name', '')}".lower()
-                if prefer_ar and ('arab' in probe or 'ar_' in probe or ' ar' in probe):
-                    pick_id = getattr(v, 'id', None)
-                    break
-                if (not prefer_ar) and ('english' in probe or 'en_' in probe or ' en' in probe):
-                    pick_id = getattr(v, 'id', None)
-                    break
-            if pick_id:
-                try:
-                    engine.setProperty('voice', pick_id)
-                except Exception:
-                    pass
-
-            # Slightly slower pace for educational narration.
-            try:
-                engine.setProperty('rate', 155)
-            except Exception:
-                pass
-
-            tmp_fd, tmp_path = tempfile.mkstemp(suffix='.wav')
-            os.close(tmp_fd)
-            try:
-                engine.save_to_file(free_text, tmp_path)
-                engine.runAndWait()
-                with open(tmp_path, 'rb') as f:
-                    wav_bytes = f.read()
-                if not wav_bytes:
-                    raise RuntimeError('empty_local_tts_audio')
-                return wav_bytes, 'audio/wav'
-            finally:
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
-
-    clean_text = re.sub(r'\s+', ' ', str(text or '')).strip()
-    if not clean_text:
-        raise ValueError('empty_tts_text')
-    clean_text = clean_text[:3800]
-
-    # Free path: if no external key/endpoint, try local offline TTS.
-    if not api_key or not endpoint:
-        return _call_attacksim_tts_local(clean_text, lang)
-
-    voice = ATTACKSIM_TTS_VOICE_AR if str(lang or 'ar').lower().startswith('ar') else ATTACKSIM_TTS_VOICE_EN
-    payload = {
-        'model': ATTACKSIM_TTS_MODEL or 'gpt-4o-mini-tts',
-        'voice': voice or 'alloy',
-        'input': clean_text,
-        'response_format': 'mp3',
-    }
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json',
-    }
-    res = requests.post(endpoint, headers=headers, json=payload, timeout=70)
-    if res.status_code >= 400:
-        return _call_attacksim_tts_local(clean_text, lang)
-
-    content_type = str(res.headers.get('content-type') or 'audio/mpeg').split(';')[0].strip() or 'audio/mpeg'
-    audio = res.content or b''
-    if not audio:
-        return _call_attacksim_tts_local(clean_text, lang)
-    return audio, content_type
 
 def _call_do_ai(
     message: str,
@@ -3887,7 +3791,7 @@ HTML_TEMPLATE = """
             @keyframes orbFloat { 0%{transform:translate(0,0) scale(1);} 100%{transform:translate(3%,5%) scale(1.08);} }
 
             .tab-nav-modern {
-                background: linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.98));
+                background: linear-gradient(145deg, rgba(15, 23, 42, 0.72), rgba(2, 6, 23, 0.8));
                 border: 1px solid rgba(148, 163, 184, 0.2);
                 box-shadow: inset 0 0 30px rgba(15, 23, 42, 0.35), 0 10px 35px rgba(2, 6, 23, 0.55);
             }
@@ -3937,7 +3841,7 @@ HTML_TEMPLATE = """
                 text-align: center;
                 min-height: 2.3rem;
                 border: 1px solid rgba(148, 163, 184, 0.18);
-                background: rgba(15, 23, 42, 0.94);
+                background: rgba(15, 23, 42, 0.55);
                 color: #cbd5e1;
                 transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
             }
@@ -3957,13 +3861,6 @@ HTML_TEMPLATE = """
                 .tab-nav-modern .tab-grid button {
                     min-height: 2.15rem;
                 }
-            }
-
-            .tab-nav-modern .tab-grid button {
-                background: linear-gradient(135deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
-                border-color: rgba(125, 211, 252, 0.32);
-                color: #e2e8f0;
-                box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.14), 0 1px 0 rgba(15, 23, 42, 0.9);
             }
 
             .tab-nav-modern .tab-grid button:hover {
@@ -3988,19 +3885,17 @@ HTML_TEMPLATE = """
 
             .training-subtabs-shell {
                 border: 1px solid rgba(147, 197, 253, 0.35);
-                background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.98));
+                background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.94));
                 box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.08), 0 10px 26px rgba(2, 6, 23, 0.48);
-                backdrop-filter: none;
             }
 
             .training-subtab-btn {
                 width: 100%;
                 border: 1px solid rgba(125, 211, 252, 0.32);
-                background: linear-gradient(135deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+                background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
                 color: #e2e8f0;
                 min-height: 2.3rem;
                 box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.16), 0 1px 0 rgba(15, 23, 42, 0.9);
-                backdrop-filter: none;
             }
 
             .training-subtab-btn:hover {
@@ -5219,14 +5114,13 @@ HTML_TEMPLATE = """
             <div id="training-section" class="hidden space-y-4">
                 <h2 class="text-xl font-bold text-amber-300 border-b border-slate-700 pb-2">🎯 قسم التدريب</h2>
                 <div class="bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl text-xs text-amber-100/90 leading-6">
-                    هذا القسم يجمع 4 مسارات تدريبية في مكان واحد: التعلم والمحاكاة، CTF، الهندسة الاجتماعية، ومحاكاة الهجمات.
+                    هذا القسم يجمع 3 مسارات تدريبية في مكان واحد: التعلم والمحاكاة، CTF، والهندسة الاجتماعية.
                 </div>
                 <div class="training-subtabs-shell rounded-xl p-2">
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div class="grid grid-cols-3 gap-2">
                         <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 التعلم والمحاكاة</button>
                         <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
                         <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
-                        <button id="btn-training-attacksim" onclick="setTrainingSubTab('attacksim')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎬 محاكاة الهجمات</button>
                     </div>
                 </div>
             </div>
@@ -5586,69 +5480,6 @@ HTML_TEMPLATE = """
                         <div id="learningAttackDetail" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6">
                             اختر أي هجمة من القائمة لعرض شرح كامل عنها.
                         </div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-violet-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.26)] space-y-3">
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
-                            <h3 class="text-sm font-bold text-violet-300">🤖 AI مساعد التعلم</h3>
-                            <span class="text-[10px] text-violet-200/80">شرح دفاعي شامل عن الثغرات والهجمات</span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
-                            <input id="learningAiInput" type="text" class="md:col-span-5 p-2 rounded bg-slate-950 border border-slate-700 text-xs outline-none" placeholder="اكتب سؤالك عن الثغرات أو عن الهجمة المختارة..."></input>
-                            <button id="learningAiSendBtn" onclick="learningAskAi()" class="px-3 py-2 rounded-lg bg-violet-900/40 hover:bg-violet-800/50 border border-violet-800/50 text-violet-200 text-xs font-bold">إرسال</button>
-                        </div>
-                        <div class="flex gap-2 flex-wrap text-[10px]">
-                            <button onclick="learningAskAi('اشرح الثغرة المختارة بشكل مبسط ثم متقدم.')" class="px-2 py-1 rounded border border-slate-700 bg-black/30 text-gray-300 hover:text-white">شرح تدريجي</button>
-                            <button onclick="learningAskAi('أعطني مؤشرات الكشف IOC وخطوات الاحتواء السريعة.')" class="px-2 py-1 rounded border border-slate-700 bg-black/30 text-gray-300 hover:text-white">IOCs واحتواء</button>
-                            <button onclick="learningAskAi('أبني خطة تحصين عملية لمدة 30 يوم ضد هذا النوع.')" class="px-2 py-1 rounded border border-slate-700 bg-black/30 text-gray-300 hover:text-white">خطة 30 يوم</button>
-                        </div>
-                        <div id="learningAiResult" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6 whitespace-pre-wrap">اسأل المساعد وسيعطيك إجابة دفاعية مفصلة وقابلة للتنفيذ.</div>
-                    </div>
-                </div>
-            </div>
-
-
-            <div id="attacksim-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-orange-300 border-b border-slate-700 pb-2">🎬 محاكاة الهجمات</h2>
-
-                <div class="bg-orange-950/20 border border-orange-900/40 p-4 rounded-xl text-xs text-orange-100/90 leading-6">
-                    مولد فيديو تدريبي دفاعي: يكتب سيناريو الهجمة بالذكاء الاصطناعي، ثم ينشئ فيديو أنيميشن مع تعليق صوتي، وفي النهاية يشرح الدفاع ومنع التكرار.
-                </div>
-
-                <div class="bg-slate-900/60 p-4 rounded-2xl border border-orange-900/40 space-y-3">
-                    <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
-                        <input id="attackSimType" type="text" placeholder="نوع الهجمة (مثال: Phishing, SQLi, Ransomware)" class="md:col-span-2 p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
-                        <input id="attackSimContext" type="text" placeholder="السياق (مثال: بنك، شركة SaaS، جامعة)" class="md:col-span-2 p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                        <select id="attackSimLevel" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="beginner">Beginner</option>
-                            <option value="intermediate" selected>Intermediate</option>
-                            <option value="advanced">Advanced</option>
-                        </select>
-                        <select id="attackSimLang" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="ar" selected>العربية</option>
-                            <option value="en">English</option>
-                        </select>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                        <button id="attackSimAiBtn" onclick="attackSimBuildStoryboard()" class="px-3 py-2 rounded-lg bg-orange-900/35 hover:bg-orange-800/45 border border-orange-800/50 text-orange-200 text-xs font-bold">1) توليد سيناريو AI</button>
-                        <button id="attackSimRenderBtn" onclick="attackSimRenderVideo()" class="px-3 py-2 rounded-lg bg-cyan-900/35 hover:bg-cyan-800/45 border border-cyan-800/50 text-cyan-200 text-xs font-bold">2) إنشاء فيديو الأنيميشن</button>
-                        <button onclick="attackSimNarrateNow()" class="px-3 py-2 rounded-lg bg-violet-900/35 hover:bg-violet-800/45 border border-violet-800/50 text-violet-200 text-xs font-bold">تشغيل التعليق الصوتي</button>
-                        <button onclick="attackSimStopNarration()" class="px-3 py-2 rounded-lg bg-rose-900/35 hover:bg-rose-800/45 border border-rose-800/50 text-rose-200 text-xs font-bold">إيقاف الصوت</button>
-                    </div>
-                    <div id="attackSimStatus" class="text-[11px] text-gray-400">ابدأ بتوليد السيناريو من AI.</div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-orange-900/40 space-y-2">
-                        <div class="text-xs font-bold text-orange-300">Storyboard AI</div>
-                        <div id="attackSimStoryboard" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6 max-h-96 overflow-y-auto whitespace-pre-wrap">لا يوجد سيناريو بعد.</div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-cyan-900/40 space-y-3">
-                        <div class="text-xs font-bold text-cyan-300">Video Preview</div>
-                        <canvas id="attackSimCanvas" width="960" height="540" class="w-full rounded-lg border border-slate-700 bg-black"></canvas>
-                        <video id="attackSimVideo" class="w-full rounded-lg border border-slate-700 bg-black" controls playsinline></video>
-                        <a id="attackSimDownload" class="hidden px-3 py-2 rounded-lg bg-emerald-900/35 hover:bg-emerald-800/45 border border-emerald-800/50 text-emerald-200 text-xs font-bold text-center" download="attack-simulation.webm">تحميل الفيديو</a>
                     </div>
                 </div>
             </div>
@@ -7029,7 +6860,7 @@ HTML_TEMPLATE = """
 
         // --- التحكم بالتبويبات ---
         const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','training','ctf','ir','forensics','se','audio','video','qr','identity','admin'];
-        const TRAINING_SUB_TABS = ['learninglab', 'ctf', 'se', 'attacksim'];
+        const TRAINING_SUB_TABS = ['learninglab', 'ctf', 'se'];
         let __trainingSubTab = 'learninglab';
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
@@ -7461,7 +7292,6 @@ HTML_TEMPLATE = """
             if (next === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if (next === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if (next === 'learninglab' && typeof learningInitCatalog === 'function') learningInitCatalog();
-            if (next === 'attacksim' && typeof attackSimInit === 'function') attackSimInit();
         }
 
         const LEARNING_ATTACK_CATALOG = [
@@ -7555,7 +7385,6 @@ HTML_TEMPLATE = """
 
         let __learningCatalogReady = false;
         let __learningSelectedAttackId = '';
-        let __learningAiConversationId = null;
 
         const LEARNING_SEVERITY_BY_ATTACK = {
             'sqli': 'high', 'xss': 'high', 'csrf': 'medium', 'idor': 'high', 'broken-access': 'critical',
@@ -7833,652 +7662,6 @@ HTML_TEMPLATE = """
 
             __learningCatalogReady = true;
             learningCatalogApplyFilters(false);
-
-            const learningAiInput = document.getElementById('learningAiInput');
-            if (learningAiInput && !learningAiInput.dataset.boundEnter) {
-                learningAiInput.dataset.boundEnter = '1';
-                learningAiInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') learningAskAi();
-                });
-            }
-        }
-
-        async function learningAskAi(quickPrompt) {
-            const inputEl = document.getElementById('learningAiInput');
-            const sendBtn = document.getElementById('learningAiSendBtn');
-            const out = document.getElementById('learningAiResult');
-            if (!inputEl || !sendBtn || !out) return;
-
-            const typed = String(inputEl.value || '').trim();
-            const question = String(quickPrompt || typed || '').trim();
-            if (!question) {
-                titanAlert('اكتب السؤال أولاً.', 'warn');
-                return;
-            }
-
-            const all = _learningAllAttacks();
-            const selected = all.find((x) => x.id === __learningSelectedAttackId) || null;
-            const selectedContext = selected
-                ? [
-                    `الهجمة المختارة: ${selected.name}`,
-                    `التصنيف: ${selected.category_title}`,
-                    `الخطورة: ${selected.severity}`,
-                    `كيف بتصير: ${selected.how}`,
-                    `وين بتصير: ${selected.where}`,
-                    `إجراءات الحماية: ${(selected.protection || []).join(' | ')}`
-                ].join('\\n')
-                : 'لا توجد هجمة محددة حالياً.';
-
-            const wrappedPrompt = [
-                'أجب بشكل دفاعي توعوي فقط وبشرح شامل وكافي.',
-                'ممنوع أوامر اختراق أو خطوات استغلال عملية.',
-                selectedContext,
-                `سؤال المستخدم: ${question}`
-            ].join('\\n\\n');
-
-            sendBtn.disabled = true;
-            sendBtn.textContent = '...';
-            out.className = 'p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6 whitespace-pre-wrap text-gray-300';
-            out.textContent = 'AI يفكر...';
-
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000);
-                const res = await fetch('/api/ai/chat', {
-                    method: 'POST',
-                    cache: 'no-store',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        message: wrappedPrompt,
-                        conversation_id: __learningAiConversationId
-                    }),
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-
-                const ct = (res.headers.get('content-type') || '').toLowerCase();
-                let data = null;
-                if (ct.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const raw = await res.text();
-                    if (raw && raw.trim().startsWith('<!DOCTYPE')) {
-                        throw new Error('الخادم أعاد صفحة HTML بدل JSON.');
-                    }
-                    try {
-                        data = JSON.parse(raw || '{}');
-                    } catch (_) {
-                        throw new Error('استجابة غير صالحة من الخادم.');
-                    }
-                }
-
-                if (!res.ok || !data || !data.success) {
-                    throw new Error((data && data.error) ? data.error : 'فشل في جلب الرد.');
-                }
-
-                __learningAiConversationId = data.conversation_id || __learningAiConversationId;
-                out.className = 'p-3 rounded bg-violet-900/20 border border-violet-800/50 text-xs leading-6 text-violet-100';
-                out.innerHTML = renderAiReplyPretty(data.reply || 'لا يوجد رد حالياً.');
-                if (!quickPrompt) inputEl.value = '';
-            } catch (e) {
-                out.className = 'p-3 rounded bg-rose-900/20 border border-rose-800/50 text-xs leading-6 text-rose-200 whitespace-pre-wrap';
-                if (e && e.name === 'AbortError') {
-                    out.textContent = 'انتهت مهلة الرد. جرّب سؤالًا أقصر.';
-                } else {
-                    out.textContent = `تعذر الاتصال: ${e.message || e}`;
-                }
-            } finally {
-                sendBtn.disabled = false;
-                sendBtn.textContent = 'إرسال';
-            }
-        }
-
-        let __attackSimConversationId = null;
-        let __attackSimStoryboard = null;
-        let __attackSimVideoUrl = '';
-        let __attackSimHasEmbeddedAudio = false;
-        let __attackSimNarrationAudioUrl = '';
-        let __attackSimNarrationAudioEl = null;
-
-        function _attackSimEscape(value) {
-            const div = document.createElement('div');
-            div.textContent = String(value ?? '');
-            return div.innerHTML;
-        }
-
-        function _attackSimExtractJson(raw) {
-            const txt = String(raw || '').trim();
-            if (!txt) return null;
-            try {
-                return JSON.parse(txt);
-            } catch (_) {}
-            const m = txt.match(/\\{[\\s\\S]*\\}/);
-            if (m && m[0]) {
-                try {
-                    return JSON.parse(m[0]);
-                } catch (_) {}
-            }
-            return null;
-        }
-
-        function _attackSimDefaultStoryboard(attackType, lang) {
-            const isAr = String(lang || 'ar') === 'ar';
-            const title = isAr ? `محاكاة دفاعية: ${attackType || 'هجمة إلكترونية'}` : `Defensive Simulation: ${attackType || 'Cyber Attack'}`;
-            return {
-                title,
-                intro: isAr ? 'فيديو تدريبي توعوي يشرح آلية التهديد بشكل مفاهيمي.' : 'Educational defensive video explaining the threat conceptually.',
-                scenes: [
-                    {
-                        title: isAr ? 'المشهد 1: نقطة الدخول' : 'Scene 1: Initial Access',
-                        visual: isAr ? 'رسالة أو مدخل مشبوه يصل للنظام.' : 'A suspicious message or input reaches the system.',
-                        narration: isAr ? 'المهاجم يحاول الوصول الأولي عبر قناة ضعيفة أو تصرف بشري خاطئ.' : 'The attacker attempts initial access through a weak channel or human error.',
-                        seconds: 4
-                    },
-                    {
-                        title: isAr ? 'المشهد 2: توسيع التأثير' : 'Scene 2: Impact Expansion',
-                        visual: isAr ? 'انتقال التأثير من أصل إلى أصول أخرى داخل البيئة.' : 'The impact expands from one asset to others in the environment.',
-                        narration: isAr ? 'بعد الدخول، يحاول التهديد التحرك وتكبير الأثر على الخدمة والبيانات.' : 'After entry, the threat moves and increases impact on services and data.',
-                        seconds: 4
-                    },
-                    {
-                        title: isAr ? 'المشهد 3: الكشف والاستجابة' : 'Scene 3: Detection and Response',
-                        visual: isAr ? 'فريق الدفاع يلتقط المؤشرات ويعزل المصدر.' : 'Defenders detect indicators and isolate the source.',
-                        narration: isAr ? 'الرصد المبكر عبر السجلات والتنبيهات يسرّع الاحتواء ويمنع الانتشار.' : 'Early monitoring and alerts accelerate containment and stop spread.',
-                        seconds: 4
-                    },
-                    {
-                        title: isAr ? 'المشهد 4: التحصين ومنع التكرار' : 'Scene 4: Hardening and Prevention',
-                        visual: isAr ? 'تحديثات، MFA، تقسيم شبكة، وتدريب دوري.' : 'Patching, MFA, network segmentation, and continuous training.',
-                        narration: isAr ? 'الختام: الدفاع المستدام يعتمد على التحصين والتمرين المستمر.' : 'Conclusion: sustainable defense depends on hardening and continuous drills.',
-                        seconds: 5
-                    }
-                ],
-                defense_summary: isAr
-                    ? 'خطوات الدفاع: تحديث الأنظمة، MFA، مراقبة SIEM/EDR، عزل سريع، وخطة استجابة حوادث محدثة.'
-                    : 'Defense steps: patching, MFA, SIEM/EDR monitoring, rapid isolation, and updated incident response playbooks.'
-            };
-        }
-
-        function attackSimInit() {
-            const typeEl = document.getElementById('attackSimType');
-            const videoEl = document.getElementById('attackSimVideo');
-            if (typeEl && !typeEl.dataset.boundEnter) {
-                typeEl.dataset.boundEnter = '1';
-                typeEl.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') attackSimBuildStoryboard();
-                });
-            }
-            if (videoEl && !videoEl.dataset.boundNarration) {
-                videoEl.dataset.boundNarration = '1';
-                videoEl.addEventListener('play', () => attackSimNarrateNow());
-                videoEl.addEventListener('pause', () => attackSimStopNarration());
-                videoEl.addEventListener('ended', () => attackSimStopNarration());
-            }
-        }
-
-        function attackSimRenderStoryboard(payload) {
-            const box = document.getElementById('attackSimStoryboard');
-            if (!box) return;
-            const data = payload || {};
-            const scenes = Array.isArray(data.scenes) ? data.scenes : [];
-
-            box.innerHTML = `
-                <div class="space-y-2">
-                    <div class="text-sm font-bold text-orange-200">${_attackSimEscape(data.title || 'Attack Simulation Storyboard')}</div>
-                    <div class="text-[11px] text-gray-300">${_attackSimEscape(data.intro || '')}</div>
-                    <div class="space-y-2 mt-2">
-                        ${scenes.map((s, idx) => `
-                            <div class="p-2 rounded border border-slate-700 bg-slate-900/50">
-                                <div class="text-[11px] font-bold text-cyan-300">${_attackSimEscape(s.title || `Scene ${idx + 1}`)}</div>
-                                <div class="text-[11px] text-gray-300 mt-1">Visual: ${_attackSimEscape(s.visual || '')}</div>
-                                <div class="text-[11px] text-violet-200 mt-1">Narration: ${_attackSimEscape(s.narration || '')}</div>
-                                <div class="text-[10px] text-gray-500 mt-1">Duration: ${_attackSimEscape(s.seconds || 4)}s</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="p-2 rounded border border-emerald-800/40 bg-emerald-950/20 text-[11px] text-emerald-200">
-                        <span class="font-bold">Defense Summary:</span> ${_attackSimEscape(data.defense_summary || '')}
-                    </div>
-                </div>
-            `;
-        }
-
-        async function attackSimBuildStoryboard() {
-            const typeEl = document.getElementById('attackSimType');
-            const ctxEl = document.getElementById('attackSimContext');
-            const levelEl = document.getElementById('attackSimLevel');
-            const langEl = document.getElementById('attackSimLang');
-            const btn = document.getElementById('attackSimAiBtn');
-            const status = document.getElementById('attackSimStatus');
-
-            const attackType = String(typeEl?.value || '').trim();
-            const orgContext = String(ctxEl?.value || '').trim();
-            const level = String(levelEl?.value || 'intermediate');
-            const lang = String(langEl?.value || 'ar');
-
-            if (!attackType) {
-                titanAlert(lang === 'ar' ? 'اكتب نوع الهجمة أولاً.' : 'Enter attack type first.', 'warn');
-                return;
-            }
-
-            if (btn) {
-                btn.disabled = true;
-                btn.textContent = '...';
-            }
-            if (status) status.textContent = lang === 'ar' ? 'AI يبني السيناريو...' : 'AI is building storyboard...';
-
-            try {
-                const prompt = [
-                    lang === 'ar'
-                        ? 'أنشئ Storyboard لفيديو تدريبي دفاعي فقط. ممنوع أوامر استغلال أو خطوات اختراق عملية.'
-                        : 'Create a defensive training storyboard only. No exploit commands or actionable offensive steps.',
-                    `Attack type: ${attackType}`,
-                    `Organization context: ${orgContext || 'N/A'}`,
-                    `Audience level: ${level}`,
-                    'Output must be strict JSON only with keys: title, intro, scenes, defense_summary.',
-                    'scenes must be an array of 4-6 objects and each scene has: title, visual, narration, seconds (3-7).',
-                    'Final scene and defense_summary must explain detection, defense, and prevention clearly.'
-                ].join('\\n');
-
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 32000);
-                const res = await fetch('/api/ai/chat', {
-                    method: 'POST',
-                    cache: 'no-store',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        message: prompt,
-                        conversation_id: __attackSimConversationId
-                    }),
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-
-                const ct = (res.headers.get('content-type') || '').toLowerCase();
-                let data = null;
-                if (ct.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const raw = await res.text();
-                    data = JSON.parse(raw || '{}');
-                }
-                if (!res.ok || !data || !data.success) {
-                    throw new Error((data && data.error) ? data.error : 'AI request failed');
-                }
-
-                __attackSimConversationId = data.conversation_id || __attackSimConversationId;
-                const parsed = _attackSimExtractJson(data.reply || '');
-                __attackSimStoryboard = (parsed && typeof parsed === 'object') ? parsed : _attackSimDefaultStoryboard(attackType, lang);
-                attackSimRenderStoryboard(__attackSimStoryboard);
-                if (status) status.textContent = lang === 'ar' ? 'تم توليد السيناريو. الخطوة التالية: إنشاء الفيديو.' : 'Storyboard ready. Next: render the video.';
-            } catch (e) {
-                __attackSimStoryboard = _attackSimDefaultStoryboard(attackType, lang);
-                attackSimRenderStoryboard(__attackSimStoryboard);
-                if (status) status.textContent = (lang === 'ar' ? 'تعذر جلب AI، تم استخدام سيناريو افتراضي دفاعي.' : 'AI unavailable, fallback defensive storyboard generated.');
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = '1) توليد سيناريو AI';
-                }
-            }
-        }
-
-        function attackSimNarrateNow() {
-            if (__attackSimHasEmbeddedAudio) return;
-            const lang = String(document.getElementById('attackSimLang')?.value || 'ar');
-            const st = __attackSimStoryboard || _attackSimDefaultStoryboard('Cyber Attack', lang);
-            const status = document.getElementById('attackSimStatus');
-            const narration = _attackSimNarrationText(st);
-            if (!narration.trim()) return;
-
-            attackSimStopNarration();
-
-            _attackSimFetchNarrationBlob(st, lang)
-                .then((blob) => {
-                    if (!blob || !blob.size) throw new Error('empty_audio_blob');
-                    if (__attackSimNarrationAudioUrl) {
-                        try { URL.revokeObjectURL(__attackSimNarrationAudioUrl); } catch (_) {}
-                        __attackSimNarrationAudioUrl = '';
-                    }
-                    __attackSimNarrationAudioUrl = URL.createObjectURL(blob);
-                    __attackSimNarrationAudioEl = new Audio(__attackSimNarrationAudioUrl);
-                    __attackSimNarrationAudioEl.play().catch(() => {
-                        throw new Error('audio_play_failed');
-                    });
-                    if (status) status.textContent = lang === 'ar' ? 'تشغيل الصوت من مولد TTS المحلي/الخارجي.' : 'Playing TTS narration.';
-                })
-                .catch(() => {
-                    if (!('speechSynthesis' in window)) {
-                        if (status) status.textContent = lang === 'ar' ? 'تعذر تشغيل الصوت على هذا المتصفح.' : 'Audio playback is not supported in this browser.';
-                        return;
-                    }
-                    const utter = new SpeechSynthesisUtterance(narration);
-                    utter.lang = (lang === 'ar') ? 'ar-SA' : 'en-US';
-                    utter.rate = 0.95;
-                    utter.pitch = 1;
-                    utter.volume = 1;
-                    window.speechSynthesis.speak(utter);
-                    if (status) status.textContent = lang === 'ar' ? 'تشغيل الصوت عبر صوت المتصفح.' : 'Playing browser narration fallback.';
-                });
-        }
-
-        function attackSimStopNarration() {
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-            }
-            if (__attackSimNarrationAudioEl) {
-                try { __attackSimNarrationAudioEl.pause(); } catch (_) {}
-                __attackSimNarrationAudioEl = null;
-            }
-            if (__attackSimNarrationAudioUrl) {
-                try { URL.revokeObjectURL(__attackSimNarrationAudioUrl); } catch (_) {}
-                __attackSimNarrationAudioUrl = '';
-            }
-        }
-
-        function _attackSimNarrationText(storyboard) {
-            const st = storyboard || {};
-            const scenes = Array.isArray(st.scenes) ? st.scenes : [];
-            const text = scenes.map((s) => String(s.narration || '').trim()).filter(Boolean).join('. ')
-                + '. ' + String(st.defense_summary || '');
-            return String(text || '').trim();
-        }
-
-        async function _attackSimFetchNarrationBlob(storyboard, lang) {
-            const text = _attackSimNarrationText(storyboard);
-            if (!text) return null;
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 50000);
-                const res = await fetch('/api/attacksim/tts', {
-                    method: 'POST',
-                    cache: 'no-store',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ text, lang: (lang || 'ar') }),
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-
-                if (!res.ok) return null;
-                const blob = await res.blob();
-                if (!blob || !blob.size) return null;
-                return blob;
-            } catch (_) {
-                return null;
-            }
-        }
-
-        function _attackSimDrawScene(ctx, w, h, scene, idx, totalScenes, localProgress, globalProgress, lang) {
-            const hue = (18 + (idx * 28)) % 360;
-            const grad = ctx.createLinearGradient(0, 0, w, h);
-            grad.addColorStop(0, `hsla(${hue}, 70%, 10%, 1)`);
-            grad.addColorStop(1, `hsla(${(hue + 40) % 360}, 80%, 18%, 1)`);
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, w, h);
-
-            ctx.save();
-            for (let i = 0; i < 80; i++) {
-                const x = (i * 137 + globalProgress * 400) % w;
-                const y = ((i * 71) + Math.sin((globalProgress + i) * 2.2) * 30 + localProgress * 40) % h;
-                const alpha = 0.04 + ((i % 7) / 150);
-                ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-                ctx.beginPath();
-                ctx.arc(x, y, 1.5 + (i % 3), 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.restore();
-
-            const panelX = 48;
-            const panelY = 58;
-            const panelW = w - 96;
-            const panelH = h - 116;
-            ctx.fillStyle = 'rgba(8, 12, 20, 0.62)';
-            ctx.strokeStyle = 'rgba(180, 210, 255, 0.26)';
-            ctx.lineWidth = 2;
-            ctx.fillRect(panelX, panelY, panelW, panelH);
-            ctx.strokeRect(panelX, panelY, panelW, panelH);
-
-            const title = String(scene?.title || `Scene ${idx + 1}`);
-            const visual = String(scene?.visual || '');
-            const narration = String(scene?.narration || '');
-
-            ctx.fillStyle = '#facc15';
-            ctx.font = 'bold 42px Arial';
-            ctx.fillText(title, panelX + 24, panelY + 64);
-
-            ctx.fillStyle = '#93c5fd';
-            ctx.font = 'bold 28px Arial';
-            ctx.fillText(lang === 'ar' ? 'المشهد البصري' : 'Visual', panelX + 24, panelY + 120);
-
-            ctx.fillStyle = '#e5e7eb';
-            ctx.font = '24px Arial';
-            const visualLines = visual.match(/.{1,58}/g) || [''];
-            visualLines.slice(0, 3).forEach((ln, i) => {
-                ctx.fillText(ln, panelX + 24, panelY + 162 + (i * 32));
-            });
-
-            ctx.fillStyle = '#c4b5fd';
-            ctx.font = 'bold 28px Arial';
-            ctx.fillText(lang === 'ar' ? 'التعليق الصوتي' : 'Narration', panelX + 24, panelY + 292);
-
-            ctx.fillStyle = '#f3f4f6';
-            ctx.font = '22px Arial';
-            const narLines = narration.match(/.{1,62}/g) || [''];
-            narLines.slice(0, 4).forEach((ln, i) => {
-                ctx.fillText(ln, panelX + 24, panelY + 332 + (i * 30));
-            });
-
-            const progressW = panelW - 48;
-            const progressX = panelX + 24;
-            const progressY = panelY + panelH - 34;
-            ctx.fillStyle = 'rgba(148, 163, 184, 0.32)';
-            ctx.fillRect(progressX, progressY, progressW, 12);
-            ctx.fillStyle = '#22d3ee';
-            ctx.fillRect(progressX, progressY, Math.max(1, progressW * localProgress), 12);
-
-            ctx.fillStyle = '#a3a3a3';
-            ctx.font = '18px Arial';
-            ctx.fillText(`${idx + 1}/${totalScenes}`, panelX + panelW - 72, panelY + 34);
-        }
-
-        async function attackSimRenderVideo() {
-            const lang = String(document.getElementById('attackSimLang')?.value || 'ar');
-            const type = String(document.getElementById('attackSimType')?.value || 'Cyber Attack').trim();
-            const status = document.getElementById('attackSimStatus');
-            const renderBtn = document.getElementById('attackSimRenderBtn');
-            const canvas = document.getElementById('attackSimCanvas');
-            const video = document.getElementById('attackSimVideo');
-            const download = document.getElementById('attackSimDownload');
-            if (!canvas || !video || !download) return;
-            __attackSimHasEmbeddedAudio = false;
-
-            if (typeof canvas.captureStream !== 'function' || typeof MediaRecorder === 'undefined') {
-                if (status) status.textContent = lang === 'ar'
-                    ? 'متصفحك لا يدعم تسجيل Canvas كفيديو (MediaRecorder). جرب Chrome/Edge حديث.'
-                    : 'Your browser does not support Canvas video recording (MediaRecorder). Try modern Chrome/Edge.';
-                return;
-            }
-
-            const st = __attackSimStoryboard || _attackSimDefaultStoryboard(type, lang);
-            const scenes = Array.isArray(st.scenes) ? st.scenes : [];
-            if (!scenes.length) {
-                titanAlert(lang === 'ar' ? 'لا يوجد مشاهد للفيديو.' : 'No scenes to render.', 'warn');
-                return;
-            }
-
-            if (renderBtn) {
-                renderBtn.disabled = true;
-                renderBtn.textContent = '...';
-            }
-            if (status) status.textContent = lang === 'ar' ? 'جارٍ إنشاء فيديو الأنيميشن والصوت...' : 'Rendering animation video with voice-over...';
-
-            try {
-                const ctx = canvas.getContext('2d');
-                if (!ctx) throw new Error('Canvas unavailable');
-
-                const width = canvas.width;
-                const height = canvas.height;
-                const durations = scenes.map((s) => {
-                    const sec = Number(s.seconds || 4);
-                    return Math.max(3, Math.min(8, Number.isFinite(sec) ? sec : 4));
-                });
-                const totalDuration = durations.reduce((a, b) => a + b, 0);
-
-                const narrationBlob = await _attackSimFetchNarrationBlob(st, lang);
-                const canvasStream = canvas.captureStream(24);
-                let stream = canvasStream;
-                let audioCtx = null;
-                let audioEl = null;
-                let narrationUrl = '';
-                let renderDuration = totalDuration;
-
-                if (narrationBlob && ('AudioContext' in window || 'webkitAudioContext' in window)) {
-                    try {
-                        const ACtx = window.AudioContext || window.webkitAudioContext;
-                        audioCtx = new ACtx();
-                        narrationUrl = URL.createObjectURL(narrationBlob);
-                        audioEl = new Audio(narrationUrl);
-                        audioEl.preload = 'auto';
-
-                        await new Promise((resolve, reject) => {
-                            const to = setTimeout(() => reject(new Error('audio metadata timeout')), 8000);
-                            audioEl.onloadedmetadata = () => {
-                                clearTimeout(to);
-                                resolve(true);
-                            };
-                            audioEl.onerror = () => {
-                                clearTimeout(to);
-                                reject(new Error('audio metadata failed'));
-                            };
-                        });
-
-                        const srcNode = audioCtx.createMediaElementSource(audioEl);
-                        const destNode = audioCtx.createMediaStreamDestination();
-                        srcNode.connect(destNode);
-
-                        const mixed = new MediaStream();
-                        canvasStream.getVideoTracks().forEach((t) => mixed.addTrack(t));
-                        destNode.stream.getAudioTracks().forEach((t) => mixed.addTrack(t));
-                        stream = mixed;
-                        renderDuration = Math.max(totalDuration, Number(audioEl.duration || 0) || 0);
-                        __attackSimHasEmbeddedAudio = true;
-                    } catch (_) {
-                        __attackSimHasEmbeddedAudio = false;
-                        if (audioCtx && typeof audioCtx.close === 'function') {
-                            try { await audioCtx.close(); } catch (_) {}
-                        }
-                        if (narrationUrl) {
-                            try { URL.revokeObjectURL(narrationUrl); } catch (_) {}
-                        }
-                        audioCtx = null;
-                        audioEl = null;
-                        narrationUrl = '';
-                    }
-                } else {
-                    __attackSimHasEmbeddedAudio = false;
-                }
-
-                const mimeCandidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
-                const mimeType = mimeCandidates.find((m) => (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(m))) || '';
-                const recorder = mimeType
-                    ? new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2800000 })
-                    : new MediaRecorder(stream);
-
-                const chunks = [];
-                recorder.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) chunks.push(e.data);
-                };
-
-                const done = new Promise((resolve, reject) => {
-                    recorder.onerror = () => reject(new Error('Recorder failed'));
-                    recorder.onstop = () => resolve(true);
-                });
-
-                recorder.start();
-
-                if (audioEl && audioCtx) {
-                    try {
-                        await audioCtx.resume();
-                        await audioEl.play();
-                    } catch (_) {
-                        __attackSimHasEmbeddedAudio = false;
-                    }
-                }
-
-                const start = performance.now();
-                const ends = [];
-                let acc = 0;
-                durations.forEach((d) => {
-                    acc += d;
-                    ends.push(acc);
-                });
-
-                await new Promise((resolve) => {
-                    function frame(now) {
-                        const elapsed = Math.max(0, (now - start) / 1000);
-                        const clamped = Math.min(totalDuration, elapsed);
-                        let sceneIndex = 0;
-                        while (sceneIndex < ends.length && clamped > ends[sceneIndex]) sceneIndex += 1;
-                        if (sceneIndex >= scenes.length) sceneIndex = scenes.length - 1;
-
-                        const sceneStart = sceneIndex === 0 ? 0 : ends[sceneIndex - 1];
-                        const sceneDur = durations[sceneIndex] || 4;
-                        const localProgress = Math.min(1, Math.max(0, (clamped - sceneStart) / sceneDur));
-                        const globalProgress = totalDuration > 0 ? (clamped / totalDuration) : 0;
-                        _attackSimDrawScene(ctx, width, height, scenes[sceneIndex], sceneIndex, scenes.length, localProgress, globalProgress, lang);
-
-                        if (elapsed < renderDuration) {
-                            requestAnimationFrame(frame);
-                        } else {
-                            resolve(true);
-                        }
-                    }
-                    requestAnimationFrame(frame);
-                });
-
-                if (audioEl && !audioEl.paused) {
-                    try { audioEl.pause(); } catch (_) {}
-                }
-
-                recorder.stop();
-                await done;
-
-                if (audioCtx && typeof audioCtx.close === 'function') {
-                    try { await audioCtx.close(); } catch (_) {}
-                }
-                if (narrationUrl) {
-                    try { URL.revokeObjectURL(narrationUrl); } catch (_) {}
-                }
-
-                if (__attackSimVideoUrl) {
-                    URL.revokeObjectURL(__attackSimVideoUrl);
-                    __attackSimVideoUrl = '';
-                }
-                const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
-                __attackSimVideoUrl = URL.createObjectURL(blob);
-                video.src = __attackSimVideoUrl;
-                video.load();
-
-                download.href = __attackSimVideoUrl;
-                download.classList.remove('hidden');
-
-                if (status) status.textContent = lang === 'ar'
-                    ? (__attackSimHasEmbeddedAudio
-                        ? 'تم إنشاء الفيديو مع تعليق صوتي مدمج داخل الملف.'
-                        : 'تم إنشاء الفيديو بدون دمج صوت خارجي. يمكن تشغيل تعليق المتصفح كبديل.')
-                    : (__attackSimHasEmbeddedAudio
-                        ? 'Video generated with embedded narration audio.'
-                        : 'Video generated without external embedded audio. Browser narration fallback is available.');
-            } catch (e) {
-                if (status) status.textContent = (lang === 'ar'
-                    ? `فشل إنشاء الفيديو: ${e.message || e}`
-                    : `Video rendering failed: ${e.message || e}`);
-            } finally {
-                if (renderBtn) {
-                    renderBtn.disabled = false;
-                    renderBtn.textContent = '2) إنشاء فيديو الأنيميشن';
-                }
-            }
         }
 
         function _resultGetElement(target) {
@@ -19577,36 +18760,6 @@ def ai_analyze():
 @app.route('/api/ai/models', methods=['GET'])
 def ai_models():
     return jsonify({"models": ["TITAN-SEC AI (DigitalOcean)"], "success": True})
-
-
-@app.route('/api/attacksim/tts', methods=['POST'])
-def attacksim_tts_route():
-    user_id, err = _get_logged_in_user_id()
-    if err:
-        return err
-    assert user_id is not None
-
-    data = request.get_json(silent=True) or {}
-    text = str(data.get('text') or '').strip()
-    lang = str(data.get('lang') or 'ar').strip().lower()
-    if not text:
-        return jsonify({'success': False, 'error': 'text مطلوب'}), 400
-
-    try:
-        audio_bytes, mime = _call_attacksim_tts(text, lang=lang)
-        add_audit_log('AttackSim TTS 🎙️', f'chars={len(text)} lang={lang}', username=session.get('username', ''))
-        return Response(
-            audio_bytes,
-            status=200,
-            mimetype=(mime or 'audio/mpeg'),
-            headers={
-                'Cache-Control': 'no-store',
-                'Content-Disposition': 'inline; filename="attacksim-narration.mp3"'
-            }
-        )
-    except Exception as e:
-        print(f"[ATTACKSIM TTS] Error: {e}")
-        return jsonify({'success': False, 'error': 'تعذر توليد الصوت حالياً. فعّل ATTACKSIM_TTS_KEY أو ثبّت pyttsx3 للصوت المحلي المجاني.'}), 503
 
 
 @app.route('/api/learning/simulate', methods=['POST'])
