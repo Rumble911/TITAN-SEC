@@ -3887,7 +3887,7 @@ HTML_TEMPLATE = """
             @keyframes orbFloat { 0%{transform:translate(0,0) scale(1);} 100%{transform:translate(3%,5%) scale(1.08);} }
 
             .tab-nav-modern {
-                background: linear-gradient(145deg, rgba(15, 23, 42, 0.72), rgba(2, 6, 23, 0.8));
+                background: linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.98));
                 border: 1px solid rgba(148, 163, 184, 0.2);
                 box-shadow: inset 0 0 30px rgba(15, 23, 42, 0.35), 0 10px 35px rgba(2, 6, 23, 0.55);
             }
@@ -3937,7 +3937,7 @@ HTML_TEMPLATE = """
                 text-align: center;
                 min-height: 2.3rem;
                 border: 1px solid rgba(148, 163, 184, 0.18);
-                background: rgba(15, 23, 42, 0.55);
+                background: rgba(15, 23, 42, 0.94);
                 color: #cbd5e1;
                 transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
             }
@@ -3957,6 +3957,13 @@ HTML_TEMPLATE = """
                 .tab-nav-modern .tab-grid button {
                     min-height: 2.15rem;
                 }
+            }
+
+            .tab-nav-modern .tab-grid button {
+                background: linear-gradient(135deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+                border-color: rgba(125, 211, 252, 0.32);
+                color: #e2e8f0;
+                box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.14), 0 1px 0 rgba(15, 23, 42, 0.9);
             }
 
             .tab-nav-modern .tab-grid button:hover {
@@ -3981,17 +3988,19 @@ HTML_TEMPLATE = """
 
             .training-subtabs-shell {
                 border: 1px solid rgba(147, 197, 253, 0.35);
-                background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.94));
+                background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.98));
                 box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.08), 0 10px 26px rgba(2, 6, 23, 0.48);
+                backdrop-filter: none;
             }
 
             .training-subtab-btn {
                 width: 100%;
                 border: 1px solid rgba(125, 211, 252, 0.32);
-                background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+                background: linear-gradient(135deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
                 color: #e2e8f0;
                 min-height: 2.3rem;
                 box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.16), 0 1px 0 rgba(15, 23, 42, 0.9);
+                backdrop-filter: none;
             }
 
             .training-subtab-btn:hover {
@@ -7928,6 +7937,8 @@ HTML_TEMPLATE = """
         let __attackSimStoryboard = null;
         let __attackSimVideoUrl = '';
         let __attackSimHasEmbeddedAudio = false;
+        let __attackSimNarrationAudioUrl = '';
+        let __attackSimNarrationAudioEl = null;
 
         function _attackSimEscape(value) {
             const div = document.createElement('div');
@@ -8116,23 +8127,52 @@ HTML_TEMPLATE = """
             if (__attackSimHasEmbeddedAudio) return;
             const lang = String(document.getElementById('attackSimLang')?.value || 'ar');
             const st = __attackSimStoryboard || _attackSimDefaultStoryboard('Cyber Attack', lang);
-            const scenes = Array.isArray(st.scenes) ? st.scenes : [];
-            const narration = scenes.map((s) => String(s.narration || '').trim()).filter(Boolean).join('. ')
-                + '. ' + String(st.defense_summary || '');
-            if (!narration.trim() || !('speechSynthesis' in window)) return;
+            const status = document.getElementById('attackSimStatus');
+            const narration = _attackSimNarrationText(st);
+            if (!narration.trim()) return;
 
             attackSimStopNarration();
-            const utter = new SpeechSynthesisUtterance(narration);
-            utter.lang = (lang === 'ar') ? 'ar-SA' : 'en-US';
-            utter.rate = 0.95;
-            utter.pitch = 1;
-            utter.volume = 1;
-            window.speechSynthesis.speak(utter);
+
+            _attackSimFetchNarrationBlob(st, lang)
+                .then((blob) => {
+                    if (!blob || !blob.size) throw new Error('empty_audio_blob');
+                    if (__attackSimNarrationAudioUrl) {
+                        try { URL.revokeObjectURL(__attackSimNarrationAudioUrl); } catch (_) {}
+                        __attackSimNarrationAudioUrl = '';
+                    }
+                    __attackSimNarrationAudioUrl = URL.createObjectURL(blob);
+                    __attackSimNarrationAudioEl = new Audio(__attackSimNarrationAudioUrl);
+                    __attackSimNarrationAudioEl.play().catch(() => {
+                        throw new Error('audio_play_failed');
+                    });
+                    if (status) status.textContent = lang === 'ar' ? 'تشغيل الصوت من مولد TTS المحلي/الخارجي.' : 'Playing TTS narration.';
+                })
+                .catch(() => {
+                    if (!('speechSynthesis' in window)) {
+                        if (status) status.textContent = lang === 'ar' ? 'تعذر تشغيل الصوت على هذا المتصفح.' : 'Audio playback is not supported in this browser.';
+                        return;
+                    }
+                    const utter = new SpeechSynthesisUtterance(narration);
+                    utter.lang = (lang === 'ar') ? 'ar-SA' : 'en-US';
+                    utter.rate = 0.95;
+                    utter.pitch = 1;
+                    utter.volume = 1;
+                    window.speechSynthesis.speak(utter);
+                    if (status) status.textContent = lang === 'ar' ? 'تشغيل الصوت عبر صوت المتصفح.' : 'Playing browser narration fallback.';
+                });
         }
 
         function attackSimStopNarration() {
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
+            }
+            if (__attackSimNarrationAudioEl) {
+                try { __attackSimNarrationAudioEl.pause(); } catch (_) {}
+                __attackSimNarrationAudioEl = null;
+            }
+            if (__attackSimNarrationAudioUrl) {
+                try { URL.revokeObjectURL(__attackSimNarrationAudioUrl); } catch (_) {}
+                __attackSimNarrationAudioUrl = '';
             }
         }
 
@@ -8250,6 +8290,14 @@ HTML_TEMPLATE = """
             const video = document.getElementById('attackSimVideo');
             const download = document.getElementById('attackSimDownload');
             if (!canvas || !video || !download) return;
+            __attackSimHasEmbeddedAudio = false;
+
+            if (typeof canvas.captureStream !== 'function' || typeof MediaRecorder === 'undefined') {
+                if (status) status.textContent = lang === 'ar'
+                    ? 'متصفحك لا يدعم تسجيل Canvas كفيديو (MediaRecorder). جرب Chrome/Edge حديث.'
+                    : 'Your browser does not support Canvas video recording (MediaRecorder). Try modern Chrome/Edge.';
+                return;
+            }
 
             const st = __attackSimStoryboard || _attackSimDefaultStoryboard(type, lang);
             const scenes = Array.isArray(st.scenes) ? st.scenes : [];
@@ -8285,40 +8333,53 @@ HTML_TEMPLATE = """
                 let renderDuration = totalDuration;
 
                 if (narrationBlob && ('AudioContext' in window || 'webkitAudioContext' in window)) {
-                    const ACtx = window.AudioContext || window.webkitAudioContext;
-                    audioCtx = new ACtx();
-                    narrationUrl = URL.createObjectURL(narrationBlob);
-                    audioEl = new Audio(narrationUrl);
-                    audioEl.preload = 'auto';
+                    try {
+                        const ACtx = window.AudioContext || window.webkitAudioContext;
+                        audioCtx = new ACtx();
+                        narrationUrl = URL.createObjectURL(narrationBlob);
+                        audioEl = new Audio(narrationUrl);
+                        audioEl.preload = 'auto';
 
-                    await new Promise((resolve, reject) => {
-                        const to = setTimeout(() => reject(new Error('audio metadata timeout')), 8000);
-                        audioEl.onloadedmetadata = () => {
-                            clearTimeout(to);
-                            resolve(true);
-                        };
-                        audioEl.onerror = () => {
-                            clearTimeout(to);
-                            reject(new Error('audio metadata failed'));
-                        };
-                    });
+                        await new Promise((resolve, reject) => {
+                            const to = setTimeout(() => reject(new Error('audio metadata timeout')), 8000);
+                            audioEl.onloadedmetadata = () => {
+                                clearTimeout(to);
+                                resolve(true);
+                            };
+                            audioEl.onerror = () => {
+                                clearTimeout(to);
+                                reject(new Error('audio metadata failed'));
+                            };
+                        });
 
-                    const srcNode = audioCtx.createMediaElementSource(audioEl);
-                    const destNode = audioCtx.createMediaStreamDestination();
-                    srcNode.connect(destNode);
+                        const srcNode = audioCtx.createMediaElementSource(audioEl);
+                        const destNode = audioCtx.createMediaStreamDestination();
+                        srcNode.connect(destNode);
 
-                    const mixed = new MediaStream();
-                    canvasStream.getVideoTracks().forEach((t) => mixed.addTrack(t));
-                    destNode.stream.getAudioTracks().forEach((t) => mixed.addTrack(t));
-                    stream = mixed;
-                    renderDuration = Math.max(totalDuration, Number(audioEl.duration || 0) || 0);
-                    __attackSimHasEmbeddedAudio = true;
+                        const mixed = new MediaStream();
+                        canvasStream.getVideoTracks().forEach((t) => mixed.addTrack(t));
+                        destNode.stream.getAudioTracks().forEach((t) => mixed.addTrack(t));
+                        stream = mixed;
+                        renderDuration = Math.max(totalDuration, Number(audioEl.duration || 0) || 0);
+                        __attackSimHasEmbeddedAudio = true;
+                    } catch (_) {
+                        __attackSimHasEmbeddedAudio = false;
+                        if (audioCtx && typeof audioCtx.close === 'function') {
+                            try { await audioCtx.close(); } catch (_) {}
+                        }
+                        if (narrationUrl) {
+                            try { URL.revokeObjectURL(narrationUrl); } catch (_) {}
+                        }
+                        audioCtx = null;
+                        audioEl = null;
+                        narrationUrl = '';
+                    }
                 } else {
                     __attackSimHasEmbeddedAudio = false;
                 }
 
                 const mimeCandidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
-                const mimeType = mimeCandidates.find((m) => (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m))) || '';
+                const mimeType = mimeCandidates.find((m) => (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(m))) || '';
                 const recorder = mimeType
                     ? new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2800000 })
                     : new MediaRecorder(stream);
