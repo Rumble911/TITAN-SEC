@@ -1574,35 +1574,12 @@ def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
         + f"- تصنيف الموضوع الحالي: {topic}. حافظ على الاستمرارية مع نفس سياق المحادثة.\n"
         + "- عند السؤال عن آلية عمل TITAN أو مكوناته أو أدواته، اشرحها كوحدات: المعمارية، المصادقة، الحماية، الأدوات، API، وتدفقات العمل.\n"
         + "- عند ذكر عمليات المنصة، اذكر مسارات API ذات الصلة عندما تكون مفيدة.\n\n"
-        + "- إذا المستخدم طلب صراحة كويز أو خيارات هجمات تدريبية: اختم الرد بقسمين واضحين:\n"
+        + "- إذا السؤال متعلق بالأمن السيبراني أو الهجمات: اختم الرد دائماً بقسمين واضحين:\n"
         + "  1) خيارات هجمات تدريبية مقترحة (3-5 خيارات للدراسة الدفاعية)\n"
         + "  2) كويز سريع من 3 أسئلة متعددة الخيارات (A/B/C/D) مع الإجابات الصحيحة في النهاية.\n"
-        + "- إذا لم يطلب المستخدم ذلك صراحة، لا تضف أقسام الكويز/الخيارات تلقائياً.\n"
         + "- اجعل الشرح مرتب بعناوين قصيرة ونقاط عملية.\n\n"
         + (kb_context or "Knowledge context from TITAN KB is unavailable right now.")
     )
-
-
-def _ai_user_requested_learning_extras(user_text: str) -> dict[str, bool]:
-    t = str(user_text or '').strip().lower()
-    if not t:
-        return {'suggestions': False, 'quiz': False}
-
-    quiz_keywords = [
-        'quiz', 'mcq', 'multiple choice', 'questions', 'test',
-        'كويز', 'اختبار', 'امتحان', 'اسئلة', 'أسئلة', 'سؤال',
-    ]
-    suggestions_keywords = [
-        'suggest', 'suggestion', 'options', 'attack options',
-        'اقترح', 'اقتراح', 'خيارات', 'خيارات هجمات', 'هجمات مقترحة',
-    ]
-
-    wants_quiz = any(k in t for k in quiz_keywords)
-    wants_suggestions = wants_quiz or any(k in t for k in suggestions_keywords)
-    return {
-        'suggestions': bool(wants_suggestions),
-        'quiz': bool(wants_quiz),
-    }
 
 
 def _ai_attack_suggestions_for_text(user_text: str, lang: str = 'ar', max_items: int = 5) -> list[dict[str, str]]:
@@ -13085,59 +13062,6 @@ HTML_TEMPLATE = """
             return _osintEscape(String(v || ''));
         }
 
-        function _aiQuizNormalize(v) {
-            return String(v || '').trim().toLowerCase();
-        }
-
-        function _aiInitQuizSession(quizRows) {
-            if (!window.__titanAiQuizSessions) window.__titanAiQuizSessions = {};
-            const sessionId = 'quiz_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
-            const src = Array.isArray(quizRows) ? quizRows : [];
-            const questions = src.map((q, idx) => {
-                const qText = String(q?.q || ('سؤال ' + (idx + 1))).trim();
-                const rawOpts = Array.isArray(q?.options) ? q.options : [];
-                const options = rawOpts.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 6);
-                const answerText = String(q?.answer || '').trim();
-                let correctIndex = options.findIndex((op) => _aiQuizNormalize(op) === _aiQuizNormalize(answerText));
-                if (correctIndex < 0) correctIndex = options.length ? 0 : -1;
-                return {
-                    q: qText,
-                    options,
-                    correctIndex,
-                    selectedIndex: null,
-                    locked: false
-                };
-            }).filter((q) => q.options.length >= 2 && q.correctIndex >= 0);
-
-            window.__titanAiQuizSessions[sessionId] = {
-                sessionId,
-                started: false,
-                completed: false,
-                score: 0,
-                answeredCount: 0,
-                questions
-            };
-            return sessionId;
-        }
-
-        function _aiPersistQuizScore(record) {
-            const key = 'titan_ai_quiz_scores';
-            let rows = [];
-            try {
-                rows = JSON.parse(localStorage.getItem(key) || '[]');
-                if (!Array.isArray(rows)) rows = [];
-            } catch (e) {
-                rows = [];
-            }
-            rows.push(record);
-            if (rows.length > 30) rows = rows.slice(rows.length - 30);
-            try {
-                localStorage.setItem(key, JSON.stringify(rows));
-            } catch (e) {}
-            const bestPercent = rows.reduce((m, r) => Math.max(m, Number(r?.percent || 0)), 0);
-            return { attempts: rows.length, bestPercent };
-        }
-
         function renderAiLearningExtras(attacks, quiz) {
             const attackRows = Array.isArray(attacks) ? attacks : [];
             const quizRows = Array.isArray(quiz) ? quiz : [];
@@ -13157,154 +13081,23 @@ HTML_TEMPLATE = """
             }
 
             if (quizRows.length) {
-                const sessionId = _aiInitQuizSession(quizRows);
-                const session = (window.__titanAiQuizSessions || {})[sessionId];
-                const questions = Array.isArray(session?.questions) ? session.questions : [];
                 html += '<div class="p-2 rounded-xl border border-fuchsia-800/40 bg-fuchsia-950/20">'
-                    + '<div class="flex items-center justify-between gap-2 mb-2">'
-                    + '<div class="text-[11px] font-bold text-fuchsia-300">Quiz تفاعلي بعد الشرح</div>'
-                    + '<div class="text-[10px] text-gray-400">' + questions.length + ' أسئلة</div>'
-                    + '</div>'
-                    + '<button id="ai-quiz-start-' + sessionId + '" onclick="aiQuizStart(\'' + sessionId + '\')" class="w-full py-1.5 rounded-lg border border-fuchsia-700/50 bg-fuchsia-900/25 text-fuchsia-200 text-[11px] font-bold hover:bg-fuchsia-800/35">بدء الكويز التفاعلي</button>'
-                    + '<div id="ai-quiz-panel-' + sessionId + '" class="hidden mt-2 space-y-2">'
-                    + questions.map((q, idx) => {
-                        const qText = _aiShortEscape(q.q || ('سؤال ' + (idx + 1)));
-                        return '<div class="p-2 rounded border border-slate-700 bg-black/25" id="ai-quiz-q-' + sessionId + '-' + idx + '">'
-                            + '<div class="text-[11px] text-fuchsia-100 font-bold mb-1">' + (idx + 1) + ') ' + qText + '</div>'
-                            + '<div class="space-y-1">'
-                            + q.options.map((op, j) => '<button id="ai-quiz-opt-' + sessionId + '-' + idx + '-' + j + '" onclick="aiQuizSelect(\'' + sessionId + '\',' + idx + ',' + j + ')" class="w-full text-right px-2 py-1 rounded border border-slate-700 bg-slate-900/40 text-gray-200 text-[11px] hover:bg-slate-800/60">' + _aiShortEscape(op) + '</button>').join('')
-                            + '</div>'
-                            + '<div id="ai-quiz-feedback-' + sessionId + '-' + idx + '" class="hidden mt-1 text-[10px]"></div>'
+                    + '<div class="text-[11px] font-bold text-fuchsia-300 mb-2">Quiz سريع بعد الشرح</div>'
+                    + quizRows.map((q, idx) => {
+                        const qText = _aiShortEscape(q?.q || ('سؤال ' + (idx + 1)));
+                        const opts = Array.isArray(q?.options) ? q.options : [];
+                        const ans = _aiShortEscape(q?.answer || '');
+                        return '<div class="mb-2 p-2 rounded border border-slate-700 bg-black/25">'
+                            + '<div class="text-[11px] text-fuchsia-100 font-bold">' + (idx + 1) + ') ' + qText + '</div>'
+                            + '<div class="mt-1 space-y-1">' + opts.map((op) => '<div class="text-[11px] text-gray-200">• ' + _aiShortEscape(op) + '</div>').join('') + '</div>'
+                            + '<div class="mt-1 text-[10px] text-emerald-300">الإجابة الصحيحة: ' + ans + '</div>'
                             + '</div>';
                     }).join('')
-                    + '<div id="ai-quiz-result-' + sessionId + '" class="hidden p-2 rounded border border-emerald-800/50 bg-emerald-950/20 text-[11px]"></div>'
-                    + '<button id="ai-quiz-retry-' + sessionId + '" onclick="aiQuizRetry(\'' + sessionId + '\')" class="hidden w-full py-1.5 rounded-lg border border-indigo-700/50 bg-indigo-900/25 text-indigo-200 text-[11px] font-bold hover:bg-indigo-800/35">إعادة المحاولة</button>'
-                    + '</div>'
                     + '</div>';
             }
 
             html += '</div>';
             return html;
-        }
-
-        function aiQuizStart(sessionId) {
-            const sessions = window.__titanAiQuizSessions || {};
-            const s = sessions[sessionId];
-            if (!s || s.completed || !Array.isArray(s.questions) || !s.questions.length) return;
-            s.started = true;
-            const startBtn = document.getElementById('ai-quiz-start-' + sessionId);
-            const panel = document.getElementById('ai-quiz-panel-' + sessionId);
-            if (startBtn) {
-                startBtn.disabled = true;
-                startBtn.classList.add('opacity-70', 'cursor-not-allowed');
-                startBtn.textContent = 'الكويز بدأ ✅';
-            }
-            if (panel) panel.classList.remove('hidden');
-        }
-
-        function aiQuizSelect(sessionId, qIndex, optionIndex) {
-            const sessions = window.__titanAiQuizSessions || {};
-            const s = sessions[sessionId];
-            if (!s || !s.started || s.completed) return;
-            const q = s.questions?.[qIndex];
-            if (!q || q.locked) return;
-
-            q.locked = true;
-            q.selectedIndex = optionIndex;
-            s.answeredCount += 1;
-            const isCorrect = optionIndex === q.correctIndex;
-            if (isCorrect) s.score += 1;
-
-            for (let j = 0; j < q.options.length; j++) {
-                const el = document.getElementById('ai-quiz-opt-' + sessionId + '-' + qIndex + '-' + j);
-                if (!el) continue;
-                el.disabled = true;
-                el.classList.add('cursor-not-allowed', 'opacity-90');
-                if (j === q.correctIndex) {
-                    el.classList.remove('border-slate-700', 'text-gray-200', 'bg-slate-900/40');
-                    el.classList.add('border-emerald-600/70', 'bg-emerald-900/25', 'text-emerald-200');
-                } else if (j === optionIndex && !isCorrect) {
-                    el.classList.remove('border-slate-700', 'text-gray-200', 'bg-slate-900/40');
-                    el.classList.add('border-rose-600/70', 'bg-rose-900/25', 'text-rose-200');
-                }
-            }
-
-            const feedback = document.getElementById('ai-quiz-feedback-' + sessionId + '-' + qIndex);
-            if (feedback) {
-                feedback.classList.remove('hidden');
-                feedback.textContent = isCorrect ? '✅ إجابة صحيحة' : '❌ إجابة غير صحيحة';
-                feedback.classList.remove('text-emerald-300', 'text-rose-300');
-                feedback.classList.add(isCorrect ? 'text-emerald-300' : 'text-rose-300');
-            }
-
-            if (s.answeredCount >= s.questions.length) {
-                s.completed = true;
-                const total = s.questions.length;
-                const score = s.score;
-                const percent = total ? Math.round((score / total) * 100) : 0;
-                const stats = _aiPersistQuizScore({
-                    ts: new Date().toISOString(),
-                    conversationId: window.__titanAiConversationId || null,
-                    total,
-                    score,
-                    percent
-                });
-
-                const resultEl = document.getElementById('ai-quiz-result-' + sessionId);
-                if (resultEl) {
-                    resultEl.classList.remove('hidden');
-                    const level = percent >= 80 ? 'ممتاز' : (percent >= 60 ? 'جيد' : 'يحتاج مراجعة');
-                    resultEl.innerHTML =
-                        '<div class="font-bold text-emerald-300 mb-1">النتيجة النهائية</div>' +
-                        '<div class="text-gray-200">الدرجة: <span class="font-black text-white">' + score + '/' + total + '</span> (' + percent + '%)</div>' +
-                        '<div class="text-gray-300">التقييم: <span class="font-bold text-cyan-300">' + level + '</span></div>' +
-                        '<div class="text-[10px] text-gray-400 mt-1">تم حفظ الدرجة. أفضل نتيجة سابقة: ' + stats.bestPercent + '% • عدد المحاولات: ' + stats.attempts + '</div>';
-                }
-
-                const retryBtn = document.getElementById('ai-quiz-retry-' + sessionId);
-                if (retryBtn) retryBtn.classList.remove('hidden');
-            }
-        }
-
-        function aiQuizRetry(sessionId) {
-            const sessions = window.__titanAiQuizSessions || {};
-            const s = sessions[sessionId];
-            if (!s || !Array.isArray(s.questions) || !s.questions.length) return;
-
-            s.started = true;
-            s.completed = false;
-            s.score = 0;
-            s.answeredCount = 0;
-
-            s.questions.forEach((q, i) => {
-                q.selectedIndex = null;
-                q.locked = false;
-                for (let j = 0; j < q.options.length; j++) {
-                    const el = document.getElementById('ai-quiz-opt-' + sessionId + '-' + i + '-' + j);
-                    if (!el) continue;
-                    el.disabled = false;
-                    el.className = 'w-full text-right px-2 py-1 rounded border border-slate-700 bg-slate-900/40 text-gray-200 text-[11px] hover:bg-slate-800/60';
-                }
-                const feedback = document.getElementById('ai-quiz-feedback-' + sessionId + '-' + i);
-                if (feedback) {
-                    feedback.textContent = '';
-                    feedback.classList.add('hidden');
-                    feedback.classList.remove('text-emerald-300', 'text-rose-300');
-                }
-            });
-
-            const resultEl = document.getElementById('ai-quiz-result-' + sessionId);
-            if (resultEl) {
-                resultEl.classList.add('hidden');
-                resultEl.innerHTML = '';
-            }
-
-            const startBtn = document.getElementById('ai-quiz-start-' + sessionId);
-            if (startBtn) {
-                startBtn.disabled = true;
-                startBtn.classList.add('opacity-70', 'cursor-not-allowed');
-                startBtn.textContent = 'الكويز قيد التنفيذ';
-            }
         }
 
         function applyAiAttackSuggestion(canonical) {
@@ -19329,9 +19122,8 @@ def ai_chat():
         system_prompt = _build_ai_system_prompt(topic, user_text=message)
         reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt, model=model)
         detected_lang = _detect_user_lang(message)
-        extras_pref = _ai_user_requested_learning_extras(message)
-        suggested_attacks = _ai_attack_suggestions_for_text(message, lang=detected_lang, max_items=5) if extras_pref.get('suggestions') else []
-        quiz = _ai_quiz_for_suggestions(suggested_attacks, lang=detected_lang) if extras_pref.get('quiz') else []
+        suggested_attacks = _ai_attack_suggestions_for_text(message, lang=detected_lang, max_items=5)
+        quiz = _ai_quiz_for_suggestions(suggested_attacks, lang=detected_lang)
 
         now = datetime.datetime.now().isoformat()
         preview = _ai_trim_title(reply, 120)
