@@ -1682,6 +1682,50 @@ def _attacksim_generate_storyboard(question: str, difficulty: str = 'intermediat
     }
 
 
+def _attacksim_storyboard_fallback(question: str, difficulty: str = 'intermediate') -> dict:
+    lvl = str(difficulty or 'intermediate').strip().lower()
+    if lvl not in ('beginner', 'intermediate', 'advanced'):
+        lvl = 'intermediate'
+    q = (question or 'Cybersecurity Threat').strip()
+    return {
+        'title': f'Attack Simulation: {q[:60]}',
+        'difficulty': lvl,
+        'ar_script': (
+            f'هذا شرح دفاعي مبسط حول {q}. الهدف هو رفع الوعي الأمني، كشف العلامات المبكرة، '
+            'وتطبيق احتواء سريع يقلل أثر الحادث. عند ظهور نشاط غير طبيعي، '
+            'يجب عزل الأصول المتأثرة، حفظ الأدلة، ومراجعة السجلات لتحديد السبب الجذري، '
+            'ثم تنفيذ خطة تعافي وتحسينات أمنية لمنع تكرار التهديد.'
+        ),
+        'en_script': (
+            f'This is a defensive awareness explanation about {q}. '
+            'Focus on early detection signals, rapid containment, and practical hardening. '
+            'When anomalies appear, isolate impacted assets, preserve evidence, '
+            'analyze logs for root cause, then recover safely with post-incident improvements.'
+        ),
+        'ar_bullets': [
+            'مراقبة السجلات والتنبيهات الأمنية بشكل مستمر.',
+            'عزل الأنظمة المتأثرة بسرعة لتقليل الانتشار.',
+            'تطبيق MFA ومبدأ أقل صلاحية.',
+            'تحديث الأنظمة وإغلاق الثغرات الدورية.'
+        ],
+        'en_bullets': [
+            'Continuously monitor logs and security alerts.',
+            'Isolate impacted systems quickly to reduce spread.',
+            'Enforce MFA and least-privilege controls.',
+            'Patch systems regularly and close known weaknesses.'
+        ],
+    }
+
+
+def _attacksim_generate_storyboard_safe(question: str, difficulty: str = 'intermediate', timeout_seconds: int = 35) -> dict:
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(_attacksim_generate_storyboard, question, difficulty)
+            return fut.result(timeout=max(10, int(timeout_seconds)))
+    except Exception:
+        return _attacksim_storyboard_fallback(question, difficulty)
+
+
 def _attacksim_ensure_logo() -> str:
     candidate = HF_LOGO_PATH
     if os.path.isabs(candidate):
@@ -1802,7 +1846,11 @@ def _attacksim_worker(job_id: str):
 
     try:
         _attacksim_set_job(job_id, status='running', progress=10)
-        storyboard = _attacksim_generate_storyboard(str(job.get('question') or ''), str(job.get('difficulty') or 'intermediate'))
+        storyboard = _attacksim_generate_storyboard_safe(
+            str(job.get('question') or ''),
+            str(job.get('difficulty') or 'intermediate'),
+            timeout_seconds=35,
+        )
         _attacksim_set_job(
             job_id,
             title=storyboard.get('title') or '',
