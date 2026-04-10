@@ -36,7 +36,6 @@ import wave
 import math
 import shutil
 import psutil  # type: ignore
-import exifread  # type: ignore
 from cryptography.hazmat.primitives.asymmetric import rsa  # type: ignore
 from cryptography.hazmat.primitives import serialization, hashes  # type: ignore
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # type: ignore
@@ -46,6 +45,7 @@ from email.mime.text import MIMEText
 import urllib.request
 import json as _json
 import html
+import sys
 
 try:
     from reportlab.pdfgen import canvas  # type: ignore
@@ -2723,16 +2723,6 @@ def lsb_decode(img_bytes: bytes) -> str:
     return "لم يتم العثور على بيانات مخفية في هذه الصورة!"
 
 
-# --- استخبارات الصور (Image EXIF OSINT) ---
-def extract_exif_data(img_bytes: bytes) -> dict:
-    tags = exifread.process_file(io.BytesIO(img_bytes), details=False)
-    extracted = {}
-    important_tags = ['Image Make', 'Image Model', 'Image DateTime', 'Image Software', 'GPS GPSLatitude', 'GPS GPSLongitude']
-    for tag in tags.keys():
-        if any(imp in tag for imp in important_tags):
-            extracted[tag] = str(tags[tag])
-    return extracted if extracted else {"Info": "لا توجد أي بيانات وصفية مخفية (EXIF) في هذه الصورة."}
-
 # --- فحص الإيميل عبر IPQualityScore API ---
 def check_email_intelligence(email: str) -> dict:
     API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
@@ -4127,7 +4117,7 @@ HTML_TEMPLATE = """
             <!-- Navigation -->
             <div class="tab-nav-modern mb-8 p-3 rounded-xl space-y-3">
                 <div class="px-1">
-                    <input id="tab-search-input" class="tab-search-input" type="text" placeholder="ابحث عن أداة... مثال: OSINT أو القبو" oninput="filterNavTabs(this.value)">
+                    <input id="tab-search-input" class="tab-search-input" type="text" placeholder="ابحث عن أداة... مثال: القبو أو OSINT" oninput="filterNavTabs(this.value)">
                     <div id="tab-search-empty" class="hidden text-[11px] text-rose-300 mt-2 font-bold">لا يوجد تبويب مطابق للبحث.</div>
                 </div>
 
@@ -4147,7 +4137,7 @@ HTML_TEMPLATE = """
                     <div class="tab-grid">
                     <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
                     <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
-                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
+                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT Maigret</button>
                     <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
                     <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
                     <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
@@ -4949,128 +4939,44 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <!-- ===== OSINT SECTION ===== -->
-            <div id="osint-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🕵️ OSINT Mission Center</h2>
-
-                <div class="relative overflow-hidden rounded-2xl border border-indigo-900/50 bg-gradient-to-r from-indigo-950/35 via-slate-950/60 to-cyan-950/30 p-4">
-                    <div class="absolute -top-10 -right-6 w-44 h-44 rounded-full bg-indigo-600/10 blur-3xl"></div>
-                    <div class="absolute -bottom-10 -left-6 w-44 h-44 rounded-full bg-cyan-600/10 blur-3xl"></div>
-                    <div class="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                        <div>
-                            <div class="text-[10px] uppercase tracking-[0.35em] text-indigo-300 font-mono">Threat Mapping Grid</div>
-                            <div class="text-sm text-gray-300 mt-1">تحليل موحد + مقارنة هدفين + تحليل دفعي + سجل نشاط حي في لوحة واحدة.</div>
-                        </div>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-0">
-                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
-                                <div class="text-[10px] text-gray-500">Total Runs</div>
-                                <div id="osintMissionTotal" class="text-base font-black text-indigo-300">0</div>
-                            </div>
-                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
-                                <div class="text-[10px] text-gray-500">High Risk</div>
-                                <div id="osintMissionHigh" class="text-base font-black text-rose-300">0</div>
-                            </div>
-                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
-                                <div class="text-[10px] text-gray-500">Avg Risk</div>
-                                <div id="osintMissionAvg" class="text-base font-black text-amber-300">0</div>
-                            </div>
-                            <div class="rounded-lg border border-slate-700 bg-black/30 px-3 py-2">
-                                <div class="text-[10px] text-gray-500">Last Type</div>
-                                <div id="osintMissionLast" class="text-sm font-black text-cyan-300">--</div>
-                            </div>
-                        </div>
-                    </div>
+            <div id="osint-section" class="hidden space-y-5">
+                <h2 class="text-xl font-bold text-indigo-300 border-b border-slate-700 pb-2 flex items-center gap-2"><span>🕵️</span> OSINT Username Hunter - Maigret</h2>
+                <div class="bg-indigo-950/20 border border-indigo-900/40 rounded-xl p-4 text-xs text-indigo-100/90 leading-6">
+                    هذا القسم مبني بالكامل على Maigret فقط. أدخل يوزرنيم واحد أو عدة يوزرنيمات (كل سطر يوزرنيم)، وسيتم عرض الحسابات المكتشفة بطريقة واضحة ومرتبة.
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40">
-                        <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
-                            <h3 class="text-sm font-bold text-indigo-300">البحث الموحد (IP / Domain / URL / Email / Phone)</h3>
-                            <div class="text-[10px] text-gray-500">Enter = تحليل مباشر</div>
-                        </div>
-                        <p class="text-[11px] text-gray-500 mb-3">اكتب أي هدف وسيتم تحليله تلقائياً حسب النوع مع درجة خطورة سريعة وذكر المسار المقترح.</p>
-                        <div class="flex flex-wrap gap-2 mb-3">
-                            <button onclick="osintApplyPreset('ip')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">IP Demo</button>
-                            <button onclick="osintApplyPreset('domain')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">Domain Demo</button>
-                            <button onclick="osintApplyPreset('url')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">URL Demo</button>
-                            <button onclick="osintApplyPreset('email')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">Email Demo</button>
-                            <button onclick="osintApplyPreset('phone')" class="px-2.5 py-1 text-[11px] rounded-lg border border-indigo-800/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">Phone Demo</button>
-                        </div>
-                        <div class="flex flex-col md:flex-row gap-2">
-                            <input id="osintTargetInput" type="text" placeholder="8.8.8.8 أو example.com أو user@mail.com أو +962..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-left" dir="ltr">
-                            <button onclick="runUnifiedOsint()" class="bg-indigo-900/50 hover:bg-indigo-800 px-5 py-3 rounded-xl font-bold border border-indigo-800/50 transition-all text-indigo-300">تحليل الهدف</button>
-                        </div>
-                        <div id="osintRiskScore" class="hidden mt-3 p-3 rounded-xl border text-sm font-bold"></div>
-                        <div id="osintUnifiedResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-80 overflow-y-auto" dir="ltr"></div>
+                    <div class="xl:col-span-2 space-y-2">
+                        <label class="block text-xs text-gray-400">Usernames (one per line)</label>
+                        <textarea id="osintUsernameInput" rows="7" placeholder="example_user\nexample.user\nexample-user" class="w-full p-3 rounded-xl bg-slate-900 border border-indigo-900/40 focus:ring-2 focus:ring-indigo-500/50 outline-none text-sm font-mono" dir="ltr"></textarea>
+                        <div class="text-[11px] text-gray-500">مسموح: حروف/أرقام و <span class="font-mono">._-</span> فقط. الحد الأعلى 8 يوزرنيمات في كل عملية.</div>
                     </div>
 
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-2">
-                        <h3 class="text-sm font-bold text-indigo-300">Watchlist</h3>
-                        <p class="text-[11px] text-gray-500">احفظ الأهداف، شغّلها بنقرة، وصدّر تقريرًا شاملًا.</p>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button onclick="saveCurrentOsintTarget()" class="py-2 bg-indigo-900/40 hover:bg-indigo-800 rounded-lg text-xs font-bold text-indigo-300 border border-indigo-800/40">إضافة الهدف الحالي</button>
-                            <button onclick="runWatchlistBatch()" class="py-2 bg-cyan-900/40 hover:bg-cyan-800 rounded-lg text-xs font-bold text-cyan-300 border border-cyan-800/40">تحليل الكل</button>
-                            <button onclick="clearOsintWatchlist()" class="py-2 bg-rose-900/30 hover:bg-rose-800 rounded-lg text-xs font-bold text-rose-300 border border-rose-800/40">تفريغ</button>
-                            <button onclick="exportOsintReport()" class="py-2 bg-emerald-900/40 hover:bg-emerald-800 rounded-lg text-xs font-bold text-emerald-300 border border-emerald-800/40">تصدير JSON</button>
-                        </div>
-                        <div id="osintWatchlist" class="bg-black/40 border border-slate-700 rounded-lg p-2 max-h-64 overflow-y-auto text-xs text-gray-300"></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-violet-900/40">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-sm font-bold text-violet-300">Batch Analyzer</h3>
-                            <button onclick="runBatchOsint()" class="px-3 py-1.5 rounded-lg bg-violet-900/40 hover:bg-violet-800 border border-violet-800/50 text-violet-300 text-xs font-bold">تشغيل دفعة</button>
-                        </div>
-                        <p class="text-[11px] text-gray-500 mb-2">ألصق أهداف متعددة (سطر لكل هدف) لتحليلها مرة واحدة.</p>
-                        <textarea id="osintBatchInput" rows="6" placeholder="8.8.8.8&#10;example.com&#10;support@example.com&#10;https://example.com/login" class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs font-mono" dir="ltr"></textarea>
-                        <div id="osintBatchResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs max-h-80 overflow-y-auto"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-sm font-bold text-fuchsia-300">Target Comparison</h3>
-                            <button onclick="compareOsintTargets()" class="px-3 py-1.5 rounded-lg bg-fuchsia-900/40 hover:bg-fuchsia-800 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">مقارنة</button>
-                        </div>
-                        <p class="text-[11px] text-gray-500 mb-2">قارن هدفين لاكتشاف أيهما أعلى مخاطرة وأقرب للتهديد.</p>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <input id="osintCompareA" type="text" placeholder="Target A" class="p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs font-mono" dir="ltr">
-                            <input id="osintCompareB" type="text" placeholder="Target B" class="p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs font-mono" dir="ltr">
-                        </div>
-                        <div id="osintCompareResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs max-h-80 overflow-y-auto"></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
-                        <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter (SocialScan)</h3>
-                        <p class="text-[11px] text-gray-500 mb-3">نسخة مبسطة تعتمد SocialScan فقط (queries + platforms) حسب طلبك.</p>
-                        <div class="space-y-2">
-                            <textarea id="osintUsernameInput" rows="4" placeholder="username1&#10;email2@gmail.com&#10;mail42@me.com" class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none font-mono text-left" dir="ltr"></textarea>
-                            <select id="osintUsernamePlatforms" multiple class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs" size="6">
-                                <option value="GITHUB" selected>GITHUB</option>
-                                <option value="GITLAB">GITLAB</option>
-                                <option value="REDDIT" selected>REDDIT</option>
-                                <option value="TWITTER">TWITTER</option>
-                                <option value="INSTAGRAM">INSTAGRAM</option>
-                                <option value="PINTEREST">PINTEREST</option>
-                                <option value="TUMBLR">TUMBLR</option>
+                    <div class="space-y-3 bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Top Sites</label>
+                            <select id="osintTopSites" class="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm">
+                                <option value="80">80 (سريع)</option>
+                                <option value="120" selected>120 (متوازن)</option>
+                                <option value="180">180 (أوسع)</option>
+                                <option value="250">250 (شامل)</option>
                             </select>
-                            <button onclick="huntUsername()" class="bg-cyan-900/50 hover:bg-cyan-800 px-5 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-300">تشغيل SocialScan</button>
                         </div>
-                        <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-amber-900/40">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-sm font-bold text-amber-300">Activity Timeline</h3>
-                            <button onclick="clearOsintActivityLog()" class="px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-800 border border-amber-800/50 text-amber-300 text-xs font-bold">تنظيف السجل</button>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Timeout لكل يوزرنيم</label>
+                            <select id="osintTimeoutSeconds" class="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm">
+                                <option value="10">10s</option>
+                                <option value="15" selected>15s</option>
+                                <option value="22">22s</option>
+                                <option value="30">30s</option>
+                            </select>
                         </div>
-                        <p class="text-[11px] text-gray-500 mb-2">آخر عمليات OSINT مع الوقت والنوع ودرجة المخاطرة.</p>
-                        <div id="osintActivityFeed" class="space-y-2 max-h-72 overflow-y-auto"></div>
+                        <button onclick="osintRunMaigret()" class="w-full py-2.5 rounded-xl bg-indigo-900/40 hover:bg-indigo-800/50 border border-indigo-700/50 text-indigo-200 font-bold text-sm">بدء فحص Maigret</button>
+                        <div id="osintRunHint" class="text-[11px] text-gray-500">Ctrl + Enter لتشغيل الفحص بسرعة.</div>
                     </div>
                 </div>
+
+                <div id="osintResult" class="hidden"></div>
             </div>
 
             <div id="training-section" class="hidden space-y-4">
@@ -6570,8 +6476,6 @@ HTML_TEMPLATE = """
             const terms = document.getElementById('auth-reg-terms');
             if (terms) terms.addEventListener('change', updateRegisterButtonState);
             resetTermsAgreementGate();
-            loadOsintWatchlist();
-            updateUsernameModeHint();
         }
         window.onload = () => {
             initRegisterTermsUi();
@@ -7276,11 +7180,11 @@ HTML_TEMPLATE = """
                 if (window.dashInterval) { clearInterval(window.dashInterval); window.dashInterval = null; }
             }
             if(type === 'tools' && typeof fetchIpIntel === 'function') fetchIpIntel();
-            if(type === 'osint' && typeof loadOsintWatchlist === 'function') loadOsintWatchlist();
             if(type === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if(type === 'ir' && typeof irInitSection === 'function') irInitSection();
             if(type === 'forensics' && typeof forensicsInitSection === 'function') forensicsInitSection();
             if(type === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
+            if(type === 'osint' && typeof osintInitSection === 'function') osintInitSection();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
             if(type === 'crypt' && typeof startCryptAdvisorChat === 'function') startCryptAdvisorChat(false);
             if(type === 'training') {
@@ -9198,275 +9102,155 @@ HTML_TEMPLATE = """
             }
         }
 
+        function osintInitSection() {
+            const input = document.getElementById('osintUsernameInput');
+            if (!input || input.dataset.bound === '1') return;
+            input.dataset.bound = '1';
+            input.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    osintRunMaigret();
+                }
+            });
+        }
+
+        function osintNormalizeUsernames(raw) {
+            const src = String(raw || '');
+            const parts = src.split(/\r?\n|,|;/g);
+            const seen = new Set();
+            const out = [];
+
+            parts.forEach((p) => {
+                const cleaned = String(p || '').trim().replace(/^@+/, '');
+                if (!cleaned) return;
+                if (!/^[a-zA-Z0-9._-]{2,64}$/.test(cleaned)) return;
+                const key = cleaned.toLowerCase();
+                if (seen.has(key)) return;
+                seen.add(key);
+                out.push(cleaned);
+            });
+
+            return out.slice(0, 8);
+        }
+
+        function osintRenderMaigretResult(box, payload) {
+            const found = Array.isArray(payload?.found) ? payload.found : [];
+            const stats = payload?.by_username || {};
+            const requested = Array.isArray(payload?.requested_usernames) ? payload.requested_usernames.length : 0;
+            const checked = Number(payload?.checked_usernames || 0);
+            const elapsed = Number(payload?.elapsed_ms || 0);
+            const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+
+            if (!found.length) {
+                const errHtml = errors.length
+                    ? `<div class="mt-2 text-[11px] text-amber-300">ملاحظات التشغيل: ${errors.map((e) => _osintEscape(e.query + ': ' + (e.error || 'unknown'))).join(' | ')}</div>`
+                    : '';
+                setResultMarkup(
+                    box,
+                    'Maigret Username Hunt',
+                    `<div class="text-sm text-gray-300">لم يتم العثور على حسابات مؤكدة.</div>
+                     <div class="text-xs text-gray-500 mt-1">Requested: ${requested} | Checked: ${checked} | Time: ${elapsed}ms</div>${errHtml}`,
+                    { badge: 'No Hits', riskScore: 10 }
+                );
+                return;
+            }
+
+            const summaryCards = Object.keys(stats).sort().map((u) => {
+                return `<div class="rounded-lg border border-indigo-900/40 bg-indigo-950/15 px-2 py-1 text-[11px] text-indigo-200">@${_osintEscape(u)}: <span class="font-bold">${_osintEscape(stats[u])}</span></div>`;
+            }).join('');
+
+            const rows = found.map((row, idx) => {
+                const safeQuery = _osintEscape(row.query || 'unknown');
+                const safeSite = _osintEscape(row.site || 'site');
+                const safeUrl = _osintEscape(row.url || '#');
+                const safeStatus = _osintEscape(row.status || 'claimed');
+                return `
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center border border-slate-700/60 rounded-lg bg-black/20 px-3 py-2">
+                        <div class="md:col-span-1 text-[11px] text-gray-500 font-mono">${idx + 1}</div>
+                        <div class="md:col-span-2 text-xs text-indigo-300 font-mono" dir="ltr">@${safeQuery}</div>
+                        <div class="md:col-span-2 text-xs text-cyan-300 font-bold">${safeSite}</div>
+                        <div class="md:col-span-5 text-xs break-all" dir="ltr"><a href="${safeUrl}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline decoration-emerald-700/40">${safeUrl}</a></div>
+                        <div class="md:col-span-2 text-[11px] text-amber-300">${safeStatus}</div>
+                    </div>
+                `;
+            }).join('');
+
+            const errorsHtml = errors.length
+                ? `<div class="mt-2 text-[11px] text-amber-300">ملاحظات التشغيل: ${errors.map((e) => _osintEscape(e.query + ': ' + (e.error || 'unknown'))).join(' | ')}</div>`
+                : '';
+
+            setResultMarkup(
+                box,
+                'Maigret Username Hunt',
+                `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-[11px]">
+                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Found Accounts: <span class="text-emerald-300 font-bold">${found.length}</span></div>
+                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Requested: <span class="text-cyan-300 font-bold">${requested}</span></div>
+                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Checked: <span class="text-indigo-300 font-bold">${checked}</span></div>
+                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Time: <span class="text-violet-300 font-bold">${elapsed}ms</span></div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">${summaryCards || ''}</div>
+                <div class="space-y-2">${rows}</div>
+                ${errorsHtml}`,
+                { badge: `${found.length} Hits`, riskScore: 20 }
+            );
+        }
+
+        async function osintRunMaigret() {
+            const input = document.getElementById('osintUsernameInput');
+            const resultBox = document.getElementById('osintResult');
+            const hint = document.getElementById('osintRunHint');
+            const topSites = Number(document.getElementById('osintTopSites')?.value || 120);
+            const timeoutSeconds = Number(document.getElementById('osintTimeoutSeconds')?.value || 15);
+
+            if (!input || !resultBox) return;
+
+            const usernames = osintNormalizeUsernames(input.value);
+            if (!usernames.length) {
+                titanAlert('أدخل يوزرنيم صالح واحد على الأقل (حروف/أرقام و ._- فقط).');
+                return;
+            }
+
+            resultBox.classList.remove('hidden');
+            setResultLoading(resultBox, 'Maigret Username Hunt', 'جار تشغيل Maigret وجمع الحسابات المحتملة...');
+            if (hint) hint.textContent = `Running on ${usernames.length} username(s)...`;
+            if (typeof soundManager !== 'undefined' && soundManager.terminalType) soundManager.terminalType();
+
+            try {
+                const res = await fetch('/api/osint/maigret', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        queries: usernames,
+                        top_sites: topSites,
+                        timeout_seconds: timeoutSeconds
+                    })
+                });
+
+                const data = await _parseJsonOrThrow(res, 'Maigret username scan');
+                if (!res.ok || !data.success) {
+                    setResultError(resultBox, data.error || `HTTP ${res.status}`);
+                    if (hint) hint.textContent = 'حدث خطأ أثناء تشغيل Maigret.';
+                    if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
+                    return;
+                }
+
+                osintRenderMaigretResult(resultBox, data);
+                if (hint) hint.textContent = `Last run: ${new Date().toLocaleTimeString()} | Found: ${Number(data.total_found || 0)}`;
+                if (typeof soundManager !== 'undefined') {
+                    if (Number(data.total_found || 0) > 0 && soundManager.success) soundManager.success();
+                    else if (soundManager.terminalType) soundManager.terminalType();
+                }
+            } catch (e) {
+                setResultError(resultBox, e.message || 'فشل الاتصال بخادم Maigret.');
+                if (hint) hint.textContent = 'تعذر إكمال الفحص.';
+                if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
+            }
+        }
+
         function _osintEscape(value) {
             const div = document.createElement('div');
             div.textContent = String(value ?? '');
             return div.innerHTML;
-        }
-
-        function _osintRenderKeyValueGrid(obj, keys) {
-            return `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${keys.map((k) => `
-                <div class="bg-slate-900/70 border border-slate-700 rounded-lg p-2">
-                    <div class="text-[10px] text-gray-500 uppercase tracking-wider">${_osintEscape(k)}</div>
-                    <div class="text-xs font-mono text-indigo-200 break-all" dir="ltr">${_osintEscape(obj?.[k] ?? 'N/A')}</div>
-                </div>
-            `).join('')}</div>`;
-        }
-
-        function _osintRenderUnifiedResult(target, targetType, data) {
-            if (!data || data.error) {
-                return `<div class="text-red-400 text-sm">${_osintEscape(data?.error || 'فشل التحليل')}</div>`;
-            }
-
-            const wrappers = {
-                ip: ['query', 'country_code', 'ISP', 'proxy', 'vpn', 'fraud_score'],
-                email: ['valid', 'disposable', 'fraud_score', 'smtp_score', 'overall_score'],
-                phone: ['formatted', 'valid', 'active', 'line_type', 'carrier', 'fraud_score'],
-                url: ['domain', 'risk_score', 'phishing', 'malware', 'suspicious', 'server'],
-                domain: ['domain', 'risk_score', 'phishing', 'malware', 'suspicious', 'server'],
-            };
-            const keys = wrappers[targetType] || Object.keys(data).slice(0, 8);
-
-            return `
-                <div class="space-y-3">
-                    <div class="bg-indigo-950/20 border border-indigo-800/40 rounded-lg p-3">
-                        <div class="text-[10px] text-indigo-300 uppercase tracking-widest">Target</div>
-                        <div class="text-sm font-mono text-white break-all" dir="ltr">${_osintEscape(target)}</div>
-                        <div class="text-[11px] text-gray-400 mt-1">Type: <span class="text-indigo-300 font-bold">${_osintEscape(targetType.toUpperCase())}</span></div>
-                    </div>
-                    ${_osintRenderKeyValueGrid(data, keys)}
-                </div>
-            `;
-        }
-
-        function _osintRenderUsernameResult(data) {
-            if (!data || !data.success) {
-                return `<div class="text-red-400 text-sm">${_osintEscape(data?.error || 'فشل الفحص')}</div>`;
-            }
-            const rows = Array.isArray(data.results) ? data.results : [];
-            const found = rows.filter((r) => r.exists === true);
-            const available = rows.filter((r) => r.available === true);
-            const invalid = rows.filter((r) => r.valid === false);
-
-            const rowHtml = rows.map((r) => {
-                const success = !!r.success;
-                const valid = !!r.valid;
-                const avail = !!r.available;
-                const exists = !!r.exists;
-                const tone = exists
-                    ? 'bg-green-900/20 border-green-800/40 text-green-200'
-                    : (avail ? 'bg-slate-900/40 border-slate-700 text-slate-300' : 'bg-amber-900/20 border-amber-800/40 text-amber-200');
-                return `<div class="p-2 rounded border ${tone}">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="font-bold">${_osintEscape(r.query || '')}</span>
-                        <span class="text-[10px] uppercase tracking-wider">${_osintEscape(r.platform || '')}</span>
-                    </div>
-                    <div class="text-[11px] mt-1">${_osintEscape(r.message || '')}</div>
-                    <div class="text-[10px] mt-1 text-gray-400">Success: ${_osintEscape(String(success))} | Valid: ${_osintEscape(String(valid))} | Available: ${_osintEscape(String(avail))}</div>
-                </div>`;
-            }).join('');
-
-            return `
-                <div class="space-y-3">
-                    <div class="grid grid-cols-4 gap-2">
-                        <div class="bg-green-900/20 border border-green-800/50 rounded-lg p-2 text-center">
-                            <div class="text-[10px] text-gray-400">FOUND</div>
-                            <div class="text-lg font-black text-green-400">${_osintEscape(found.length)}</div>
-                        </div>
-                        <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-2 text-center">
-                            <div class="text-[10px] text-gray-400">AVAILABLE</div>
-                            <div class="text-lg font-black text-gray-300">${_osintEscape(available.length)}</div>
-                        </div>
-                        <div class="bg-cyan-900/20 border border-cyan-800/50 rounded-lg p-2 text-center">
-                            <div class="text-[10px] text-gray-400">CHECKED</div>
-                            <div class="text-lg font-black text-cyan-300">${_osintEscape(rows.length)}</div>
-                        </div>
-                        <div class="bg-indigo-900/20 border border-indigo-800/50 rounded-lg p-2 text-center">
-                            <div class="text-[10px] text-gray-400">INVALID</div>
-                            <div class="text-sm font-bold text-indigo-300 font-mono" dir="ltr">${_osintEscape(invalid.length)}</div>
-                        </div>
-                    </div>
-                    <div class="text-[11px] text-cyan-200/90 bg-cyan-950/20 border border-cyan-900/30 rounded-lg px-3 py-2">
-                        Engine: <span class="font-bold text-cyan-300">${_osintEscape(String(data.engine || 'socialscan').toUpperCase())}</span>
-                        | Queries: <span class="font-bold text-cyan-100">${_osintEscape(data.query_count || 0)}</span>
-                        | Platforms: <span class="font-bold text-cyan-100">${_osintEscape(data.platform_count || 0)}</span>
-                    </div>
-                    <div class="bg-black/40 border border-slate-700 rounded-lg p-2">
-                        <div class="text-[10px] text-gray-500 uppercase mb-2">SocialScan Results</div>
-                        ${rowHtml || '<div class="text-gray-500 text-xs">لا توجد نتائج.</div>'}
-                    </div>
-                </div>
-            `;
-        }
-
-        function _osintDetectTargetType(target) {
-            const t = (target || '').trim();
-            if (!t) return 'unknown';
-            const ipRegex = /^(?:[0-9]{1,3}[.]){3}[0-9]{1,3}$/;
-            const emailRegex = /^[^@ ]+@[^@ ]+[.][^@ ]+$/;
-            const phoneRegex = /^[+]?[0-9 -]{7,20}$/;
-            const urlRegex = /^(https?:[/][/])/i;
-            const domainRegex = /^(?:[a-zA-Z0-9-]+[.])+[a-zA-Z]{2,}$/;
-
-            if (ipRegex.test(t)) return 'ip';
-            if (emailRegex.test(t)) return 'email';
-            if (urlRegex.test(t)) return 'url';
-            if (domainRegex.test(t)) return 'domain';
-            if (phoneRegex.test(t)) return 'phone';
-            return 'unknown';
-        }
-
-        function _osintRiskTone(score) {
-            const n = Number(score) || 0;
-            if (n >= 70) return { cls: 'text-rose-300 border-rose-800/50 bg-rose-900/20', label: 'High Risk' };
-            if (n >= 35) return { cls: 'text-amber-300 border-amber-800/50 bg-amber-900/20', label: 'Medium Risk' };
-            return { cls: 'text-emerald-300 border-emerald-800/50 bg-emerald-900/20', label: 'Low Risk' };
-        }
-
-        let _osintActivityLog = [];
-        let _osintLastUnified = null;
-
-        function _osintLoadActivityLog() {
-            try {
-                _osintActivityLog = JSON.parse(localStorage.getItem('titan_osint_activity') || '[]');
-                if (!Array.isArray(_osintActivityLog)) _osintActivityLog = [];
-            } catch (_) {
-                _osintActivityLog = [];
-            }
-        }
-
-        function _osintSaveActivityLog() {
-            localStorage.setItem('titan_osint_activity', JSON.stringify((_osintActivityLog || []).slice(0, 80)));
-        }
-
-        function _osintRenderActivityFeed() {
-            const box = document.getElementById('osintActivityFeed');
-            if (!box) return;
-            if (!_osintActivityLog.length) {
-                box.innerHTML = '<div class="text-xs text-gray-500 bg-black/30 border border-slate-700 rounded-lg p-3">لا يوجد نشاط OSINT حتى الآن.</div>';
-                return;
-            }
-            box.innerHTML = _osintActivityLog.slice(0, 25).map((row) => {
-                const tone = _osintRiskTone(row.risk_score || 0);
-                return `<div class="rounded-lg border border-slate-700 bg-black/35 p-2">
-                    <div class="flex items-center justify-between gap-2">
-                        <div class="font-mono text-[11px] text-cyan-300 break-all" dir="ltr">${_osintEscape(row.target || '')}</div>
-                        <span class="text-[10px] px-2 py-0.5 rounded border ${tone.cls}">${_osintEscape(String(row.risk_score || 0))}</span>
-                    </div>
-                    <div class="text-[10px] text-gray-400 mt-1">${_osintEscape((row.action || 'lookup').toUpperCase())} | ${_osintEscape((row.target_type || 'unknown').toUpperCase())} | ${_osintEscape(row.label || '')}</div>
-                    <div class="text-[10px] text-gray-600 mt-0.5">${_osintEscape(row.created_at || '')}</div>
-                </div>`;
-            }).join('');
-        }
-
-        function _osintUpdateMissionStats() {
-            const log = Array.isArray(_osintActivityLog) ? _osintActivityLog : [];
-            const total = log.length;
-            const high = log.filter((x) => Number(x.risk_score || 0) >= 70).length;
-            const avg = total ? (log.reduce((a, b) => a + (Number(b.risk_score || 0) || 0), 0) / total) : 0;
-            const lastType = (log[0]?.target_type || '--').toUpperCase();
-            const totalEl = document.getElementById('osintMissionTotal');
-            const highEl = document.getElementById('osintMissionHigh');
-            const avgEl = document.getElementById('osintMissionAvg');
-            const lastEl = document.getElementById('osintMissionLast');
-            if (totalEl) totalEl.innerText = String(total);
-            if (highEl) highEl.innerText = String(high);
-            if (avgEl) avgEl.innerText = String(Math.round(avg));
-            if (lastEl) lastEl.innerText = lastType;
-        }
-
-        function _osintTrackActivity(action, payload) {
-            const row = {
-                action,
-                target: String(payload?.target || ''),
-                target_type: String(payload?.targetType || 'unknown'),
-                risk_score: Math.max(0, Math.min(100, Number(payload?.risk || 0) || 0)),
-                label: String(payload?.label || ''),
-                created_at: new Date().toLocaleString()
-            };
-            _osintActivityLog.unshift(row);
-            _osintActivityLog = _osintActivityLog.slice(0, 80);
-            _osintSaveActivityLog();
-            _osintRenderActivityFeed();
-            _osintUpdateMissionStats();
-        }
-
-        async function _osintLookupTarget(rawTarget) {
-            const target = String(rawTarget || '').trim();
-            const targetType = _osintDetectTargetType(target);
-            if (!target) throw new Error('Target is empty');
-            if (targetType === 'unknown') throw new Error('Unsupported target type');
-
-            let data = null;
-            let risk = 0;
-            let label = 'Low';
-
-            if (targetType === 'ip') {
-                const res = await fetch('/api/ip', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ip: target})
-                });
-                data = await res.json();
-                risk = data.proxy ? 75 : 20;
-                label = data.proxy ? 'Proxy/VPN Suspected' : 'Clean IP';
-            } else if (targetType === 'email') {
-                const res = await fetch('/api/scan/email', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email: target})
-                });
-                data = await res.json();
-                risk = Number(data.fraud_score || 0);
-                label = risk >= 70 ? 'High Fraud Probability' : (risk >= 35 ? 'Suspicious' : 'Likely Safe');
-            } else if (targetType === 'phone') {
-                const res = await fetch('/api/scan/phone', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({phone: target})
-                });
-                data = await res.json();
-                risk = Number(data.fraud_score || 0);
-                label = risk >= 70 ? 'High Abuse Probability' : (risk >= 35 ? 'Suspicious' : 'Likely Safe');
-            } else if (targetType === 'domain' || targetType === 'url') {
-                const finalUrl = targetType === 'domain' ? `https://${target}` : target;
-                const res = await fetch('/api/scan/url', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({url: finalUrl})
-                });
-                data = await res.json();
-                risk = Number(data.risk_score || 0);
-                label = risk >= 70 ? 'High Threat URL' : (risk >= 35 ? 'Potentially Suspicious' : 'Likely Safe URL');
-            }
-
-            return { target, targetType, data, risk, label };
-        }
-
-        function osintApplyPreset(kind) {
-            const map = {
-                ip: '8.8.8.8',
-                domain: 'example.com',
-                url: 'https://example.com/login',
-                email: 'security@example.com',
-                phone: '+12025550123'
-            };
-            const value = map[String(kind || '').toLowerCase()] || '';
-            const input = document.getElementById('osintTargetInput');
-            if (input) {
-                input.value = value;
-                input.focus();
-            }
-        }
-
-        function _osintRenderRisk(score, label) {
-            const box = document.getElementById('osintRiskScore');
-            if (!box) return;
-            const n = Math.max(0, Math.min(100, Number(score) || 0));
-            const tone = _osintRiskTone(n);
-            box.className = `mt-3 p-3 rounded-xl border text-sm font-bold ${tone.cls}`;
-            box.innerHTML = `<div class="flex items-center justify-between gap-2"><span>Risk Score: ${_osintEscape(n)}/100</span><span class="text-[10px] uppercase tracking-wider">${_osintEscape(tone.label)}</span></div><div class="text-[11px] mt-1">${_osintEscape(label || '')}</div>`;
-            box.classList.remove('hidden');
         }
 
         let _ctfChallenges = [];
@@ -9741,317 +9525,6 @@ HTML_TEMPLATE = """
                 out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 whitespace-pre-wrap ctf-bidi';
                 out.innerText = `فشل الاتصال: ${e.message || e}`;
             }
-        }
-
-        async function runUnifiedOsint() {
-            const input = document.getElementById('osintTargetInput');
-            const out = document.getElementById('osintUnifiedResult');
-            const target = (input?.value || '').trim();
-            if (!target) return titanAlert('ادخل هدف أولاً.');
-            if (!out) return;
-
-            setResultLoading(out, 'Unified OSINT', 'Running unified OSINT lookup...');
-            try {
-                const res = await _osintLookupTarget(target);
-                const { targetType, data, risk, label } = res;
-
-                _osintRenderRisk(risk, label);
-                setResultMarkup(out, 'Unified OSINT', _osintRenderUnifiedResult(target, targetType, data), { badge: targetType.toUpperCase() });
-                _osintLastUnified = {
-                    target,
-                    target_type: targetType,
-                    risk_score: risk,
-                    label,
-                    data
-                };
-                _osintTrackActivity('unified_lookup', { target, targetType, risk, label });
-                soundManager.success();
-            } catch (e) {
-                setResultError(out, `Lookup failed: ${e.message || e}. Supported: IP, URL, Domain, Email, Phone`);
-                soundManager.error();
-            }
-        }
-
-        async function huntUsername() {
-            const rawQueries = (document.getElementById('osintUsernameInput')?.value || '').trim();
-            const platformSelect = document.getElementById('osintUsernamePlatforms');
-            const out = document.getElementById('osintUsernameResult');
-            const queries = String(rawQueries || '')
-                .split(/[\n,]+/)
-                .map((x) => x.trim())
-                .filter(Boolean)
-                .slice(0, 8);
-            if (!queries.length) return titanAlert('ادخل query واحد على الأقل (username أو email).');
-            if (!out) return;
-
-            let platforms = [];
-            if (platformSelect && platformSelect.options) {
-                platforms = Array.from(platformSelect.options)
-                    .filter((opt) => opt.selected)
-                    .map((opt) => String(opt.value || '').trim())
-                    .filter(Boolean);
-            }
-            if (!platforms.length) platforms = ['GITHUB', 'REDDIT'];
-
-            setResultLoading(out, 'Username Hunt', `جاري تشغيل SocialScan على ${queries.length} query(s)...`);
-            try {
-                const res = await fetch('/api/osint/username', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({queries, platforms})
-                });
-                const contentType = String(res.headers.get('content-type') || '').toLowerCase();
-                let data = null;
-                if (contentType.includes('application/json')) {
-                    data = await res.json();
-                } else {
-                    const raw = await res.text();
-                    data = {
-                        success: false,
-                        error: res.status >= 500
-                            ? `Server error ${res.status}: endpoint returned HTML instead of JSON.`
-                            : `Unexpected response type (${contentType || 'unknown'}).`,
-                        raw_preview: String(raw || '').slice(0, 220)
-                    };
-                }
-                const badge = data.success ? 'SOCIAL' : 'Failed';
-                setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge });
-                if (data.found_count > 0) {
-                    _osintRenderRisk(60, 'Public Username Footprint Detected');
-                    _osintTrackActivity('username_hunt', { target: queries[0], targetType: 'username', risk: 60, label: 'Public footprint detected' });
-                } else {
-                    _osintRenderRisk(15, 'No Immediate Public Presence');
-                    _osintTrackActivity('username_hunt', { target: queries[0], targetType: 'username', risk: 15, label: 'No immediate public presence' });
-                }
-            } catch (e) {
-                setResultError(out, `Username scan failed: ${e.message || e}`);
-            }
-        }
-
-        function updateUsernameModeHint() {
-            if (window.__osintKeybindInit) return;
-            window.__osintKeybindInit = true;
-
-            const targetInput = document.getElementById('osintTargetInput');
-            if (targetInput) {
-                targetInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        runUnifiedOsint();
-                    }
-                });
-            }
-
-            const userInput = document.getElementById('osintUsernameInput');
-            if (userInput) {
-                userInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        huntUsername();
-                    }
-                });
-            }
-        }
-
-        function loadOsintWatchlist() {
-            const box = document.getElementById('osintWatchlist');
-            if (!box) return;
-            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
-            if (!list.length) {
-                setResultList(box, 'OSINT Watchlist', [], { badge: '0', emptyText: 'لا يوجد عناصر محفوظة بعد.' });
-                _osintLoadActivityLog();
-                _osintRenderActivityFeed();
-                _osintUpdateMissionStats();
-                return;
-            }
-            setResultList(
-                box,
-                'OSINT Watchlist',
-                list.map((x, i) => `<div class="flex items-center justify-between gap-2"><span class="font-mono text-[11px] text-indigo-200" dir="ltr">${_resultEscape(x)}</span><div class="flex items-center gap-2"><button onclick="runWatchlistTarget(${i})" class="text-cyan-300 text-[10px]">تشغيل</button><button onclick="setCompareFromWatchItem(${i}, 'a')" class="text-fuchsia-300 text-[10px]">A</button><button onclick="setCompareFromWatchItem(${i}, 'b')" class="text-fuchsia-300 text-[10px]">B</button><button onclick="removeOsintWatchItem(${i})" class="text-red-400 text-[10px]">حذف</button></div></div>`),
-                { badge: `${list.length} Targets` }
-            );
-            _osintLoadActivityLog();
-            _osintRenderActivityFeed();
-            _osintUpdateMissionStats();
-        }
-
-        function saveCurrentOsintTarget() {
-            const target = (document.getElementById('osintTargetInput')?.value || '').trim();
-            if (!target) return titanAlert('لا يوجد هدف لحفظه.');
-            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
-            if (!list.includes(target)) list.unshift(target);
-            localStorage.setItem('titan_osint_watchlist', JSON.stringify(list.slice(0, 40)));
-            loadOsintWatchlist();
-            titanAlert('تمت إضافة الهدف إلى الـ Watchlist.');
-        }
-
-        function clearOsintWatchlist() {
-            localStorage.setItem('titan_osint_watchlist', JSON.stringify([]));
-            loadOsintWatchlist();
-            titanAlert('تم تفريغ الـ Watchlist.');
-        }
-
-        async function runWatchlistTarget(idx) {
-            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
-            const target = list[idx];
-            if (!target) return;
-            const input = document.getElementById('osintTargetInput');
-            if (input) input.value = target;
-            await runUnifiedOsint();
-        }
-
-        function setCompareFromWatchItem(idx, side) {
-            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
-            const target = list[idx];
-            if (!target) return;
-            const id = side === 'b' ? 'osintCompareB' : 'osintCompareA';
-            const el = document.getElementById(id);
-            if (el) el.value = target;
-        }
-
-        function runWatchlistBatch() {
-            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
-            if (!list.length) return titanAlert('لا توجد أهداف في الـ Watchlist.');
-            const input = document.getElementById('osintBatchInput');
-            if (input) input.value = list.slice(0, 12).join('\\n');
-            runBatchOsint();
-        }
-
-        function removeOsintWatchItem(idx) {
-            const list = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
-            list.splice(idx, 1);
-            localStorage.setItem('titan_osint_watchlist', JSON.stringify(list));
-            loadOsintWatchlist();
-        }
-
-        async function runBatchOsint() {
-            const src = (document.getElementById('osintBatchInput')?.value || '');
-            const box = document.getElementById('osintBatchResult');
-            if (!box) return;
-
-            const targets = Array.from(new Set(src.split(/\\r?\\n/).map((x) => x.trim()).filter(Boolean))).slice(0, 20);
-            if (!targets.length) return titanAlert('أدخل هدفًا واحدًا على الأقل في التحليل الدفعي.');
-
-            setResultLoading(box, 'Batch Analyzer', `تحليل ${targets.length} هدف...`);
-
-            const rows = [];
-            for (let i = 0; i < targets.length; i += 1) {
-                const t = targets[i];
-                try {
-                    const res = await _osintLookupTarget(t);
-                    rows.push({ target: t, ok: true, ...res });
-                    _osintTrackActivity('batch_lookup', { target: t, targetType: res.targetType, risk: res.risk, label: res.label });
-                } catch (e) {
-                    rows.push({ target: t, ok: false, error: e.message || String(e), targetType: 'unknown', risk: 0, label: 'Failed' });
-                }
-            }
-
-            const okRows = rows.filter((r) => r.ok);
-            const avgRisk = okRows.length ? Math.round(okRows.reduce((a, b) => a + (Number(b.risk || 0) || 0), 0) / okRows.length) : 0;
-            const highCount = okRows.filter((r) => Number(r.risk || 0) >= 70).length;
-
-            const html = `
-                <div class="space-y-3">
-                    <div class="grid grid-cols-3 gap-2">
-                        <div class="p-2 rounded border border-slate-700 bg-slate-900/50 text-center"><div class="text-[10px] text-gray-500">Targets</div><div class="text-lg font-black text-cyan-300">${_osintEscape(rows.length)}</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-slate-900/50 text-center"><div class="text-[10px] text-gray-500">High Risk</div><div class="text-lg font-black text-rose-300">${_osintEscape(highCount)}</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-slate-900/50 text-center"><div class="text-[10px] text-gray-500">Avg Risk</div><div class="text-lg font-black text-amber-300">${_osintEscape(avgRisk)}</div></div>
-                    </div>
-                    <div class="space-y-2">
-                        ${rows.map((r) => {
-                            if (!r.ok) {
-                                return `<div class="p-2 rounded border border-rose-800/40 bg-rose-900/10"><div class="font-mono text-xs text-rose-300 break-all" dir="ltr">${_osintEscape(r.target)}</div><div class="text-[10px] text-rose-200 mt-1">${_osintEscape(r.error || 'failed')}</div></div>`;
-                            }
-                            const tone = _osintRiskTone(r.risk);
-                            return `<div class="p-2 rounded border border-slate-700 bg-black/30">
-                                <div class="flex items-center justify-between gap-2">
-                                    <div class="font-mono text-xs text-cyan-300 break-all" dir="ltr">${_osintEscape(r.target)}</div>
-                                    <span class="text-[10px] px-2 py-0.5 rounded border ${tone.cls}">${_osintEscape(r.risk)}</span>
-                                </div>
-                                <div class="text-[10px] text-gray-400 mt-1">${_osintEscape(r.targetType.toUpperCase())} | ${_osintEscape(r.label)}</div>
-                            </div>`;
-                        }).join('')}
-                    </div>
-                </div>
-            `;
-            setResultMarkup(box, 'Batch Analyzer', html, { badge: `${rows.length} Targets` });
-        }
-
-        async function compareOsintTargets() {
-            const a = (document.getElementById('osintCompareA')?.value || '').trim();
-            const b = (document.getElementById('osintCompareB')?.value || '').trim();
-            const out = document.getElementById('osintCompareResult');
-            if (!out) return;
-            if (!a || !b) return titanAlert('أدخل الهدفين للمقارنة.');
-
-            setResultLoading(out, 'Target Comparison', 'جاري تحليل الهدفين...');
-            try {
-                const [ra, rb] = await Promise.all([_osintLookupTarget(a), _osintLookupTarget(b)]);
-                const winner = Number(ra.risk || 0) >= Number(rb.risk || 0) ? ra : rb;
-                const delta = Math.abs(Number(ra.risk || 0) - Number(rb.risk || 0));
-                const card = (x, label) => {
-                    const tone = _osintRiskTone(x.risk);
-                    return `<div class="p-3 rounded-lg border border-slate-700 bg-black/30 space-y-1">
-                        <div class="text-[10px] text-gray-500 uppercase">${_osintEscape(label)}</div>
-                        <div class="font-mono text-xs text-cyan-300 break-all" dir="ltr">${_osintEscape(x.target)}</div>
-                        <div class="text-[10px] text-gray-400">${_osintEscape(x.targetType.toUpperCase())} | ${_osintEscape(x.label)}</div>
-                        <div><span class="text-[10px] px-2 py-0.5 rounded border ${tone.cls}">${_osintEscape(x.risk)}</span></div>
-                    </div>`;
-                };
-
-                const html = `
-                    <div class="space-y-3">
-                        <div class="p-2 rounded-lg border border-fuchsia-800/40 bg-fuchsia-900/10 text-fuchsia-200 text-xs">
-                            الأعلى خطورة: <span class="font-bold">${_osintEscape(winner.target)}</span> | فرق المخاطرة: <span class="font-bold">${_osintEscape(delta)}</span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            ${card(ra, 'Target A')}
-                            ${card(rb, 'Target B')}
-                        </div>
-                    </div>
-                `;
-                setResultMarkup(out, 'Target Comparison', html, { badge: 'COMPARE' });
-                _osintTrackActivity('target_compare', { target: `${a} <-> ${b}`, targetType: 'compare', risk: Math.max(Number(ra.risk || 0), Number(rb.risk || 0)), label: 'Comparison completed' });
-            } catch (e) {
-                setResultError(out, `Comparison failed: ${e.message || e}`);
-            }
-        }
-
-        function clearOsintActivityLog() {
-            _osintActivityLog = [];
-            _osintSaveActivityLog();
-            _osintRenderActivityFeed();
-            _osintUpdateMissionStats();
-        }
-
-        function exportOsintReport() {
-            const watchlist = JSON.parse(localStorage.getItem('titan_osint_watchlist') || '[]');
-            const activity = JSON.parse(localStorage.getItem('titan_osint_activity') || '[]');
-            const latestUnified = document.getElementById('osintUnifiedResult')?.innerText || '';
-            const latestThreat = document.getElementById('osintThreatResult')?.innerText || '';
-            const latestUsername = document.getElementById('osintUsernameResult')?.innerText || '';
-            const latestHash = document.getElementById('osintHashResult')?.innerText || '';
-            const latestBatch = document.getElementById('osintBatchResult')?.innerText || '';
-            const latestCompare = document.getElementById('osintCompareResult')?.innerText || '';
-            const report = {
-                generated_at: new Date().toISOString(),
-                watchlist,
-                activity_timeline: activity,
-                latest_unified_object: _osintLastUnified,
-                latest_unified_lookup: latestUnified,
-                latest_threat_intel: latestThreat,
-                latest_username_hunt: latestUsername,
-                latest_hash_analysis: latestHash,
-                latest_batch_analysis: latestBatch,
-                latest_target_comparison: latestCompare
-            };
-            const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'titan-osint-report.json';
-            a.click();
-            URL.revokeObjectURL(url);
         }
 
         let currentIncidentCaseId = null;
@@ -15013,18 +14486,276 @@ def pdf_clean_route():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# --- مسارات الإضافات للحزمة الثانية المتقدمة ---
 
-@app.route('/api/osint/image', methods=['POST'])
-def osint_image_route():
+def _extract_first_json_blob(raw_text: str):
+    text = str(raw_text or '').strip()
+    if not text:
+        return None
     try:
-        file = request.files['file']
-        data = extract_exif_data(file.read())
-        add_audit_log("استخبارات صور (OSINT)", f"تم استخراج بيانات من {file.filename}")
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return json.loads(text)
+    except Exception:
+        pass
 
+    for open_ch, close_ch in (('{', '}'), ('[', ']')):
+        start = text.find(open_ch)
+        while start != -1:
+            depth = 0
+            in_string = False
+            escaped = False
+            for idx in range(start, len(text)):
+                ch = text[idx]
+                if in_string:
+                    if escaped:
+                        escaped = False
+                    elif ch == '\\':
+                        escaped = True
+                    elif ch == '"':
+                        in_string = False
+                    continue
+
+                if ch == '"':
+                    in_string = True
+                    continue
+                if ch == open_ch:
+                    depth += 1
+                elif ch == close_ch:
+                    depth -= 1
+                    if depth == 0:
+                        candidate = text[start:idx + 1]
+                        try:
+                            return json.loads(candidate)
+                        except Exception:
+                            break
+            start = text.find(open_ch, start + 1)
+    return None
+
+
+def _iter_maigret_site_maps(payload: object) -> list[tuple[str, dict]]:
+    result: list[tuple[str, dict]] = []
+
+    def add_from(obj: object, username_hint: str = '') -> None:
+        if not isinstance(obj, dict):
+            return
+        sites = obj.get('sites')
+        if isinstance(sites, dict):
+            result.append((str(obj.get('username') or username_hint or ''), sites))
+
+        for key, value in obj.items():
+            if isinstance(value, dict) and isinstance(value.get('sites'), dict):
+                hint = str(value.get('username') or key or username_hint)
+                result.append((hint, value.get('sites') or {}))
+
+    if isinstance(payload, dict):
+        add_from(payload, str(payload.get('username') or ''))
+        for key, value in payload.items():
+            if isinstance(value, dict):
+                add_from(value, str(key))
+    elif isinstance(payload, list):
+        for item in payload:
+            add_from(item, str(item.get('username') or '') if isinstance(item, dict) else '')
+
+    return result
+
+
+def _normalize_maigret_site_row(query: str, site_name: str, site_data: object):
+    if not isinstance(site_data, dict):
+        return None
+
+    status_items = [
+        site_data.get('status'),
+        site_data.get('check_result'),
+        site_data.get('result'),
+        site_data.get('message'),
+        site_data.get('http_status'),
+    ]
+    status_text = ' | '.join(str(x).strip() for x in status_items if str(x).strip())
+    status_l = status_text.lower()
+
+    explicit_negative = any(token in status_l for token in ('not found', 'notfound', 'available', 'unclaimed', 'unused', 'free'))
+    claimed = bool(site_data.get('claimed') or site_data.get('exists') or site_data.get('found') or site_data.get('is_found'))
+    if not explicit_negative and any(token in status_l for token in ('claimed', 'found', 'exists', 'occupied', 'taken')):
+        claimed = True
+    if explicit_negative:
+        claimed = False
+
+    if not claimed:
+        return None
+
+    url = (
+        site_data.get('url_user')
+        or site_data.get('url')
+        or site_data.get('profile_url')
+        or site_data.get('urlMain')
+        or site_data.get('url_main')
+        or ''
+    )
+    url = str(url or '').strip()
+    if '{username}' in url:
+        url = url.replace('{username}', query)
+    if not url:
+        return None
+
+    return {
+        'query': query,
+        'site': str(site_name or 'site').strip() or 'site',
+        'url': url,
+        'status': status_text or 'claimed',
+    }
+
+
+def run_maigret_queries(queries: list[str], top_sites: int = 120, timeout_seconds: int = 15) -> dict:
+    started_at = time.time()
+    found: list[dict] = []
+    errors: list[dict] = []
+    processed: list[str] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    command_prefixes: list[list[str]] = []
+    maigret_bin = shutil.which('maigret')
+    if maigret_bin:
+        command_prefixes.append([maigret_bin])
+    command_prefixes.append([sys.executable, '-m', 'maigret'])
+
+    for query in queries:
+        payload = None
+        last_error = 'تعذر تشغيل Maigret'
+
+        for prefix in command_prefixes:
+            cmd = prefix + [
+                query,
+                '--json',
+                '--no-progressbar',
+                '--top-sites', str(top_sites),
+                '--timeout', str(timeout_seconds),
+            ]
+
+            try:
+                completed = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=max(10, timeout_seconds + 8),
+                )
+                stdout = completed.stdout or ''
+                stderr = completed.stderr or ''
+                payload = _extract_first_json_blob(stdout)
+                if payload is None and stderr:
+                    payload = _extract_first_json_blob(stderr)
+
+                if payload is not None:
+                    break
+
+                raw_err = stderr.strip() or stdout.strip() or f"exit={completed.returncode}"
+                last_error = str(raw_err)[:420]
+            except subprocess.TimeoutExpired:
+                last_error = f"timeout after {timeout_seconds}s"
+            except Exception as exc:
+                last_error = str(exc)[:420]
+
+        if payload is None:
+            errors.append({'query': query, 'error': last_error})
+            continue
+
+        processed.append(query)
+        site_maps = _iter_maigret_site_maps(payload)
+
+        for query_hint, site_map in site_maps:
+            effective_query = str(query or query_hint or '').strip()
+            if not effective_query:
+                continue
+            for site_name, site_data in site_map.items():
+                row = _normalize_maigret_site_row(effective_query, str(site_name), site_data)
+                if not row:
+                    continue
+                unique_key = (
+                    str(row['query']).lower(),
+                    str(row['site']).lower(),
+                    str(row['url']).lower(),
+                )
+                if unique_key in seen:
+                    continue
+                seen.add(unique_key)
+                found.append(row)
+
+    found.sort(key=lambda r: (str(r.get('query', '')).lower(), str(r.get('site', '')).lower()))
+    by_username: dict[str, int] = {}
+    for row in found:
+        q = str(row.get('query') or '').strip()
+        if not q:
+            continue
+        by_username[q] = by_username.get(q, 0) + 1
+
+    return {
+        'engine': 'maigret',
+        'requested_usernames': queries,
+        'checked_usernames': len(processed),
+        'processed_usernames': processed,
+        'total_found': len(found),
+        'found': found,
+        'by_username': by_username,
+        'errors': errors,
+        'top_sites': top_sites,
+        'timeout_seconds': timeout_seconds,
+        'elapsed_ms': int((time.time() - started_at) * 1000),
+    }
+
+
+@app.route('/api/osint/maigret', methods=['POST'])
+def osint_maigret_route():
+    data = request.get_json(silent=True) or {}
+    raw_queries = data.get('queries', data.get('usernames', []))
+
+    tokens: list[str]
+    if isinstance(raw_queries, str):
+        tokens = [p.strip() for p in re.split(r'[\r\n,;]+', raw_queries)]
+    elif isinstance(raw_queries, list):
+        tokens = [str(x).strip() for x in raw_queries]
+    else:
+        tokens = []
+
+    clean_queries: list[str] = []
+    seen = set()
+    for token in tokens:
+        q = str(token or '').strip().lstrip('@')
+        if not q:
+            continue
+        if not re.fullmatch(r'[A-Za-z0-9._-]{2,64}', q):
+            continue
+        key = q.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        clean_queries.append(q)
+
+    clean_queries = clean_queries[:8]
+    if not clean_queries:
+        return jsonify({"success": False, "error": "أدخل يوزرنيم صالح واحد على الأقل (حروف/أرقام و ._- فقط)."}), 400
+
+    try:
+        top_sites = int(data.get('top_sites', 120) or 120)
+    except Exception:
+        top_sites = 120
+    try:
+        timeout_seconds = int(data.get('timeout_seconds', 15) or 15)
+    except Exception:
+        timeout_seconds = 15
+
+    top_sites = max(30, min(400, top_sites))
+    timeout_seconds = max(6, min(35, timeout_seconds))
+
+    result = run_maigret_queries(clean_queries, top_sites=top_sites, timeout_seconds=timeout_seconds)
+
+    if result.get('checked_usernames', 0) == 0 and result.get('errors'):
+        first_error = str(result['errors'][0].get('error') or 'تعذر تشغيل Maigret')
+        return jsonify({
+            'success': False,
+            'error': f"تعذر تشغيل Maigret: {first_error}",
+            'engine': 'maigret',
+            'requested_usernames': clean_queries,
+        }), 500
+
+    add_audit_log("OSINT Maigret", f"users={len(clean_queries)} found={result.get('total_found', 0)}")
+    return jsonify({'success': True, **result})
 
 @app.route('/api/scan/email', methods=['POST'])
 def scan_email_route():
@@ -15032,125 +14763,6 @@ def scan_email_route():
     res = check_email_intelligence(email)
     add_audit_log("فحص إيميل (IPQualityScore)", f"تم فحص البريد: {email}")
     return jsonify(res)
-
-
-def run_socialscan_queries(queries: list[str], platforms: list[str] | None = None) -> dict:
-    clean_queries = [str(q or '').strip() for q in (queries or [])]
-    clean_queries = [q for q in clean_queries if q][:8]
-    if not clean_queries:
-        return {"success": False, "error": "queries مطلوبة (username/email)"}
-
-    try:
-        from socialscan.util import Platforms, sync_execute_queries  # type: ignore
-    except Exception as e:
-        return {"success": False, "error": f"socialscan_import_error: {e}"}
-
-    supported = [name for name in dir(Platforms) if name.isupper()]
-    wanted = [str(p or '').strip().upper() for p in (platforms or []) if str(p or '').strip()]
-    if not wanted:
-        wanted = ['GITHUB', 'REDDIT']
-
-    selected = []
-    selected_names = []
-    for name in wanted:
-        if name in supported:
-            obj = getattr(Platforms, name, None)
-            if obj is not None:
-                selected.append(obj)
-                selected_names.append(name)
-
-    if not selected:
-        return {
-            "success": False,
-            "error": "لا توجد منصات صالحة في الطلب",
-            "supported_platforms": supported,
-        }
-
-    profile_url_templates = {
-        'GITHUB': 'https://github.com/{q}',
-        'GITLAB': 'https://gitlab.com/{q}',
-        'REDDIT': 'https://www.reddit.com/user/{q}',
-        'TWITTER': 'https://x.com/{q}',
-        'INSTAGRAM': 'https://www.instagram.com/{q}/',
-        'PINTEREST': 'https://www.pinterest.com/{q}/',
-        'TUMBLR': 'https://{q}.tumblr.com/',
-    }
-
-    try:
-        raw = sync_execute_queries(clean_queries, selected)
-    except Exception as e:
-        return {"success": False, "error": f"socialscan_runtime_error: {e}"}
-
-    rows = []
-    for r in raw or []:
-        platform_obj = getattr(r, 'platform', '')
-        platform = str(getattr(platform_obj, 'name', '') or str(platform_obj) or 'UNKNOWN').upper().strip()
-        query = str(getattr(r, 'query', '') or '').strip()
-        success = bool(getattr(r, 'success', False))
-        valid = bool(getattr(r, 'valid', False))
-        available = bool(getattr(r, 'available', False))
-        message = str(getattr(r, 'message', '') or '').strip()
-        exists = bool(valid and not available)
-        tpl = profile_url_templates.get(platform)
-        url = tpl.format(q=query) if tpl else ''
-        rows.append({
-            "query": query,
-            "platform": platform,
-            "message": message,
-            "success": success,
-            "valid": valid,
-            "available": available,
-            "exists": exists,
-            "url": url,
-        })
-
-    return {
-        "success": True,
-        "engine": "socialscan",
-        "queries": clean_queries,
-        "platforms": selected_names,
-        "query_count": len(clean_queries),
-        "platform_count": len(selected_names),
-        "found_count": len([x for x in rows if x.get('exists')]),
-        "results": rows,
-        "checked_at": datetime.datetime.utcnow().isoformat() + 'Z',
-    }
-
-
-@app.route('/api/osint/username', methods=['POST'])
-def osint_username_route():
-    try:
-        data = request.get_json(silent=True) or {}
-        queries = data.get('queries') or []
-        if isinstance(queries, str):
-            queries = [queries]
-        if not isinstance(queries, list):
-            queries = []
-
-        # Backward compatibility: old client may still send username only.
-        if not queries:
-            single_username = str(data.get('username', '') or '').strip()
-            if single_username:
-                queries = [single_username]
-
-        platforms = data.get('platforms') or []
-        if isinstance(platforms, str):
-            platforms = [platforms]
-        if not isinstance(platforms, list):
-            platforms = []
-
-        result = run_socialscan_queries(queries, platforms)
-        if not result.get('success'):
-            return jsonify(result), 400
-
-        add_audit_log("Username Hunter (OSINT)", f"SocialScan queries={result.get('query_count', 0)} platforms={result.get('platform_count', 0)}")
-        return jsonify(result)
-    except Exception as e:
-        # Always return JSON here so frontend does not fail on HTML error pages.
-        return jsonify({
-            "success": False,
-            "error": f"username_hunt_runtime_error: {e}"
-        }), 500
 
 
 def _ir_priority_rank(priority: str) -> int:
