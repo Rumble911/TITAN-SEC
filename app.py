@@ -10433,7 +10433,20 @@ HTML_TEMPLATE = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({username, mode})
                 });
-                const data = await res.json();
+                const contentType = String(res.headers.get('content-type') || '').toLowerCase();
+                let data = null;
+                if (contentType.includes('application/json')) {
+                    data = await res.json();
+                } else {
+                    const raw = await res.text();
+                    data = {
+                        success: false,
+                        error: res.status >= 500
+                            ? `Server error ${res.status}: endpoint returned HTML instead of JSON.`
+                            : `Unexpected response type (${contentType || 'unknown'}).`,
+                        raw_preview: String(raw || '').slice(0, 220)
+                    };
+                }
                 const badge = data.success ? 'SOCIAL' : 'Failed';
                 setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge });
                 if (data.found_count > 0) {
@@ -15656,14 +15669,23 @@ def scan_email_route():
 
 @app.route('/api/osint/username', methods=['POST'])
 def osint_username_route():
-    data = request.json or {}
-    username = data.get('username', '').strip()
-    mode = data.get('mode', 'deep')
-    result = check_username_presence(username, mode)
-    if not result.get('success'):
-        return jsonify(result), 400
-    add_audit_log("Username Hunter (OSINT)", f"فحص اليوزرنيم: {username} | mode={result.get('mode', 'deep')}")
-    return jsonify(result)
+    try:
+        data = request.get_json(silent=True) or {}
+        username = str(data.get('username', '') or '').strip()
+        mode = str(data.get('mode', 'deep') or 'deep').strip().lower()
+
+        result = check_username_presence(username, mode)
+        if not result.get('success'):
+            return jsonify(result), 400
+
+        add_audit_log("Username Hunter (OSINT)", f"فحص اليوزرنيم: {username} | mode={result.get('mode', 'deep')}")
+        return jsonify(result)
+    except Exception as e:
+        # Always return JSON here so frontend does not fail on HTML error pages.
+        return jsonify({
+            "success": False,
+            "error": f"username_hunt_runtime_error: {e}"
+        }), 500
 
 
 def _ir_priority_rank(priority: str) -> int:
