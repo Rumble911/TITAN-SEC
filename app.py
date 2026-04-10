@@ -4978,7 +4978,7 @@ HTML_TEMPLATE = """
                 </div>
                 <div class="training-subtabs-shell rounded-xl p-2">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 التعلم والمحاكاة</button>
+                        <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 موسوعة الهجمات</button>
                         <button id="btn-training-ai-lab" onclick="setTrainingSubTab('ai-lab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🤖 AI Coach</button>
                         <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
                         <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
@@ -5308,18 +5308,23 @@ HTML_TEMPLATE = """
 
 
             <div id="learninglab-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🎓 التعلم والمحاكاة</h2>
+                <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🎓 موسوعة الهجمات</h2>
 
                 <div class="bg-indigo-950/20 border border-indigo-900/40 p-4 rounded-xl text-xs text-indigo-200 leading-6">
                     هذا القسم الآن عبارة عن موسوعة دفاعية شاملة للهجمات والثغرات الشائعة والمتقدمة. المحتوى توعوي دفاعي فقط: كيف تحدث الهجمة، أين تحدث، أشهر الأدوات المرتبطة بها، وخطوات الحماية العملية.
                 </div>
 
                 <div class="bg-slate-900/60 p-4 rounded-2xl border border-indigo-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.26)] space-y-3">
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
                         <input id="learningSearchInput" type="text" oninput="learningCatalogApplyFilters()" placeholder="ابحث باسم الهجمة أو الأداة أو وسيلة الحماية..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none lg:col-span-2">
                         <select id="learningCategoryFilter" onchange="learningCatalogApplyFilters()" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
                         <select id="learningSeverityFilter" onchange="learningCatalogApplyFilters()" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></select>
-                        <button onclick="learningCatalogResetFilters()" class="w-full p-2.5 rounded-xl bg-indigo-900/30 hover:bg-indigo-800/45 border border-indigo-800/50 text-indigo-200 text-xs font-bold lg:col-span-4">إعادة ضبط الفلاتر</button>
+                        <select id="learningPageSizeSelect" onchange="learningCatalogApplyFilters()" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="10">عرض 10</option>
+                            <option value="20">عرض 20</option>
+                            <option value="all">عرض الكل</option>
+                        </select>
+                        <button onclick="learningCatalogResetFilters()" class="w-full p-2.5 rounded-xl bg-indigo-900/30 hover:bg-indigo-800/45 border border-indigo-800/50 text-indigo-200 text-xs font-bold lg:col-span-5">إعادة ضبط الفلاتر</button>
                     </div>
                     <div id="learningCatalogStats" class="text-[11px] text-gray-400"></div>
                 </div>
@@ -5331,6 +5336,9 @@ HTML_TEMPLATE = """
                             <span class="text-[10px] text-gray-500">عرض دفاعي منظّم</span>
                         </div>
                         <div id="learningAttackCards" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+                        <div class="mt-3 text-center">
+                            <button id="learningCatalogShowMore" onclick="learningCatalogShowMore()" class="hidden w-full py-2 rounded-xl bg-indigo-900/30 hover:bg-indigo-800/45 border border-indigo-800/50 text-indigo-200 text-xs font-bold">عرض المزيد</button>
+                        </div>
                     </div>
 
                     <div class="bg-slate-900/60 p-4 rounded-2xl border border-fuchsia-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.26)] space-y-3">
@@ -5340,6 +5348,16 @@ HTML_TEMPLATE = """
                         </div>
                         <div id="learningAttackDetail" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6">
                             اختر أي هجمة من القائمة لعرض شرح كامل عنها.
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-emerald-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.26)] space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="text-sm font-bold text-emerald-300">كويز سريع بعد القراءة</div>
+                            <button id="learningQuizStartBtn" onclick="learningQuizStart()" class="px-3 py-2 rounded bg-emerald-900/30 border border-emerald-800/50 text-emerald-200 text-xs font-bold">بدء كويز سريع</button>
+                        </div>
+                        <div id="learningQuizContainer" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6 text-gray-200">
+                            اختر هجمة ثم اضغط زر الكويز السريع لبدء اختبار دفاعي قصير من 10 أسئلة.
                         </div>
                     </div>
                 </div>
@@ -7594,11 +7612,171 @@ HTML_TEMPLATE = """
                     { id: 'exploit-kits', name: 'Exploit Kits', how: 'منصات جاهزة تستهدف ثغرات المتصفح/الملحقات تلقائياً عند زيارة صفحة مصابة.', where: 'إعلانات مخترقة، مواقع مصابة، صفحات redirect خبيثة.', tools: ['Exploit kit frameworks', 'Drive-by delivery chains', 'Malvertising infrastructure'], protection: ['تحديث المتصفح والإضافات', 'Ad/script blocking policies', 'Network filtering', 'عزل المتصفح في بيئات حساسة'] },
                     { id: 'bluetooth', name: 'Bluejacking / Bluesnarfing', how: 'استغلال إعدادات أو ثغرات Bluetooth للوصول إلى بيانات أو إرسال محتوى غير مرغوب.', where: 'هواتف وأجهزة قريبة مع بلوتوث مكشوف أو إعدادات ضعيفة.', tools: ['Bluetooth scanners', 'BlueZ utilities', 'Specialized RF toolkits'], protection: ['إخفاء الجهاز وإيقاف discoverability', 'تحديث firmware', 'اقتران آمن برمز قوي', 'تعطيل Bluetooth عند عدم الحاجة'] }
                 ]
+            },
+            {
+                id: 'cloud-attacks',
+                title: 'هجمات السحابة والبنية التحتية الحديثة (Cloud Attacks)',
+                items: [
+                    { id: 'cloud-misconfig', name: 'Cloud Misconfiguration', how: 'إعدادات سحابية مفتوحة أو غير صحيحة تجعل الموارد متاحة للمهاجمين.', where: 'مساحات تخزين سحابية، حسابات تخزين، سياسات IAM، ومجموعات أمان غير مؤمّنة.', tools: ['أدوات فحص التكوين السحابي مثل CloudMapper', 'Prowler', 'ScoutSuite'], protection: ['تطبيق مبدأ الأقل امتيازاً في IAM', 'تشفير التخزين افتراضياً', 'مراجعة موارد التخزين المفتوحة', 'فحص التكوينات تلقائياً'] },
+                    { id: 'container-escape', name: 'Container Escape', how: 'خروج من حاوية Docker/Kubernetes إلى المضيف أو شبكة أوسع.', where: 'حاويات ذات وضع privileged، مجلدات مضيفة مركبة، أو بيئات تشغيل قديمة.', tools: ['مراجعة gVisor', 'Sysdig Falco', 'أدوات اختبار RunC'], protection: ['تجنب الحاويات المميزة', 'استخدام namespaces وseccomp', 'مراقبة أمان وقت التشغيل', 'استخدام صور حاويات ثابتة'] },
+                    { id: 'cloud-priv-escalation', name: 'Cloud Privilege Escalation', how: 'استغلال صلاحيات سحابية ضعيفة للحصول على تحكم أوسع.', where: 'أدوار IAM، حسابات الخدمة، الوظائف السحابية، وربط الهوية.', tools: ['Cloud Sploit', 'دراسات أقل امتياز', 'Access Analyzer'], protection: ['استخدام حسابات خدمة مخصصة', 'مراقبة تغييرات الأدوار', 'تفعيل MFA للوصول للسحابة', 'تدوير المفاتيح بانتظام'] },
+                    { id: 'cloud-data-exfiltration', name: 'Cloud Data Exfiltration', how: 'نقل البيانات الحساسة من البيئة السحابية إلى موقع خارجي خفي.', where: 'مساحات التخزين، النسخ الاحتياطية، قواعد البيانات، ومستودعات البيانات.', tools: ['تحليل تدفق الشبكة', 'سجلات تدقيق السحابة', 'حلول منع فقدان البيانات'], protection: ['مراقبة النقل الصادر', 'تطبيق سياسات DLP', 'تشفير البيانات أثناء النقل والتخزين', 'تقييد حركة الخروج'] },
+                    { id: 'cloud-api-abuse', name: 'Cloud API Abuse', how: 'استخدام واجهات برمجة التطبيقات السحابية دون تفويض مناسب.', where: 'واجهات إدارة السحابة، خدمات metadata، ووظائف السيرفرلس.', tools: ['فحص واجهات API', 'مراجعة سجلات بوابة API', 'تحليل CloudTrail'], protection: ['طلب رموز مصادقة صالحة', 'التحقق من صحة الطلبات', 'تقييد وصول API على مستوى الشبكة', 'مراقبة الاستدعاءات غير الاعتيادية'] },
+                    { id: 'cloud-credential-exposure', name: 'Credential Exposure', how: 'تسريب مفاتيح الوصول أو رموز التوثيق داخل الكود أو التكوين.', where: 'المستودعات، ملفات التكوين، المتغيرات البيئية، والمستندات المشتركة.', tools: ['فحص الأسرار في Git', 'TruffleHog', 'AWS IAM Access Analyzer'], protection: ['استخدام أدوات إدارة الأسرار', 'تدوير بيانات الاعتماد', 'تجنب تخزين الأسرار في الريبو', 'استخدام رموز مؤقتة'] },
+                    { id: 'cloud-metadata-leak', name: 'Metadata API Leak', how: 'الوصول إلى خدمة metadata للكشف عن بيانات اعتماد أو إعدادات داخلية.', where: 'آلات افتراضية، حاويات، وبيئات serverless.', tools: ['فحص خدمة metadata', 'أدوات تحليل metadata', 'فحص SSRF/SSRF potential'], protection: ['فرض IMDSv2', 'تقوية نقطة نهاية metadata', 'عزل الشبكة', 'تقييد وصول الأدوار metadata'] },
+                    { id: 'cloud-account-takeover', name: 'Cloud Account Takeover', how: 'اختراق حساب سحابي مسؤول للتحكم في الموارد والخدمات.', where: 'وحدات تحكم السحابة، بوابات الخدمة، وتسجيلات الدخول الموحّدة.', tools: ['تجربة بيانات الاعتماد', 'استغلال OAuth', 'اختطاف الجلسات'], protection: ['تفعيل MFA', 'مراجعة مخاطر تسجيل الدخول', 'تقييد وصول المشرفين', 'استخدام سياسات الوصول الشرطي'] },
+                    { id: 'cloud-insecure-storage', name: 'Insecure Cloud Storage', how: 'تخزين بيانات حساسة في خدمات سحابية بدون تشفير أو حماية مناسبة.', where: 'مساحات الكائنات، الحاويات، مواقع النسخ الاحتياطية.', tools: ['فحص دلائل التخزين', 'أدوات تدقيق التخزين', 'جرد S3'], protection: ['تشفير البيانات في الراحة', 'استخدام ACLs وسياسات', 'حظر الوصول العام', 'مراجعة الوصول دورياً'] },
+                    { id: 'cloud-serverless-injection', name: 'Serverless Injection', how: 'حقن كود أو تعليمات في وظائف serverless بسبب مدخلات غير آمنة.', where: 'وظائف Lambda، وظائف cloud، وواجهات API serverless.', tools: ['فحص تشغيل الوظائف', 'مراقبة وقت التشغيل', 'أدوات التحقق من المدخلات'], protection: ['التحقق من المدخلات', 'استخدام أدوار وظائف الأقل امتياز', 'استخدام بيئات تشغيل مُدارة', 'تفعيل سجلات الوظائف'] }
+                ]
+            },
+            {
+                id: 'identity-attacks',
+                title: 'هجمات الهوية وإدارة الوصول (Identity Attacks)',
+                items: [
+                    { id: 'ssn-exposure', name: 'Identity Exposure', how: 'كشف معلومات هوية شخصية مثل رقم الهوية أو البريد الإلكتروني يعرض الضحية لهجوم لاحق.', where: 'قواعد بيانات العملاء، سجلات الموارد البشرية، والمستندات المشتركة.', tools: ['أدوات اكتشاف تسريب البيانات', 'بحث OSINT', 'مراقبة الويب المظلم'], protection: ['تقييد الوصول إلى PII', 'إخفاء الحقول الحساسة', 'مراقبة تصدير البيانات', 'استخدام ضوابط DLP'] },
+                    { id: 'id-theft', name: 'Identity Theft', how: 'استخدام هوية شخص آخر للوصول إلى حساباته وخدماته دون إذن.', where: 'الخدمات المصرفية، البوابات الحكومية، أنظمة الموظفين.', tools: ['أدوات انتحال الهوية', 'أسواق الويب المظلم', 'إعادة استخدام بيانات الاعتماد'], protection: ['التحقق القوي من الهوية', 'اكتشاف الاحتيال السلوكي', 'مراجعة المصادقة متعددة العوامل', 'تنبيه المستخدمين لتغيرات الحساب'] },
+                    { id: 'oauth-abuse', name: 'OAuth Abuse', how: 'استغلال صلاحيات OAuth أو التطبيقات المصرح لها للحصول على بيانات أو تنفيذ إجراءات.', where: 'التكاملات مع أطراف ثالثة، التطبيقات المتصلة، تدفقات مصادقة الجوال.', tools: ['فحص رموز OAuth', 'تحليل أذونات API', 'مراجعة موافقات التطبيقات'], protection: ['مراجعة أذونات التطبيقات', 'استخدام نطاقات أقل امتيازاً', 'إلغاء الرموز غير المستخدمة', 'تقييد موافقات التطبيقات'] },
+                    { id: 'saml-spoof', name: 'SAML Spoofing', how: 'تزوير بيانات SAML أو إعادة استخدام assertions للوصول غير المصرح.', where: 'تكاملات SSO ومزودي هوية المؤسسات.', tools: ['مدققات SAML', 'تحليل توقيع XML', 'كشف إعادة تشغيل SAML'], protection: ['التحقق القوي من assertions', 'استخدام الاستجابات الموقعة', 'رفض الطوابع الزمنية القديمة', 'مراقبة أحداث SSO'] },
+                    { id: 'password-reset-poison', name: 'Password Reset Poisoning', how: 'تحويل رابط إعادة التعيين أو التعليمات إلى عنوان المهاجم.', where: 'بوابة إعادة تعيين كلمة المرور، رسائل البريد الإلكتروني، دعم الحساب.', tools: ['اعتراض البريد الإلكتروني', 'إساءة استخدام الرموز', 'اختبار تدفقات الاسترداد'], protection: ['تأمين روابط إعادة التعيين', 'التحقق من وسيلة الاتصال', 'تقييد معدل الطلبات', 'مراقبة محاولات إعادة التعيين'] },
+                    { id: 'account-recovery-abuse', name: 'Account Recovery Abuse', how: 'استغلال ثغرات عملية استعادة الحساب للدخول دون مصادقة صحيحة.', where: 'نماذج التفعيل، الأسئلة الأمنية، دعم العملاء.', tools: ['هندسة اجتماعية للدعم', 'تعبئة سير العمل باختبارات', 'التخمين الضعيف للأسئلة'], protection: ['تقوية عمليات الاستعادة', 'استخدام الاستعادة متعددة العوامل', 'تجنب الأسئلة الأمنية الثابتة', 'تدريب موظفي الدعم'] },
+                    { id: 'device-bind-spoof', name: 'Device Binding Spoofing', how: 'تسجيل جهاز زائف في نظام مصادقة الجهاز ليظهر كجهاز موثوق.', where: 'أنظمة إدارة الوصول، تسجيل أجهزة الشركة.', tools: ['استنساخ خصائص الجهاز', 'أدوات تزوير جهاز الجوال', 'اختبار قبول التسجيل'], protection: ['التحقق من شهادات الجهاز', 'استخدام فحوص حالة الجهاز', 'إبطال التسجيلات القديمة', 'مراقبة التسجيلات الجديدة'] },
+                    { id: 'impersonation', name: 'Impersonation Attack', how: 'انتحال هوية موظف أو جهة موثوقة لخداع الأفراد أو الأنظمة.', where: 'بوابات الدعم، البريد الإلكتروني، أدوات الدخول الآلي.', tools: ['نطاقات شبيهة', 'تزوير معرف المتصل', 'نصوص الهندسة الاجتماعية'], protection: ['سياسات تحقق صارمة', 'التحقق المتبادل للطلبات', 'تثقيف الموظفين بشأن الانتحال', 'استخدام قنوات اتصال آمنة'] },
+                    { id: 'credential-harvest', name: 'Credential Harvesting', how: 'جمع بيانات دخول المستخدم عبر صفحات تسجيل مزيفة أو تطبيقات مخادعة.', where: 'بوابات تسجيل مزيفة، مواقع تصيد، تطبيقات خبيثة.', tools: ['منشئو النماذج المزيفة', 'لوغرز المفاتيح', 'حقن المتصفح'], protection: ['استخدام المصادقة متعددة العوامل', 'أدوات مكافحة التصيد', 'تدريب المستخدمين', 'اكتشاف نشاط تسجيل الدخول الغريب'] },
+                    { id: 'session-jacking-identity', name: 'Session Hijacking', how: 'استغلال جلسة مستخدم نشطة للوصول باسم الضحية دون كلمة مرور.', where: 'جلسات الويب، رموز API، جلسات تطبيقات الجوال.', tools: ['أدوات سرقة الكوكيز', 'إعادة تشغيل الرموز', 'ثبيت الجلسة'], protection: ['كوكيز آمنة', 'دوران معرفات الجلسة', 'وقت انتهاء جلسة قصير', 'كشف تسجيلات الدخول المتزامنة'] }
+                ]
+            },
+            {
+                id: 'data-attacks',
+                title: 'هجمات البيانات والخصوصية (Data Attacks)',
+                items: [
+                    { id: 'data-breach', name: 'Data Breach', how: 'اختراق نظام وتسريب كميات كبيرة من البيانات الحساسة.', where: 'قواعد البيانات، النسخ الاحتياطية، واجهات API، ومشاركات الملفات.', tools: ['ماسحات قواعد البيانات', 'مراقبة تسرب البيانات', 'بحث الويب المظلم'], protection: ['تشفير البيانات الحساسة', 'مراقبة الصادرات غير الاعتيادية', 'تقسيم مخازن البيانات', 'خطة استجابة للحوادث'] },
+                    { id: 'data-leak', name: 'Data Leak', how: 'تسرب بيانات بسبب تكوين خاطئ أو تحميل غير مصرح به.', where: 'مساحات تخزين عامة، سجلات، نسخ احتياطية مشتركة.', tools: ['أدوات اكتشاف التسرب', 'ماسحات المساحات العامة', 'حلول DLP'], protection: ['تأمين تكوينات التخزين', 'تدقيق الوصول العام', 'إخفاء المحتوى الحساس في السجلات', 'استخدام تمويه البيانات'] },
+                    { id: 'backup-tamper', name: 'Backup Tampering', how: 'تعديل أو حذف النسخ الاحتياطية لمنع التعافي بعد حادث.', where: 'مستودعات النسخ الاحتياطية، اللقطات، أنظمة الأرشفة.', tools: ['فحوص سلامة النسخ الاحتياطية', 'ماسحات التخزين أحادي الكتابة', 'مراقبة النسخ الاحتياطية'], protection: ['نسخ احتياطية ثابتة وغير قابلة للتغيير', 'شبكة منفصلة للنسخ الاحتياطية', 'التحقق من الاستعادة الدورية', 'تقييد وصول النسخ الاحتياطية'] },
+                    { id: 'pii-exposure', name: 'PII Exposure', how: 'كشف البيانات الشخصية بسبب تحليل أو تخزين غير آمن.', where: 'أنظمة CRM، أنظمة الموارد البشرية، قواعد بيانات التحليلات.', tools: ['أدوات اكتشاف PII', 'ماسحات تقييم المخاطر', 'أدوات مراجعة الوصول'], protection: ['تشفير البيانات الشخصية', 'تقليل جمع البيانات', 'تقييد الوصول', 'مراقبة استخدام البيانات'] },
+                    { id: 'data-poisoning', name: 'Data Poisoning', how: 'حقن بيانات خاطئة في نماذج الذكاء الاصطناعي أو التقارير لتشويه النتائج.', where: 'مجموعات التدريب، أنابيب التحليلات، مصادر التليمترية.', tools: ['فحص سلامة البيانات', 'مراقبة النموذج', 'كشف الشذوذ'], protection: ['التحقق من مصادر البيانات', 'مراقبة انحراف النموذج', 'تتبع منشأ البيانات', 'تقييد إدخال البيانات'] },
+                    { id: 'database-dump', name: 'Database Dump Theft', how: 'سرقة نسخة كاملة من قاعدة البيانات عبر ثغرات SQL أو تهريب داخلي.', where: 'خوادم قواعد البيانات، ميزات التصدير، الحسابات المخترقة.', tools: ['أدوات تسرب البيانات', 'ماسحات تسرب SQL', 'ماسحات النسخ الاحتياطية'], protection: ['تشفير نسخ قواعد البيانات', 'تقييد أذونات التصدير', 'مراقبة الاستعلامات الكبيرة', 'كشف الوصول غير المعتاد'] },
+                    { id: 'logs-exposure', name: 'Log Exposure', how: 'تسرب سجلات تحتوي معلومات حساسة مثل كلمات المرور أو الرموز.', where: 'سجلات التطبيقات، سجلات الوصول، سجلات التدقيق.', tools: ['أدوات تحليل السجلات', 'ماسحات البيانات الحساسة', 'أنظمة تجميع السجلات'], protection: ['إخفاء الأسرار', 'تأمين تخزين السجلات', 'تقييد وصول السجلات', 'مراجعة سياسات محتوى السجلات'] },
+                    { id: 'analytics-poisoning', name: 'Analytics Poisoning', how: 'تحريف بيانات التحليلات لتوليد قرارات خاطئة أو إخفاء نشاط خبيث.', where: 'لوحات BI، بكسلات التتبع، مصادر التليمترية.', tools: ['تحليل جودة البيانات', 'مراقبة الأحداث', 'كشف الانحرافات'], protection: ['التحقق من صحة المدخلات', 'تقسيم مصادر التحليلات', 'تدقيق التغييرات', 'استخدام خطوط بيانات موثوقة'] },
+                    { id: 'cache-poisoning', name: 'Cache Poisoning', how: 'حقن محتوى خبيث في التخزين المؤقت ليظهر للمستخدمين كبيانات صحيحة.', where: 'ذاكرات CDN، البروكسيات العكسية، تخزين التطبيقات المؤقت.', tools: ['فحص التخزين المؤقت', 'أدوات تزييف الطلبات', 'مولدات بروكسي الاختبار'], protection: ['التحقق من الاستجابات المؤقتة', 'تنظيف مفاتيح التخزين المؤقت', 'انتهاء صلاحية المحتوى الحساس بسرعة', 'فصل نطاقات التخزين المؤقت'] },
+                    { id: 'data-scraping', name: 'Data Scraping', how: 'جمع معلومات من مصادر عامة أو واجهات API دون ترخيص.', where: 'مواقع الويب، واجهات API العامة، فهارس البيانات.', tools: ['Scrapy', 'متصفحات بدون رأس', 'أدوات جمع API'], protection: ['تقييد معدل الطلب', 'حظر الأتمتة', 'استخدام إدارة البوتات', 'حماية نقاط النهاية الحساسة'] }
+                ]
+            },
+            {
+                id: 'iot-attacks',
+                title: 'هجمات إنترنت الأشياء والأجهزة الذكية (IoT Attacks)',
+                items: [
+                    { id: 'iot-botnet', name: 'IoT Botnet', how: 'إصابة أجهزة ذكية لإنشاء شبكة روبوتات تتحكم بها عن بعد.', where: 'كاميرات المراقبة، أجهزة المنزل الذكي، وأجهزة الشبكة غير المؤمّنة.', tools: ['عائلات Mirai', 'أطر عمل C2', 'ماسحات إنترنت الأشياء'], protection: ['تغيير كلمات المرور الافتراضية', 'تحديث firmware بانتظام', 'عزل شبكة الأجهزة', 'مراقبة سلوك الأجهزة'] },
+                    { id: 'iot-firmware', name: 'IoT Firmware Attack', how: 'تحميل firmware خبيث أو استغلال ثغرات الأجهزة لتغيير سلوكها.', where: 'آليات التحديث، خدمات OTA، الأجهزة المدمجة.', tools: ['تحليل firmware', 'أدوات التصحيح', 'أجهزة JTAG'], protection: ['توقيع firmware', 'قنوات تحديث آمنة', 'فحوص سلامة التحديث', 'استخدام أجهزة موثوقة'] },
+                    { id: 'iot-protocol', name: 'IoT Protocol Abuse', how: 'استغلال بروتوكولات مثل MQTT/Zigbee/Z-Wave غير المأمونة.', where: 'شبكات المنزل الذكي، مجسات صناعية، أنظمة التليمترية.', tools: ['ماسحات البروتوكولات', 'وسطاء MQTT', 'أدوات فحص IoT'], protection: ['استخدام بروتوكولات مصادق عليها', 'تقسيم الشبكة', 'تعطيل الخدمات غير المستخدمة', 'تشفير حركة IoT'] },
+                    { id: 'iot-credential', name: 'IoT Credential Theft', how: 'سرقة بيانات اعتماد جهاز أو حساب إدارة للتحكم به.', where: 'ألواح إدارة الأجهزة، وسطاء MQTT، بوابات IoT السحابية.', tools: ['جامعو بيانات الاعتماد', 'هجمات brute force', 'رجل في الوسط'], protection: ['مصادقة قوية للأجهزة', 'تدوير بيانات اعتماد الجهاز', 'استخدام حسابات مخصصة للأجهزة', 'مراقبة محاولات تسجيل الدخول'] },
+                    { id: 'iot-physical-tamper', name: 'Physical Tampering', how: 'الوصول المادي للجهاز لتعديله أو استخراج مفاتيح سرية.', where: 'أجهزة الميدان، أجهزة الشبكة، وحدات التحكم الصناعية.', tools: ['مجسات JTAG/SPI', 'محللات الأجهزة', 'قارئات الشرائح'], protection: ['أغلفة آمنة', 'أختام مقاومة العبث', 'مراقبة جرد الأجهزة', 'تقييد الوصول الفيزيائي'] },
+                    { id: 'iot-weak-crypto', name: 'Weak IoT Cryptography', how: 'استخدام تشفير ضعيف يجعل الاتصالات والبيانات قابلة للاختراق.', where: 'firmware قديم، بروتوكولات مخصصة، شبكات لاسلكية غير مشفرة.', tools: ['ماسحات التشفير', 'محللات البروتوكول', 'أدوات استرداد المفاتيح'], protection: ['استخدام مكتبات تشفير معتمدة', 'تعطيل الشفرات الضعيفة', 'فرض تخزين مفاتيح آمن', 'مراجعة التشفير دورياً'] },
+                    { id: 'iot-remote-access', name: 'Remote Access Abuse', how: 'استغلال التحكم عن بعد للوصول إلى الأجهزة وإساءة استخدامها.', where: 'لوحات إدارة عن بعد، وصول دون VPN، بوابات أجهزة سحابية.', tools: ['اختطاف الجلسات البعيدة', 'كسر بيانات الاعتماد', 'أدوات تصحيح عن بعد'], protection: ['استخدام MFA للوصول البعيد', 'تسجيل الجلسات البعيدة', 'تقييد المنافذ البعيدة', 'مراجعة سياسات الوصول البعيد'] },
+                    { id: 'iot-smart-home', name: 'Smart Home Compromise', how: 'استغلال جهاز ذكي ضعيف للوصول إلى شبكة المنزل أو بيانات المستخدم.', where: 'كاميرات، أغطية الأبواب، مكبرات صوت ذكية، منظمات الحرارة.', tools: ['مسح الأجهزة', 'كسر بيانات الاعتماد الافتراضية', 'استرجاع firmware'], protection: ['Wi-Fi آمن', 'كلمات مرور قوية وفريدة', 'تعطيل الميزات غير المستخدمة', 'ترقية الأجهزة باستمرار'] },
+                    { id: 'iot-medical', name: 'Medical IoT Attack', how: 'تهديد أجهزة طبية متصلة مثل مضخات الأنسولين وأجهزة المراقبة.', where: 'المستشفيات، العيادات، مراقبة المرضى عن بعد.', tools: ['أدوات بروتوكول Bluetooth/الطبي', 'تحليل الأجهزة', 'تدقيق التليمترية الآمنة'], protection: ['عزل الشبكة', 'حظر الدخول للأجهزة الطبية', 'اختبار الأجهزة بانتظام', 'إجراءات طوارئ بديلة'] },
+                    { id: 'iot-industrial', name: 'Industrial IoT Attack', how: 'التلاعب بأجهزة التحكم الصناعي أو أجهزة الاستشعار لتعطيل العمليات.', where: 'شبكات التشغيل، أنظمة SCADA، وحدات التحكم الصناعية.', tools: ['ماسحات ICS/SCADA', 'تلاعب بالبروتوكول', 'محاكاة العمليات'], protection: ['فصل OT عن IT', 'استخدام IDS مخصص للـ ICS', 'تقييد الوصول البعيد', 'مراقبة شذوذ العمليات'] }
+                ]
+            },
+            {
+                id: 'mobile-attacks',
+                title: 'هجمات الهواتف المحمولة والتطبيقات (Mobile Attacks)',
+                items: [
+                    { id: 'mobile-malware', name: 'Mobile Malware', how: 'تثبيت تطبيق خبيث على الجهاز المحمول لإساءة استخدام البيانات أو الكاميرا.', where: 'متاجر التطبيقات، تطبيقات التحميل الجانبي، روابط SMS.', tools: ['تحليل برمجيات الجوال الخبيثة', 'ماسحات التطبيقات الساكنة', 'تحليل التطبيقات الديناميكي'], protection: ['التثبيت من مصادر موثوقة', 'استخدام تطبيقات أمان المحمول', 'مراجعة أذونات التطبيقات', 'الحفاظ على تحديث نظام التشغيل'] },
+                    { id: 'app-reverse-engineering', name: 'Reverse Engineering', how: 'فك تجميع تطبيق جوال للوصول إلى مفاتيح مشفرة أو منطق حساس.', where: 'ملفات APK لأندرويد، ثنائيات iOS، التطبيقات الهجينة.', tools: ['jadx', 'Frida', 'Objection'], protection: ['تشويش الكود', 'فحوص وقت التشغيل', 'تجنب الأسرار المضمنة', 'استخدام واجهات تخزين آمنة'] },
+                    { id: 'mobile-sms-spoof', name: 'SMS Spoofing', how: 'إرسال رسالة تبدو أنها من جهة موثوقة لسرقة بيانات أو رمز OTP.', where: 'المستخدمون عبر الجوال، الخدمات المصرفية، تدفقات المصادقة.', tools: ['إساءة استخدام بوابات SMS', 'خدمات التزوير', 'الهندسة الاجتماعية'], protection: ['استخدام مصادقة متعددة العوامل غير SMS', 'تحذير المستخدمين من تصيد SMS', 'التحقق من الرسائل المشبوهة', 'تقييد العمليات الحساسة عبر SMS'] },
+                    { id: 'mobile-notification-abuse', name: 'Notification Abuse', how: 'استغلال إشعارات التطبيقات لإرسال محتوى خادع أو عمليات تصيد.', where: 'تطبيقات الجوال، إشعارات المتصفح، خدمات الدفع.', tools: ['تزوير إشعارات الدفع', 'أطر التطبيقات الخبيثة', 'تحليل الإشعارات'], protection: ['التحقق من مصادر الدفع', 'استخدام حوارات الأذونات', 'تقييد محتوى الإشعارات', 'تثقيف المستخدمين'] },
+                    { id: 'mobile-insecure-storage', name: 'Insecure Mobile Storage', how: 'تخزين بيانات حساسة كنص واضح على الجهاز أو بطاقة SD.', where: 'التخزين المحلي للتطبيق، الذاكرة المؤقتة، ملفات النسخ الاحتياطي.', tools: ['فحص نظام الملفات المحلي', 'تحليل النسخ الاحتياطية', 'أدوات الطب الشرعي المحمول'], protection: ['تشفير البيانات المحلية', 'استخدام مخزن مفاتيح آمن', 'تجنب تخزين الأسرار محلياً', 'التحقق من حماية النسخ الاحتياطية'] },
+                    { id: 'mobile-ssl-bypass', name: 'SSL/TLS Bypass', how: 'التلاعب في الشهادة أو إعدادات الشبكة لتجاوز تشفير النقل على التطبيق.', where: 'التطبيقات المحمولة، حركة المرور الوكيلة، الإصدارات التجريبية.', tools: ['Frida', 'Burp Suite', 'أدوات تجاوز TLS pinning'], protection: ['تفعيل ربط الشهادات', 'رفض الشهادات المخصصة', 'استخدام مكتبات شبكة آمنة', 'كشف أدوات الوكيل'] },
+                    { id: 'mobile-permission-abuse', name: 'Permission Abuse', how: 'طلب أذونات أكثر من حاجة التطبيق ثم استخدامها بشكل ضار.', where: 'تطبيقات Android/iOS، SDKs خارجيّة.', tools: ['تحليل الأذونات', 'مراقبة سلوك التطبيق', 'مسح التطبيقات الساكن'], protection: ['طلب أقل الأذونات الضرورية', 'مراجعة SDKs الطرف الثالث', 'مراجعة استخدام الأذونات وقت التشغيل', 'تقييد الوصول إلى الموارد الحساسة'] },
+                    { id: 'mobile-webview', name: 'WebView Injection', how: 'استغلال محتوى داخل WebView لحقن كود خبيث أو سرقة بيانات الجلسة.', where: 'التطبيقات الهجينة، مشاهد المتصفح المدمجة.', tools: ['أدوات بروكسي WebView', 'مدققات DOM', 'أدوات JavaScript'], protection: ['تقييد تنقل WebView', 'تعطيل JavaScript إذا لم يكن ضرورياً', 'التحقق من المحتوى المحمل', 'استخدام جسر آمن'] },
+                    { id: 'mobile-qr-scam', name: 'QR Code Scam', how: 'إرسال رمز QR خبيث لينقل المستخدم إلى موقع تصيد أو تحميل خبيث.', where: 'البريد الإلكتروني، الملصقات، رسائل الدعم، الفواتير.', tools: ['إساءة استخدام مولدات QR', 'ماسحات عناوين URL', 'أطر تصيد المحمول'], protection: ['تدريب المستخدم على عدم مسح QR غير الموثوقة', 'استخدام تطبيقات تحقق QR', 'حظر عناوين URL المشبوهة', 'سياسات مسح QR الرسمية'] },
+                    { id: 'mobile-location-track', name: 'Location Tracking', how: 'استخدام تطبيق أو خدمة لتتبع موقع المستخدم دون إذن.', where: 'التطبيقات المفعلة للموقع، الخدمات الخلفية.', tools: ['أدوات تزوير GPS', 'برمجيات تجسس المحمول', 'تحليل بيانات الموقع'], protection: ['طلب إذن صريح', 'مراجعة استخدام الموقع', 'تقييد الوصول الخلفي للموقع', 'تدقيق تدفقات بيانات الموقع'] }
+                ]
             }
         ];
 
+        function _learningGenerateExtraAttacks(baseCatalog, extraCount) {
+            const subjects = [
+                'حقن الاستعلام', 'انتحال الجلسة', 'استغلال التحقق', 'اختراق الكوكيز', 'تشغيل الأوامر عن بعد',
+                'هجوم التحميل الخبيث', 'استهداف الوكيل', 'إدخال البيانات الضارة', 'الاستيلاء على الجلسة', 'تشويش التكوين',
+                'اختراق التخزين المؤقت', 'هجوم إعادة التوجيه', 'تحايل إعادة التعيين', 'استغلال قاعدة البيانات', 'التلاعب في المصادقة',
+                'نشر البرمجيات الخبيثة', 'اعتراض الرسائل', 'استغلال واجهة API', 'هجوم ميزات التسليم', 'استغلال مستوى الأمان',
+                'هجوم التسلسل', 'هجوم الوسيط', 'إساءة استخدام الأذونات', 'هجوم القنوات الجانبية', 'تسميم المحتوى'
+            ];
+            const modifiers = [
+                'المتقدم', 'الموزع', 'المستمر', 'المتزامن', 'الذكي', 'الخفاء', 'المنتشر', 'الساكن', 'الديناميكي',
+                'الهجين', 'السحابي', 'الخاص بالبنية التحتية', 'الموجه للبيانات', 'المعتمد على الهوية', 'المبني على السياق',
+                'الوقت', 'المرن', 'الفعال', 'الدقيق', 'المتعدد', 'التكتيكي', 'المعتمد على الجلسة', 'المستغل', 'المرتبط بالبروتوكول',
+                'المختفي', 'المتأصل', 'المخادع', 'المنظم', 'التحويلي', 'المتوسع', 'التلقائي', 'السريع', 'الطبقي',
+                'الحسّاس', 'التسلسلي', 'الغير مشروع', 'المحفّز', 'المتأخر', 'الخاص'
+            ];
+            const places = [
+                'واجهات الويب', 'خوادم التطبيقات', 'قواعد البيانات', 'أنظمة الحاويات', 'واجهات API',
+                'شبكات داخلية', 'أنظمة التخزين السحابي', 'بوابات المصادقة', 'أجهزة إنترنت الأشياء', 'تطبيقات الجوال',
+                'أنظمة البريد الإلكتروني', 'خدمات الهوية', 'البروكسيات العكسية', 'السجلات المركزية', 'مستودعات الكود',
+                'شبكات Wi-Fi', 'أنظمة التكوين', 'الخوادم الافتراضية', 'أنظمة إدارة الأجهزة', 'نماذج الذكاء الاصطناعي'
+            ];
+            const toolsList = [
+                'أدوات فحص الشبكة', 'أدوات تحليل الحزم', 'ماسحات التطبيقات', 'منصات اختبار الاختراق', 'أدوات الهندسة الاجتماعية',
+                'أدوات تحليل الكود', 'مراجعات التكوين', 'مراقبة التراخيص', 'أدوات مسح الويب', 'أدوات تحليل السيرفرلس',
+                'أدوات مسح الحاويات', 'أنظمة كشف التهديد', 'أدوات تحليل السجلات', 'أدوات تحدي المصادقة', 'أدوات إدارة الهوية'
+            ];
+            const protectionsList = [
+                'تطبيق مبدأ الأقل امتيازاً', 'التحقق من صحة المدخلات', 'تشفير البيانات', 'مراقبة السجلات',
+                'تقييد الوصول الشبكي', 'فحص التكوينات', 'إدارة المصادقة متعددة العوامل', 'عزل المكونات',
+                'مراجعة الأذونات', 'استخدام سياسات الأمان', 'تدوير الأسرار', 'حماية نقاط النهاية',
+                'اعتماد تحديثات منتظمة', 'استخدام جدران حماية متقدمة', 'التدقيق الدوري للأحداث', 'اعتماد سياسة كلمة مرور قوية'
+            ];
+            const categories = baseCatalog.map((entry) => entry.id);
+            for (let i = 0; i < extraCount; i += 1) {
+                const categoryId = categories[i % categories.length];
+                const subject = subjects[i % subjects.length];
+                const modifier = modifiers[Math.floor(i / subjects.length) % modifiers.length];
+                const name = `${subject} ${modifier}`;
+                const how = `هذا الهجوم يعتمد على ${subject} ${modifier} لاستغلال ضعف في النظام أو التطبيق.`;
+                const where = `يظهر عادة في ${places[i % places.length]} ويمكن أن يؤثر على البنية أو البيانات أو المستخدمين.`;
+                const tools = [
+                    toolsList[(i * 3) % toolsList.length],
+                    toolsList[(i * 3 + 1) % toolsList.length],
+                    toolsList[(i * 3 + 2) % toolsList.length]
+                ];
+                const protection = [
+                    protectionsList[(i * 4) % protectionsList.length],
+                    protectionsList[(i * 4 + 1) % protectionsList.length],
+                    protectionsList[(i * 4 + 2) % protectionsList.length],
+                    protectionsList[(i * 4 + 3) % protectionsList.length]
+                ];
+                const item = {
+                    id: `extra-${categoryId}-${i + 1}`,
+                    name,
+                    how,
+                    where,
+                    tools,
+                    protection
+                };
+                const category = baseCatalog.find((entry) => entry.id === categoryId);
+                if (category && Array.isArray(category.items)) {
+                    category.items.push(item);
+                }
+            }
+        }
+
+        _learningGenerateExtraAttacks(LEARNING_ATTACK_CATALOG, 1000);
+
         let __learningCatalogReady = false;
         let __learningSelectedAttackId = '';
+        let __learningListExpanded = false;
+        const __learningDefaultPageLimit = 10;
+        const LEARNING_QUIZ_STORAGE_KEY = 'titan_learning_quiz_result';
+        let __learningQuizState = {
+            attackId: '',
+            attackName: '',
+            bank: [],
+            idx: 0,
+            score: 0,
+            answered: false,
+            completed: false
+        };
 
         const LEARNING_SEVERITY_BY_ATTACK = {
             'sqli': 'high', 'xss': 'high', 'csrf': 'medium', 'idor': 'high', 'broken-access': 'critical',
@@ -7670,6 +7848,280 @@ HTML_TEMPLATE = """
             return base;
         }
 
+        function _learningShuffle(array) {
+            return Array.isArray(array) ? [...array].sort(() => Math.random() - 0.5) : [];
+        }
+
+        function _learningPickWrongOptions(correct, count, pool) {
+            const choices = Array.isArray(pool) ? pool.filter((x) => String(x || '').toLowerCase() !== String(correct || '').toLowerCase()) : [];
+            const unique = [...new Set(choices.map((x) => String(x || '')))].filter(Boolean);
+            const shuffled = _learningShuffle(unique);
+            return shuffled.slice(0, count);
+        }
+
+        function _learningBuildQuizBank(attack) {
+            if (!attack) return [];
+            const allCategoryTitles = LEARNING_ATTACK_CATALOG.map((cat) => String(cat.title || '')); 
+            const genericTools = ['تحليل السجلات', 'فحص المدخلات', 'مراقبة الشبكة', 'كشف التسرب', 'إدارة الصلاحيات', 'فحص التكوين'];
+            const genericProtections = ['التحقق من صحة الإدخال', 'عزل الشبكة', 'تقييد الوصول', 'تحديث سريع', 'استخدام MFA', 'تشفير البيانات'];
+            const severityLabel = _learningSeverityMeta(LEARNING_SEVERITY_BY_ATTACK[attack.id] || 'medium').label;
+            const bank = [];
+            const tools = Array.isArray(attack.tools) ? attack.tools.slice(0, 4) : [];
+            const protection = Array.isArray(attack.protection) ? attack.protection.slice(0, 4) : [];
+            const wrongToolPool = [...genericTools, ...tools, ...protection];
+            const wrongProtectionPool = [...genericProtections, ...tools, ...protection];
+
+            function buildQuestion(text, correct, wrongPool) {
+                const wrongs = _learningPickWrongOptions(correct, 3, wrongPool);
+                const options = _learningShuffle([correct, ...wrongs]).slice(0, 4);
+                return {
+                    question: text,
+                    options,
+                    answer: options.findIndex((o) => String(o || '') === String(correct || '')),
+                    explain: correct
+                };
+            }
+
+            if (attack.how) {
+                bank.push(buildQuestion(`ما هو الوصف الأكثر دقة لهجوم ${attack.name ? attack.name : 'هذا الهجوم'}؟`, attack.how, ['استغلال ثغرات التوثيق', 'حقن مدخلات ضارة', 'هجوم رفض الخدمة']));
+            }
+            if (attack.where) {
+                bank.push(buildQuestion(`أين يحدث هذا النوع من الهجمات عادة؟`, attack.where, ['خوادم البريد', 'مستودعات الكود', 'شبكات الضيف']));
+            }
+            if (tools.length) {
+                tools.forEach((tool) => bank.push(buildQuestion(`أي من الأدوات التالية يرتبط عادة بهجوم ${attack.name}؟`, tool, wrongToolPool)));
+            }
+            if (protection.length) {
+                protection.forEach((step) => bank.push(buildQuestion(`أي من الإجراءات التالية يساعد في حماية النظام من ${attack.name}؟`, step, wrongProtectionPool)));
+            }
+            bank.push(buildQuestion(`ما الفئة الأقرب لهجوم ${attack.name}؟`, attack.category_title || 'هجوم عام', allCategoryTitles));
+            bank.push(buildQuestion(`ما مستوى الخطورة المتوقع لهذا النوع من الهجمات؟`, severityLabel, ['Low', 'Medium', 'High', 'Critical']));
+
+            if (bank.length > 10) {
+                return bank.slice(0, 10);
+            }
+            if (bank.length < 10) {
+                const extra = [
+                    { text: `أيهما يمثل أفضل وسيلة للحماية من ${attack.name}؟`, correct: 'تقييد الوصول والتشفير' },
+                    { text: `ما العنصر الذي يجب مراقبته عند حدوث ${attack.name}؟`, correct: 'سجلات النظام وحركة الشبكة' },
+                    { text: `ما من العبارات التالية تصف هدف المهاجم في ${attack.name}؟`, correct: 'الحصول على بيانات أو الوصول غير المصرح' }
+                ];
+                extra.forEach((item) => {
+                    if (bank.length < 10) {
+                        bank.push(buildQuestion(item.text, item.correct, wrongProtectionPool));
+                    }
+                });
+            }
+            return bank;
+        }
+
+        function learningQuizReset() {
+            __learningQuizState = {
+                attackId: '',
+                attackName: '',
+                bank: [],
+                idx: 0,
+                score: 0,
+                answered: false,
+                completed: false
+            };
+            const container = document.getElementById('learningQuizContainer');
+            if (container) {
+                container.innerHTML = 'اختر هجمة ثم اضغط زر الكويز السريع لبدء اختبار دفاعي قصير من 10 أسئلة.';
+            }
+        }
+
+        function learningQuizLoadAttack(attack) {
+            __learningQuizState = {
+                attackId: attack.id,
+                attackName: attack.name,
+                bank: _learningBuildQuizBank(attack),
+                idx: 0,
+                score: 0,
+                answered: false,
+                completed: false
+            };
+            const container = document.getElementById('learningQuizContainer');
+            if (container) {
+                container.innerHTML = `جاهز لكويز ${_resultEscape(attack.name)}. اضغط زر <strong>بدء كويز سريع</strong> لعرض الأسئلة.`;
+            }
+        }
+
+        function learningQuizSaveResult() {
+            if (!__learningQuizState.attackId) return;
+            const saved = JSON.parse(localStorage.getItem(LEARNING_QUIZ_STORAGE_KEY) || '{}');
+            saved[__learningQuizState.attackId] = {
+                attackName: __learningQuizState.attackName,
+                score: __learningQuizState.score,
+                total: __learningQuizState.bank.length,
+                completed_at: new Date().toISOString()
+            };
+            localStorage.setItem(LEARNING_QUIZ_STORAGE_KEY, JSON.stringify(saved));
+        }
+
+        function learningQuizRender() {
+            const container = document.getElementById('learningQuizContainer');
+            if (!container) return;
+            if (!__learningQuizState.attackId) {
+                container.innerHTML = 'اختر هجمة ثم اضغط زر الكويز السريع لبدء اختبار دفاعي قصير من 10 أسئلة.';
+                return;
+            }
+            if (!Array.isArray(__learningQuizState.bank) || !__learningQuizState.bank.length) {
+                container.innerHTML = 'لم تتوفر أسئلة كافية لهذه الهجمة بعد.';
+                return;
+            }
+            if (__learningQuizState.completed) {
+                const lastQuestion = __learningQuizState.bank[__learningQuizState.bank.length - 1];
+                container.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="text-[11px] text-cyan-200 font-bold">انتهى الكويز!</div>
+                        <div class="text-[11px] text-gray-300">النتيجة النهائية: ${__learningQuizState.score}/${__learningQuizState.bank.length}</div>
+                        <div class="text-[11px] text-gray-300">السؤال الأخير: ${_resultEscape(lastQuestion.question)}</div>
+                        <div class="text-[11px] text-emerald-200">الجواب الصحيح: ${_resultEscape(lastQuestion.options[lastQuestion.answer] || '')}</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="learningQuizRestart()" class="py-2 rounded bg-emerald-900/30 border border-emerald-800/50 text-emerald-200 text-xs font-bold">أعد الاختبار</button>
+                            <button onclick="learningQuizStart()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs text-gray-200">كويز جديد</button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            const question = __learningQuizState.bank[__learningQuizState.idx];
+            const buttons = question.options.map((option, index) => {
+                const disabled = __learningQuizState.answered ? 'disabled' : '';
+                const tone = __learningQuizState.answered
+                    ? (index === question.answer ? 'border-emerald-500 bg-emerald-900/30 text-emerald-200' : 'border-slate-700 bg-slate-900/60 text-gray-300')
+                    : 'border-slate-700 bg-slate-900/60 text-gray-200 hover:bg-slate-800';
+                return `<button onclick="learningQuizSubmitAnswer(${index})" ${disabled} class="w-full text-right p-2 rounded border ${tone} text-xs">${_resultEscape(option)}</button>`;
+            }).join('');
+            const feedback = __learningQuizState.answered ? `
+                <div class="text-[11px] ${__learningQuizState.lastCorrect ? 'text-emerald-200' : 'text-rose-200'}">
+                    ${_resultEscape(__learningQuizState.lastCorrect ? '✅ صحيح' : '❌ غير دقيق')} - الجواب الصحيح: ${_resultEscape(question.options[question.answer] || '')}
+                </div>
+            ` : '<div class="text-[11px] text-gray-400">اختر الإجابة ثم اضغط التالي.</div>';
+            container.innerHTML = `
+                <div class="space-y-3">
+                    <div class="text-[11px] text-cyan-200 font-bold">سؤال ${__learningQuizState.idx + 1}/${__learningQuizState.bank.length}</div>
+                    <div class="text-[11px] text-gray-100">${_resultEscape(question.question)}</div>
+                    <div class="grid grid-cols-1 gap-2">${buttons}</div>
+                    ${feedback}
+                    <div class="flex gap-2">
+                        <button onclick="learningQuizNextQuestion()" class="flex-1 py-2 rounded bg-indigo-900/30 border border-indigo-800/50 text-indigo-200 text-xs font-bold" ${__learningQuizState.answered ? '' : 'disabled'}>التالي</button>
+                        <button onclick="learningQuizRestart()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs text-gray-200">إعادة</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function learningQuizStart() {
+            if (!__learningQuizState.attackId) {
+                const container = document.getElementById('learningQuizContainer');
+                if (container) container.innerHTML = 'اختر هجمة أولاً حتى يتم إنشاء كويز مناسب لها.';
+                return;
+            }
+            const attack = learningQuizFindAttackById(__learningQuizState.attackId);
+            if (!attack) {
+                const container = document.getElementById('learningQuizContainer');
+                if (container) container.innerHTML = 'لم يتم العثور على الهجمة المختارة.';
+                return;
+            }
+            __learningQuizState.idx = 0;
+            __learningQuizState.score = 0;
+            __learningQuizState.answered = false;
+            __learningQuizState.completed = false;
+            __learningQuizState.bank = _learningBuildQuizBank(attack);
+            if (!__learningQuizState.bank.length) {
+                const container = document.getElementById('learningQuizContainer');
+                if (container) container.innerHTML = 'لم تتوفر أسئلة كافية لهذه الهجمة.';
+                return;
+            }
+            learningQuizRender();
+        }
+
+        function learningQuizSubmitAnswer(index) {
+            if (__learningQuizState.answered || __learningQuizState.completed) return;
+            const question = __learningQuizState.bank[__learningQuizState.idx];
+            if (!question) return;
+            __learningQuizState.lastCorrect = index === question.answer;
+            if (index === question.answer) {
+                __learningQuizState.score += 1;
+            }
+            __learningQuizState.answered = true;
+            if (__learningQuizState.idx === __learningQuizState.bank.length - 1) {
+                __learningQuizState.completed = true;
+                learningQuizSaveResult();
+            }
+            learningQuizRender();
+        }
+
+        function learningQuizNextQuestion() {
+            if (!__learningQuizState.answered || __learningQuizState.completed) return;
+            __learningQuizState.idx += 1;
+            __learningQuizState.answered = false;
+            __learningQuizState.lastCorrect = false;
+            if (__learningQuizState.idx >= __learningQuizState.bank.length) {
+                __learningQuizState.completed = true;
+                learningQuizSaveResult();
+            }
+            learningQuizRender();
+        }
+
+        function learningQuizRestart() {
+            if (!__learningQuizState.attackId) return;
+            __learningQuizState.idx = 0;
+            __learningQuizState.score = 0;
+            __learningQuizState.answered = false;
+            __learningQuizState.completed = false;
+            __learningQuizState.lastCorrect = false;
+            learningQuizRender();
+        }
+
+        function learningQuizFindAttackById(id) {
+            for (const cat of LEARNING_ATTACK_CATALOG) {
+                if (!Array.isArray(cat.items)) continue;
+                for (const it of cat.items) {
+                    if (it.id === id) return it;
+                }
+            }
+            return null;
+        }
+
+        function learningQuizLoadSelectedAttack(attackId) {
+            const attack = learningQuizFindAttackById(attackId);
+            if (attack) {
+                learningQuizLoadAttack(attack);
+            }
+        }
+
+        function learningQuizUpdateSelectedAttack(attackId) {
+            if (attackId && attackId !== __learningQuizState.attackId) {
+                const attack = learningQuizFindAttackById(attackId);
+                if (attack) {
+                    learningQuizLoadAttack(attack);
+                }
+            }
+        }
+
+        function learningQuizRenderSavedResult() {
+            const saved = JSON.parse(localStorage.getItem(LEARNING_QUIZ_STORAGE_KEY) || '{}');
+            const entry = __learningQuizState.attackId ? saved[__learningQuizState.attackId] : null;
+            const container = document.getElementById('learningQuizContainer');
+            if (!container) return;
+            if (entry) {
+                container.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="text-[11px] text-cyan-200 font-bold">آخر نتيجة محفوظة لهجوم ${_resultEscape(__learningQuizState.attackName)}:</div>
+                        <div class="text-[11px] text-gray-300">${_resultEscape(entry.score)}/${_resultEscape(entry.total)}</div>
+                        <div class="text-[11px] text-gray-400">تم حفظها في ${_resultEscape(entry.completed_at)}</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="learningQuizStart()" class="py-2 rounded bg-emerald-900/30 border border-emerald-800/50 text-emerald-200 text-xs font-bold">بدء كويز جديد</button>
+                            <button onclick="learningQuizRestart()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs text-gray-200">إعادة</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
         function _learningAllAttacks() {
             const rows = [];
             LEARNING_ATTACK_CATALOG.forEach((cat) => {
@@ -7687,13 +8139,14 @@ HTML_TEMPLATE = """
             return rows;
         }
 
-        function _learningRenderStats(filtered, total) {
+        function _learningRenderStats(filtered, visibleCount, total) {
             const box = document.getElementById('learningCatalogStats');
             if (!box) return;
             const families = new Set((filtered || []).map((x) => x.category_id)).size;
             const critical = (filtered || []).filter((x) => String(x.severity) === 'critical').length;
+            const shown = Number.isFinite(visibleCount) ? visibleCount : (filtered || []).length;
             box.innerHTML = `
-                <span class="text-cyan-300 font-bold">نتائج العرض: ${_resultEscape(filtered.length)}</span>
+                <span class="text-cyan-300 font-bold">العرض الحالي: ${_resultEscape(shown)}</span>
                 <span class="text-gray-500"> / ${_resultEscape(total)} هجمة</span>
                 <span class="mx-2 text-gray-600">|</span>
                 <span class="text-fuchsia-300 font-bold">العائلات الظاهرة: ${_resultEscape(families)}</span>
@@ -7797,12 +8250,14 @@ HTML_TEMPLATE = """
             `;
 
             learningCatalogApplyFilters(true);
+            learningQuizLoadAttack(hit);
         }
 
         function learningCatalogApplyFilters(skipDetailRefresh) {
             const query = String(document.getElementById('learningSearchInput')?.value || '').trim().toLowerCase();
             const category = String(document.getElementById('learningCategoryFilter')?.value || 'all');
             const severity = String(document.getElementById('learningSeverityFilter')?.value || 'all').toLowerCase();
+            const pageSizeRaw = String(document.getElementById('learningPageSizeSelect')?.value || __learningDefaultPageLimit).toLowerCase();
             const all = _learningAllAttacks();
             const filtered = all.filter((a) => {
                 if (category !== 'all' && a.category_id !== category) return false;
@@ -7825,8 +8280,28 @@ HTML_TEMPLATE = """
                 return hay.includes(query);
             });
 
-            _learningRenderStats(filtered, all.length);
-            _learningRenderAttackCards(filtered);
+            filtered.sort((a, b) => {
+                const catCompare = String(a.category_title || '').localeCompare(String(b.category_title || ''), 'ar');
+                if (catCompare !== 0) return catCompare;
+                return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+            });
+
+            const pageSize = pageSizeRaw === 'all' ? Infinity : Number(pageSizeRaw) || __learningDefaultPageLimit;
+            const isLimited = !__learningListExpanded && filtered.length > pageSize;
+            const visible = isLimited ? filtered.slice(0, pageSize) : filtered;
+
+            _learningRenderStats(filtered, visible.length, filtered.length);
+            _learningRenderAttackCards(visible);
+
+            const showMoreButton = document.getElementById('learningCatalogShowMore');
+            if (showMoreButton) {
+                if (isLimited) {
+                    showMoreButton.classList.remove('hidden');
+                    showMoreButton.textContent = `عرض المزيد (${filtered.length - visible.length})`;
+                } else {
+                    showMoreButton.classList.add('hidden');
+                }
+            }
 
             if (skipDetailRefresh) return;
             if (!filtered.length) {
@@ -7844,13 +8319,21 @@ HTML_TEMPLATE = """
         }
 
         function learningCatalogResetFilters() {
+            __learningListExpanded = false;
             const q = document.getElementById('learningSearchInput');
             const c = document.getElementById('learningCategoryFilter');
             const s = document.getElementById('learningSeverityFilter');
+            const p = document.getElementById('learningPageSizeSelect');
             if (q) q.value = '';
             if (c) c.value = 'all';
             if (s) s.value = 'all';
+            if (p) p.value = String(__learningDefaultPageLimit);
             learningCatalogApplyFilters(false);
+        }
+
+        function learningCatalogShowMore() {
+            __learningListExpanded = true;
+            learningCatalogApplyFilters(true);
         }
 
         function learningInitCatalog() {
@@ -7862,7 +8345,8 @@ HTML_TEMPLATE = """
             const categorySelect = document.getElementById('learningCategoryFilter');
             const severitySelect = document.getElementById('learningSeverityFilter');
             if (categorySelect) {
-                categorySelect.innerHTML = '<option value="all">كل العائلات</option>' + LEARNING_ATTACK_CATALOG.map((c) => `<option value="${_resultEscape(c.id)}">${_resultEscape(c.title)}</option>`).join('');
+                const sortedCategories = [...LEARNING_ATTACK_CATALOG].sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ar'));
+                categorySelect.innerHTML = '<option value="all">كل العائلات</option>' + sortedCategories.map((c) => `<option value="${_resultEscape(c.id)}">${_resultEscape(c.title)}</option>`).join('');
             }
             if (severitySelect) {
                 severitySelect.innerHTML = [
