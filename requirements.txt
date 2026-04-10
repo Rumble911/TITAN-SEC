@@ -20,3 +20,4 @@ edge-tts
 gradio_client
 maigret==0.5.0
 sherlock-project==0.16.0
+socialscan==2.0.1
