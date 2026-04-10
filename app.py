@@ -3529,8 +3529,8 @@ def _username_scan_budget_seconds(mode: str) -> int:
     deep = str(mode).lower() == 'deep'
     # Heroku router times out requests around 30s, so keep a safe margin.
     if os.environ.get('DYNO'):
-        return 22 if deep else 14
-    return 55 if deep else 25
+        return 24 if deep else 16
+    return 85 if deep else 35
 
 
 def _scan_with_maigret(username: str, mode: str, max_timeout_seconds: int | None = None) -> tuple[list[dict], str]:
@@ -3538,12 +3538,15 @@ def _scan_with_maigret(username: str, mode: str, max_timeout_seconds: int | None
     if max_timeout_seconds is not None:
         timeout_seconds = max(4, min(timeout_seconds, int(max_timeout_seconds)))
     candidates: list[list[str]] = []
+    top_sites = max(100, int(os.environ.get('USERNAME_HUNT_TOP_SITES', '500')))
 
     if shutil.which('maigret'):
+        candidates.append(['maigret', username, '--json', '--top-sites', str(top_sites)])
         candidates.append(['maigret', username, '--json'])
 
     py = shutil.which('python') or shutil.which('python3')
     if py:
+        candidates.append([py, '-m', 'maigret', username, '--json', '--top-sites', str(top_sites)])
         candidates.append([py, '-m', 'maigret', username, '--json'])
 
     if not candidates:
@@ -3718,50 +3721,55 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
     def _remaining_budget() -> int:
         return max(0, int(deadline - time.monotonic()))
 
-    maigret_rows, maigret_err = _scan_with_maigret(u, selected_mode, max_timeout_seconds=_remaining_budget())
-    if maigret_rows:
-        collected_rows.extend(maigret_rows)
-        sources.append('maigret')
-    elif maigret_err:
-        engine_notes.append(maigret_err)
+    jobs: list[tuple[str, concurrent.futures.Future]] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+        jobs.append(('maigret', ex.submit(_scan_with_maigret, u, selected_mode, _remaining_budget())))
+        jobs.append(('socialscan', ex.submit(_scan_with_socialscan, u, selected_mode, _remaining_budget())))
+        if selected_mode == 'deep':
+            jobs.append(('sherlock', ex.submit(_scan_with_sherlock, u, selected_mode, _remaining_budget())))
 
-    # Deep mode uses both engines. Quick mode keeps only Maigret before fallback.
-    if selected_mode == 'deep':
-        rem = _remaining_budget()
-        if rem >= 6:
-            sherlock_rows, sherlock_err = _scan_with_sherlock(u, selected_mode, max_timeout_seconds=rem)
-            if sherlock_rows:
-                collected_rows.extend(sherlock_rows)
-                sources.append('sherlock')
-            elif sherlock_err:
-                engine_notes.append(sherlock_err)
-        else:
-            engine_notes.append('sherlock_skipped_due_to_time_budget')
+        future_to_engine = {fut: name for name, fut in jobs}
+        wait_timeout = max(5, _remaining_budget())
+        done, not_done = concurrent.futures.wait(
+            [fut for _, fut in jobs],
+            timeout=wait_timeout,
+            return_when=concurrent.futures.ALL_COMPLETED
+        )
 
-    # SocialScan acts as an additional safety net in deep mode,
-    # and as a backup path when the primary engines return no rows.
-    if selected_mode == 'deep' or not collected_rows:
-        rem = _remaining_budget()
-        if rem >= 5:
-            socialscan_rows, socialscan_err = _scan_with_socialscan(u, selected_mode, max_timeout_seconds=rem)
-            if socialscan_rows:
-                collected_rows.extend(socialscan_rows)
-                sources.append('socialscan')
-            elif socialscan_err:
-                engine_notes.append(socialscan_err)
-        else:
-            engine_notes.append('socialscan_skipped_due_to_time_budget')
+        for fut in done:
+            name = future_to_engine.get(fut, 'unknown')
+            try:
+                rows, err = fut.result()
+            except Exception as e:
+                rows, err = [], f'{name}_runtime_error: {e}'
+
+            if rows:
+                collected_rows.extend(rows)
+                sources.append(name)
+            elif err:
+                engine_notes.append(err)
+
+        for fut in not_done:
+            name = future_to_engine.get(fut, 'unknown')
+            fut.cancel()
+            engine_notes.append(f'{name}_skipped_due_to_time_budget')
 
     if not collected_rows:
-        legacy = _check_username_presence_legacy(u, selected_mode)
-        if not legacy.get('success'):
-            return legacy
-        legacy['mode'] = selected_mode
-        legacy['engine'] = 'legacy_probe'
-        legacy['sources'] = ['legacy_probe']
-        if engine_notes:
-            legacy['engine_notes'] = engine_notes
-        return legacy
+        return {
+            "success": True,
+            "username": u,
+            "mode": selected_mode,
+            "engine": "+".join(sources) if sources else 'engines_only',
+            "sources": sources,
+            "checked_count": 0,
+            "found_count": 0,
+            "found": [],
+            "not_found": [],
+            "unknown": [],
+            "all_results": [],
+            "checked_at": datetime.datetime.utcnow().isoformat() + 'Z',
+            "engine_notes": engine_notes + ['no_results_from_selected_engines']
+        }
 
     all_rows = _merge_username_rows(collected_rows)
     found = [r for r in all_rows if r.get('exists')]
@@ -3772,8 +3780,8 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
         "success": True,
         "username": u,
         "mode": selected_mode,
-        "engine": "+".join(sources) if sources else 'legacy_probe',
-        "sources": sources if sources else ['legacy_probe'],
+        "engine": "+".join(sources) if sources else 'engines_only',
+        "sources": sources,
         "checked_count": len(all_rows),
         "found_count": len(found),
         "found": found,
