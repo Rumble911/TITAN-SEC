@@ -9116,7 +9116,7 @@ HTML_TEMPLATE = """
 
         function osintNormalizeUsernames(raw) {
             const src = String(raw || '');
-            const parts = src.split(/\r?\n|,|;/g);
+            const parts = src.split(/\\r?\\n|,|;/g);
             const seen = new Set();
             const out = [];
 
