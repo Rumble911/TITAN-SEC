@@ -111,6 +111,10 @@ _ELEVENLABS_VOICES_CACHE_LOCK = threading.Lock()
 _ELEVENLABS_VOICES_CACHE: dict[str, object] = {'at': 0.0, 'voices': []}
 _ELEVENLABS_VOICES_CACHE_TTL_SECONDS = 900
 
+_USERNAME_HUNT_JOBS_LOCK = threading.Lock()
+_USERNAME_HUNT_JOBS: dict[str, dict[str, object]] = {}
+_USERNAME_HUNT_JOBS_TTL_SECONDS = 1800
+
 AI_SYSTEM_PROMPT = """
 أنت TITAN، مساعد ذكي وشخصية حقيقية — مش مجرد برنامج.
 
@@ -3793,6 +3797,73 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
     if engine_notes:
         result['engine_notes'] = engine_notes
     return result
+
+
+def _username_hunt_prune_jobs() -> None:
+    now = time.time()
+    with _USERNAME_HUNT_JOBS_LOCK:
+        stale_ids = []
+        for jid, row in _USERNAME_HUNT_JOBS.items():
+            raw_ts = row.get('created_ts', now)
+            try:
+                created_ts = float(str(raw_ts))
+            except Exception:
+                created_ts = now
+            if (now - created_ts) > _USERNAME_HUNT_JOBS_TTL_SECONDS:
+                stale_ids.append(jid)
+        for jid in stale_ids:
+            _USERNAME_HUNT_JOBS.pop(jid, None)
+
+
+def _username_hunt_start_job(username: str, mode: str) -> str:
+    _username_hunt_prune_jobs()
+    job_id = uuid.uuid4().hex
+    now_iso = datetime.datetime.utcnow().isoformat() + 'Z'
+    with _USERNAME_HUNT_JOBS_LOCK:
+        _USERNAME_HUNT_JOBS[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'mode': mode,
+            'status': 'queued',
+            'created_at': now_iso,
+            'updated_at': now_iso,
+            'created_ts': time.time(),
+        }
+
+    def _runner():
+        with _USERNAME_HUNT_JOBS_LOCK:
+            row = _USERNAME_HUNT_JOBS.get(job_id)
+            if row:
+                row['status'] = 'running'
+                row['updated_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
+
+        try:
+            result = check_username_presence(username, mode)
+            with _USERNAME_HUNT_JOBS_LOCK:
+                row = _USERNAME_HUNT_JOBS.get(job_id)
+                if row:
+                    row['status'] = 'done'
+                    row['result'] = result
+                    row['updated_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
+        except Exception as e:
+            with _USERNAME_HUNT_JOBS_LOCK:
+                row = _USERNAME_HUNT_JOBS.get(job_id)
+                if row:
+                    row['status'] = 'error'
+                    row['error'] = f'username_hunt_background_error: {e}'
+                    row['updated_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
+
+    threading.Thread(target=_runner, daemon=True).start()
+    return job_id
+
+
+def _username_hunt_get_job(job_id: str) -> dict[str, object] | None:
+    _username_hunt_prune_jobs()
+    with _USERNAME_HUNT_JOBS_LOCK:
+        row = _USERNAME_HUNT_JOBS.get(job_id)
+        if not row:
+            return None
+        return dict(row)
 
 
 def create_social_defense_scenario(scenario_type: str) -> dict:
@@ -10466,6 +10537,30 @@ HTML_TEMPLATE = """
             if (!username) return titanAlert('ادخل اسم مستخدم أولاً.');
             if (!out) return;
 
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const pollUsernameJob = async (jobId) => {
+                for (let i = 0; i < 90; i++) {
+                    const statusRes = await fetch('/api/osint/username/status/' + encodeURIComponent(jobId));
+                    const statusType = String(statusRes.headers.get('content-type') || '').toLowerCase();
+                    let payload = null;
+                    if (statusType.includes('application/json')) {
+                        payload = await statusRes.json();
+                    } else {
+                        const html = await statusRes.text();
+                        throw new Error(`Status endpoint returned non-JSON (${statusRes.status}): ${String(html || '').slice(0, 120)}`);
+                    }
+
+                    if (payload?.status === 'done' && payload?.result) return payload.result;
+                    if (payload?.status === 'error' || payload?.success === false) {
+                        throw new Error(payload?.error || 'Username background scan failed');
+                    }
+
+                    setResultLoading(out, 'Username Hunt', `جاري فحص المنصات الاجتماعية (${mode.toUpperCase()})... ${i + 1}`);
+                    await sleep(1500);
+                }
+                throw new Error('Timeout while waiting for deep username scan result.');
+            };
+
             setResultLoading(out, 'Username Hunt', `جاري فحص المنصات الاجتماعية (${mode.toUpperCase()})...`);
             try {
                 const res = await fetch('/api/osint/username', {
@@ -10487,6 +10582,11 @@ HTML_TEMPLATE = """
                         raw_preview: String(raw || '').slice(0, 220)
                     };
                 }
+
+                if (data?.status === 'processing' && data?.job_id) {
+                    data = await pollUsernameJob(data.job_id);
+                }
+
                 const badge = data.success ? 'SOCIAL' : 'Failed';
                 setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge });
                 if (data.found_count > 0) {
@@ -15714,6 +15814,22 @@ def osint_username_route():
         username = str(data.get('username', '') or '').strip()
         mode = str(data.get('mode', 'deep') or 'deep').strip().lower()
 
+        if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', username):
+            return jsonify({
+                "success": False,
+                "error": "اسم المستخدم غير صالح. المسموح: أحرف/أرقام/._- وبطول 3-30."
+            }), 400
+
+        if mode == 'deep':
+            job_id = _username_hunt_start_job(username, mode)
+            return jsonify({
+                "success": True,
+                "status": "processing",
+                "job_id": job_id,
+                "username": username,
+                "mode": mode,
+            }), 202
+
         result = check_username_presence(username, mode)
         if not result.get('success'):
             return jsonify(result), 400
@@ -15726,6 +15842,41 @@ def osint_username_route():
             "success": False,
             "error": f"username_hunt_runtime_error: {e}"
         }), 500
+
+
+@app.route('/api/osint/username/status/<job_id>', methods=['GET'])
+def osint_username_status_route(job_id):
+    row = _username_hunt_get_job(str(job_id or '').strip())
+    if not row:
+        return jsonify({"success": False, "error": "job_not_found"}), 404
+
+    status = str(row.get('status') or 'unknown')
+    if status == 'done':
+        return jsonify({
+            "success": True,
+            "status": "done",
+            "job_id": row.get('job_id'),
+            "result": row.get('result') or {},
+            "updated_at": row.get('updated_at')
+        })
+
+    if status == 'error':
+        return jsonify({
+            "success": False,
+            "status": "error",
+            "job_id": row.get('job_id'),
+            "error": str(row.get('error') or 'username_hunt_background_error'),
+            "updated_at": row.get('updated_at')
+        }), 500
+
+    return jsonify({
+        "success": True,
+        "status": status,
+        "job_id": row.get('job_id'),
+        "username": row.get('username'),
+        "mode": row.get('mode'),
+        "updated_at": row.get('updated_at')
+    }), 202
 
 
 def _ir_priority_rank(priority: str) -> int:
