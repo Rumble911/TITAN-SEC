@@ -18,3 +18,5 @@ arabic-reshaper
 python-bidi
 edge-tts
 gradio_client
+maigret
+sherlock-project
