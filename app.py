@@ -34,7 +34,6 @@ import subprocess
 import threading
 import wave
 import math
-import shutil
 import psutil  # type: ignore
 from cryptography.hazmat.primitives.asymmetric import rsa  # type: ignore
 from cryptography.hazmat.primitives import serialization, hashes  # type: ignore
@@ -45,7 +44,6 @@ from email.mime.text import MIMEText
 import urllib.request
 import json as _json
 import html
-import sys
 
 try:
     from reportlab.pdfgen import canvas  # type: ignore
@@ -4137,7 +4135,7 @@ HTML_TEMPLATE = """
                     <div class="tab-grid">
                     <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
                     <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
-                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT Maigret</button>
+                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT Social Hybrid</button>
                     <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
                     <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
                     <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
@@ -4940,9 +4938,9 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="osint-section" class="hidden space-y-5">
-                <h2 class="text-xl font-bold text-indigo-300 border-b border-slate-700 pb-2 flex items-center gap-2"><span>🕵️</span> OSINT Username Hunter - Maigret</h2>
+                <h2 class="text-xl font-bold text-indigo-300 border-b border-slate-700 pb-2 flex items-center gap-2"><span>🕵️</span> OSINT Username Hunter - Social Hybrid</h2>
                 <div class="bg-indigo-950/20 border border-indigo-900/40 rounded-xl p-4 text-xs text-indigo-100/90 leading-6">
-                    هذا القسم مبني بالكامل على Maigret فقط. أدخل يوزرنيم واحد أو عدة يوزرنيمات (كل سطر يوزرنيم)، وسيتم عرض الحسابات المكتشفة بطريقة واضحة ومرتبة.
+                    هذا القسم يعمل بثلاثة محركات: SocialScan + Profile Probe + WhatsMyName. الفحص يغطي كل المنصات المتاحة عبر المحركات: Instagram, Twitter/X, Reddit, Pinterest, Tumblr, GitHub, GitLab, Facebook, TikTok, LinkedIn, YouTube, Telegram, Snapchat, Threads, Twitch, Medium, VK وغيرها من منصات Social Category في WhatsMyName.
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -4953,14 +4951,8 @@ HTML_TEMPLATE = """
                     </div>
 
                     <div class="space-y-3 bg-slate-900/60 border border-slate-700 rounded-xl p-4">
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">Top Sites</label>
-                            <select id="osintTopSites" class="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm">
-                                <option value="80">80 (سريع)</option>
-                                <option value="120" selected>120 (متوازن)</option>
-                                <option value="180">180 (أوسع)</option>
-                                <option value="250">250 (شامل)</option>
-                            </select>
+                        <div class="rounded-lg border border-indigo-900/40 bg-indigo-950/15 px-3 py-2 text-[11px] text-indigo-200">
+                            Platforms Scope: SocialScan + Profile Probe + WhatsMyName (all available social platforms)
                         </div>
                         <div>
                             <label class="block text-xs text-gray-400 mb-1">Timeout لكل يوزرنيم</label>
@@ -4971,8 +4963,8 @@ HTML_TEMPLATE = """
                                 <option value="30">30s</option>
                             </select>
                         </div>
-                        <button onclick="osintRunMaigret()" class="w-full py-2.5 rounded-xl bg-indigo-900/40 hover:bg-indigo-800/50 border border-indigo-700/50 text-indigo-200 font-bold text-sm">بدء فحص Maigret</button>
-                        <div id="osintRunHint" class="text-[11px] text-gray-500">Ctrl + Enter لتشغيل الفحص بسرعة.</div>
+                        <button onclick="osintRunSocialscan()" class="w-full py-2.5 rounded-xl bg-indigo-900/40 hover:bg-indigo-800/50 border border-indigo-700/50 text-indigo-200 font-bold text-sm">بدء فحص OSINT Hybrid</button>
+                        <div id="osintRunHint" class="text-[11px] text-gray-500">Ctrl + Enter لتشغيل فحص OSINT Hybrid بسرعة.</div>
                     </div>
                 </div>
 
@@ -9109,7 +9101,7 @@ HTML_TEMPLATE = """
             input.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                     e.preventDefault();
-                    osintRunMaigret();
+                    osintRunSocialscan();
                 }
             });
         }
@@ -9133,13 +9125,19 @@ HTML_TEMPLATE = """
             return out.slice(0, 8);
         }
 
-        function osintRenderMaigretResult(box, payload) {
+        function osintRenderSocialscanResult(box, payload) {
             const found = Array.isArray(payload?.found) ? payload.found : [];
             const stats = payload?.by_username || {};
             const requested = Array.isArray(payload?.requested_usernames) ? payload.requested_usernames.length : 0;
             const checked = Number(payload?.checked_usernames || 0);
             const elapsed = Number(payload?.elapsed_ms || 0);
             const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+            const platformScope = Array.isArray(payload?.platform_scope) ? payload.platform_scope : [];
+            const engineName = String(payload?.engine || 'social_hybrid');
+            const engines = Array.isArray(payload?.engines) ? payload.engines : [];
+            const enginesLabel = engines.length
+                ? engines.map((e) => _osintEscape(e?.name || '')).filter(Boolean).join(' + ')
+                : _osintEscape(engineName);
 
             if (!found.length) {
                 const errHtml = errors.length
@@ -9147,9 +9145,9 @@ HTML_TEMPLATE = """
                     : '';
                 setResultMarkup(
                     box,
-                    'Maigret Username Hunt',
+                    'OSINT Social Hunt',
                     `<div class="text-sm text-gray-300">لم يتم العثور على حسابات مؤكدة.</div>
-                     <div class="text-xs text-gray-500 mt-1">Requested: ${requested} | Checked: ${checked} | Time: ${elapsed}ms</div>${errHtml}`,
+                     <div class="text-xs text-gray-500 mt-1">Engine: ${enginesLabel} | Platforms: ${platformScope.length} | Requested: ${requested} | Checked: ${checked} | Time: ${elapsed}ms</div>${errHtml}`,
                     { badge: 'No Hits', riskScore: 10 }
                 );
                 return;
@@ -9164,13 +9162,14 @@ HTML_TEMPLATE = """
                 const safeSite = _osintEscape(row.site || 'site');
                 const safeUrl = _osintEscape(row.url || '#');
                 const safeStatus = _osintEscape(row.status || 'claimed');
+                const safeEngine = _osintEscape(row.engine || '');
                 return `
                     <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center border border-slate-700/60 rounded-lg bg-black/20 px-3 py-2">
                         <div class="md:col-span-1 text-[11px] text-gray-500 font-mono">${idx + 1}</div>
                         <div class="md:col-span-2 text-xs text-indigo-300 font-mono" dir="ltr">@${safeQuery}</div>
                         <div class="md:col-span-2 text-xs text-cyan-300 font-bold">${safeSite}</div>
                         <div class="md:col-span-5 text-xs break-all" dir="ltr"><a href="${safeUrl}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline decoration-emerald-700/40">${safeUrl}</a></div>
-                        <div class="md:col-span-2 text-[11px] text-amber-300">${safeStatus}</div>
+                        <div class="md:col-span-2 text-[11px] text-amber-300">${safeStatus}${safeEngine ? ` | ${safeEngine}` : ''}</div>
                     </div>
                 `;
             }).join('');
@@ -9181,11 +9180,13 @@ HTML_TEMPLATE = """
 
             setResultMarkup(
                 box,
-                'Maigret Username Hunt',
-                `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-[11px]">
+                'OSINT Social Hunt',
+                `<div class="text-[11px] text-gray-500 mb-2">Engine: ${enginesLabel} | Platforms: ${platformScope.length}</div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3 text-[11px]">
                     <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Found Accounts: <span class="text-emerald-300 font-bold">${found.length}</span></div>
                     <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Requested: <span class="text-cyan-300 font-bold">${requested}</span></div>
                     <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Checked: <span class="text-indigo-300 font-bold">${checked}</span></div>
+                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Platforms: <span class="text-fuchsia-300 font-bold">${platformScope.length}</span></div>
                     <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Time: <span class="text-violet-300 font-bold">${elapsed}ms</span></div>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">${summaryCards || ''}</div>
@@ -9195,11 +9196,10 @@ HTML_TEMPLATE = """
             );
         }
 
-        async function osintRunMaigret() {
+        async function osintRunSocialscan() {
             const input = document.getElementById('osintUsernameInput');
             const resultBox = document.getElementById('osintResult');
             const hint = document.getElementById('osintRunHint');
-            const topSites = Number(document.getElementById('osintTopSites')?.value || 120);
             const timeoutSeconds = Number(document.getElementById('osintTimeoutSeconds')?.value || 15);
 
             if (!input || !resultBox) return;
@@ -9211,37 +9211,36 @@ HTML_TEMPLATE = """
             }
 
             resultBox.classList.remove('hidden');
-            setResultLoading(resultBox, 'Maigret Username Hunt', 'جار تشغيل Maigret وجمع الحسابات المحتملة...');
+            setResultLoading(resultBox, 'OSINT Social Hunt', 'جار تشغيل محركات SocialScan + Profile Probe + WhatsMyName على كل المنصات المتاحة...');
             if (hint) hint.textContent = `Running on ${usernames.length} username(s)...`;
             if (typeof soundManager !== 'undefined' && soundManager.terminalType) soundManager.terminalType();
 
             try {
-                const res = await fetch('/api/osint/maigret', {
+                const res = await fetch('/api/osint/socialscan', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         queries: usernames,
-                        top_sites: topSites,
                         timeout_seconds: timeoutSeconds
                     })
                 });
 
-                const data = await _parseJsonOrThrow(res, 'Maigret username scan');
+                const data = await _parseJsonOrThrow(res, 'OSINT social username scan');
                 if (!res.ok || !data.success) {
                     setResultError(resultBox, data.error || `HTTP ${res.status}`);
-                    if (hint) hint.textContent = 'حدث خطأ أثناء تشغيل Maigret.';
+                    if (hint) hint.textContent = 'حدث خطأ أثناء تشغيل محركات OSINT.';
                     if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
                     return;
                 }
 
-                osintRenderMaigretResult(resultBox, data);
+                osintRenderSocialscanResult(resultBox, data);
                 if (hint) hint.textContent = `Last run: ${new Date().toLocaleTimeString()} | Found: ${Number(data.total_found || 0)}`;
                 if (typeof soundManager !== 'undefined') {
                     if (Number(data.total_found || 0) > 0 && soundManager.success) soundManager.success();
                     else if (soundManager.terminalType) soundManager.terminalType();
                 }
             } catch (e) {
-                setResultError(resultBox, e.message || 'فشل الاتصال بخادم Maigret.');
+                setResultError(resultBox, e.message || 'فشل الاتصال بخادم OSINT.');
                 if (hint) hint.textContent = 'تعذر إكمال الفحص.';
                 if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
             }
@@ -14487,328 +14486,997 @@ def pdf_clean_route():
         return jsonify({"error": str(e)}), 400
 
 
-def _extract_first_json_blob(raw_text: str):
-    text = str(raw_text or '').strip()
-    if not text:
-        return None
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-
-    for open_ch, close_ch in (('{', '}'), ('[', ']')):
-        start = text.find(open_ch)
-        while start != -1:
-            depth = 0
-            in_string = False
-            escaped = False
-            for idx in range(start, len(text)):
-                ch = text[idx]
-                if in_string:
-                    if escaped:
-                        escaped = False
-                    elif ch == '\\':
-                        escaped = True
-                    elif ch == '"':
-                        in_string = False
-                    continue
-
-                if ch == '"':
-                    in_string = True
-                    continue
-                if ch == open_ch:
-                    depth += 1
-                elif ch == close_ch:
-                    depth -= 1
-                    if depth == 0:
-                        candidate = text[start:idx + 1]
-                        try:
-                            return json.loads(candidate)
-                        except Exception:
-                            break
-            start = text.find(open_ch, start + 1)
-    return None
-
-
-def _iter_maigret_site_maps(payload: object) -> list[tuple[str, dict]]:
-    result: list[tuple[str, dict]] = []
-
-    def add_from(obj: object, username_hint: str = '') -> None:
-        if not isinstance(obj, dict):
-            return
-        sites = obj.get('sites')
-        if isinstance(sites, dict):
-            result.append((str(obj.get('username') or username_hint or ''), sites))
-
-        for key, value in obj.items():
-            if isinstance(value, dict) and isinstance(value.get('sites'), dict):
-                hint = str(value.get('username') or key or username_hint)
-                result.append((hint, value.get('sites') or {}))
-
-    if isinstance(payload, dict):
-        # Maigret "simple" JSON report format: {"Site": {...}, ...}
-        # where each value includes username/url_user/status.
-        site_like_values = [v for v in payload.values() if isinstance(v, dict)]
-        if site_like_values and all((
-            ('url_user' in v) or ('status' in v) or ('username' in v)
-        ) for v in site_like_values):
-            grouped: dict[str, dict] = {}
-            for site_name, info in payload.items():
-                if not isinstance(info, dict):
-                    continue
-                user = str(info.get('username') or '').strip()
-                if not user:
-                    continue
-                grouped.setdefault(user, {})[str(site_name)] = info
-            for user, site_map in grouped.items():
-                result.append((user, site_map))
-
-        add_from(payload, str(payload.get('username') or ''))
-        for key, value in payload.items():
-            if isinstance(value, dict):
-                add_from(value, str(key))
-    elif isinstance(payload, list):
-        for item in payload:
-            add_from(item, str(item.get('username') or '') if isinstance(item, dict) else '')
-
-    return result
-
-
-def _normalize_maigret_site_row(query: str, site_name: str, site_data: object):
-    if not isinstance(site_data, dict):
-        return None
-
-    status_obj = site_data.get('status') if isinstance(site_data.get('status'), dict) else {}
-
-    status_items = [
-        status_obj.get('status') if isinstance(status_obj, dict) else None,
-        site_data.get('check_result'),
-        site_data.get('result'),
-        site_data.get('message'),
-        site_data.get('http_status'),
-    ]
-    status_text = ' | '.join(str(x).strip() for x in status_items if str(x).strip())
-    status_l = status_text.lower()
-
-    explicit_negative = any(token in status_l for token in ('not found', 'notfound', 'available', 'unclaimed', 'unused', 'free'))
-    claimed = bool(site_data.get('claimed') or site_data.get('exists') or site_data.get('found') or site_data.get('is_found'))
-    if not explicit_negative and any(token in status_l for token in ('claimed', 'found', 'exists', 'occupied', 'taken')):
-        claimed = True
-    if explicit_negative:
-        claimed = False
-
-    if not claimed:
-        return None
-
-    url = (
-        site_data.get('url_user')
-        or site_data.get('url')
-        or site_data.get('profile_url')
-        or (status_obj.get('url') if isinstance(status_obj, dict) else '')
-        or site_data.get('urlMain')
-        or site_data.get('url_main')
+_SOCIALSCAN_USERNAME_PLATFORMS = ['INSTAGRAM', 'TWITTER', 'REDDIT', 'PINTEREST', 'TUMBLR', 'GITHUB', 'GITLAB']
+_SOCIALSCAN_EXCLUDED_PLATFORMS = {'FIREFOX'}
+_PROFILE_PROBE_PLATFORM_DEFS = {
+    'FACEBOOK': {
+        'template': 'https://www.facebook.com/{username}',
+        'not_found_markers': [
+            'page isn\'t available',
+            'content isn\'t available right now',
+            'this content isn\'t available right now',
+            'the link may be broken',
+        ],
+    },
+    'TIKTOK': {
+        'template': 'https://www.tiktok.com/@{username}',
+        'not_found_markers': [
+            'couldn\'t find this account',
+            'account not found',
+            'page not available',
+        ],
+    },
+    'LINKEDIN': {
+        'template': 'https://www.linkedin.com/in/{username}',
+        'not_found_markers': ['page not found', 'profile not found'],
+    },
+    'YOUTUBE': {
+        'template': 'https://www.youtube.com/@{username}',
+        'not_found_markers': ['this page isn\'t available', '404 not found'],
+    },
+    'SNAPCHAT': {
+        'template': 'https://www.snapchat.com/add/{username}',
+        'not_found_markers': ['page not found', 'we can\'t seem to find'],
+    },
+    'TELEGRAM': {
+        'template': 'https://t.me/{username}',
+        'not_found_markers': ['if you have telegram', 'this page is not available'],
+    },
+    'THREADS': {
+        'template': 'https://www.threads.net/@{username}',
+        'not_found_markers': ['sorry, this page isn\'t available', 'page isn\'t available'],
+    },
+    'TWITCH': {
+        'template': 'https://www.twitch.tv/{username}',
+        'not_found_markers': ['unless you\'ve got a time machine', 'page not found'],
+    },
+    'MEDIUM': {
+        'template': 'https://medium.com/@{username}',
+        'not_found_markers': ['404', 'page not found'],
+    },
+    'VK': {
+        'template': 'https://vk.com/{username}',
+        'not_found_markers': ['page not found'],
+    },
+}
+_OSINT_PROBE_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+}
+_WHATS_MY_NAME_DATA_URL = os.environ.get(
+    'WHATS_MY_NAME_DATA_URL',
+    'https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json',
+).strip()
+_WHATS_MY_NAME_CATEGORY_TOKENS = [
+    t.strip().lower()
+    for t in str(
+        os.environ.get(
+            'WHATS_MY_NAME_CATEGORIES',
+            'social,video,music,images,blog,dating,gaming,hobby,tech,coding,business,news,political,misc,art',
+        )
         or ''
-    )
-    url = str(url or '').strip()
-    if '{username}' in url:
-        url = url.replace('{username}', query)
-    if not url:
-        return None
-
-    return {
-        'query': query,
-        'site': str(site_name or 'site').strip() or 'site',
-        'url': url,
-        'status': status_text or 'claimed',
-    }
-
-
-def _build_maigret_command_prefixes() -> list[list[str]]:
-    prefixes: list[list[str]] = []
-    seen: set[tuple[str, ...]] = set()
-
-    def _add(prefix: list[str]) -> None:
-        if not prefix:
-            return
-        key = tuple(prefix)
-        if key in seen:
-            return
-        seen.add(key)
-        prefixes.append(prefix)
-
-    app_dir = os.path.dirname(os.path.abspath(__file__))
-    venv_py = os.path.join(app_dir, '.venv312', 'Scripts', 'python.exe')
-    venv_maigret = os.path.join(app_dir, '.venv312', 'Scripts', 'maigret.exe')
-
-    # Optional explicit override from env for production tuning.
-    env_py = str(os.environ.get('MAIGRET_PYTHON', '') or '').strip()
-    if env_py and os.path.exists(env_py):
-        _add([env_py, '-m', 'maigret'])
-
-    # Prefer local project venv (3.12) before system Python.
-    if os.path.exists(venv_py):
-        _add([venv_py, '-m', 'maigret'])
-    if os.path.exists(venv_maigret):
-        _add([venv_maigret])
-
-    maigret_bin = shutil.which('maigret')
-    if maigret_bin:
-        _add([maigret_bin])
-
-    py_launcher = shutil.which('py')
-    if py_launcher:
-        _add([py_launcher, '-3.12', '-m', 'maigret'])
-
-    _add([sys.executable, '-m', 'maigret'])
-    return prefixes
+    ).split(',')
+    if t.strip()
+]
+_WHATS_MY_NAME_ALLOWED_CATEGORIES = set(_WHATS_MY_NAME_CATEGORY_TOKENS or ['social'])
+_WHATS_MY_NAME_PRIORITY_TOKENS = [
+    'FACEBOOK', 'TIKTOK', 'LINKEDIN', 'YOUTUBE', 'TELEGRAM', 'SNAPCHAT', 'TWITCH',
+    'THREADS', 'INSTAGRAM', 'TWITTER', 'REDDIT', 'PINTEREST', 'TUMBLR', 'GITHUB', 'GITLAB',
+]
+try:
+    _WHATS_MY_NAME_MAX_SITES = max(60, min(1200, int(os.environ.get('WHATS_MY_NAME_MAX_SITES', '360') or 360)))
+except Exception:
+    _WHATS_MY_NAME_MAX_SITES = 360
+try:
+    _WHATS_MY_NAME_CACHE_TTL_SECONDS = max(120, min(3600, int(os.environ.get('WHATS_MY_NAME_CACHE_TTL_SECONDS', '1200') or 1200)))
+except Exception:
+    _WHATS_MY_NAME_CACHE_TTL_SECONDS = 1200
+_WHATS_MY_NAME_CACHE_LOCK = threading.Lock()
+_WHATS_MY_NAME_CACHE: dict[str, object] = {'at': 0.0, 'sites': [], 'error': ''}
+_SOCIALSCAN_LINK_TEMPLATES = {
+    'INSTAGRAM': 'https://www.instagram.com/{username}',
+    'TWITTER': 'https://x.com/{username}',
+    'REDDIT': 'https://www.reddit.com/user/{username}',
+    'PINTEREST': 'https://www.pinterest.com/{username}',
+    'TUMBLR': 'https://{username}.tumblr.com',
+    'GITHUB': 'https://github.com/{username}',
+    'GITLAB': 'https://gitlab.com/{username}',
+}
 
 
-def _maigret_compact_error(raw_error: str) -> str:
-    err = str(raw_error or '').strip()
-    if not err:
-        return 'تعذر تشغيل Maigret.'
-
-    low = err.lower()
-    if 'no module named maigret' in low:
-        return 'حزمة Maigret غير مثبتة في بيئة التشغيل الحالية.'
-    if 'python314' in low or 'python 3.14' in low:
-        return 'Maigret غير متوافق حالياً مع Python 3.14 في بيئة التشغيل. تم تحويل المحاولة إلى Python 3.12.'
-    if 'traceback' in low and 'site-packages\\maigret' in low:
-        return 'حدث خطأ استيراد داخل حزمة Maigret. جرّب تشغيل التطبيق من بيئة Python 3.12 (.venv312).'
-
-    single_line = re.sub(r'\s+', ' ', err).strip()
-    return single_line[:420]
-
-
-def _load_maigret_json_from_folder(folder: str):
+def _socialscan_all_platform_names() -> list[str]:
     try:
-        if not os.path.isdir(folder):
-            return None
-        for name in sorted(os.listdir(folder)):
-            if not str(name).lower().endswith('.json'):
-                continue
-            file_path = os.path.join(folder, name)
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                parsed = _extract_first_json_blob(content)
-                if isinstance(parsed, (dict, list)):
-                    return parsed
-            except Exception:
-                continue
+        from socialscan.platforms import Platforms  # type: ignore
     except Exception:
+        return list(_SOCIALSCAN_USERNAME_PLATFORMS)
+
+    discovered: list[str] = []
+    for member in Platforms:
+        name = str(getattr(member, 'name', '') or '').upper().strip()
+        if not name or name in _SOCIALSCAN_EXCLUDED_PLATFORMS:
+            continue
+        discovered.append(name)
+
+    preferred = [name for name in _SOCIALSCAN_USERNAME_PLATFORMS if name in discovered]
+    remaining = sorted(name for name in discovered if name not in preferred)
+    return preferred + remaining
+
+
+def _profile_probe_all_platform_names() -> list[str]:
+    return [name for name in _PROFILE_PROBE_PLATFORM_DEFS.keys()]
+
+
+def _whats_my_name_normalize_platform_name(name: str) -> str:
+    cleaned = re.sub(r'[^A-Za-z0-9]+', '_', str(name or '').strip()).strip('_').upper()
+    return cleaned or 'UNKNOWN'
+
+
+def _whats_my_name_get_sites(force_refresh: bool = False) -> tuple[list[dict], str]:
+    now = time.time()
+    with _WHATS_MY_NAME_CACHE_LOCK:
+        cached_at_raw = _WHATS_MY_NAME_CACHE.get('at')
+        cached_sites_raw = _WHATS_MY_NAME_CACHE.get('sites')
+        cached_error_raw = _WHATS_MY_NAME_CACHE.get('error')
+
+        if isinstance(cached_at_raw, (int, float, str)):
+            try:
+                cached_at = float(cached_at_raw)
+            except Exception:
+                cached_at = 0.0
+        else:
+            cached_at = 0.0
+
+        cached_sites = list(cached_sites_raw) if isinstance(cached_sites_raw, list) else []
+        cached_error = str(cached_error_raw or '')
+    if not force_refresh and cached_sites and (now - cached_at) <= _WHATS_MY_NAME_CACHE_TTL_SECONDS:
+        return cached_sites, cached_error
+
+    sites: list[dict] = []
+    error = ''
+    try:
+        res = requests.get(_WHATS_MY_NAME_DATA_URL, headers=_OSINT_PROBE_HEADERS, timeout=(5, 18))
+        res.raise_for_status()
+        decoded = res.json()
+        payload = decoded if isinstance(decoded, dict) else {}
+        raw_sites = payload.get('sites', []) if isinstance(payload, dict) else []
+
+        for raw in raw_sites:
+            if not isinstance(raw, dict):
+                continue
+
+            category = str(raw.get('cat', '') or '').strip().lower()
+            if _WHATS_MY_NAME_ALLOWED_CATEGORIES and category not in _WHATS_MY_NAME_ALLOWED_CATEGORIES:
+                continue
+            if category in {'xx nsfw xx', 'archived'}:
+                continue
+
+            platform_label = str(raw.get('name', '') or '').strip()
+            uri_check = str(raw.get('uri_check', '') or '').strip()
+            if not platform_label or not uri_check or '{account}' not in uri_check:
+                continue
+
+            e_code = raw.get('e_code')
+            m_code = raw.get('m_code')
+            e_string = str(raw.get('e_string', '') or '').strip()
+            m_string = str(raw.get('m_string', '') or '').strip()
+            if e_code is None and m_code is None and not e_string and not m_string:
+                continue
+
+            sites.append({
+                'platform': _whats_my_name_normalize_platform_name(platform_label),
+                'platform_label': platform_label,
+                'category': category,
+                'uri_check': uri_check,
+                'e_code': e_code,
+                'm_code': m_code,
+                'e_string': e_string,
+                'm_string': m_string,
+            })
+
+        dedup: dict[str, dict] = {}
+        for site in sites:
+            key = str(site.get('platform') or '').upper()
+            if not key or key in dedup:
+                continue
+            dedup[key] = site
+
+        sites = sorted(dedup.values(), key=lambda s: str(s.get('platform_label') or s.get('platform') or '').lower())
+        if _WHATS_MY_NAME_MAX_SITES and len(sites) > _WHATS_MY_NAME_MAX_SITES:
+            selected: list[dict] = []
+            selected_keys: set[str] = set()
+
+            def _append_if_new(site_row: dict):
+                key = str(site_row.get('platform') or '').upper()
+                if not key or key in selected_keys:
+                    return
+                selected_keys.add(key)
+                selected.append(site_row)
+
+            for token in _WHATS_MY_NAME_PRIORITY_TOKENS:
+                for site_row in sites:
+                    key = str(site_row.get('platform') or '').upper()
+                    if key == token or token in key:
+                        _append_if_new(site_row)
+                        break
+
+            for site_row in sites:
+                if len(selected) >= _WHATS_MY_NAME_MAX_SITES:
+                    break
+                _append_if_new(site_row)
+
+            sites = selected
+    except Exception as exc:
+        sites = []
+        error = f'WhatsMyName dataset unavailable: {exc}'
+
+    with _WHATS_MY_NAME_CACHE_LOCK:
+        _WHATS_MY_NAME_CACHE['at'] = now
+        _WHATS_MY_NAME_CACHE['sites'] = sites
+        _WHATS_MY_NAME_CACHE['error'] = error
+    return sites, error
+
+
+def _whats_my_name_site_index() -> tuple[dict[str, dict], str]:
+    sites, error = _whats_my_name_get_sites()
+    out: dict[str, dict] = {}
+    for site in sites:
+        key = str(site.get('platform') or '').upper()
+        if key and key not in out:
+            out[key] = site
+    return out, error
+
+
+def _whats_my_name_resolve_alias(raw_name: str, site_index: dict[str, dict]) -> str | None:
+    name = str(raw_name or '').strip().upper()
+    if not name:
         return None
+    if name in site_index:
+        return name
+
+    starts = [key for key in site_index.keys() if key.startswith(name + '_')]
+    if starts:
+        return starts[0]
+
+    contains = [key for key in site_index.keys() if name in key]
+    if contains:
+        return contains[0]
+
     return None
 
 
-def run_maigret_queries(queries: list[str], top_sites: int = 120, timeout_seconds: int = 15) -> dict:
+def _whats_my_name_all_platform_names() -> list[str]:
+    index, _ = _whats_my_name_site_index()
+    return list(index.keys())
+
+
+def _osint_all_platform_names() -> list[str]:
+    primary = _socialscan_all_platform_names()
+    second = [name for name in _profile_probe_all_platform_names() if name not in primary]
+    merged = primary + second
+    third = [name for name in _whats_my_name_all_platform_names() if name not in merged]
+    return merged + third
+
+
+def _socialscan_build_profile_link(platform_name: str, username: str) -> str | None:
+    template = _SOCIALSCAN_LINK_TEMPLATES.get(str(platform_name or '').upper())
+    if not template:
+        return None
+    user = str(username or '').strip().lstrip('@')
+    if not user:
+        return None
+    return template.format(username=user)
+
+
+def _profile_probe_build_profile_link(platform_name: str, username: str) -> str | None:
+    cfg = _PROFILE_PROBE_PLATFORM_DEFS.get(str(platform_name or '').upper())
+    if not cfg:
+        return None
+    template = str(cfg.get('template') or '').strip()
+    if not template:
+        return None
+    user = str(username or '').strip().lstrip('@')
+    if not user:
+        return None
+    encoded_user = urllib.parse.quote(user, safe='._-')
+    return template.format(username=encoded_user)
+
+
+def run_socialscan_queries(queries: list[str], timeout_seconds: int = 15, platform_names: list[str] | None = None) -> dict:
     started_at = time.time()
-    found: list[dict] = []
     errors: list[dict] = []
-    processed: list[str] = []
-    seen: set[tuple[str, str, str]] = set()
+    found: list[dict] = []
+    by_username: dict[str, int] = {}
+    seen_rows: set[tuple[str, str]] = set()
+    processed_usernames = list(dict.fromkeys(str(q).strip() for q in queries if str(q).strip()))
+    default_platform_names = _socialscan_all_platform_names()
 
-    command_prefixes = _build_maigret_command_prefixes()
+    requested_platform_names: list[str] = []
+    platform_seen: set[str] = set()
+    raw_platforms = platform_names or default_platform_names
+    for raw_name in raw_platforms:
+        name = str(raw_name or '').strip().upper()
+        if not name or name in platform_seen or name in _SOCIALSCAN_EXCLUDED_PLATFORMS:
+            continue
+        platform_seen.add(name)
+        requested_platform_names.append(name)
 
-    for query in queries:
-        payload = None
-        last_error = 'تعذر تشغيل Maigret'
+    if not requested_platform_names:
+        requested_platform_names = list(default_platform_names)
 
-        for prefix in command_prefixes:
-            out_dir = tempfile.mkdtemp(prefix='maigret_json_')
-            cmd = prefix + [
-                query,
-                '-J', 'simple',
-                '--no-progressbar',
-                '--top-sites', str(top_sites),
-                '--timeout', str(timeout_seconds),
-                '--folderoutput', out_dir,
-            ]
+    try:
+        import aiohttp  # type: ignore
+        from socialscan.util import sync_execute_queries  # type: ignore
+        from socialscan.platforms import Platforms  # type: ignore
+    except Exception as exc:
+        return {
+            'engine': 'socialscan',
+            'scope': 'social_media_only',
+            'platform_scope': requested_platform_names,
+            'requested_usernames': processed_usernames,
+            'checked_usernames': 0,
+            'processed_usernames': [],
+            'total_found': 0,
+            'found': [],
+            'by_username': {},
+            'errors': [{'query': '*', 'error': f'SocialScan import error: {exc}'}],
+            'timeout_seconds': timeout_seconds,
+            'elapsed_ms': int((time.time() - started_at) * 1000),
+        }
 
+    timeout_seconds = max(6, min(35, int(timeout_seconds or 15)))
+    selected_platforms = []
+    for name in requested_platform_names:
+        member = getattr(Platforms, name, None)
+        if member is None:
+            continue
+        selected_platforms.append(member)
+
+        platform_cls = member.value
+        if hasattr(platform_cls, 'TIMEOUT_DURATION'):
+            setattr(platform_cls, 'TIMEOUT_DURATION', timeout_seconds)
+        if hasattr(platform_cls, 'client_timeout'):
             try:
-                completed = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=max(10, timeout_seconds + 8),
-                )
-                stdout = completed.stdout or ''
-                stderr = completed.stderr or ''
+                setattr(platform_cls, 'client_timeout', aiohttp.ClientTimeout(connect=timeout_seconds))
+            except Exception:
+                pass
 
-                payload = _load_maigret_json_from_folder(out_dir)
-                if payload is None:
-                    payload = _extract_first_json_blob(stdout)
-                if payload is None and stderr:
-                    payload = _extract_first_json_blob(stderr)
+    if not selected_platforms:
+        return {
+            'engine': 'socialscan',
+            'scope': 'social_media_only',
+            'platform_scope': requested_platform_names,
+            'requested_usernames': processed_usernames,
+            'checked_usernames': 0,
+            'processed_usernames': [],
+            'total_found': 0,
+            'found': [],
+            'by_username': {},
+            'errors': [{'query': '*', 'error': 'لا توجد منصات SocialScan متاحة في البيئة الحالية.'}],
+            'timeout_seconds': timeout_seconds,
+            'elapsed_ms': int((time.time() - started_at) * 1000),
+        }
 
-                if payload is not None:
-                    shutil.rmtree(out_dir, ignore_errors=True)
-                    break
+    try:
+        responses = sync_execute_queries(processed_usernames, platforms=selected_platforms, proxy_list=[])
+    except Exception as exc:
+        return {
+            'engine': 'socialscan',
+            'scope': 'social_media_only',
+            'platform_scope': [p.name for p in selected_platforms],
+            'requested_usernames': processed_usernames,
+            'checked_usernames': 0,
+            'processed_usernames': [],
+            'total_found': 0,
+            'found': [],
+            'by_username': {},
+            'errors': [{'query': '*', 'error': f'SocialScan run error: {exc}'}],
+            'timeout_seconds': timeout_seconds,
+            'elapsed_ms': int((time.time() - started_at) * 1000),
+        }
 
-                raw_err = stderr.strip() or stdout.strip() or f"exit={completed.returncode}"
-                runner = ' '.join(prefix[:3])
-                last_error = f"{runner}: {_maigret_compact_error(raw_err)}"
-            except subprocess.TimeoutExpired:
-                runner = ' '.join(prefix[:3])
-                last_error = f"{runner}: timeout after {timeout_seconds}s"
-            except Exception as exc:
-                runner = ' '.join(prefix[:3])
-                last_error = f"{runner}: {_maigret_compact_error(str(exc))}"
-            finally:
-                shutil.rmtree(out_dir, ignore_errors=True)
+    touched_users: set[str] = set()
+    for response in responses:
+        query = str(getattr(response, 'query', '') or '').strip()
+        if query:
+            touched_users.add(query)
 
-        if payload is None:
-            errors.append({'query': query, 'error': last_error})
+        platform_member = getattr(response, 'platform', None)
+        platform_name = str(getattr(platform_member, 'name', '') or '').upper() or 'UNKNOWN'
+        message = str(getattr(response, 'message', '') or '')
+        success = bool(getattr(response, 'success', False))
+        valid = bool(getattr(response, 'valid', False))
+        available = bool(getattr(response, 'available', False))
+
+        if not success:
+            errors.append({
+                'query': query or 'unknown',
+                'platform': platform_name,
+                'error': message or 'request failed',
+            })
             continue
 
-        processed.append(query)
-        site_maps = _iter_maigret_site_maps(payload)
-
-        for query_hint, site_map in site_maps:
-            effective_query = str(query or query_hint or '').strip()
-            if not effective_query:
+        # In SocialScan, available=False + valid=True generally means the account is taken/existing.
+        if valid and not available:
+            link = str(getattr(response, 'link', '') or '').strip() or _socialscan_build_profile_link(platform_name, query) or ''
+            row_key = (query.lower(), platform_name)
+            if row_key in seen_rows:
                 continue
-            for site_name, site_data in site_map.items():
-                row = _normalize_maigret_site_row(effective_query, str(site_name), site_data)
-                if not row:
-                    continue
-                unique_key = (
-                    str(row['query']).lower(),
-                    str(row['site']).lower(),
-                    str(row['url']).lower(),
-                )
-                if unique_key in seen:
-                    continue
-                seen.add(unique_key)
-                found.append(row)
+            seen_rows.add(row_key)
+            found.append({
+                'query': query,
+                'site': platform_name,
+                'url': link,
+                'status': message or 'Unavailable (likely taken)',
+            })
+            by_username[query] = by_username.get(query, 0) + 1
 
     found.sort(key=lambda r: (str(r.get('query', '')).lower(), str(r.get('site', '')).lower()))
-    by_username: dict[str, int] = {}
-    for row in found:
-        q = str(row.get('query') or '').strip()
-        if not q:
-            continue
-        by_username[q] = by_username.get(q, 0) + 1
 
     return {
-        'engine': 'maigret',
-        'requested_usernames': queries,
-        'checked_usernames': len(processed),
-        'processed_usernames': processed,
+        'engine': 'socialscan',
+        'scope': 'social_media_only',
+        'platform_scope': [p.name for p in selected_platforms],
+        'requested_usernames': processed_usernames,
+        'checked_usernames': len(touched_users or set(processed_usernames)),
+        'processed_usernames': sorted(touched_users) if touched_users else processed_usernames,
         'total_found': len(found),
         'found': found,
         'by_username': by_username,
         'errors': errors,
-        'top_sites': top_sites,
         'timeout_seconds': timeout_seconds,
         'elapsed_ms': int((time.time() - started_at) * 1000),
     }
 
 
-@app.route('/api/osint/maigret', methods=['POST'])
-def osint_maigret_route():
+def run_profile_probe_queries(queries: list[str], timeout_seconds: int = 15, platform_names: list[str] | None = None) -> dict:
+    started_at = time.time()
+    errors: list[dict] = []
+    found: list[dict] = []
+    by_username: dict[str, int] = {}
+    seen_rows: set[tuple[str, str]] = set()
+    processed_usernames = list(dict.fromkeys(str(q).strip() for q in queries if str(q).strip()))
+
+    default_platform_names = _profile_probe_all_platform_names()
+    requested_platform_names: list[str] = []
+    platform_seen: set[str] = set()
+    for raw_name in (platform_names or default_platform_names):
+        name = str(raw_name or '').strip().upper()
+        if not name or name in platform_seen or name not in _PROFILE_PROBE_PLATFORM_DEFS:
+            continue
+        platform_seen.add(name)
+        requested_platform_names.append(name)
+
+    if not requested_platform_names:
+        requested_platform_names = list(default_platform_names)
+
+    timeout_seconds = max(6, min(35, int(timeout_seconds or 15)))
+
+    if not processed_usernames:
+        return {
+            'engine': 'profile_probe',
+            'scope': 'social_media_only',
+            'platform_scope': requested_platform_names,
+            'requested_usernames': processed_usernames,
+            'checked_usernames': 0,
+            'processed_usernames': [],
+            'total_found': 0,
+            'found': [],
+            'by_username': {},
+            'errors': [],
+            'timeout_seconds': timeout_seconds,
+            'elapsed_ms': int((time.time() - started_at) * 1000),
+        }
+
+    def _probe_one(query: str, platform_name: str) -> tuple[dict | None, dict | None]:
+        url = _profile_probe_build_profile_link(platform_name, query)
+        if not url:
+            return None, {
+                'query': query,
+                'platform': platform_name,
+                'error': 'missing profile URL template',
+            }
+
+        try:
+            response = requests.get(
+                url,
+                headers=_OSINT_PROBE_HEADERS,
+                timeout=(4, timeout_seconds),
+                allow_redirects=True,
+            )
+        except Exception as exc:
+            return None, {
+                'query': query,
+                'platform': platform_name,
+                'error': f'probe request failed: {exc}',
+            }
+
+        status_code = int(response.status_code or 0)
+        final_url = str(response.url or url)
+
+        if status_code in (404, 410):
+            return None, None
+        if status_code >= 500:
+            return None, {
+                'query': query,
+                'platform': platform_name,
+                'error': f'probe response status: {status_code}',
+            }
+
+        body_text = ''
+        content_type = str(response.headers.get('Content-Type', '') or '').lower()
+        if 'text' in content_type or 'html' in content_type or not content_type:
+            try:
+                body_text = str(response.text or '')[:12000].lower()
+            except Exception:
+                body_text = ''
+
+        markers = [
+            str(x).strip().lower()
+            for x in (_PROFILE_PROBE_PLATFORM_DEFS.get(platform_name, {}).get('not_found_markers') or [])
+            if str(x).strip()
+        ]
+        if markers and any(marker in body_text for marker in markers):
+            return None, None
+
+        lowered_query = query.lower()
+        lowered_final = final_url.lower()
+
+        if status_code in (301, 302, 303, 307, 308) and lowered_query not in lowered_final:
+            return None, None
+
+        confidence = 'high' if lowered_query in lowered_final else ('medium' if lowered_query in body_text else 'low')
+        if confidence == 'low' and status_code not in (403,):
+            return None, None
+
+        if status_code not in (200, 301, 302, 303, 307, 308, 403):
+            return None, None
+
+        row = {
+            'query': query,
+            'site': platform_name,
+            'url': final_url,
+            'status': f'Probe reachable ({confidence} confidence)',
+            'engine': 'profile_probe',
+        }
+        return row, None
+
+    tasks: list[tuple[str, str]] = []
+    for query in processed_usernames:
+        for platform_name in requested_platform_names:
+            tasks.append((query, platform_name))
+
+    if tasks:
+        max_workers = max(4, min(24, len(tasks)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(_probe_one, query, platform_name): (query, platform_name)
+                for query, platform_name in tasks
+            }
+            for future in concurrent.futures.as_completed(future_map):
+                query, platform_name = future_map[future]
+                try:
+                    row, err = future.result()
+                except Exception as exc:
+                    row, err = None, {
+                        'query': query,
+                        'platform': platform_name,
+                        'error': f'probe execution failed: {exc}',
+                    }
+
+                if err:
+                    errors.append(err)
+                    continue
+                if not row:
+                    continue
+
+                row_key = (str(row.get('query', '')).lower(), str(row.get('site', '')).upper())
+                if row_key in seen_rows:
+                    continue
+                seen_rows.add(row_key)
+                found.append(row)
+                user_key = str(row.get('query', '')).strip()
+                if user_key:
+                    by_username[user_key] = by_username.get(user_key, 0) + 1
+
+    found.sort(key=lambda r: (str(r.get('query', '')).lower(), str(r.get('site', '')).lower()))
+
+    return {
+        'engine': 'profile_probe',
+        'scope': 'social_media_only',
+        'platform_scope': requested_platform_names,
+        'requested_usernames': processed_usernames,
+        'checked_usernames': len(processed_usernames),
+        'processed_usernames': processed_usernames,
+        'total_found': len(found),
+        'found': found,
+        'by_username': by_username,
+        'errors': errors,
+        'timeout_seconds': timeout_seconds,
+        'elapsed_ms': int((time.time() - started_at) * 1000),
+    }
+
+
+def run_whats_my_name_queries(queries: list[str], timeout_seconds: int = 15, platform_names: list[str] | None = None) -> dict:
+    started_at = time.time()
+    errors: list[dict] = []
+    found: list[dict] = []
+    by_username: dict[str, int] = {}
+    seen_rows: set[tuple[str, str]] = set()
+    processed_usernames = list(dict.fromkeys(str(q).strip() for q in queries if str(q).strip()))
+
+    site_index, dataset_error = _whats_my_name_site_index()
+    default_platform_names = list(site_index.keys())
+
+    requested_platform_names: list[str] = []
+    platform_seen: set[str] = set()
+    for raw_name in (platform_names or default_platform_names):
+        resolved_name = _whats_my_name_resolve_alias(str(raw_name or ''), site_index)
+        if not resolved_name or resolved_name in platform_seen:
+            continue
+        platform_seen.add(resolved_name)
+        requested_platform_names.append(resolved_name)
+
+    if not requested_platform_names:
+        requested_platform_names = list(default_platform_names)
+
+    timeout_seconds = max(6, min(35, int(timeout_seconds or 15)))
+    req_timeout = max(4, min(12, timeout_seconds))
+
+    if dataset_error and not site_index:
+        return {
+            'engine': 'whatsmyname',
+            'scope': 'social_media_only',
+            'platform_scope': requested_platform_names,
+            'requested_usernames': processed_usernames,
+            'checked_usernames': 0,
+            'processed_usernames': [],
+            'total_found': 0,
+            'found': [],
+            'by_username': {},
+            'errors': [{'query': '*', 'platform': 'WHATS_MY_NAME', 'error': dataset_error}],
+            'timeout_seconds': timeout_seconds,
+            'elapsed_ms': int((time.time() - started_at) * 1000),
+        }
+
+    if dataset_error:
+        errors.append({'query': '*', 'platform': 'WHATS_MY_NAME', 'error': dataset_error})
+
+    if not processed_usernames or not requested_platform_names:
+        return {
+            'engine': 'whatsmyname',
+            'scope': 'social_media_only',
+            'platform_scope': requested_platform_names,
+            'requested_usernames': processed_usernames,
+            'checked_usernames': 0 if not processed_usernames else len(processed_usernames),
+            'processed_usernames': processed_usernames,
+            'total_found': 0,
+            'found': [],
+            'by_username': {},
+            'errors': errors,
+            'timeout_seconds': timeout_seconds,
+            'elapsed_ms': int((time.time() - started_at) * 1000),
+        }
+
+    def _to_int_or_none(value):
+        try:
+            if value is None:
+                return None
+            return int(value)
+        except Exception:
+            return None
+
+    def _probe_one(query: str, platform_name: str) -> tuple[dict | None, dict | None]:
+        site_cfg = site_index.get(platform_name) or {}
+        template = str(site_cfg.get('uri_check') or '').strip()
+        if not template:
+            return None, {
+                'query': query,
+                'platform': platform_name,
+                'error': 'missing uri_check template',
+            }
+
+        encoded_user = urllib.parse.quote(str(query).lstrip('@'), safe='._-')
+        url = template.replace('{account}', encoded_user)
+
+        try:
+            response = requests.get(
+                url,
+                headers=_OSINT_PROBE_HEADERS,
+                timeout=(4, req_timeout),
+                allow_redirects=True,
+            )
+        except Exception as exc:
+            return None, {
+                'query': query,
+                'platform': platform_name,
+                'error': f'whatsmyname request failed: {exc}',
+            }
+
+        status_code = int(response.status_code or 0)
+        final_url = str(response.url or url)
+
+        if status_code in (404, 410):
+            return None, None
+        if status_code >= 500:
+            return None, {
+                'query': query,
+                'platform': platform_name,
+                'error': f'whatsmyname response status: {status_code}',
+            }
+
+        e_code = _to_int_or_none(site_cfg.get('e_code'))
+        m_code = _to_int_or_none(site_cfg.get('m_code'))
+        e_string = str(site_cfg.get('e_string') or '').strip().lower()
+        m_string = str(site_cfg.get('m_string') or '').strip().lower()
+
+        body_text = ''
+        content_type = str(response.headers.get('Content-Type', '') or '').lower()
+        need_body_text = bool(e_string or m_string)
+        if need_body_text and ('text' in content_type or 'html' in content_type or not content_type):
+            try:
+                body_text = str(response.text or '')[:14000].lower()
+            except Exception:
+                body_text = ''
+
+        exists: bool | None = None
+        if m_code is not None and status_code == m_code:
+            exists = False
+        if m_string and m_string in body_text:
+            exists = False
+        if e_code is not None and status_code == e_code:
+            exists = True
+        if e_string and e_string in body_text:
+            exists = True
+
+        if exists is None:
+            lowered_query = query.lower()
+            lowered_final = final_url.lower()
+            if status_code in (200, 301, 302, 303, 307, 308, 403) and lowered_query in lowered_final:
+                exists = True
+            else:
+                exists = False
+
+        if not exists:
+            return None, None
+
+        row = {
+            'query': query,
+            'site': platform_name,
+            'url': final_url,
+            'status': 'WhatsMyName matched profile pattern',
+            'engine': 'whatsmyname',
+        }
+        return row, None
+
+    tasks: list[tuple[str, str]] = []
+    for query in processed_usernames:
+        for platform_name in requested_platform_names:
+            tasks.append((query, platform_name))
+
+    max_error_rows = 140
+    if tasks:
+        max_workers = max(8, min(28, len(tasks)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(_probe_one, query, platform_name): (query, platform_name)
+                for query, platform_name in tasks
+            }
+            for future in concurrent.futures.as_completed(future_map):
+                query, platform_name = future_map[future]
+                try:
+                    row, err = future.result()
+                except Exception as exc:
+                    row, err = None, {
+                        'query': query,
+                        'platform': platform_name,
+                        'error': f'whatsmyname execution failed: {exc}',
+                    }
+
+                if err:
+                    if len(errors) < max_error_rows:
+                        errors.append(err)
+                    continue
+                if not row:
+                    continue
+
+                row_key = (str(row.get('query', '')).lower(), str(row.get('site', '')).upper())
+                if row_key in seen_rows:
+                    continue
+                seen_rows.add(row_key)
+                found.append(row)
+                user_key = str(row.get('query', '')).strip()
+                if user_key:
+                    by_username[user_key] = by_username.get(user_key, 0) + 1
+
+    found.sort(key=lambda r: (str(r.get('query', '')).lower(), str(r.get('site', '')).lower()))
+
+    return {
+        'engine': 'whatsmyname',
+        'scope': 'social_media_only',
+        'platform_scope': requested_platform_names,
+        'requested_usernames': processed_usernames,
+        'checked_usernames': len(processed_usernames),
+        'processed_usernames': processed_usernames,
+        'total_found': len(found),
+        'found': found,
+        'by_username': by_username,
+        'errors': errors,
+        'timeout_seconds': timeout_seconds,
+        'elapsed_ms': int((time.time() - started_at) * 1000),
+    }
+
+
+def run_osint_social_queries(queries: list[str], timeout_seconds: int = 15, platform_names: list[str] | None = None) -> dict:
+    started_at = time.time()
+    processed_usernames = list(dict.fromkeys(str(q).strip() for q in queries if str(q).strip()))
+
+
+    # --- فلترة منصات التواصل الاجتماعي فقط ---
+
+    # --- قائمة المنصات المطلوبة فقط ---
+    _USER_REQUESTED_SOCIAL_PLATFORMS = [
+        'INSTAGRAM', 'TWITTER', 'REDDIT', 'PINTEREST', 'TUMBLR', 'GITHUB', 'GITLAB',
+        'FACEBOOK', 'TIKTOK', 'LINKEDIN', 'YOUTUBE', 'TELEGRAM', 'SNAPCHAT',
+        'THREADS', 'TWITCH', 'MEDIUM', 'VK'
+    ]
+
+    all_platforms = _osint_all_platform_names()
+    requested_platforms: list[str] = []
+    seen_platforms: set[str] = set()
+    for name in _USER_REQUESTED_SOCIAL_PLATFORMS:
+        n = str(name or '').strip().upper()
+        if not n or n in seen_platforms or n not in all_platforms:
+            continue
+        seen_platforms.add(n)
+        requested_platforms.append(n)
+
+    # إذا المستخدم أرسل platform_names صراحة (API)، نأخذ التقاطع مع القائمة المسموحة فقط
+    if platform_names:
+        requested_platforms = [n for n in requested_platforms if n in [str(x).strip().upper() for x in platform_names]]
+    if not requested_platforms:
+        requested_platforms = list(_USER_REQUESTED_SOCIAL_PLATFORMS)
+
+    socialscan_supported = set(_socialscan_all_platform_names())
+    profile_probe_supported = set(_profile_probe_all_platform_names())
+    whats_my_name_supported = set(_whats_my_name_all_platform_names())
+
+    socialscan_platforms = [p for p in requested_platforms if p in socialscan_supported]
+    profile_probe_platforms = [p for p in requested_platforms if p in profile_probe_supported]
+    whats_my_name_platforms = [p for p in requested_platforms if p in whats_my_name_supported]
+
+    socialscan_result = run_socialscan_queries(
+        processed_usernames,
+        timeout_seconds=timeout_seconds,
+        platform_names=socialscan_platforms,
+    ) if socialscan_platforms else {
+        'engine': 'socialscan',
+        'platform_scope': [],
+        'found': [],
+        'errors': [],
+        'by_username': {},
+        'checked_usernames': 0,
+        'processed_usernames': [],
+    }
+
+    profile_probe_result = run_profile_probe_queries(
+        processed_usernames,
+        timeout_seconds=timeout_seconds,
+        platform_names=profile_probe_platforms,
+    ) if profile_probe_platforms else {
+        'engine': 'profile_probe',
+        'platform_scope': [],
+        'found': [],
+        'errors': [],
+        'by_username': {},
+        'checked_usernames': 0,
+        'processed_usernames': [],
+    }
+
+    whats_my_name_result = run_whats_my_name_queries(
+        processed_usernames,
+        timeout_seconds=timeout_seconds,
+        platform_names=whats_my_name_platforms,
+    ) if whats_my_name_platforms else {
+        'engine': 'whatsmyname',
+        'platform_scope': [],
+        'found': [],
+        'errors': [],
+        'by_username': {},
+        'checked_usernames': 0,
+        'processed_usernames': [],
+    }
+
+    merged_found: list[dict] = []
+    merged_errors: list[dict] = []
+    merged_by_username: dict[str, int] = {}
+    seen_rows: set[tuple[str, str]] = set()
+
+    for source_name, source_result in (
+        ('socialscan', socialscan_result),
+        ('profile_probe', profile_probe_result),
+        ('whatsmyname', whats_my_name_result),
+    ):
+        for row in (source_result.get('found') or []):
+            query = str(row.get('query', '')).strip()
+            site = str(row.get('site', '')).strip().upper()
+            if not query or not site:
+                continue
+            row_key = (query.lower(), site)
+            if row_key in seen_rows:
+                continue
+            seen_rows.add(row_key)
+
+            row_copy = dict(row)
+            row_copy.setdefault('engine', source_name)
+            merged_found.append(row_copy)
+            merged_by_username[query] = merged_by_username.get(query, 0) + 1
+
+        for err in (source_result.get('errors') or []):
+            err_copy = dict(err)
+            err_copy.setdefault('engine', source_name)
+            merged_errors.append(err_copy)
+
+    merged_found.sort(key=lambda r: (str(r.get('query', '')).lower(), str(r.get('site', '')).lower()))
+
+    processed_from_engines: list[str] = []
+    for name in (socialscan_result.get('processed_usernames') or []):
+        if name not in processed_from_engines:
+            processed_from_engines.append(name)
+    for name in (profile_probe_result.get('processed_usernames') or []):
+        if name not in processed_from_engines:
+            processed_from_engines.append(name)
+    for name in (whats_my_name_result.get('processed_usernames') or []):
+        if name not in processed_from_engines:
+            processed_from_engines.append(name)
+    if not processed_from_engines:
+        processed_from_engines = list(processed_usernames)
+
+    checked_usernames = max(
+        int(socialscan_result.get('checked_usernames') or 0),
+        int(profile_probe_result.get('checked_usernames') or 0),
+        int(whats_my_name_result.get('checked_usernames') or 0),
+        len(processed_from_engines),
+    )
+
+    return {
+        'engine': 'social_hybrid',
+        'engines': [
+            {
+                'name': 'socialscan',
+                'platform_scope': socialscan_result.get('platform_scope') or [],
+                'total_found': int(socialscan_result.get('total_found') or 0),
+            },
+            {
+                'name': 'profile_probe',
+                'platform_scope': profile_probe_result.get('platform_scope') or [],
+                'total_found': int(profile_probe_result.get('total_found') or 0),
+            },
+            {
+                'name': 'whatsmyname',
+                'platform_scope': whats_my_name_result.get('platform_scope') or [],
+                'total_found': int(whats_my_name_result.get('total_found') or 0),
+            },
+        ],
+        'scope': 'all_social_platforms',
+        'platform_scope': requested_platforms,
+        'requested_usernames': processed_usernames,
+        'checked_usernames': checked_usernames,
+        'processed_usernames': processed_from_engines,
+        'total_found': len(merged_found),
+        'found': merged_found,
+        'by_username': merged_by_username,
+        'errors': merged_errors,
+        'timeout_seconds': timeout_seconds,
+        'elapsed_ms': int((time.time() - started_at) * 1000),
+    }
+
+
+@app.route('/api/osint/socialscan', methods=['POST'])
+def osint_socialscan_route():
     data = request.get_json(silent=True) or {}
     raw_queries = data.get('queries', data.get('usernames', []))
+    raw_platforms = data.get('platforms', [])
 
     tokens: list[str]
     if isinstance(raw_queries, str):
@@ -14836,30 +15504,56 @@ def osint_maigret_route():
     if not clean_queries:
         return jsonify({"success": False, "error": "أدخل يوزرنيم صالح واحد على الأقل (حروف/أرقام و ._- فقط)."}), 400
 
-    try:
-        top_sites = int(data.get('top_sites', 120) or 120)
-    except Exception:
-        top_sites = 120
+    platform_tokens: list[str]
+    if isinstance(raw_platforms, str):
+        platform_tokens = [p.strip() for p in re.split(r'[\r\n,;|]+', raw_platforms)]
+    elif isinstance(raw_platforms, list):
+        platform_tokens = [str(x).strip() for x in raw_platforms]
+    else:
+        platform_tokens = []
+
+    allowed_platforms = set(_osint_all_platform_names())
+    clean_platforms: list[str] = []
+    seen_platforms: set[str] = set()
+    for token in platform_tokens:
+        p = str(token or '').strip().upper()
+        if not p or p in seen_platforms:
+            continue
+        if p not in allowed_platforms:
+            continue
+        seen_platforms.add(p)
+        clean_platforms.append(p)
+
+    if platform_tokens and not clean_platforms:
+        return jsonify({
+            'success': False,
+            'error': 'لم يتم تمرير أي منصة صالحة. اترك الحقل فارغًا للبحث في كل المنصات المتاحة.',
+            'allowed_platforms': sorted(allowed_platforms),
+        }), 400
+
     try:
         timeout_seconds = int(data.get('timeout_seconds', 15) or 15)
     except Exception:
         timeout_seconds = 15
 
-    top_sites = max(30, min(400, top_sites))
     timeout_seconds = max(6, min(35, timeout_seconds))
 
-    result = run_maigret_queries(clean_queries, top_sites=top_sites, timeout_seconds=timeout_seconds)
+    result = run_osint_social_queries(
+        clean_queries,
+        timeout_seconds=timeout_seconds,
+        platform_names=clean_platforms or None,
+    )
 
     if result.get('checked_usernames', 0) == 0 and result.get('errors'):
-        first_error = str(result['errors'][0].get('error') or 'تعذر تشغيل Maigret')
+        first_error = str(result['errors'][0].get('error') or 'تعذر تشغيل محركات OSINT')
         return jsonify({
             'success': False,
-            'error': f"تعذر تشغيل Maigret: {first_error}",
-            'engine': 'maigret',
+            'error': f"تعذر تشغيل محركات OSINT: {first_error}",
+            'engine': 'social_hybrid',
             'requested_usernames': clean_queries,
         }), 500
 
-    add_audit_log("OSINT Maigret", f"users={len(clean_queries)} found={result.get('total_found', 0)}")
+    add_audit_log("OSINT Social Hybrid", f"users={len(clean_queries)} platforms={len(result.get('platform_scope') or [])} found={result.get('total_found', 0)}")
     return jsonify({'success': True, **result})
 
 @app.route('/api/scan/email', methods=['POST'])
