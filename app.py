@@ -3141,652 +3141,6 @@ def scan_malware_file(file_path: str) -> dict:
     except Exception as e:
         return {"success": False, "message": "فشل رفع الملف", "error": str(e)}
 
-def _check_username_presence_legacy(username: str, mode: str = 'social') -> dict:
-    u = (username or '').strip()
-    if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', u):
-        return {
-            "success": False,
-            "error": "اسم المستخدم غير صالح. المسموح: أحرف/أرقام/._- وبطول 3-30."
-        }
-
-    # Rebuilt from scratch: only most popular social-media platforms.
-    social_platforms = [
-        ("facebook", f"https://www.facebook.com/{u}"),
-        ("instagram", f"https://www.instagram.com/{u}/"),
-        ("x", f"https://x.com/{u}"),
-        ("tiktok", f"https://www.tiktok.com/@{u}"),
-        ("youtube", f"https://www.youtube.com/@{u}"),
-        ("threads", f"https://www.threads.net/@{u}"),
-        ("snapchat", f"https://www.snapchat.com/add/{u}"),
-        ("telegram", f"https://t.me/{u}"),
-        ("linkedin", f"https://www.linkedin.com/in/{u}"),
-        ("pinterest", f"https://www.pinterest.com/{u}/"),
-        ("reddit", f"https://www.reddit.com/user/{u}"),
-        ("twitch", f"https://www.twitch.tv/{u}"),
-    ]
-
-    not_found_markers = [
-        "page not found",
-        "sorry, this page isn't available",
-        "this account doesn't exist",
-        "couldn't find that page",
-        "user not found",
-        "this profile is unavailable",
-        "does not exist",
-        "looks like this page doesn't exist",
-        "profile couldn't be found",
-    ]
-
-    per_platform_markers = {
-        "facebook": ["content isn't available right now"],
-        "instagram": ["sorry, this page isn't available"],
-        "x": ["this account doesn\u2019t exist", "this account doesn't exist"],
-        "tiktok": ["couldn't find this account"],
-        "youtube": ["this page isn't available"],
-        "reddit": ["nobody on reddit goes by that name"],
-        "telegram": ["if you have telegram"],
-        "twitch": ["unless you've got a time machine"],
-    }
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept-Language": "en-US,en;q=0.9"
-    }
-
-    def _probe_instagram(platform: str, url: str):
-        """Instagram needs extra handling because web pages may redirect to login or rate-limit bots."""
-        def _ig_profile_lookup() -> dict:
-            api_candidates = [
-                f"https://www.instagram.com/api/v1/users/web_profile_info/?username={urllib.parse.quote(u)}",
-                f"https://i.instagram.com/api/v1/users/web_profile_info/?username={urllib.parse.quote(u)}",
-            ]
-            api_headers = {
-                **headers,
-                "X-IG-App-ID": "936619743392459",
-                "Referer": "https://www.instagram.com/",
-            }
-
-            last_status = 0
-            last_error = "instagram_probe_rate_limited"
-            for api_url in api_candidates:
-                try:
-                    rr = requests.get(api_url, headers=api_headers, timeout=7, allow_redirects=True)
-                    rr_status = int(rr.status_code)
-                    last_status = rr_status
-
-                    if rr_status == 200:
-                        try:
-                            payload = rr.json() if rr.text else {}
-                        except Exception:
-                            payload = {}
-                        user_obj = ((payload or {}).get('data') or {}).get('user')
-                        return {"decided": True, "exists": bool(user_obj), "status_code": rr_status}
-
-                    if rr_status in (404, 410):
-                        return {"decided": True, "exists": False, "status_code": rr_status}
-
-                    if rr_status in (401, 403, 429):
-                        last_error = "instagram_probe_rate_limited"
-                        continue
-
-                    last_error = f"instagram_probe_status_{rr_status}"
-                except Exception:
-                    continue
-
-            return {"decided": False, "exists": False, "status_code": last_status, "error": last_error}
-
-        try:
-            r = requests.get(url, headers=headers, timeout=7, allow_redirects=True)
-            status = int(r.status_code)
-            body = (r.text or '').lower()
-            final_url = str(r.url or '')
-            final_url_l = final_url.lower()
-
-            if status in (404, 410):
-                return {
-                    "platform": platform,
-                    "url": url,
-                    "final_url": final_url,
-                    "status_code": status,
-                    "exists": False
-                }
-
-            # Strong positive signals from web profile response.
-            if status == 200 and (
-                f'"username":"{u.lower()}"' in body
-                or f'https://www.instagram.com/{u.lower()}/' in body
-            ):
-                return {
-                    "platform": platform,
-                    "url": url,
-                    "final_url": final_url,
-                    "status_code": status,
-                    "exists": True
-                }
-
-            # If IG redirects to login/challenge or returns anti-bot response,
-            # use a dedicated profile endpoint before deciding it's not found.
-            needs_fallback = (
-                '/accounts/login' in final_url_l
-                or '/challenge/' in final_url_l
-                or status in (301, 302, 307, 308, 401, 403, 429)
-            )
-
-            if needs_fallback:
-                lookup = _ig_profile_lookup()
-                if lookup.get("decided"):
-                    return {
-                        "platform": platform,
-                        "url": url,
-                        "final_url": final_url,
-                        "status_code": int(lookup.get("status_code") or 0),
-                        "exists": bool(lookup.get("exists"))
-                    }
-
-                return {
-                    "platform": platform,
-                    "url": url,
-                    "final_url": final_url,
-                    "status_code": int(lookup.get("status_code") or 0),
-                    "exists": False,
-                    "error": str(lookup.get("error") or "instagram_probe_rate_limited")
-                }
-
-            markers = not_found_markers + per_platform_markers.get(platform, [])
-            exists = not any(m in body for m in markers)
-            return {
-                "platform": platform,
-                "url": url,
-                "final_url": final_url,
-                "status_code": status,
-                "exists": exists
-            }
-        except Exception as e:
-            return {
-                "platform": platform,
-                "url": url,
-                "status_code": 0,
-                "exists": False,
-                "error": str(e)
-            }
-
-    def _probe(item):
-        platform, url = item
-        if platform == 'instagram':
-            return _probe_instagram(platform, url)
-        try:
-            r = requests.get(url, headers=headers, timeout=7, allow_redirects=True)
-            status = r.status_code
-            body = (r.text or '').lower()
-            if status in (404, 410):
-                exists = False
-            elif status in (200, 301, 302, 307, 308):
-                markers = not_found_markers + per_platform_markers.get(platform, [])
-                exists = not any(m in body for m in markers)
-            elif status in (401, 403, 429):
-                return {
-                    "platform": platform,
-                    "url": url,
-                    "final_url": str(r.url),
-                    "status_code": status,
-                    "exists": False,
-                    "error": "probe_rate_limited"
-                }
-            else:
-                exists = False
-            return {
-                "platform": platform,
-                "url": url,
-                "final_url": str(r.url),
-                "status_code": status,
-                "exists": exists
-            }
-        except Exception as e:
-            return {
-                "platform": platform,
-                "url": url,
-                "status_code": 0,
-                "exists": False,
-                "error": str(e)
-            }
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(social_platforms)) as ex:
-        rows = list(ex.map(_probe, social_platforms))
-
-    # Keep fixed social order in output.
-    fixed_order = {name: i for i, (name, _) in enumerate(social_platforms)}
-    rows.sort(key=lambda r: fixed_order.get(str(r.get('platform', '')).lower(), 999))
-
-    found = [r for r in rows if r.get("exists")]
-    missing = [r for r in rows if not r.get("exists") and not r.get("error")]
-    unknown = [r for r in rows if r.get("error")]
-
-    return {
-        "success": True,
-        "username": u,
-        "mode": "social",
-        "checked_count": len(rows),
-        "found_count": len(found),
-        "found": found,
-        "not_found": missing,
-        "unknown": unknown,
-        "all_results": rows,
-        "checked_at": datetime.datetime.utcnow().isoformat() + 'Z'
-    }
-
-
-def _extract_json_from_text(raw: str):
-    text = (raw or '').strip()
-    if not text:
-        return None
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-
-    # Some tools print banners/logs before JSON; try to locate a JSON object/array blob.
-    candidates = [
-        (text.find('{'), text.rfind('}')),
-        (text.find('['), text.rfind(']')),
-    ]
-    for start, end in candidates:
-        if start >= 0 and end > start:
-            chunk = text[start:end + 1]
-            try:
-                return json.loads(chunk)
-            except Exception:
-                continue
-    return None
-
-
-def _normalize_username_result_row(platform: str, url: str, exists: bool, source: str, error: str = '') -> dict:
-    return {
-        "platform": str(platform or '').strip() or "unknown",
-        "url": str(url or '').strip(),
-        "final_url": str(url or '').strip(),
-        "status_code": 0,
-        "exists": bool(exists),
-        "source": source,
-        **({"error": error} if error else {})
-    }
-
-
-def _rows_from_maigret_payload(payload) -> list[dict]:
-    rows: list[dict] = []
-
-    if isinstance(payload, dict) and 'sites' in payload:
-        sites = payload.get('sites')
-    else:
-        sites = payload
-
-    if isinstance(sites, dict):
-        iterable = [(k, v) for k, v in sites.items()]
-    elif isinstance(sites, list):
-        iterable = []
-        for item in sites:
-            if isinstance(item, dict):
-                name = item.get('name') or item.get('site_name') or item.get('site') or item.get('title')
-                iterable.append((name, item))
-    else:
-        iterable = []
-
-    for platform, item in iterable:
-        if not isinstance(item, dict):
-            continue
-        p = str(platform or item.get('name') or item.get('site_name') or 'unknown').strip()
-        url = (
-            item.get('url_user')
-            or item.get('url')
-            or item.get('profile_url')
-            or item.get('uri_check')
-            or item.get('uri')
-            or ''
-        )
-        status_text = str(item.get('status') or item.get('message') or '').lower()
-
-        if isinstance(item.get('exists'), bool):
-            exists = bool(item.get('exists'))
-        elif isinstance(item.get('claimed'), bool):
-            exists = bool(item.get('claimed'))
-        elif isinstance(item.get('found'), bool):
-            exists = bool(item.get('found'))
-        else:
-            neg_markers = ('available', 'not found', 'unclaimed', 'absent', 'missing')
-            pos_markers = ('claimed', 'found', 'exists', 'taken')
-            if any(x in status_text for x in pos_markers):
-                exists = True
-            elif any(x in status_text for x in neg_markers):
-                exists = False
-            else:
-                exists = bool(url)
-
-        rows.append(_normalize_username_result_row(p, str(url or ''), exists, source='maigret'))
-
-    return rows
-
-
-def _rows_from_sherlock_payload(payload) -> list[dict]:
-    rows: list[dict] = []
-    data = payload
-
-    # Common Sherlock structure: { "username": { "Site": "https://..." } }
-    if isinstance(payload, dict) and len(payload) == 1:
-        k = next(iter(payload.keys()))
-        v = payload.get(k)
-        if isinstance(v, dict):
-            data = v
-
-    if not isinstance(data, dict):
-        return rows
-
-    for platform, item in data.items():
-        p = str(platform or '').strip() or 'unknown'
-        if isinstance(item, str):
-            rows.append(_normalize_username_result_row(p, item, True, source='sherlock'))
-            continue
-
-        if not isinstance(item, dict):
-            continue
-
-        url = item.get('url') or item.get('url_main') or item.get('profile_url') or ''
-        if not url and isinstance(item.get('link'), str):
-            url = item.get('link')
-
-        if isinstance(item.get('exists'), bool):
-            exists = bool(item.get('exists'))
-        elif isinstance(item.get('found'), bool):
-            exists = bool(item.get('found'))
-        elif isinstance(item.get('claimed'), bool):
-            exists = bool(item.get('claimed'))
-        else:
-            status_text = str(item.get('status') or item.get('message') or '').lower()
-            exists = any(x in status_text for x in ('found', 'claimed', 'exists', 'taken')) or bool(url)
-
-        err = str(item.get('error') or '').strip()
-        rows.append(_normalize_username_result_row(p, str(url or ''), exists, source='sherlock', error=err))
-
-    return rows
-
-
-def _run_username_tool_command(command: list[str], timeout_seconds: int) -> tuple[bool, str]:
-    try:
-        proc = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-            encoding='utf-8',
-            errors='replace'
-        )
-        mixed = ((proc.stdout or '') + '\n' + (proc.stderr or '')).strip()
-        return (proc.returncode == 0, mixed)
-    except Exception as e:
-        return (False, str(e))
-
-
-def _username_scan_budget_seconds(mode: str) -> int:
-    deep = str(mode).lower() == 'deep'
-    # Heroku router times out requests around 30s, so keep a safe margin.
-    if os.environ.get('DYNO'):
-        return 22 if deep else 14
-    return 55 if deep else 25
-
-
-def _scan_with_maigret(username: str, mode: str, max_timeout_seconds: int | None = None) -> tuple[list[dict], str]:
-    timeout_seconds = 25 if str(mode).lower() == 'quick' else 70
-    if max_timeout_seconds is not None:
-        timeout_seconds = max(4, min(timeout_seconds, int(max_timeout_seconds)))
-    candidates: list[list[str]] = []
-
-    if shutil.which('maigret'):
-        candidates.append(['maigret', username, '--json'])
-
-    py = shutil.which('python') or shutil.which('python3')
-    if py:
-        candidates.append([py, '-m', 'maigret', username, '--json'])
-
-    if not candidates:
-        return [], 'maigret_not_installed'
-
-    per_attempt_timeout = max(4, int(timeout_seconds / max(1, len(candidates))))
-
-    for cmd in candidates:
-        ok, out = _run_username_tool_command(cmd, timeout_seconds=per_attempt_timeout)
-        payload = _extract_json_from_text(out)
-        if payload is not None:
-            rows = _rows_from_maigret_payload(payload)
-            if rows:
-                return rows, ''
-        if ok and not out:
-            continue
-
-    return [], 'maigret_parse_failed_or_empty'
-
-
-def _scan_with_sherlock(username: str, mode: str, max_timeout_seconds: int | None = None) -> tuple[list[dict], str]:
-    timeout_seconds = 20 if str(mode).lower() == 'quick' else 60
-    if max_timeout_seconds is not None:
-        timeout_seconds = max(4, min(timeout_seconds, int(max_timeout_seconds)))
-    candidates: list[list[str]] = []
-
-    if shutil.which('sherlock'):
-        candidates.append(['sherlock', username, '--print-found'])
-
-    py = shutil.which('python') or shutil.which('python3')
-    if py:
-        candidates.append([py, '-m', 'sherlock', username, '--print-found'])
-        candidates.append([py, '-m', 'sherlock_project', username, '--print-found'])
-
-    if not candidates:
-        return [], 'sherlock_not_installed'
-
-    per_attempt_timeout = max(4, int(timeout_seconds / max(1, len(candidates))))
-
-    for cmd in candidates:
-        ok, out = _run_username_tool_command(cmd, timeout_seconds=per_attempt_timeout)
-        payload = _extract_json_from_text(out)
-        if payload is not None:
-            rows = _rows_from_sherlock_payload(payload)
-            if rows:
-                return rows, ''
-
-        # Fallback: parse lines like "[+] Platform: https://..."
-        lines = [ln.strip() for ln in (out or '').splitlines() if ln.strip()]
-        parsed_rows: list[dict] = []
-        for ln in lines:
-            if 'http://' not in ln and 'https://' not in ln:
-                continue
-            m = re.search(r'([A-Za-z0-9_. -]{2,40})\s*:\s*(https?://\S+)', ln)
-            if not m:
-                continue
-            parsed_rows.append(_normalize_username_result_row(m.group(1).strip(), m.group(2).strip(), True, source='sherlock'))
-        if parsed_rows:
-            return parsed_rows, ''
-
-        if ok and not out:
-            continue
-
-    return [], 'sherlock_parse_failed_or_empty'
-
-
-def _scan_with_socialscan(username: str, mode: str, max_timeout_seconds: int | None = None) -> tuple[list[dict], str]:
-    if max_timeout_seconds is not None and int(max_timeout_seconds) < 5:
-        return [], 'socialscan_skipped_due_to_time_budget'
-
-    try:
-        from socialscan.util import Platforms, sync_execute_queries  # type: ignore
-    except Exception:
-        return [], 'socialscan_not_installed'
-
-    # Keep quick mode lighter while deep mode checks broader set.
-    candidate_platform_names = [
-        'GITHUB', 'GITLAB', 'REDDIT', 'TWITTER', 'INSTAGRAM',
-        'PINTEREST', 'TUMBLR'
-    ]
-    if str(mode).lower() == 'quick':
-        candidate_platform_names = ['GITHUB', 'REDDIT']
-
-    selected_platforms = []
-    for name in candidate_platform_names:
-        p = getattr(Platforms, name, None)
-        if p is not None:
-            selected_platforms.append(p)
-
-    if not selected_platforms:
-        return [], 'socialscan_platforms_unavailable'
-
-    platform_url_templates = {
-        'GITHUB': 'https://github.com/{u}',
-        'GITLAB': 'https://gitlab.com/{u}',
-        'REDDIT': 'https://www.reddit.com/user/{u}',
-        'TWITTER': 'https://x.com/{u}',
-        'INSTAGRAM': 'https://www.instagram.com/{u}/',
-        'PINTEREST': 'https://www.pinterest.com/{u}/',
-        'TUMBLR': 'https://{u}.tumblr.com/',
-    }
-
-    try:
-        results = sync_execute_queries([username], selected_platforms)
-    except Exception as e:
-        return [], f'socialscan_runtime_error: {e}'
-
-    rows: list[dict] = []
-    for result in results or []:
-        platform_obj = getattr(result, 'platform', '')
-        platform_name = str(getattr(platform_obj, 'name', '') or str(platform_obj) or 'unknown').strip()
-        query_value = str(getattr(result, 'query', username) or username).strip()
-        valid = bool(getattr(result, 'valid', False))
-        available = bool(getattr(result, 'available', False))
-        success = bool(getattr(result, 'success', False))
-        message = str(getattr(result, 'message', '') or '').strip()
-
-        # In SocialScan: available=True means username/email is free (not claimed).
-        exists = bool(valid and not available)
-        url_tpl = platform_url_templates.get(platform_name.upper(), '')
-        url = url_tpl.format(u=query_value) if url_tpl else ''
-
-        row = _normalize_username_result_row(platform_name, url, exists, source='socialscan')
-        if not success and message:
-            row['error'] = message
-        rows.append(row)
-
-    if not rows:
-        return [], 'socialscan_no_results'
-    return rows, ''
-
-
-def _merge_username_rows(rows: list[dict]) -> list[dict]:
-    merged: dict[str, dict] = {}
-    for row in rows:
-        platform = str(row.get('platform') or '').strip() or 'unknown'
-        key = platform.lower()
-        current = merged.get(key)
-        if not current:
-            merged[key] = row
-            continue
-
-        # Prefer "exists=True" and rows without errors.
-        cur_score = (1 if current.get('exists') else 0) + (0 if current.get('error') else 1)
-        new_score = (1 if row.get('exists') else 0) + (0 if row.get('error') else 1)
-        if new_score > cur_score:
-            merged[key] = row
-
-    preferred = ['facebook', 'instagram', 'x', 'tiktok', 'youtube', 'threads', 'snapchat', 'telegram', 'linkedin', 'pinterest', 'reddit', 'twitch']
-    rank = {name: idx for idx, name in enumerate(preferred)}
-    return sorted(merged.values(), key=lambda r: (rank.get(str(r.get('platform', '')).lower(), 999), str(r.get('platform', '')).lower()))
-
-
-def check_username_presence(username: str, mode: str = 'deep') -> dict:
-    u = (username or '').strip()
-    selected_mode = str(mode or 'deep').strip().lower()
-    if selected_mode not in ('quick', 'deep'):
-        selected_mode = 'deep'
-
-    if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', u):
-        return {
-            "success": False,
-            "error": "اسم المستخدم غير صالح. المسموح: أحرف/أرقام/._- وبطول 3-30."
-        }
-
-    engine_notes: list[str] = []
-    collected_rows: list[dict] = []
-    sources: list[str] = []
-
-    deadline = time.monotonic() + _username_scan_budget_seconds(selected_mode)
-
-    def _remaining_budget() -> int:
-        return max(0, int(deadline - time.monotonic()))
-
-    maigret_rows, maigret_err = _scan_with_maigret(u, selected_mode, max_timeout_seconds=_remaining_budget())
-    if maigret_rows:
-        collected_rows.extend(maigret_rows)
-        sources.append('maigret')
-    elif maigret_err:
-        engine_notes.append(maigret_err)
-
-    # Deep mode uses both engines. Quick mode keeps only Maigret before fallback.
-    if selected_mode == 'deep':
-        rem = _remaining_budget()
-        if rem >= 6:
-            sherlock_rows, sherlock_err = _scan_with_sherlock(u, selected_mode, max_timeout_seconds=rem)
-            if sherlock_rows:
-                collected_rows.extend(sherlock_rows)
-                sources.append('sherlock')
-            elif sherlock_err:
-                engine_notes.append(sherlock_err)
-        else:
-            engine_notes.append('sherlock_skipped_due_to_time_budget')
-
-    # SocialScan acts as an additional safety net in deep mode,
-    # and as a backup path when the primary engines return no rows.
-    if selected_mode == 'deep' or not collected_rows:
-        rem = _remaining_budget()
-        if rem >= 5:
-            socialscan_rows, socialscan_err = _scan_with_socialscan(u, selected_mode, max_timeout_seconds=rem)
-            if socialscan_rows:
-                collected_rows.extend(socialscan_rows)
-                sources.append('socialscan')
-            elif socialscan_err:
-                engine_notes.append(socialscan_err)
-        else:
-            engine_notes.append('socialscan_skipped_due_to_time_budget')
-
-    if not collected_rows:
-        legacy = _check_username_presence_legacy(u, selected_mode)
-        if not legacy.get('success'):
-            return legacy
-        legacy['mode'] = selected_mode
-        legacy['engine'] = 'legacy_probe'
-        legacy['sources'] = ['legacy_probe']
-        if engine_notes:
-            legacy['engine_notes'] = engine_notes
-        return legacy
-
-    all_rows = _merge_username_rows(collected_rows)
-    found = [r for r in all_rows if r.get('exists')]
-    missing = [r for r in all_rows if not r.get('exists') and not r.get('error')]
-    unknown = [r for r in all_rows if r.get('error')]
-
-    result = {
-        "success": True,
-        "username": u,
-        "mode": selected_mode,
-        "engine": "+".join(sources) if sources else 'legacy_probe',
-        "sources": sources if sources else ['legacy_probe'],
-        "checked_count": len(all_rows),
-        "found_count": len(found),
-        "found": found,
-        "not_found": missing,
-        "unknown": unknown,
-        "all_results": all_rows,
-        "checked_at": datetime.datetime.utcnow().isoformat() + 'Z'
-    }
-    if engine_notes:
-        result['engine_notes'] = engine_notes
-    return result
-
-
 def create_social_defense_scenario(scenario_type: str) -> dict:
     scenarios = {
         'phishing_email': {
@@ -5690,18 +5044,20 @@ HTML_TEMPLATE = """
 
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
-                        <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter</h3>
-                        <p class="text-[11px] text-gray-500 mb-3">Quick: فحص سريع للمنصات الأساسية. Deep: محرك Maigret/Sherlock مع تغطية أوسع.</p>
-                        <div class="flex flex-col md:flex-row gap-2">
-                            <input id="osintUsernameInput" type="text" placeholder="username" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none font-mono text-left" dir="ltr">
-                            <select id="osintUsernameMode" class="p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs">
-                                <option value="quick">Quick</option>
-                                <option value="deep" selected>Deep</option>
+                        <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter (SocialScan)</h3>
+                        <p class="text-[11px] text-gray-500 mb-3">نسخة مبسطة تعتمد SocialScan فقط (queries + platforms) حسب طلبك.</p>
+                        <div class="space-y-2">
+                            <textarea id="osintUsernameInput" rows="4" placeholder="username1&#10;email2@gmail.com&#10;mail42@me.com" class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none font-mono text-left" dir="ltr"></textarea>
+                            <select id="osintUsernamePlatforms" multiple class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs" size="6">
+                                <option value="GITHUB" selected>GITHUB</option>
+                                <option value="GITLAB">GITLAB</option>
+                                <option value="REDDIT" selected>REDDIT</option>
+                                <option value="TWITTER">TWITTER</option>
+                                <option value="INSTAGRAM">INSTAGRAM</option>
+                                <option value="PINTEREST">PINTEREST</option>
+                                <option value="TUMBLR">TUMBLR</option>
                             </select>
-                            <button onclick="huntUsername()" class="bg-cyan-900/50 hover:bg-cyan-800 px-5 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-300">ابحث</button>
-                        </div>
-                        <div class="mt-2 text-[11px] text-cyan-100/90 bg-slate-900/60 border border-cyan-900/30 rounded-lg px-3 py-2">
-                            الوضع العميق يجلب منصات إضافية تلقائياً حسب دعم المحرك، مع fallback داخلي عند عدم توفر الأدوات.
+                            <button onclick="huntUsername()" class="bg-cyan-900/50 hover:bg-cyan-800 px-5 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-300">تشغيل SocialScan</button>
                         </div>
                         <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
                     </div>
@@ -9887,49 +9243,28 @@ HTML_TEMPLATE = """
             if (!data || !data.success) {
                 return `<div class="text-red-400 text-sm">${_osintEscape(data?.error || 'فشل الفحص')}</div>`;
             }
-            const found = data.found || [];
-            const notFound = data.not_found || [];
-            const unknown = data.unknown || [];
-            const allResults = data.all_results || [];
-            const checked = Number(data.checked_count || (found.length + notFound.length + unknown.length));
-            const modeTotal = checked;
+            const rows = Array.isArray(data.results) ? data.results : [];
+            const found = rows.filter((r) => r.exists === true);
+            const available = rows.filter((r) => r.available === true);
+            const invalid = rows.filter((r) => r.valid === false);
 
-            const socialPriority = [
-                { id: 'facebook', label: 'Facebook' },
-                { id: 'instagram', label: 'Instagram' }
-            ];
-            const priorityRank = { facebook: 0, instagram: 1 };
-            const foundSorted = [...found].sort((a, b) => {
-                const ra = priorityRank[String(a?.platform || '').toLowerCase()] ?? 999;
-                const rb = priorityRank[String(b?.platform || '').toLowerCase()] ?? 999;
-                if (ra !== rb) return ra - rb;
-                return String(a?.platform || '').localeCompare(String(b?.platform || ''));
-            });
-
-            const socialRows = socialPriority.map((s) => {
-                const row = allResults.find((r) => String(r?.platform || '').toLowerCase() === s.id);
-                if (!row) {
-                    return `<div class="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 p-2">
-                        <span class="font-bold text-gray-300">${_osintEscape(s.label)}</span>
-                        <span class="text-[11px] text-gray-500">لم يتم فحصها</span>
-                    </div>`;
-                }
-
-                const exists = !!row.exists;
-                const hasError = !!row.error;
-                const statusText = hasError ? 'Unknown' : (exists ? 'Found' : 'Not Found');
-                const statusClass = hasError
-                    ? 'text-amber-300 border-amber-800/40 bg-amber-900/10'
-                    : (exists ? 'text-green-300 border-green-800/40 bg-green-900/10' : 'text-gray-300 border-slate-700 bg-slate-900/50');
-
-                return `<div class="rounded-lg border p-2 ${statusClass}">
+            const rowHtml = rows.map((r) => {
+                const success = !!r.success;
+                const valid = !!r.valid;
+                const avail = !!r.available;
+                const exists = !!r.exists;
+                const tone = exists
+                    ? 'bg-green-900/20 border-green-800/40 text-green-200'
+                    : (avail ? 'bg-slate-900/40 border-slate-700 text-slate-300' : 'bg-amber-900/20 border-amber-800/40 text-amber-200');
+                return `<div class="p-2 rounded border ${tone}">
                     <div class="flex items-center justify-between gap-2">
-                        <span class="font-bold">${_osintEscape(s.label)}</span>
-                        <span class="text-[10px] uppercase tracking-wider">${_osintEscape(statusText)}</span>
+                        <span class="font-bold">${_osintEscape(r.query || '')}</span>
+                        <span class="text-[10px] uppercase tracking-wider">${_osintEscape(r.platform || '')}</span>
                     </div>
-                    <div class="text-[11px] font-mono break-all mt-1" dir="ltr">${_osintEscape(row.url || '')}</div>
+                    <div class="text-[11px] mt-1">${_osintEscape(r.message || '')}</div>
+                    <div class="text-[10px] mt-1 text-gray-400">Success: ${_osintEscape(String(success))} | Valid: ${_osintEscape(String(valid))} | Available: ${_osintEscape(String(avail))}</div>
                 </div>`;
-            });
+            }).join('');
 
             return `
                 <div class="space-y-3">
@@ -9939,40 +9274,26 @@ HTML_TEMPLATE = """
                             <div class="text-lg font-black text-green-400">${_osintEscape(found.length)}</div>
                         </div>
                         <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-2 text-center">
-                            <div class="text-[10px] text-gray-400">NOT FOUND</div>
-                            <div class="text-lg font-black text-gray-300">${_osintEscape(notFound.length)}</div>
+                            <div class="text-[10px] text-gray-400">AVAILABLE</div>
+                            <div class="text-lg font-black text-gray-300">${_osintEscape(available.length)}</div>
                         </div>
                         <div class="bg-cyan-900/20 border border-cyan-800/50 rounded-lg p-2 text-center">
                             <div class="text-[10px] text-gray-400">CHECKED</div>
-                            <div class="text-lg font-black text-cyan-300">${_osintEscape(checked)}</div>
+                            <div class="text-lg font-black text-cyan-300">${_osintEscape(rows.length)}</div>
                         </div>
                         <div class="bg-indigo-900/20 border border-indigo-800/50 rounded-lg p-2 text-center">
-                            <div class="text-[10px] text-gray-400">USERNAME</div>
-                            <div class="text-sm font-bold text-indigo-300 font-mono" dir="ltr">${_osintEscape(data.username)}</div>
+                            <div class="text-[10px] text-gray-400">INVALID</div>
+                            <div class="text-sm font-bold text-indigo-300 font-mono" dir="ltr">${_osintEscape(invalid.length)}</div>
                         </div>
                     </div>
                     <div class="text-[11px] text-cyan-200/90 bg-cyan-950/20 border border-cyan-900/30 rounded-lg px-3 py-2">
-                        Mode: <span class="font-bold text-cyan-300">${_osintEscape(String(data.mode || '').toUpperCase())}</span>
-                        | منصات الوضع: <span class="font-bold text-cyan-100">${_osintEscape(modeTotal)}</span>
-                        | Unknown: <span class="font-bold text-amber-300">${_osintEscape(unknown.length)}</span>
-                    </div>
-                    <div class="bg-slate-950/40 border border-indigo-900/30 rounded-lg p-2 space-y-2">
-                        <div class="text-[10px] text-indigo-300 uppercase tracking-wider">Social Priority (First)</div>
-                        ${socialRows.join('')}
+                        Engine: <span class="font-bold text-cyan-300">${_osintEscape(String(data.engine || 'socialscan').toUpperCase())}</span>
+                        | Queries: <span class="font-bold text-cyan-100">${_osintEscape(data.query_count || 0)}</span>
+                        | Platforms: <span class="font-bold text-cyan-100">${_osintEscape(data.platform_count || 0)}</span>
                     </div>
                     <div class="bg-black/40 border border-slate-700 rounded-lg p-2">
-                        <div class="text-[10px] text-gray-500 uppercase mb-2">Platforms Detected</div>
-                        ${foundSorted.length ? foundSorted.map((r) => `<a href="${_osintEscape(r.url)}" target="_blank" rel="noopener noreferrer" class="block mb-1 p-2 rounded bg-green-900/20 border border-green-800/40 hover:bg-green-900/35 transition-all">
-                            <span class="text-green-300 font-bold">${_osintEscape(r.platform)}</span>
-                            <span class="text-[11px] text-gray-300 ml-2 font-mono" dir="ltr">${_osintEscape(r.url)}</span>
-                        </a>`).join('') : '<div class="text-gray-500 text-xs">لا توجد حسابات مؤكدة حالياً.</div>'}
-                        ${unknown.length ? `<div class="mt-2 pt-2 border-t border-amber-900/30">
-                            <div class="text-[10px] text-amber-300 uppercase mb-1">Unknown / Rate Limited</div>
-                            ${unknown.map((r) => `<div class="mb-1 p-2 rounded bg-amber-900/10 border border-amber-800/30">
-                                <span class="text-amber-300 font-bold">${_osintEscape(r.platform)}</span>
-                                <span class="text-[11px] text-gray-300 ml-2 font-mono" dir="ltr">${_osintEscape(r.url || '')}</span>
-                            </div>`).join('')}
-                        </div>` : ''}
+                        <div class="text-[10px] text-gray-500 uppercase mb-2">SocialScan Results</div>
+                        ${rowHtml || '<div class="text-gray-500 text-xs">لا توجد نتائج.</div>'}
                     </div>
                 </div>
             `;
@@ -10452,18 +9773,32 @@ HTML_TEMPLATE = """
         }
 
         async function huntUsername() {
-            const username = (document.getElementById('osintUsernameInput')?.value || '').trim();
-            const mode = (document.getElementById('osintUsernameMode')?.value || 'deep').toLowerCase();
+            const rawQueries = (document.getElementById('osintUsernameInput')?.value || '').trim();
+            const platformSelect = document.getElementById('osintUsernamePlatforms');
             const out = document.getElementById('osintUsernameResult');
-            if (!username) return titanAlert('ادخل اسم مستخدم أولاً.');
+            const queries = String(rawQueries || '')
+                .split(/[\n,]+/)
+                .map((x) => x.trim())
+                .filter(Boolean)
+                .slice(0, 8);
+            if (!queries.length) return titanAlert('ادخل query واحد على الأقل (username أو email).');
             if (!out) return;
 
-            setResultLoading(out, 'Username Hunt', `جاري فحص المنصات الاجتماعية (${mode.toUpperCase()})...`);
+            let platforms = [];
+            if (platformSelect && platformSelect.options) {
+                platforms = Array.from(platformSelect.options)
+                    .filter((opt) => opt.selected)
+                    .map((opt) => String(opt.value || '').trim())
+                    .filter(Boolean);
+            }
+            if (!platforms.length) platforms = ['GITHUB', 'REDDIT'];
+
+            setResultLoading(out, 'Username Hunt', `جاري تشغيل SocialScan على ${queries.length} query(s)...`);
             try {
                 const res = await fetch('/api/osint/username', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, mode})
+                    body: JSON.stringify({queries, platforms})
                 });
                 const contentType = String(res.headers.get('content-type') || '').toLowerCase();
                 let data = null;
@@ -10483,10 +9818,10 @@ HTML_TEMPLATE = """
                 setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge });
                 if (data.found_count > 0) {
                     _osintRenderRisk(60, 'Public Username Footprint Detected');
-                    _osintTrackActivity('username_hunt', { target: username, targetType: 'username', risk: 60, label: 'Public footprint detected' });
+                    _osintTrackActivity('username_hunt', { target: queries[0], targetType: 'username', risk: 60, label: 'Public footprint detected' });
                 } else {
                     _osintRenderRisk(15, 'No Immediate Public Presence');
-                    _osintTrackActivity('username_hunt', { target: username, targetType: 'username', risk: 15, label: 'No immediate public presence' });
+                    _osintTrackActivity('username_hunt', { target: queries[0], targetType: 'username', risk: 15, label: 'No immediate public presence' });
                 }
             } catch (e) {
                 setResultError(out, `Username scan failed: ${e.message || e}`);
@@ -15699,18 +15034,116 @@ def scan_email_route():
     return jsonify(res)
 
 
+def run_socialscan_queries(queries: list[str], platforms: list[str] | None = None) -> dict:
+    clean_queries = [str(q or '').strip() for q in (queries or [])]
+    clean_queries = [q for q in clean_queries if q][:8]
+    if not clean_queries:
+        return {"success": False, "error": "queries مطلوبة (username/email)"}
+
+    try:
+        from socialscan.util import Platforms, sync_execute_queries  # type: ignore
+    except Exception as e:
+        return {"success": False, "error": f"socialscan_import_error: {e}"}
+
+    supported = [name for name in dir(Platforms) if name.isupper()]
+    wanted = [str(p or '').strip().upper() for p in (platforms or []) if str(p or '').strip()]
+    if not wanted:
+        wanted = ['GITHUB', 'REDDIT']
+
+    selected = []
+    selected_names = []
+    for name in wanted:
+        if name in supported:
+            obj = getattr(Platforms, name, None)
+            if obj is not None:
+                selected.append(obj)
+                selected_names.append(name)
+
+    if not selected:
+        return {
+            "success": False,
+            "error": "لا توجد منصات صالحة في الطلب",
+            "supported_platforms": supported,
+        }
+
+    profile_url_templates = {
+        'GITHUB': 'https://github.com/{q}',
+        'GITLAB': 'https://gitlab.com/{q}',
+        'REDDIT': 'https://www.reddit.com/user/{q}',
+        'TWITTER': 'https://x.com/{q}',
+        'INSTAGRAM': 'https://www.instagram.com/{q}/',
+        'PINTEREST': 'https://www.pinterest.com/{q}/',
+        'TUMBLR': 'https://{q}.tumblr.com/',
+    }
+
+    try:
+        raw = sync_execute_queries(clean_queries, selected)
+    except Exception as e:
+        return {"success": False, "error": f"socialscan_runtime_error: {e}"}
+
+    rows = []
+    for r in raw or []:
+        platform_obj = getattr(r, 'platform', '')
+        platform = str(getattr(platform_obj, 'name', '') or str(platform_obj) or 'UNKNOWN').upper().strip()
+        query = str(getattr(r, 'query', '') or '').strip()
+        success = bool(getattr(r, 'success', False))
+        valid = bool(getattr(r, 'valid', False))
+        available = bool(getattr(r, 'available', False))
+        message = str(getattr(r, 'message', '') or '').strip()
+        exists = bool(valid and not available)
+        tpl = profile_url_templates.get(platform)
+        url = tpl.format(q=query) if tpl else ''
+        rows.append({
+            "query": query,
+            "platform": platform,
+            "message": message,
+            "success": success,
+            "valid": valid,
+            "available": available,
+            "exists": exists,
+            "url": url,
+        })
+
+    return {
+        "success": True,
+        "engine": "socialscan",
+        "queries": clean_queries,
+        "platforms": selected_names,
+        "query_count": len(clean_queries),
+        "platform_count": len(selected_names),
+        "found_count": len([x for x in rows if x.get('exists')]),
+        "results": rows,
+        "checked_at": datetime.datetime.utcnow().isoformat() + 'Z',
+    }
+
+
 @app.route('/api/osint/username', methods=['POST'])
 def osint_username_route():
     try:
         data = request.get_json(silent=True) or {}
-        username = str(data.get('username', '') or '').strip()
-        mode = str(data.get('mode', 'deep') or 'deep').strip().lower()
+        queries = data.get('queries') or []
+        if isinstance(queries, str):
+            queries = [queries]
+        if not isinstance(queries, list):
+            queries = []
 
-        result = check_username_presence(username, mode)
+        # Backward compatibility: old client may still send username only.
+        if not queries:
+            single_username = str(data.get('username', '') or '').strip()
+            if single_username:
+                queries = [single_username]
+
+        platforms = data.get('platforms') or []
+        if isinstance(platforms, str):
+            platforms = [platforms]
+        if not isinstance(platforms, list):
+            platforms = []
+
+        result = run_socialscan_queries(queries, platforms)
         if not result.get('success'):
             return jsonify(result), 400
 
-        add_audit_log("Username Hunter (OSINT)", f"فحص اليوزرنيم: {username} | mode={result.get('mode', 'deep')}")
+        add_audit_log("Username Hunter (OSINT)", f"SocialScan queries={result.get('query_count', 0)} platforms={result.get('platform_count', 0)}")
         return jsonify(result)
     except Exception as e:
         # Always return JSON here so frontend does not fail on HTML error pages.
