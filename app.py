@@ -34,6 +34,7 @@ import subprocess
 import threading
 import wave
 import math
+import shutil
 import psutil  # type: ignore
 import exifread  # type: ignore
 from cryptography.hazmat.primitives.asymmetric import rsa  # type: ignore
@@ -3140,7 +3141,7 @@ def scan_malware_file(file_path: str) -> dict:
     except Exception as e:
         return {"success": False, "message": "فشل رفع الملف", "error": str(e)}
 
-def check_username_presence(username: str, mode: str = 'social') -> dict:
+def _check_username_presence_legacy(username: str, mode: str = 'social') -> dict:
     u = (username or '').strip()
     if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', u):
         return {
@@ -3372,6 +3373,313 @@ def check_username_presence(username: str, mode: str = 'social') -> dict:
         "all_results": rows,
         "checked_at": datetime.datetime.utcnow().isoformat() + 'Z'
     }
+
+
+def _extract_json_from_text(raw: str):
+    text = (raw or '').strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # Some tools print banners/logs before JSON; try to locate a JSON object/array blob.
+    candidates = [
+        (text.find('{'), text.rfind('}')),
+        (text.find('['), text.rfind(']')),
+    ]
+    for start, end in candidates:
+        if start >= 0 and end > start:
+            chunk = text[start:end + 1]
+            try:
+                return json.loads(chunk)
+            except Exception:
+                continue
+    return None
+
+
+def _normalize_username_result_row(platform: str, url: str, exists: bool, source: str, error: str = '') -> dict:
+    return {
+        "platform": str(platform or '').strip() or "unknown",
+        "url": str(url or '').strip(),
+        "final_url": str(url or '').strip(),
+        "status_code": 0,
+        "exists": bool(exists),
+        "source": source,
+        **({"error": error} if error else {})
+    }
+
+
+def _rows_from_maigret_payload(payload) -> list[dict]:
+    rows: list[dict] = []
+
+    if isinstance(payload, dict) and 'sites' in payload:
+        sites = payload.get('sites')
+    else:
+        sites = payload
+
+    if isinstance(sites, dict):
+        iterable = [(k, v) for k, v in sites.items()]
+    elif isinstance(sites, list):
+        iterable = []
+        for item in sites:
+            if isinstance(item, dict):
+                name = item.get('name') or item.get('site_name') or item.get('site') or item.get('title')
+                iterable.append((name, item))
+    else:
+        iterable = []
+
+    for platform, item in iterable:
+        if not isinstance(item, dict):
+            continue
+        p = str(platform or item.get('name') or item.get('site_name') or 'unknown').strip()
+        url = (
+            item.get('url_user')
+            or item.get('url')
+            or item.get('profile_url')
+            or item.get('uri_check')
+            or item.get('uri')
+            or ''
+        )
+        status_text = str(item.get('status') or item.get('message') or '').lower()
+
+        if isinstance(item.get('exists'), bool):
+            exists = bool(item.get('exists'))
+        elif isinstance(item.get('claimed'), bool):
+            exists = bool(item.get('claimed'))
+        elif isinstance(item.get('found'), bool):
+            exists = bool(item.get('found'))
+        else:
+            neg_markers = ('available', 'not found', 'unclaimed', 'absent', 'missing')
+            pos_markers = ('claimed', 'found', 'exists', 'taken')
+            if any(x in status_text for x in pos_markers):
+                exists = True
+            elif any(x in status_text for x in neg_markers):
+                exists = False
+            else:
+                exists = bool(url)
+
+        rows.append(_normalize_username_result_row(p, str(url or ''), exists, source='maigret'))
+
+    return rows
+
+
+def _rows_from_sherlock_payload(payload) -> list[dict]:
+    rows: list[dict] = []
+    data = payload
+
+    # Common Sherlock structure: { "username": { "Site": "https://..." } }
+    if isinstance(payload, dict) and len(payload) == 1:
+        k = next(iter(payload.keys()))
+        v = payload.get(k)
+        if isinstance(v, dict):
+            data = v
+
+    if not isinstance(data, dict):
+        return rows
+
+    for platform, item in data.items():
+        p = str(platform or '').strip() or 'unknown'
+        if isinstance(item, str):
+            rows.append(_normalize_username_result_row(p, item, True, source='sherlock'))
+            continue
+
+        if not isinstance(item, dict):
+            continue
+
+        url = item.get('url') or item.get('url_main') or item.get('profile_url') or ''
+        if not url and isinstance(item.get('link'), str):
+            url = item.get('link')
+
+        if isinstance(item.get('exists'), bool):
+            exists = bool(item.get('exists'))
+        elif isinstance(item.get('found'), bool):
+            exists = bool(item.get('found'))
+        elif isinstance(item.get('claimed'), bool):
+            exists = bool(item.get('claimed'))
+        else:
+            status_text = str(item.get('status') or item.get('message') or '').lower()
+            exists = any(x in status_text for x in ('found', 'claimed', 'exists', 'taken')) or bool(url)
+
+        err = str(item.get('error') or '').strip()
+        rows.append(_normalize_username_result_row(p, str(url or ''), exists, source='sherlock', error=err))
+
+    return rows
+
+
+def _run_username_tool_command(command: list[str], timeout_seconds: int) -> tuple[bool, str]:
+    try:
+        proc = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+            encoding='utf-8',
+            errors='replace'
+        )
+        mixed = ((proc.stdout or '') + '\n' + (proc.stderr or '')).strip()
+        return (proc.returncode == 0, mixed)
+    except Exception as e:
+        return (False, str(e))
+
+
+def _scan_with_maigret(username: str, mode: str) -> tuple[list[dict], str]:
+    timeout_seconds = 25 if str(mode).lower() == 'quick' else 70
+    candidates: list[list[str]] = []
+
+    if shutil.which('maigret'):
+        candidates.append(['maigret', username, '--json'])
+
+    py = shutil.which('python') or shutil.which('python3')
+    if py:
+        candidates.append([py, '-m', 'maigret', username, '--json'])
+
+    if not candidates:
+        return [], 'maigret_not_installed'
+
+    for cmd in candidates:
+        ok, out = _run_username_tool_command(cmd, timeout_seconds=timeout_seconds)
+        payload = _extract_json_from_text(out)
+        if payload is not None:
+            rows = _rows_from_maigret_payload(payload)
+            if rows:
+                return rows, ''
+        if ok and not out:
+            continue
+
+    return [], 'maigret_parse_failed_or_empty'
+
+
+def _scan_with_sherlock(username: str, mode: str) -> tuple[list[dict], str]:
+    timeout_seconds = 20 if str(mode).lower() == 'quick' else 60
+    candidates: list[list[str]] = []
+
+    if shutil.which('sherlock'):
+        candidates.append(['sherlock', username, '--print-found'])
+
+    py = shutil.which('python') or shutil.which('python3')
+    if py:
+        candidates.append([py, '-m', 'sherlock', username, '--print-found'])
+        candidates.append([py, '-m', 'sherlock_project', username, '--print-found'])
+
+    if not candidates:
+        return [], 'sherlock_not_installed'
+
+    for cmd in candidates:
+        ok, out = _run_username_tool_command(cmd, timeout_seconds=timeout_seconds)
+        payload = _extract_json_from_text(out)
+        if payload is not None:
+            rows = _rows_from_sherlock_payload(payload)
+            if rows:
+                return rows, ''
+
+        # Fallback: parse lines like "[+] Platform: https://..."
+        lines = [ln.strip() for ln in (out or '').splitlines() if ln.strip()]
+        parsed_rows: list[dict] = []
+        for ln in lines:
+            if 'http://' not in ln and 'https://' not in ln:
+                continue
+            m = re.search(r'([A-Za-z0-9_. -]{2,40})\s*:\s*(https?://\S+)', ln)
+            if not m:
+                continue
+            parsed_rows.append(_normalize_username_result_row(m.group(1).strip(), m.group(2).strip(), True, source='sherlock'))
+        if parsed_rows:
+            return parsed_rows, ''
+
+        if ok and not out:
+            continue
+
+    return [], 'sherlock_parse_failed_or_empty'
+
+
+def _merge_username_rows(rows: list[dict]) -> list[dict]:
+    merged: dict[str, dict] = {}
+    for row in rows:
+        platform = str(row.get('platform') or '').strip() or 'unknown'
+        key = platform.lower()
+        current = merged.get(key)
+        if not current:
+            merged[key] = row
+            continue
+
+        # Prefer "exists=True" and rows without errors.
+        cur_score = (1 if current.get('exists') else 0) + (0 if current.get('error') else 1)
+        new_score = (1 if row.get('exists') else 0) + (0 if row.get('error') else 1)
+        if new_score > cur_score:
+            merged[key] = row
+
+    preferred = ['facebook', 'instagram', 'x', 'tiktok', 'youtube', 'threads', 'snapchat', 'telegram', 'linkedin', 'pinterest', 'reddit', 'twitch']
+    rank = {name: idx for idx, name in enumerate(preferred)}
+    return sorted(merged.values(), key=lambda r: (rank.get(str(r.get('platform', '')).lower(), 999), str(r.get('platform', '')).lower()))
+
+
+def check_username_presence(username: str, mode: str = 'deep') -> dict:
+    u = (username or '').strip()
+    selected_mode = str(mode or 'deep').strip().lower()
+    if selected_mode not in ('quick', 'deep'):
+        selected_mode = 'deep'
+
+    if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', u):
+        return {
+            "success": False,
+            "error": "اسم المستخدم غير صالح. المسموح: أحرف/أرقام/._- وبطول 3-30."
+        }
+
+    engine_notes: list[str] = []
+    collected_rows: list[dict] = []
+    sources: list[str] = []
+
+    maigret_rows, maigret_err = _scan_with_maigret(u, selected_mode)
+    if maigret_rows:
+        collected_rows.extend(maigret_rows)
+        sources.append('maigret')
+    elif maigret_err:
+        engine_notes.append(maigret_err)
+
+    # Deep mode uses both engines. Quick mode keeps only Maigret before fallback.
+    if selected_mode == 'deep':
+        sherlock_rows, sherlock_err = _scan_with_sherlock(u, selected_mode)
+        if sherlock_rows:
+            collected_rows.extend(sherlock_rows)
+            sources.append('sherlock')
+        elif sherlock_err:
+            engine_notes.append(sherlock_err)
+
+    if not collected_rows:
+        legacy = _check_username_presence_legacy(u, selected_mode)
+        if not legacy.get('success'):
+            return legacy
+        legacy['mode'] = selected_mode
+        legacy['engine'] = 'legacy_probe'
+        legacy['sources'] = ['legacy_probe']
+        if engine_notes:
+            legacy['engine_notes'] = engine_notes
+        return legacy
+
+    all_rows = _merge_username_rows(collected_rows)
+    found = [r for r in all_rows if r.get('exists')]
+    missing = [r for r in all_rows if not r.get('exists') and not r.get('error')]
+    unknown = [r for r in all_rows if r.get('error')]
+
+    result = {
+        "success": True,
+        "username": u,
+        "mode": selected_mode,
+        "engine": "+".join(sources) if sources else 'legacy_probe',
+        "sources": sources if sources else ['legacy_probe'],
+        "checked_count": len(all_rows),
+        "found_count": len(found),
+        "found": found,
+        "not_found": missing,
+        "unknown": unknown,
+        "all_results": all_rows,
+        "checked_at": datetime.datetime.utcnow().isoformat() + 'Z'
+    }
+    if engine_notes:
+        result['engine_notes'] = engine_notes
+    return result
 
 
 def create_social_defense_scenario(scenario_type: str) -> dict:
@@ -5278,7 +5586,7 @@ HTML_TEMPLATE = """
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40">
                         <h3 class="text-sm font-bold text-cyan-300 mb-2">Username Hunter</h3>
-                        <p class="text-[11px] text-gray-500 mb-3">فحص اليوزرنيم على المنصات الأشهر مع وضع سريع أو عميق.</p>
+                        <p class="text-[11px] text-gray-500 mb-3">Quick: فحص سريع للمنصات الأساسية. Deep: محرك Maigret/Sherlock مع تغطية أوسع.</p>
                         <div class="flex flex-col md:flex-row gap-2">
                             <input id="osintUsernameInput" type="text" placeholder="username" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none font-mono text-left" dir="ltr">
                             <select id="osintUsernameMode" class="p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs">
@@ -5288,7 +5596,7 @@ HTML_TEMPLATE = """
                             <button onclick="huntUsername()" class="bg-cyan-900/50 hover:bg-cyan-800 px-5 py-3 rounded-xl font-bold border border-cyan-800/50 transition-all text-cyan-300">ابحث</button>
                         </div>
                         <div class="mt-2 text-[11px] text-cyan-100/90 bg-slate-900/60 border border-cyan-900/30 rounded-lg px-3 py-2">
-                            المنصات المفحوصة: Facebook, Instagram, X, TikTok, YouTube, Threads, Snapchat, Telegram, LinkedIn, Pinterest, Reddit, Twitch.
+                            الوضع العميق يجلب منصات إضافية تلقائياً حسب دعم المحرك، مع fallback داخلي عند عدم توفر الأدوات.
                         </div>
                         <div id="osintUsernameResult" class="hidden mt-3 p-3 bg-black/40 border border-slate-700 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-72 overflow-y-auto" dir="ltr"></div>
                     </div>
