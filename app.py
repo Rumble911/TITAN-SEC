@@ -3594,6 +3594,69 @@ def _scan_with_sherlock(username: str, mode: str) -> tuple[list[dict], str]:
     return [], 'sherlock_parse_failed_or_empty'
 
 
+def _scan_with_socialscan(username: str, mode: str) -> tuple[list[dict], str]:
+    try:
+        from socialscan.util import Platforms, sync_execute_queries  # type: ignore
+    except Exception:
+        return [], 'socialscan_not_installed'
+
+    # Keep quick mode lighter while deep mode checks broader set.
+    candidate_platform_names = [
+        'GITHUB', 'GITLAB', 'REDDIT', 'TWITTER', 'INSTAGRAM',
+        'PINTEREST', 'TUMBLR'
+    ]
+    if str(mode).lower() == 'quick':
+        candidate_platform_names = ['GITHUB', 'REDDIT']
+
+    selected_platforms = []
+    for name in candidate_platform_names:
+        p = getattr(Platforms, name, None)
+        if p is not None:
+            selected_platforms.append(p)
+
+    if not selected_platforms:
+        return [], 'socialscan_platforms_unavailable'
+
+    platform_url_templates = {
+        'GITHUB': 'https://github.com/{u}',
+        'GITLAB': 'https://gitlab.com/{u}',
+        'REDDIT': 'https://www.reddit.com/user/{u}',
+        'TWITTER': 'https://x.com/{u}',
+        'INSTAGRAM': 'https://www.instagram.com/{u}/',
+        'PINTEREST': 'https://www.pinterest.com/{u}/',
+        'TUMBLR': 'https://{u}.tumblr.com/',
+    }
+
+    try:
+        results = sync_execute_queries([username], selected_platforms)
+    except Exception as e:
+        return [], f'socialscan_runtime_error: {e}'
+
+    rows: list[dict] = []
+    for result in results or []:
+        platform_obj = getattr(result, 'platform', '')
+        platform_name = str(getattr(platform_obj, 'name', '') or str(platform_obj) or 'unknown').strip()
+        query_value = str(getattr(result, 'query', username) or username).strip()
+        valid = bool(getattr(result, 'valid', False))
+        available = bool(getattr(result, 'available', False))
+        success = bool(getattr(result, 'success', False))
+        message = str(getattr(result, 'message', '') or '').strip()
+
+        # In SocialScan: available=True means username/email is free (not claimed).
+        exists = bool(valid and not available)
+        url_tpl = platform_url_templates.get(platform_name.upper(), '')
+        url = url_tpl.format(u=query_value) if url_tpl else ''
+
+        row = _normalize_username_result_row(platform_name, url, exists, source='socialscan')
+        if not success and message:
+            row['error'] = message
+        rows.append(row)
+
+    if not rows:
+        return [], 'socialscan_no_results'
+    return rows, ''
+
+
 def _merge_username_rows(rows: list[dict]) -> list[dict]:
     merged: dict[str, dict] = {}
     for row in rows:
@@ -3646,6 +3709,16 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
             sources.append('sherlock')
         elif sherlock_err:
             engine_notes.append(sherlock_err)
+
+    # SocialScan acts as an additional safety net in deep mode,
+    # and as a backup path when the primary engines return no rows.
+    if selected_mode == 'deep' or not collected_rows:
+        socialscan_rows, socialscan_err = _scan_with_socialscan(u, selected_mode)
+        if socialscan_rows:
+            collected_rows.extend(socialscan_rows)
+            sources.append('socialscan')
+        elif socialscan_err:
+            engine_notes.append(socialscan_err)
 
     if not collected_rows:
         legacy = _check_username_presence_legacy(u, selected_mode)
