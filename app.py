@@ -14546,6 +14546,23 @@ def _iter_maigret_site_maps(payload: object) -> list[tuple[str, dict]]:
                 result.append((hint, value.get('sites') or {}))
 
     if isinstance(payload, dict):
+        # Maigret "simple" JSON report format: {"Site": {...}, ...}
+        # where each value includes username/url_user/status.
+        site_like_values = [v for v in payload.values() if isinstance(v, dict)]
+        if site_like_values and all((
+            ('url_user' in v) or ('status' in v) or ('username' in v)
+        ) for v in site_like_values):
+            grouped: dict[str, dict] = {}
+            for site_name, info in payload.items():
+                if not isinstance(info, dict):
+                    continue
+                user = str(info.get('username') or '').strip()
+                if not user:
+                    continue
+                grouped.setdefault(user, {})[str(site_name)] = info
+            for user, site_map in grouped.items():
+                result.append((user, site_map))
+
         add_from(payload, str(payload.get('username') or ''))
         for key, value in payload.items():
             if isinstance(value, dict):
@@ -14561,8 +14578,10 @@ def _normalize_maigret_site_row(query: str, site_name: str, site_data: object):
     if not isinstance(site_data, dict):
         return None
 
+    status_obj = site_data.get('status') if isinstance(site_data.get('status'), dict) else {}
+
     status_items = [
-        site_data.get('status'),
+        status_obj.get('status') if isinstance(status_obj, dict) else None,
         site_data.get('check_result'),
         site_data.get('result'),
         site_data.get('message'),
@@ -14585,6 +14604,7 @@ def _normalize_maigret_site_row(query: str, site_name: str, site_data: object):
         site_data.get('url_user')
         or site_data.get('url')
         or site_data.get('profile_url')
+        or (status_obj.get('url') if isinstance(status_obj, dict) else '')
         or site_data.get('urlMain')
         or site_data.get('url_main')
         or ''
@@ -14603,6 +14623,84 @@ def _normalize_maigret_site_row(query: str, site_name: str, site_data: object):
     }
 
 
+def _build_maigret_command_prefixes() -> list[list[str]]:
+    prefixes: list[list[str]] = []
+    seen: set[tuple[str, ...]] = set()
+
+    def _add(prefix: list[str]) -> None:
+        if not prefix:
+            return
+        key = tuple(prefix)
+        if key in seen:
+            return
+        seen.add(key)
+        prefixes.append(prefix)
+
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    venv_py = os.path.join(app_dir, '.venv312', 'Scripts', 'python.exe')
+    venv_maigret = os.path.join(app_dir, '.venv312', 'Scripts', 'maigret.exe')
+
+    # Optional explicit override from env for production tuning.
+    env_py = str(os.environ.get('MAIGRET_PYTHON', '') or '').strip()
+    if env_py and os.path.exists(env_py):
+        _add([env_py, '-m', 'maigret'])
+
+    # Prefer local project venv (3.12) before system Python.
+    if os.path.exists(venv_py):
+        _add([venv_py, '-m', 'maigret'])
+    if os.path.exists(venv_maigret):
+        _add([venv_maigret])
+
+    maigret_bin = shutil.which('maigret')
+    if maigret_bin:
+        _add([maigret_bin])
+
+    py_launcher = shutil.which('py')
+    if py_launcher:
+        _add([py_launcher, '-3.12', '-m', 'maigret'])
+
+    _add([sys.executable, '-m', 'maigret'])
+    return prefixes
+
+
+def _maigret_compact_error(raw_error: str) -> str:
+    err = str(raw_error or '').strip()
+    if not err:
+        return 'تعذر تشغيل Maigret.'
+
+    low = err.lower()
+    if 'no module named maigret' in low:
+        return 'حزمة Maigret غير مثبتة في بيئة التشغيل الحالية.'
+    if 'python314' in low or 'python 3.14' in low:
+        return 'Maigret غير متوافق حالياً مع Python 3.14 في بيئة التشغيل. تم تحويل المحاولة إلى Python 3.12.'
+    if 'traceback' in low and 'site-packages\\maigret' in low:
+        return 'حدث خطأ استيراد داخل حزمة Maigret. جرّب تشغيل التطبيق من بيئة Python 3.12 (.venv312).'
+
+    single_line = re.sub(r'\s+', ' ', err).strip()
+    return single_line[:420]
+
+
+def _load_maigret_json_from_folder(folder: str):
+    try:
+        if not os.path.isdir(folder):
+            return None
+        for name in sorted(os.listdir(folder)):
+            if not str(name).lower().endswith('.json'):
+                continue
+            file_path = os.path.join(folder, name)
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                parsed = _extract_first_json_blob(content)
+                if isinstance(parsed, (dict, list)):
+                    return parsed
+            except Exception:
+                continue
+    except Exception:
+        return None
+    return None
+
+
 def run_maigret_queries(queries: list[str], top_sites: int = 120, timeout_seconds: int = 15) -> dict:
     started_at = time.time()
     found: list[dict] = []
@@ -14610,23 +14708,21 @@ def run_maigret_queries(queries: list[str], top_sites: int = 120, timeout_second
     processed: list[str] = []
     seen: set[tuple[str, str, str]] = set()
 
-    command_prefixes: list[list[str]] = []
-    maigret_bin = shutil.which('maigret')
-    if maigret_bin:
-        command_prefixes.append([maigret_bin])
-    command_prefixes.append([sys.executable, '-m', 'maigret'])
+    command_prefixes = _build_maigret_command_prefixes()
 
     for query in queries:
         payload = None
         last_error = 'تعذر تشغيل Maigret'
 
         for prefix in command_prefixes:
+            out_dir = tempfile.mkdtemp(prefix='maigret_json_')
             cmd = prefix + [
                 query,
-                '--json',
+                '-J', 'simple',
                 '--no-progressbar',
                 '--top-sites', str(top_sites),
                 '--timeout', str(timeout_seconds),
+                '--folderoutput', out_dir,
             ]
 
             try:
@@ -14638,19 +14734,28 @@ def run_maigret_queries(queries: list[str], top_sites: int = 120, timeout_second
                 )
                 stdout = completed.stdout or ''
                 stderr = completed.stderr or ''
-                payload = _extract_first_json_blob(stdout)
+
+                payload = _load_maigret_json_from_folder(out_dir)
+                if payload is None:
+                    payload = _extract_first_json_blob(stdout)
                 if payload is None and stderr:
                     payload = _extract_first_json_blob(stderr)
 
                 if payload is not None:
+                    shutil.rmtree(out_dir, ignore_errors=True)
                     break
 
                 raw_err = stderr.strip() or stdout.strip() or f"exit={completed.returncode}"
-                last_error = str(raw_err)[:420]
+                runner = ' '.join(prefix[:3])
+                last_error = f"{runner}: {_maigret_compact_error(raw_err)}"
             except subprocess.TimeoutExpired:
-                last_error = f"timeout after {timeout_seconds}s"
+                runner = ' '.join(prefix[:3])
+                last_error = f"{runner}: timeout after {timeout_seconds}s"
             except Exception as exc:
-                last_error = str(exc)[:420]
+                runner = ' '.join(prefix[:3])
+                last_error = f"{runner}: {_maigret_compact_error(str(exc))}"
+            finally:
+                shutil.rmtree(out_dir, ignore_errors=True)
 
         if payload is None:
             errors.append({'query': query, 'error': last_error})
