@@ -10539,8 +10539,10 @@ HTML_TEMPLATE = """
 
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
             const pollUsernameJob = async (jobId) => {
+                let currentJobId = jobId;
                 for (let i = 0; i < 90; i++) {
-                    const statusRes = await fetch('/api/osint/username/status/' + encodeURIComponent(jobId));
+                    const qs = `?username=${encodeURIComponent(username)}&mode=${encodeURIComponent(mode)}`;
+                    const statusRes = await fetch('/api/osint/username/status/' + encodeURIComponent(currentJobId) + qs);
                     const statusType = String(statusRes.headers.get('content-type') || '').toLowerCase();
                     let payload = null;
                     if (statusType.includes('application/json')) {
@@ -10551,6 +10553,9 @@ HTML_TEMPLATE = """
                     }
 
                     if (payload?.status === 'done' && payload?.result) return payload.result;
+                    if (payload?.status === 'processing' && payload?.job_id) {
+                        currentJobId = String(payload.job_id);
+                    }
                     if (payload?.status === 'error' || payload?.success === false) {
                         throw new Error(payload?.error || 'Username background scan failed');
                     }
@@ -15848,6 +15853,22 @@ def osint_username_route():
 def osint_username_status_route(job_id):
     row = _username_hunt_get_job(str(job_id or '').strip())
     if not row:
+        # Heroku/Gunicorn multi-worker fallback: recreate the background job
+        # in the current worker if client provides recovery params.
+        rec_username = str(request.args.get('username', '') or '').strip()
+        rec_mode = str(request.args.get('mode', 'deep') or 'deep').strip().lower()
+        if rec_mode not in ('quick', 'deep'):
+            rec_mode = 'deep'
+
+        if rec_username and re.fullmatch(r'[A-Za-z0-9._-]{3,30}', rec_username):
+            new_job_id = _username_hunt_start_job(rec_username, rec_mode)
+            return jsonify({
+                "success": True,
+                "status": "processing",
+                "job_id": new_job_id,
+                "recovered": True,
+            }), 202
+
         return jsonify({"success": False, "error": "job_not_found"}), 404
 
     status = str(row.get('status') or 'unknown')
