@@ -111,10 +111,6 @@ _ELEVENLABS_VOICES_CACHE_LOCK = threading.Lock()
 _ELEVENLABS_VOICES_CACHE: dict[str, object] = {'at': 0.0, 'voices': []}
 _ELEVENLABS_VOICES_CACHE_TTL_SECONDS = 900
 
-_USERNAME_HUNT_JOBS_LOCK = threading.Lock()
-_USERNAME_HUNT_JOBS: dict[str, dict[str, object]] = {}
-_USERNAME_HUNT_JOBS_TTL_SECONDS = 1800
-
 AI_SYSTEM_PROMPT = """
 أنت TITAN، مساعد ذكي وشخصية حقيقية — مش مجرد برنامج.
 
@@ -3533,8 +3529,8 @@ def _username_scan_budget_seconds(mode: str) -> int:
     deep = str(mode).lower() == 'deep'
     # Heroku router times out requests around 30s, so keep a safe margin.
     if os.environ.get('DYNO'):
-        return 24 if deep else 16
-    return 85 if deep else 35
+        return 22 if deep else 14
+    return 55 if deep else 25
 
 
 def _scan_with_maigret(username: str, mode: str, max_timeout_seconds: int | None = None) -> tuple[list[dict], str]:
@@ -3542,15 +3538,12 @@ def _scan_with_maigret(username: str, mode: str, max_timeout_seconds: int | None
     if max_timeout_seconds is not None:
         timeout_seconds = max(4, min(timeout_seconds, int(max_timeout_seconds)))
     candidates: list[list[str]] = []
-    top_sites = max(100, int(os.environ.get('USERNAME_HUNT_TOP_SITES', '500')))
 
     if shutil.which('maigret'):
-        candidates.append(['maigret', username, '--json', '--top-sites', str(top_sites)])
         candidates.append(['maigret', username, '--json'])
 
     py = shutil.which('python') or shutil.which('python3')
     if py:
-        candidates.append([py, '-m', 'maigret', username, '--json', '--top-sites', str(top_sites)])
         candidates.append([py, '-m', 'maigret', username, '--json'])
 
     if not candidates:
@@ -3725,55 +3718,50 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
     def _remaining_budget() -> int:
         return max(0, int(deadline - time.monotonic()))
 
-    jobs: list[tuple[str, concurrent.futures.Future]] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
-        jobs.append(('maigret', ex.submit(_scan_with_maigret, u, selected_mode, _remaining_budget())))
-        jobs.append(('socialscan', ex.submit(_scan_with_socialscan, u, selected_mode, _remaining_budget())))
-        if selected_mode == 'deep':
-            jobs.append(('sherlock', ex.submit(_scan_with_sherlock, u, selected_mode, _remaining_budget())))
+    maigret_rows, maigret_err = _scan_with_maigret(u, selected_mode, max_timeout_seconds=_remaining_budget())
+    if maigret_rows:
+        collected_rows.extend(maigret_rows)
+        sources.append('maigret')
+    elif maigret_err:
+        engine_notes.append(maigret_err)
 
-        future_to_engine = {fut: name for name, fut in jobs}
-        wait_timeout = max(5, _remaining_budget())
-        done, not_done = concurrent.futures.wait(
-            [fut for _, fut in jobs],
-            timeout=wait_timeout,
-            return_when=concurrent.futures.ALL_COMPLETED
-        )
+    # Deep mode uses both engines. Quick mode keeps only Maigret before fallback.
+    if selected_mode == 'deep':
+        rem = _remaining_budget()
+        if rem >= 6:
+            sherlock_rows, sherlock_err = _scan_with_sherlock(u, selected_mode, max_timeout_seconds=rem)
+            if sherlock_rows:
+                collected_rows.extend(sherlock_rows)
+                sources.append('sherlock')
+            elif sherlock_err:
+                engine_notes.append(sherlock_err)
+        else:
+            engine_notes.append('sherlock_skipped_due_to_time_budget')
 
-        for fut in done:
-            name = future_to_engine.get(fut, 'unknown')
-            try:
-                rows, err = fut.result()
-            except Exception as e:
-                rows, err = [], f'{name}_runtime_error: {e}'
-
-            if rows:
-                collected_rows.extend(rows)
-                sources.append(name)
-            elif err:
-                engine_notes.append(err)
-
-        for fut in not_done:
-            name = future_to_engine.get(fut, 'unknown')
-            fut.cancel()
-            engine_notes.append(f'{name}_skipped_due_to_time_budget')
+    # SocialScan acts as an additional safety net in deep mode,
+    # and as a backup path when the primary engines return no rows.
+    if selected_mode == 'deep' or not collected_rows:
+        rem = _remaining_budget()
+        if rem >= 5:
+            socialscan_rows, socialscan_err = _scan_with_socialscan(u, selected_mode, max_timeout_seconds=rem)
+            if socialscan_rows:
+                collected_rows.extend(socialscan_rows)
+                sources.append('socialscan')
+            elif socialscan_err:
+                engine_notes.append(socialscan_err)
+        else:
+            engine_notes.append('socialscan_skipped_due_to_time_budget')
 
     if not collected_rows:
-        return {
-            "success": True,
-            "username": u,
-            "mode": selected_mode,
-            "engine": "+".join(sources) if sources else 'engines_only',
-            "sources": sources,
-            "checked_count": 0,
-            "found_count": 0,
-            "found": [],
-            "not_found": [],
-            "unknown": [],
-            "all_results": [],
-            "checked_at": datetime.datetime.utcnow().isoformat() + 'Z',
-            "engine_notes": engine_notes + ['no_results_from_selected_engines']
-        }
+        legacy = _check_username_presence_legacy(u, selected_mode)
+        if not legacy.get('success'):
+            return legacy
+        legacy['mode'] = selected_mode
+        legacy['engine'] = 'legacy_probe'
+        legacy['sources'] = ['legacy_probe']
+        if engine_notes:
+            legacy['engine_notes'] = engine_notes
+        return legacy
 
     all_rows = _merge_username_rows(collected_rows)
     found = [r for r in all_rows if r.get('exists')]
@@ -3784,8 +3772,8 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
         "success": True,
         "username": u,
         "mode": selected_mode,
-        "engine": "+".join(sources) if sources else 'engines_only',
-        "sources": sources,
+        "engine": "+".join(sources) if sources else 'legacy_probe',
+        "sources": sources if sources else ['legacy_probe'],
         "checked_count": len(all_rows),
         "found_count": len(found),
         "found": found,
@@ -3797,73 +3785,6 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
     if engine_notes:
         result['engine_notes'] = engine_notes
     return result
-
-
-def _username_hunt_prune_jobs() -> None:
-    now = time.time()
-    with _USERNAME_HUNT_JOBS_LOCK:
-        stale_ids = []
-        for jid, row in _USERNAME_HUNT_JOBS.items():
-            raw_ts = row.get('created_ts', now)
-            try:
-                created_ts = float(str(raw_ts))
-            except Exception:
-                created_ts = now
-            if (now - created_ts) > _USERNAME_HUNT_JOBS_TTL_SECONDS:
-                stale_ids.append(jid)
-        for jid in stale_ids:
-            _USERNAME_HUNT_JOBS.pop(jid, None)
-
-
-def _username_hunt_start_job(username: str, mode: str) -> str:
-    _username_hunt_prune_jobs()
-    job_id = uuid.uuid4().hex
-    now_iso = datetime.datetime.utcnow().isoformat() + 'Z'
-    with _USERNAME_HUNT_JOBS_LOCK:
-        _USERNAME_HUNT_JOBS[job_id] = {
-            'job_id': job_id,
-            'username': username,
-            'mode': mode,
-            'status': 'queued',
-            'created_at': now_iso,
-            'updated_at': now_iso,
-            'created_ts': time.time(),
-        }
-
-    def _runner():
-        with _USERNAME_HUNT_JOBS_LOCK:
-            row = _USERNAME_HUNT_JOBS.get(job_id)
-            if row:
-                row['status'] = 'running'
-                row['updated_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
-
-        try:
-            result = check_username_presence(username, mode)
-            with _USERNAME_HUNT_JOBS_LOCK:
-                row = _USERNAME_HUNT_JOBS.get(job_id)
-                if row:
-                    row['status'] = 'done'
-                    row['result'] = result
-                    row['updated_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
-        except Exception as e:
-            with _USERNAME_HUNT_JOBS_LOCK:
-                row = _USERNAME_HUNT_JOBS.get(job_id)
-                if row:
-                    row['status'] = 'error'
-                    row['error'] = f'username_hunt_background_error: {e}'
-                    row['updated_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
-
-    threading.Thread(target=_runner, daemon=True).start()
-    return job_id
-
-
-def _username_hunt_get_job(job_id: str) -> dict[str, object] | None:
-    _username_hunt_prune_jobs()
-    with _USERNAME_HUNT_JOBS_LOCK:
-        row = _USERNAME_HUNT_JOBS.get(job_id)
-        if not row:
-            return None
-        return dict(row)
 
 
 def create_social_defense_scenario(scenario_type: str) -> dict:
@@ -10537,35 +10458,6 @@ HTML_TEMPLATE = """
             if (!username) return titanAlert('ادخل اسم مستخدم أولاً.');
             if (!out) return;
 
-            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-            const pollUsernameJob = async (jobId) => {
-                let currentJobId = jobId;
-                for (let i = 0; i < 90; i++) {
-                    const qs = `?username=${encodeURIComponent(username)}&mode=${encodeURIComponent(mode)}`;
-                    const statusRes = await fetch('/api/osint/username/status/' + encodeURIComponent(currentJobId) + qs);
-                    const statusType = String(statusRes.headers.get('content-type') || '').toLowerCase();
-                    let payload = null;
-                    if (statusType.includes('application/json')) {
-                        payload = await statusRes.json();
-                    } else {
-                        const html = await statusRes.text();
-                        throw new Error(`Status endpoint returned non-JSON (${statusRes.status}): ${String(html || '').slice(0, 120)}`);
-                    }
-
-                    if (payload?.status === 'done' && payload?.result) return payload.result;
-                    if (payload?.status === 'processing' && payload?.job_id) {
-                        currentJobId = String(payload.job_id);
-                    }
-                    if (payload?.status === 'error' || payload?.success === false) {
-                        throw new Error(payload?.error || 'Username background scan failed');
-                    }
-
-                    setResultLoading(out, 'Username Hunt', `جاري فحص المنصات الاجتماعية (${mode.toUpperCase()})... ${i + 1}`);
-                    await sleep(1500);
-                }
-                throw new Error('Timeout while waiting for deep username scan result.');
-            };
-
             setResultLoading(out, 'Username Hunt', `جاري فحص المنصات الاجتماعية (${mode.toUpperCase()})...`);
             try {
                 const res = await fetch('/api/osint/username', {
@@ -10587,11 +10479,6 @@ HTML_TEMPLATE = """
                         raw_preview: String(raw || '').slice(0, 220)
                     };
                 }
-
-                if (data?.status === 'processing' && data?.job_id) {
-                    data = await pollUsernameJob(data.job_id);
-                }
-
                 const badge = data.success ? 'SOCIAL' : 'Failed';
                 setResultMarkup(out, 'Username Hunt', _osintRenderUsernameResult(data), { badge });
                 if (data.found_count > 0) {
@@ -15819,22 +15706,6 @@ def osint_username_route():
         username = str(data.get('username', '') or '').strip()
         mode = str(data.get('mode', 'deep') or 'deep').strip().lower()
 
-        if not re.fullmatch(r'[A-Za-z0-9._-]{3,30}', username):
-            return jsonify({
-                "success": False,
-                "error": "اسم المستخدم غير صالح. المسموح: أحرف/أرقام/._- وبطول 3-30."
-            }), 400
-
-        if mode == 'deep':
-            job_id = _username_hunt_start_job(username, mode)
-            return jsonify({
-                "success": True,
-                "status": "processing",
-                "job_id": job_id,
-                "username": username,
-                "mode": mode,
-            }), 202
-
         result = check_username_presence(username, mode)
         if not result.get('success'):
             return jsonify(result), 400
@@ -15847,57 +15718,6 @@ def osint_username_route():
             "success": False,
             "error": f"username_hunt_runtime_error: {e}"
         }), 500
-
-
-@app.route('/api/osint/username/status/<job_id>', methods=['GET'])
-def osint_username_status_route(job_id):
-    row = _username_hunt_get_job(str(job_id or '').strip())
-    if not row:
-        # Heroku/Gunicorn multi-worker fallback: recreate the background job
-        # in the current worker if client provides recovery params.
-        rec_username = str(request.args.get('username', '') or '').strip()
-        rec_mode = str(request.args.get('mode', 'deep') or 'deep').strip().lower()
-        if rec_mode not in ('quick', 'deep'):
-            rec_mode = 'deep'
-
-        if rec_username and re.fullmatch(r'[A-Za-z0-9._-]{3,30}', rec_username):
-            new_job_id = _username_hunt_start_job(rec_username, rec_mode)
-            return jsonify({
-                "success": True,
-                "status": "processing",
-                "job_id": new_job_id,
-                "recovered": True,
-            }), 202
-
-        return jsonify({"success": False, "error": "job_not_found"}), 404
-
-    status = str(row.get('status') or 'unknown')
-    if status == 'done':
-        return jsonify({
-            "success": True,
-            "status": "done",
-            "job_id": row.get('job_id'),
-            "result": row.get('result') or {},
-            "updated_at": row.get('updated_at')
-        })
-
-    if status == 'error':
-        return jsonify({
-            "success": False,
-            "status": "error",
-            "job_id": row.get('job_id'),
-            "error": str(row.get('error') or 'username_hunt_background_error'),
-            "updated_at": row.get('updated_at')
-        }), 500
-
-    return jsonify({
-        "success": True,
-        "status": status,
-        "job_id": row.get('job_id'),
-        "username": row.get('username'),
-        "mode": row.get('mode'),
-        "updated_at": row.get('updated_at')
-    }), 202
 
 
 def _ir_priority_rank(priority: str) -> int:
