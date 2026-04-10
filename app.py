@@ -3525,8 +3525,18 @@ def _run_username_tool_command(command: list[str], timeout_seconds: int) -> tupl
         return (False, str(e))
 
 
-def _scan_with_maigret(username: str, mode: str) -> tuple[list[dict], str]:
+def _username_scan_budget_seconds(mode: str) -> int:
+    deep = str(mode).lower() == 'deep'
+    # Heroku router times out requests around 30s, so keep a safe margin.
+    if os.environ.get('DYNO'):
+        return 22 if deep else 14
+    return 55 if deep else 25
+
+
+def _scan_with_maigret(username: str, mode: str, max_timeout_seconds: int | None = None) -> tuple[list[dict], str]:
     timeout_seconds = 25 if str(mode).lower() == 'quick' else 70
+    if max_timeout_seconds is not None:
+        timeout_seconds = max(4, min(timeout_seconds, int(max_timeout_seconds)))
     candidates: list[list[str]] = []
 
     if shutil.which('maigret'):
@@ -3539,8 +3549,10 @@ def _scan_with_maigret(username: str, mode: str) -> tuple[list[dict], str]:
     if not candidates:
         return [], 'maigret_not_installed'
 
+    per_attempt_timeout = max(4, int(timeout_seconds / max(1, len(candidates))))
+
     for cmd in candidates:
-        ok, out = _run_username_tool_command(cmd, timeout_seconds=timeout_seconds)
+        ok, out = _run_username_tool_command(cmd, timeout_seconds=per_attempt_timeout)
         payload = _extract_json_from_text(out)
         if payload is not None:
             rows = _rows_from_maigret_payload(payload)
@@ -3552,8 +3564,10 @@ def _scan_with_maigret(username: str, mode: str) -> tuple[list[dict], str]:
     return [], 'maigret_parse_failed_or_empty'
 
 
-def _scan_with_sherlock(username: str, mode: str) -> tuple[list[dict], str]:
+def _scan_with_sherlock(username: str, mode: str, max_timeout_seconds: int | None = None) -> tuple[list[dict], str]:
     timeout_seconds = 20 if str(mode).lower() == 'quick' else 60
+    if max_timeout_seconds is not None:
+        timeout_seconds = max(4, min(timeout_seconds, int(max_timeout_seconds)))
     candidates: list[list[str]] = []
 
     if shutil.which('sherlock'):
@@ -3567,8 +3581,10 @@ def _scan_with_sherlock(username: str, mode: str) -> tuple[list[dict], str]:
     if not candidates:
         return [], 'sherlock_not_installed'
 
+    per_attempt_timeout = max(4, int(timeout_seconds / max(1, len(candidates))))
+
     for cmd in candidates:
-        ok, out = _run_username_tool_command(cmd, timeout_seconds=timeout_seconds)
+        ok, out = _run_username_tool_command(cmd, timeout_seconds=per_attempt_timeout)
         payload = _extract_json_from_text(out)
         if payload is not None:
             rows = _rows_from_sherlock_payload(payload)
@@ -3594,7 +3610,10 @@ def _scan_with_sherlock(username: str, mode: str) -> tuple[list[dict], str]:
     return [], 'sherlock_parse_failed_or_empty'
 
 
-def _scan_with_socialscan(username: str, mode: str) -> tuple[list[dict], str]:
+def _scan_with_socialscan(username: str, mode: str, max_timeout_seconds: int | None = None) -> tuple[list[dict], str]:
+    if max_timeout_seconds is not None and int(max_timeout_seconds) < 5:
+        return [], 'socialscan_skipped_due_to_time_budget'
+
     try:
         from socialscan.util import Platforms, sync_execute_queries  # type: ignore
     except Exception:
@@ -3694,7 +3713,12 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
     collected_rows: list[dict] = []
     sources: list[str] = []
 
-    maigret_rows, maigret_err = _scan_with_maigret(u, selected_mode)
+    deadline = time.monotonic() + _username_scan_budget_seconds(selected_mode)
+
+    def _remaining_budget() -> int:
+        return max(0, int(deadline - time.monotonic()))
+
+    maigret_rows, maigret_err = _scan_with_maigret(u, selected_mode, max_timeout_seconds=_remaining_budget())
     if maigret_rows:
         collected_rows.extend(maigret_rows)
         sources.append('maigret')
@@ -3703,22 +3727,30 @@ def check_username_presence(username: str, mode: str = 'deep') -> dict:
 
     # Deep mode uses both engines. Quick mode keeps only Maigret before fallback.
     if selected_mode == 'deep':
-        sherlock_rows, sherlock_err = _scan_with_sherlock(u, selected_mode)
-        if sherlock_rows:
-            collected_rows.extend(sherlock_rows)
-            sources.append('sherlock')
-        elif sherlock_err:
-            engine_notes.append(sherlock_err)
+        rem = _remaining_budget()
+        if rem >= 6:
+            sherlock_rows, sherlock_err = _scan_with_sherlock(u, selected_mode, max_timeout_seconds=rem)
+            if sherlock_rows:
+                collected_rows.extend(sherlock_rows)
+                sources.append('sherlock')
+            elif sherlock_err:
+                engine_notes.append(sherlock_err)
+        else:
+            engine_notes.append('sherlock_skipped_due_to_time_budget')
 
     # SocialScan acts as an additional safety net in deep mode,
     # and as a backup path when the primary engines return no rows.
     if selected_mode == 'deep' or not collected_rows:
-        socialscan_rows, socialscan_err = _scan_with_socialscan(u, selected_mode)
-        if socialscan_rows:
-            collected_rows.extend(socialscan_rows)
-            sources.append('socialscan')
-        elif socialscan_err:
-            engine_notes.append(socialscan_err)
+        rem = _remaining_budget()
+        if rem >= 5:
+            socialscan_rows, socialscan_err = _scan_with_socialscan(u, selected_mode, max_timeout_seconds=rem)
+            if socialscan_rows:
+                collected_rows.extend(socialscan_rows)
+                sources.append('socialscan')
+            elif socialscan_err:
+                engine_notes.append(socialscan_err)
+        else:
+            engine_notes.append('socialscan_skipped_due_to_time_budget')
 
     if not collected_rows:
         legacy = _check_username_presence_legacy(u, selected_mode)
