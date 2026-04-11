@@ -3810,6 +3810,8 @@ HTML_TEMPLATE = """
                 border: 1px solid rgba(147, 197, 253, 0.35);
                 background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.94));
                 box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.08), 0 10px 26px rgba(2, 6, 23, 0.48);
+                padding: 0.75rem;
+                border-radius: 1.5rem;
             }
 
             .training-subtab-btn {
@@ -3817,7 +3819,9 @@ HTML_TEMPLATE = """
                 border: 1px solid rgba(125, 211, 252, 0.32);
                 background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
                 color: #e2e8f0;
-                min-height: 2.3rem;
+                min-height: 3rem;
+                border-radius: 9999px;
+                letter-spacing: 0.04em;
                 box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.16), 0 1px 0 rgba(15, 23, 42, 0.9);
             }
 
@@ -3831,7 +3835,59 @@ HTML_TEMPLATE = """
                 background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(109, 40, 217, 0.95));
                 border-color: rgba(196, 181, 253, 0.7);
                 color: #ffffff;
-                box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.25), 0 0 18px rgba(139, 92, 246, 0.45);
+                box-shadow: 0 12px 30px rgba(139, 92, 246, 0.24);
+            }
+
+            .toolskb-panel {
+                background: linear-gradient(145deg, rgba(15, 23, 42, 0.88), rgba(6, 7, 22, 0.94));
+                border: 1px solid rgba(16, 185, 129, 0.16);
+                box-shadow: 0 24px 50px rgba(0, 0, 0, 0.18);
+            }
+
+            .toolskb-card {
+                width: 100%;
+                text-align: right;
+                padding: 1rem;
+                border-radius: 1.25rem;
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+            }
+
+            .toolskb-card:hover {
+                transform: translateY(-2px);
+                border-color: rgba(34, 197, 94, 0.35);
+            }
+
+            .toolskb-category-pill {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0.2rem 0.65rem;
+                border-radius: 9999px;
+                background: rgba(15, 23, 42, 0.85);
+                color: #94a3b8;
+                font-size: 10px;
+                letter-spacing: 0.02em;
+            }
+
+            .toolskb-filters-shell {
+                background: rgba(15, 23, 42, 0.88);
+                border: 1px solid rgba(34, 197, 94, 0.14);
+                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+                border-radius: 1.5rem;
+            }
+
+            .toolskb-detail-shell {
+                background: rgba(15, 23, 42, 0.88);
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.08);
+                border-radius: 1.5rem;
+            }
+
+            .toolskb-quiz-shell {
+                background: rgba(15, 23, 42, 0.88);
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                border-radius: 1.5rem;
             }
 
             .result-panel {
@@ -4974,14 +5030,69 @@ HTML_TEMPLATE = """
             <div id="training-section" class="hidden space-y-4">
                 <h2 class="text-xl font-bold text-amber-300 border-b border-slate-700 pb-2">🎯 قسم التدريب</h2>
                 <div class="bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl text-xs text-amber-100/90 leading-6">
-                    هذا القسم يجمع 3 مسارات تدريبية في مكان واحد: التعلم والمحاكاة، CTF، والهندسة الاجتماعية.
+                    هذا القسم يجمع عدة مسارات تدريبية في مكان واحد: موسوعة الهجمات، موسوعة الأدوات، AI Coach، CTF، والهندسة الاجتماعية.
                 </div>
                 <div class="training-subtabs-shell rounded-xl p-2">
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
                         <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 موسوعة الهجمات</button>
+                        <button id="btn-training-tools-kb" onclick="setTrainingSubTab('tools-kb')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🛠️ موسوعة الأدوات</button>
                         <button id="btn-training-ai-lab" onclick="setTrainingSubTab('ai-lab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🤖 AI Coach</button>
                         <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
                         <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tools-kb-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-emerald-300 border-b border-slate-700 pb-2">🛠️ موسوعة الأدوات</h2>
+
+                <div class="bg-emerald-950/20 border border-emerald-900/40 p-4 rounded-3xl text-xs text-emerald-100/90 leading-6 shadow-[0_12px_40px_rgba(8,145,178,0.12)]">
+                    هذا القسم يعرض أدوات وتطبيقات الأمن السيبراني مرتبة حسب مرحلة الاستخدام، مع تفاصيل لكل أداة وكويز مرتبط لفهمها بسرعة.
+                </div>
+
+                <div class="toolskb-filters-shell p-4">
+                    <div class="grid grid-cols-1 xl:grid-cols-5 gap-3">
+                        <input id="toolskbSearchInput" type="text" oninput="toolskbApplyFilters()" placeholder="ابحث باسم الأداة أو الفئة..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none xl:col-span-3">
+                        <select id="toolskbCategoryFilter" onchange="toolskbApplyFilters()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="all">كل الفئات</option>
+                        </select>
+                                <button onclick="toolskbResetFilters()" class="w-full px-4 py-2 rounded-2xl bg-emerald-900/30 hover:bg-emerald-800/45 border border-emerald-800/50 text-emerald-200 text-xs font-bold">إعادة ضبط الفلاتر</button>
+                        <div id="toolskbCatalogStats" class="text-[11px] text-gray-400 xl:col-span-5"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-9 gap-5">
+                    <div class="xl:col-span-4 space-y-4">
+                        <div class="toolskb-panel p-5 rounded-[1.5rem] space-y-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-emerald-300">قائمة الأدوات</div>
+                                    <div class="text-[11px] text-gray-400">انقر لعرض التفاصيل والكويز الخاص بكل أداة.</div>
+                                </div>
+                                <span class="text-[10px] text-slate-400">البحث المباشر</span>
+                            </div>
+                            <div id="toolskbCatalog" class="grid grid-cols-1 gap-3 max-h-[72vh] overflow-y-auto pr-1"></div>
+                            <div id="toolskbEmpty" class="hidden text-[11px] text-rose-300 font-bold">لم يتم العثور على أدوات مطابقة.</div>
+                            <div class="mt-3 text-center">
+                                <button id="toolskbCatalogShowMore" onclick="toolskbShowMore()" class="hidden w-full py-2 rounded-xl bg-emerald-900/30 hover:bg-emerald-800/45 border border-emerald-800/50 text-emerald-200 text-xs font-bold">عرض المزيد</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="xl:col-span-5 space-y-4">
+                        <div class="toolskb-detail-shell p-5 rounded-[1.5rem] space-y-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-emerald-300">تفاصيل الأداة</div>
+                                    <div class="text-[11px] text-gray-400">عرض تعريفي وعملي لكل أداة.</div>
+                                </div>
+                                <button onclick="toolskbQuizStart()" class="px-3 py-2 rounded-xl bg-emerald-900/30 border border-emerald-800/50 text-emerald-200 text-xs font-bold">بدء كويز الأداة</button>
+                            </div>
+                            <div id="toolskbDetail" class="p-3 rounded-xl border border-slate-700 bg-black/30 text-xs text-gray-200 leading-6">اختر أداة من القائمة لعرض تفاصيلها، ثم اضغط زر كويز الأداة.</div>
+                        </div>
+                        <div class="toolskb-quiz-shell p-5 rounded-[1.5rem] space-y-4">
+                            <div class="text-sm font-bold text-emerald-300">كويز الأداة</div>
+                            <div id="toolskbQuizContainer" class="p-4 rounded-2xl border border-slate-700 bg-black/40 text-xs text-gray-200">اختر أداة ثم ابدأ الكويز.</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -6799,7 +6910,7 @@ HTML_TEMPLATE = """
 
         // --- التحكم بالتبويبات ---
         const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','training','ctf','ir','forensics','se','audio','video','qr','identity','admin'];
-        const TRAINING_SUB_TABS = ['learninglab', 'ai-lab', 'ctf', 'se'];
+        const TRAINING_SUB_TABS = ['learninglab', 'tools-kb', 'ai-lab', 'ctf', 'se'];
         let __trainingSubTab = 'learninglab';
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
@@ -7231,6 +7342,7 @@ HTML_TEMPLATE = """
             if (next === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if (next === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if (next === 'learninglab' && typeof learningInitCatalog === 'function') learningInitCatalog();
+            if (next === 'tools-kb' && typeof trainingToolsInit === 'function') trainingToolsInit();
             if (next === 'ai-lab' && typeof trainingAiCoachInit === 'function') trainingAiCoachInit();
         }
 
@@ -7695,6 +7807,64 @@ HTML_TEMPLATE = """
             }
         ];
 
+        function _normalizeCatalogName(text) {
+            return String(text || '')
+                .toLowerCase()
+                .replace(/[^0-9\u0621-\u064A\u0600-\u06FFa-z ]+/g, ' ')
+                .replace(/\\s+/g, ' ')
+                .trim();
+        }
+
+        function _levenshteinDistance(a, b) {
+            const aLen = a.length;
+            const bLen = b.length;
+            const matrix = Array.from({ length: bLen + 1 }, (_, i) => [i]);
+            for (let j = 0; j <= aLen; j += 1) {
+                matrix[0][j] = j;
+            }
+            for (let i = 1; i <= bLen; i += 1) {
+                for (let j = 1; j <= aLen; j += 1) {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j - 1] + (a[j - 1] === b[i - 1] ? 0 : 1)
+                    );
+                }
+            }
+            return matrix[bLen][aLen];
+        }
+
+        function _isSimilarName(a, b) {
+            const x = _normalizeCatalogName(a);
+            const y = _normalizeCatalogName(b);
+            if (!x || !y) return false;
+            if (x === y) return true;
+            if (x.includes(y) || y.includes(x)) {
+                return Math.min(x.length, y.length) / Math.max(x.length, y.length) >= 0.75;
+            }
+            const distance = _levenshteinDistance(x, y);
+            return 1 - distance / Math.max(x.length, y.length) >= 0.72;
+        }
+
+        function _hasDuplicateName(name, existingNames) {
+            return existingNames.some((existing) => _isSimilarName(name, existing));
+        }
+
+        function _dedupeCatalogItems(catalog) {
+            const names = [];
+            catalog.forEach((category) => {
+                if (!Array.isArray(category.items)) return;
+                category.items = category.items.filter((item) => {
+                    const name = item.name || item.title || '';
+                    if (_hasDuplicateName(name, names)) {
+                        return false;
+                    }
+                    names.push(name);
+                    return true;
+                });
+            });
+        }
+
         function _learningGenerateExtraAttacks(baseCatalog, extraCount) {
             const subjects = [
                 'حقن الاستعلام', 'انتحال الجلسة', 'استغلال التحقق', 'اختراق الكوكيز', 'تشغيل الأوامر عن بعد',
@@ -7727,12 +7897,21 @@ HTML_TEMPLATE = """
                 'مراجعة الأذونات', 'استخدام سياسات الأمان', 'تدوير الأسرار', 'حماية نقاط النهاية',
                 'اعتماد تحديثات منتظمة', 'استخدام جدران حماية متقدمة', 'التدقيق الدوري للأحداث', 'اعتماد سياسة كلمة مرور قوية'
             ];
-            const categories = baseCatalog.map((entry) => entry.id);
-            for (let i = 0; i < extraCount; i += 1) {
-                const categoryId = categories[i % categories.length];
+            const existingNames = baseCatalog.flatMap((entry) => (Array.isArray(entry.items) ? entry.items.map((item) => item.name || '') : []));
+            let added = 0;
+            let attempt = 0;
+            const maxAttempts = extraCount * 8;
+
+            while (added < extraCount && attempt < maxAttempts) {
+                const i = attempt;
+                const categoryId = baseCatalog[i % baseCatalog.length]?.id;
                 const subject = subjects[i % subjects.length];
                 const modifier = modifiers[Math.floor(i / subjects.length) % modifiers.length];
                 const name = `${subject} ${modifier}`;
+                if (_hasDuplicateName(name, existingNames)) {
+                    attempt += 1;
+                    continue;
+                }
                 const how = `هذا الهجوم يعتمد على ${subject} ${modifier} لاستغلال ضعف في النظام أو التطبيق.`;
                 const where = `يظهر عادة في ${places[i % places.length]} ويمكن أن يؤثر على البنية أو البيانات أو المستخدمين.`;
                 const tools = [
@@ -7747,7 +7926,7 @@ HTML_TEMPLATE = """
                     protectionsList[(i * 4 + 3) % protectionsList.length]
                 ];
                 const item = {
-                    id: `extra-${categoryId}-${i + 1}`,
+                    id: `extra-${categoryId}-${added + 1}`,
                     name,
                     how,
                     where,
@@ -7757,17 +7936,220 @@ HTML_TEMPLATE = """
                 const category = baseCatalog.find((entry) => entry.id === categoryId);
                 if (category && Array.isArray(category.items)) {
                     category.items.push(item);
+                    existingNames.push(name);
+                    added += 1;
                 }
+                attempt += 1;
             }
+
+            _dedupeCatalogItems(baseCatalog);
         }
 
         _learningGenerateExtraAttacks(LEARNING_ATTACK_CATALOG, 1000);
 
         let __learningCatalogReady = false;
+        let __toolskbReady = false;
+        let __toolskbSelectedToolId = '';
+        let __toolskbListExpanded = false;
+        let __toolskbQuizState = {
+            toolId: '',
+            toolName: '',
+            bank: [],
+            idx: 0,
+            score: 0,
+            answered: false,
+            completed: false
+        };
         let __learningSelectedAttackId = '';
         let __learningListExpanded = false;
-        const __learningDefaultPageLimit = 10;
+        const __toolskbDefaultPageLimit = 5;
+        const __learningDefaultPageLimit = 5;
         const LEARNING_QUIZ_STORAGE_KEY = 'titan_learning_quiz_result';
+        const TOOLSKB_QUIZ_STORAGE_KEY = 'titan_toolskb_quiz_result';
+        const TOOLSKB_CATALOG = [
+            { id: 'digital-forensics', name: 'التحقيق الجنائي الرقمي', description: 'أدوات تحليل الحوادث واسترداد الأدلة والفحص الرقمي للمحتوى المشبوه.', tools: ['Autopsy', 'FTK Imager', 'Volatility'] },
+            { id: 'network-security', name: 'أمن الشبكات', description: 'أدوات فحص الشبكات، كشف التسلل ومراقبة حركة البيانات في الوقت الحقيقي.', tools: ['Wireshark', 'Zeek', 'Suricata'] },
+            { id: 'web-security', name: 'أمن تطبيقات الويب', description: 'أدوات اختبار تطبيقات الويب، فحص الثغرات، وتحليل الحماية ضد هجمات الويب.', tools: ['Burp Suite', 'OWASP ZAP', 'Acunetix'] },
+            { id: 'endpoint-protection', name: 'حماية النقاط الطرفية', description: 'أدوات منع التهديدات على أجهزة المستخدمين والخوادم وحماية النقاط الطرفية.', tools: ['CrowdStrike', 'SentinelOne', 'Microsoft Defender'] },
+            { id: 'identity-access', name: 'هوية وإدارة الوصول', description: 'أدوات المصادقة والتحقق متعدد العوامل وإدارة الهويات السيبرانية.', tools: ['Okta', 'Duo', 'Azure AD'] },
+            { id: 'osint-recon', name: 'OSINT والتحري', description: 'أدوات جمع المعلومات العلنية واستخبارات الأهداف لتقييم المجال الدفاعي.', tools: ['Shodan', 'Maltego', 'Censys'] },
+            { id: 'incident-response', name: 'الاستجابة للحوادث', description: 'أدوات تنسيق الحوادث وإدارة التحقيقات والتقارير الأمنية.', tools: ['TheHive', 'Cortex XSOAR', 'MISP'] },
+            { id: 'data-protection', name: 'حماية البيانات', description: 'أدوات تشفير البيانات وحماية المعلومات ومنع تسرب البيانات.', tools: ['VeraCrypt', 'Symantec DLP', 'AWS KMS'] }
+        ];
+        const TOOLSKB_CATEGORY_CATALOG = [
+            {
+                id: 'information-gathering',
+                title: 'جمع المعلومات والاستطلاع',
+                items: [
+                    { id: 'nmap', name: 'Nmap', how: 'الأداة الأشهر لفحص المنافذ واكتشاف الخدمات وأنظمة التشغيل.', where: 'المرحلة الأولى من الاستطلاع لتحديد واجهات الهدف وخدماته.', tools: ['Zenmap', 'Masscan', 'Rustscan'], tips: ['ابدأ بفحص TCP وUDP، واستخدم -A لتحليل الخدمات ونظام التشغيل.'] },
+                    { id: 'theharvester', name: 'TheHarvester', how: 'تجمع البريد الإلكتروني والنطاقات الفرعية من مصادر عامة (OSINT).', where: 'اكتشاف بيانات الاتصال والنطاقات المرتبطة بالهدف.', tools: ['Sublist3r', 'Amass', 'theHarvester'], tips: ['استخدم مصادر مختلفة للحصول على تغطية أوسع، واحفظ النتائج للمقارنة.'] },
+                    { id: 'maltego', name: 'Maltego', how: 'أداة مرئية لتحليل العلاقات بين الأشخاص، النطاقات، والشركات.', where: 'رسم خريطة العلاقات وحجم الهدف من خلال OSINT بصري.', tools: ['Maltego', 'Spiderfoot', 'Gephi'], tips: ['ابدأ بكلمة مفتاحية أو نطاق، ثم اتبع الروابط والكيانات ذات الصلة.'] },
+                    { id: 'whois', name: 'Whois', how: 'لمعرفة بيانات مالك النطاق وتاريخ التسجيل.', where: 'التأكد من مالك النطاق ومعلومات الاتصال وسجلات التسجيل.', tools: ['whois', 'DomainTools', 'ICANN Lookup'], tips: ['فحص السجلات التاريخية يمكن أن يكشف عن تغييرات في الملكية.'] },
+                    { id: 'dnsenum', name: 'Dnsenum', how: 'تستخدم لعمل enumeration لخرائط الـ DNS الخاصة بالهدف.', where: 'جمع النطاقات الفرعية والسجلات DNS المتعلقة بالهدف.', tools: ['dnsenum', 'dnsrecon', 'Amass'], tips: ['اجمع سجلات A وMX وTXT وNS للحصول على صورة DNS كاملة.'] },
+                    { id: 'recon-ng', name: 'Recon-ng', how: 'إطار عمل كامل للاستطلاع مفتوح المصدر مشابه Metasploit.', where: 'إدارة الاستطلاع ودمج مصادر OSINT في منصة واحدة.', tools: ['Recon-ng', 'SpiderFoot', 'theHarvester'], tips: ['استخدم الوحدات المدمجة لربط النتائج تلقائياً.'] },
+                    { id: 'dimitry', name: 'Dimitry', how: 'أداة سريعة لجمع المعلومات الأساسية عن موقع معين.', where: 'فحص سريع للمضيف، الهوست، والبورتات المتاحة.', tools: ['Dmitry', 'Nmap', 'WhatWeb'], tips: ['مفيدة للكشف السريع قبل البدء بفحص أعمق.'] }
+                ]
+            },
+            {
+                id: 'vulnerability-analysis',
+                title: 'تحليل الثغرات',
+                items: [
+                    { id: 'nessus', name: 'Nessus', how: 'أقوى ماسح للثغرات في العالم، تجاري وله نسخة مجانية.', where: 'فحص الأنظمة والخوادم لاكتشاف ثغرات مع توصيات تصحيح.', tools: ['Nessus', 'OpenVAS', 'Qualys'], tips: ['استخدم إعدادات الفحص المسبق والنطاقات المعتمدة لضمان نتائج دقيقة.'] },
+                    { id: 'nikto', name: 'Nikto', how: 'ماسح متخصص في ثغرات خوادم الويب.', where: 'فحص خوادم الويب القديمة والتكوينات الضعيفة.', tools: ['Nikto', 'Skipfish', 'Wapiti'], tips: ['استفد من قواعد Nikto المحدثة للتحقق من إعدادات السيرفر السيئة.'] },
+                    { id: 'openvas', name: 'OpenVAS', how: 'بديل مفتوح المصدر لـ Nessus لفحص الثغرات الشاملة.', where: 'فحص بيئة الشبكة والخوادم بحثاً عن نقاط الضعف.', tools: ['OpenVAS', 'Nessus', 'Nmap'], tips: ['احرص على تحديث قواعد الفحص قبل بدء الفحص.'] },
+                    { id: 'lynis', name: 'Lynis', how: 'أداة لتدقيق أمان أنظمة Linux/Unix.', where: 'تحليل إعدادات النظام واكتشاف ثغرات تكوينية.', tools: ['Lynis', 'Tiger', 'Chkrootkit'], tips: ['تشغيلها دورياً يساعد على تحسين أمان النظام وتقليل التهديدات.'] }
+                ]
+            },
+            {
+                id: 'web-applications',
+                title: 'تحليل تطبيقات الويب',
+                items: [
+                    { id: 'burpsuite', name: 'Burp Suite', how: 'الأداة رقم 1 عالمياً لاعتراض وتحليل طلبات الويب (Proxy).', where: 'اختبار تطبيقات الويب وسلوك الطلبات والاستجابات.', tools: ['Burp Suite', 'OWASP ZAP', 'Fiddler'], tips: ['استخدم Sitemap وتحليل الجلسات لاكتشاف نقاط الضعف.'] },
+                    { id: 'owasp-zap', name: 'OWASP ZAP', how: 'بديل مجاني وقوي لـ Burp Suite.', where: 'فحص تطبيقات الويب وتوليد الهجمات التلقائية.', tools: ['OWASP ZAP', 'Burp Suite', 'W3AF'], tips: ['استغل الأوضاع الآلية للمسح مع مراجعة النتائج يدوياً.'] },
+                    { id: 'sqlmap', name: 'SQLmap', how: 'أداة آلية لاكتشاف واستغلال ثغرات SQL Injection.', where: 'اختبار قواعد البيانات وخطوط الإدخال المعرضة للحقن.', tools: ['SQLmap', 'Havij', 'SQLNinja'], tips: ['يُفضل استخدامها بعد تحديد نقطة إدخال محتملة.'] },
+                    { id: 'wpscan', name: 'WpScan', how: 'ماسح ثغرات متخصص لمواقع وردبريس.', where: 'فحص إضافة وثيمات وردبريس والإعدادات الأمنية.', tools: ['WpScan', 'Wordfence', 'WPScan API'], tips: ['تأكد من صلاحية الفحص على الموقع المستهدف لتجنب توقف الخدمة.'] },
+                    { id: 'dirb-dirbuster', name: 'Dirb / Dirbuster', how: 'بحث عن المجلدات والملفات المخفية في المواقع.', where: 'اكتشاف مسارات وملفات غير معلنة في تطبيقات الويب.', tools: ['Dirb', 'Dirbuster', 'Gobuster'], tips: ['استخدم قوائم كلمات مرور متوافقة مع التقنية والحجم المتوقع للموقع.'] },
+                    { id: 'gobuster', name: 'Gobuster', how: 'أداة سريعة لاكتشاف المسارات باستخدام Brute Force.', where: 'جزء من فحص الفرضية لمسارات وملفات مخفية.', tools: ['Gobuster', 'ffuf', 'Dirb'], tips: ['سريع جداً على قوائم القاموس الجاهزة ومسارات HTTP/S.'] }
+                ]
+            },
+            {
+                id: 'exploitation-tools',
+                title: 'استغلال الثغرات',
+                items: [
+                    { id: 'metasploit', name: 'Metasploit Framework', how: 'الإطار الأكثر شهرة لتطوير وتنفيذ برمجيات الاستغلال.', where: 'مرحلة الاستغلال لبناء وتشغيل Exploits على الأهداف.', tools: ['Metasploit', 'msfconsole', 'msfvenom'], tips: ['الموديلات الجاهزة تسهل بناء الاستغلالات وتوليد الحمولة.'] },
+                    { id: 'armitage', name: 'Armitage', how: 'واجهة رسومية لإدارة أداة Metasploit.', where: 'تنظيم جلسات الاستغلال وتحليل الثغرات بشكل مرئي.', tools: ['Armitage', 'Metasploit', 'Cobalt Strike'], tips: ['مفيدة للمستخدمين المبتدئين في Metasploit مع تمثيل مرئي.'] },
+                    { id: 'beef', name: 'Beef (Browser Exploitation Framework)', how: 'تستهدف متصفحات الويب للسيطرة على جهاز الضحية عبر المتصفح.', where: 'اختبار ثغرات المتصفح والهجمات عبر صفحات الويب المصطبغة.', tools: ['Beef', 'Social-Engineer Toolkit', 'Browser Exploitation'], tips: ['عِب إعداد صفحات الصيد بعناية وتحقق من قيود المتصفح.'] },
+                    { id: 'set', name: 'Social Engineering Toolkit (SET)', how: 'متخصصة في هجمات الهندسة الاجتماعية وصيد التشفير.', where: 'إنشاء حملات phishing وهجمات اجتماعية متقدمة.', tools: ['SET', 'Gophish', 'King Phisher'], tips: ['استخدمها لتدريب الفرق وقياس الاستجابة الاجتماعية.'] },
+                    { id: 'searchsploit', name: 'Searchsploit', how: 'بحث في قاعدة بيانات Exploit-DB دون إنترنت.', where: 'البحث عن استغلالات معروفة للثغرات المكتشفة.', tools: ['Searchsploit', 'Exploit-DB', 'Metasploit'], tips: ['يُسرّع إيجاد الاستغلالات بعد تحديد CVE أو برنامج الهدف.'] }
+                ]
+            },
+            {
+                id: 'wireless-attacks',
+                title: 'تحليل الشبكات اللاسلكية',
+                items: [
+                    { id: 'aircrack-ng', name: 'Aircrack-ng', how: 'حزمة أدوات لكسر تشفير شبكات WEP/WPA/WPA2.', where: 'اختبار أمان شبكات Wi-Fi المحلية.', tools: ['Aircrack-ng', 'Airodump-ng', 'Airdecap-ng'], tips: ['اجمع الحزم الكافية قبل محاولة كسر المفتاح.'] },
+                    { id: 'wifite', name: 'Wifite', how: 'أداة آلية لتبسيط عملية اختراق الشبكات اللاسلكية.', where: 'هجمات سريعة على شبكات WPA/WPA2 وWPS.', tools: ['Wifite', 'Aircrack-ng', 'Reaver'], tips: ['مناسبة للاختبار الآلي عندما تكون الأجهزة سهلة الوصول.'] },
+                    { id: 'reaver', name: 'Reaver', how: 'مخصصة لاختراق ثغرة WPS في الرواتر.', where: 'الهجمات على شبكات يدعم جهازها WPS.', tools: ['Reaver', 'Bully', 'PixieWPS'], tips: ['يستغرق وقتاً طويلاً في بعض الحالات، واحترس من قفل WPS.'] },
+                    { id: 'kismet', name: 'Kismet', how: 'كاشف للشبكات اللاسلكية وأداة للتنصت (Sniffer).', where: 'استكشاف الشبكات اللاسلكية القريبة وتحليلها.', tools: ['Kismet', 'Wireshark', 'Aircrack-ng'], tips: ['مفيد لاكتشاف نقاط الوصول الخفية والشبكات غير مرخّصة.'] },
+                    { id: 'fluxion', name: 'Fluxion', how: 'أداة متطورة لعمل هجمات التوأم الشرير (Evil Twin).', where: 'إنشاء شبكة زائفة لخداع الضحايا وجمع بيانات الاعتماد.', tools: ['Fluxion', 'EvilAP', 'Airbase-ng'], tips: ['يتطلب تحكم جيد بالشبكة اللاسلكية وبيئة اختبار آمنة.'] }
+                ]
+            },
+            {
+                id: 'password-attacks',
+                title: 'كسر كلمات المرور',
+                items: [
+                    { id: 'john', name: 'John the Ripper', how: 'أداة كلاسيكية لكسر كلمات المرور المشفرة (Hashes).', where: 'تحليل hash كلمات المرور المحلية أو المسروقة.', tools: ['John the Ripper', 'Hashcat', 'Cain & Abel'], tips: ['يمكن استخدام قوائم وكلمات مخصصة لزيادة الفاعلية.'] },
+                    { id: 'hashcat', name: 'Hashcat', how: 'أداة كسر كلمات المرور الأسرع في العالم باستخدام GPU.', where: 'كسر hashes بسرعة عالية باستخدام وحدات معالجة الرسوم.', tools: ['Hashcat', 'oclHashcat', 'John the Ripper'], tips: ['استخدم قواعد وملفات wordlists محسنة لنتائج أفضل.'] },
+                    { id: 'hydra', name: 'Hydra', how: 'أداة قوية جداً لعمل تخمين Brute Force على البروتوكولات.', where: 'تجربة دخول آلي على SSH وFTP وHTTP وغيرها.', tools: ['Hydra', 'Medusa', 'Patator'], tips: ['حدد نطاق المحاولات لمنع حظر الحساب أو إشعارات الانتهاك.'] },
+                    { id: 'medusa', name: 'Medusa', how: 'تشبه Hydra وتستخدم لتخمين كلمات المرور عن بعد.', where: 'هجمات brute-force على خدمات الشبكة البعيدة.', tools: ['Medusa', 'Hydra', 'Ncrack'], tips: ['مدمجة لمعالجة العديد من البروتوكولات بسرعة جيدة.'] },
+                    { id: 'crunch', name: 'Crunch', how: 'أداة لإنشاء قوائم كلمات مرور (Wordlists) مخصصة.', where: 'إنشاء قواعد كلمات مرور مخصصة لهجمات القاموس.', tools: ['Crunch', 'CeWL', 'Maskprocessor'], tips: ['يمكنك توليد قوائم دقيقة بناءً على طول ونمط محدد.'] },
+                    { id: 'cupp', name: 'Cupp', how: 'أداة ذكية لإنشاء قائمة كلمات مرور بناءً على معلومات الشخص.', where: 'تصميم wordlists استناداً إلى بيانات الهدف الشخصية.', tools: ['Cupp', 'Cewl', 'MakeMKH'], tips: ['جيدة في هجمات الاستهداف عندما تتوفر معلومات عن الضحية.'] }
+                ]
+            },
+            {
+                id: 'digital-forensics',
+                title: 'الطب الشرعي الرقمي',
+                items: [
+                    { id: 'autopsy', name: 'Autopsy', how: 'واجهة رسومية لتحليل الأقراص الصلبة والهواتف.', where: 'تحليل الأدلة الرقمية للملفات والحلول المختفية.', tools: ['Autopsy', 'Sleuth Kit', 'PhotoRec'], tips: ['مفيدة لاستعادة الملفات وتحليل نظام الملفات.'] },
+                    { id: 'sleuthkit', name: 'Sleuth Kit', how: 'حزمة أدوات سطر أوامر للتحقيق في الملفات.', where: 'تحليل نظام الملفات واسترجاع البيانات المحذوفة.', tools: ['Sleuth Kit', 'Autopsy', 'tsk_recover'], tips: ['تعمل بشكل جيد على أنظمة ملفات متعددة مثل NTFS وEXT.'] },
+                    { id: 'binwalk', name: 'Binwalk', how: 'تحليل واستخراج الملفات المدمجة داخل فايرموير.', where: 'فحص صور الفيرموير والملفات المدمجة بحثاً عن محتوى مخفي.', tools: ['Binwalk', 'foremost', 'dd'], tips: ['يمكن أن يكتشف ملفات مضغوطة ومكونات مخفية في firmware.'] },
+                    { id: 'foremost', name: 'Foremost', how: 'استرجاع الملفات المحذوفة بناءً على هيكليتها.', where: 'استعادة الملفات من الأقراص أو الصور بعد الحذف.', tools: ['Foremost', 'Photorec', 'Scalpel'], tips: ['اختر أنواع الملفات مناسبة لتحسين نتائج الاستعادة.'] },
+                    { id: 'volatility', name: 'Volatility', how: 'أقوى أداة لتحليل محتوى الذاكرة العشوائية (RAM).', where: 'تحليل اللقطات الذاكرية لاكتشاف العمليات والجذور الخفية.', tools: ['Volatility', 'Rekall', 'LiME'], tips: ['يعمل جيداً مع قواعد بيانات Plug-in متعددة لتتبع إجراءات النظام.'] }
+                ]
+            },
+            {
+                id: 'post-exploitation',
+                title: 'ما بعد الاختراق',
+                items: [
+                    { id: 'mimikatz', name: 'Mimikatz', how: 'أداة لاستخراج كلمات المرور من ذاكرة ويندوز.', where: 'استخراج بيانات الاعتماد بعد الوصول إلى النظام.', tools: ['Mimikatz', 'LaZagne', 'WCE'], tips: ['يعمل فقط بصلاحيات عالية ويفضل استخدامه في بيئة اختبار.'] },
+                    { id: 'powersploit', name: 'Powersploit', how: 'مجموعة PowerShell لعمليات ما بعد الاختراق.', where: 'تنفيذ ورفع صلاحيات داخل بيئة Windows.', tools: ['PowerSploit', 'Empire', 'Cobalt Strike'], tips: ['يمكنه المساعدة في التحرك الجانبي وجمع بيانات الاعتماد.'] },
+                    { id: 'netcat', name: 'Netcat (nc)', how: 'السكين السويسري لفتح منافذ ونقل بيانات.', where: 'إنشاء قنوات اتصال وعكس أصداف وخدمات بسيطة.', tools: ['Netcat', 'Socat', 'Ncat'], tips: ['مناسب لإنشاء Backdoor بسيط أو اختبار الشبكات.'] }
+                ]
+            },
+            {
+                id: 'reporting-anonymity',
+                title: 'أدوات التبليغ والتخفي',
+                items: [
+                    { id: 'proxychains', name: 'Proxychains', how: 'توجيه الاتصال عبر عدة بروكسيات لإخفاء الهوية.', where: 'تشغيل الأدوات عبر شبكة مختفية لتغيير مصدر الاتصال.', tools: ['Proxychains', 'Tor', 'Polipo'], tips: ['استخدمها مع بروكسيات موثوقة لتقليل التأخير وتحسين الخصوصية.'] },
+                    { id: 'tor', name: 'Tor', how: 'متصفح وخدمة لتشفير الاتصال وإخفاء IP.', where: 'التصفح والخدمات المجهولة عبر الإنترنت.', tools: ['Tor Browser', 'Onion Routing', 'Tails'], tips: ['لا تستخدم Tor لتسريب معلومات حساسة بطريقة مكشوفة.'] },
+                    { id: 'macchanger', name: 'MacChanger', how: 'تغيير عنوان MAC لبطاقة الشبكة.', where: 'إخفاء هوية الجهاز على الشبكات المحلية.', tools: ['MacChanger', 'SMAC', 'TMAC'], tips: ['يمكن أن يساعد في تجنب بعض القيود المتعلقة بعنوان MAC.'] },
+                    { id: 'cherrytree', name: 'CherryTree', how: 'أداة تدوين الملاحظات المفضلة للهكرز لتوثيق الخطوات.', where: 'توثيق العمليات والملاحظات أثناء التمرين أو التحقيق.', tools: ['CherryTree', 'KeepNote', 'Joplin'], tips: ['احفظ دائماً نسخة احتياطية من ملاحظاتك لتفادي فقدان البيانات.'] }
+                ]
+            }
+        ];
+
+        function _toolskbGenerateExtraTools(catalog, count) {
+            const subjects = ['Cyber', 'Net', 'Data', 'Cloud', 'Secure', 'Threat', 'Audit', 'Log', 'Access', 'Endpoint', 'Web', 'Mobile', 'Packet', 'Session', 'Auth', 'Route'];
+            const types = ['Scanner', 'Analyzer', 'Monitor', 'Guardian', 'Inspector', 'Vault', 'Tracker', 'Sentinel', 'Engine', 'Platform', 'Probe', 'Optimizer', 'Shield', 'Beacon', 'Matrix', 'Wizard'];
+            const descriptions = ['للتحليل المتقدم', 'لمراقبة التهديدات', 'لاكتشاف الثغرات', 'لتعزيز الرؤية الأمنية', 'لاستكمال المراجعات', 'لتتبع الأداء', 'لحماية الوصول', 'لتدقيق الأنظمة', 'لتقوية التحكم', 'لتقييم المخاطر'];
+            const areas = ['الشبكات', 'تطبيقات الويب', 'الأنظمة', 'الخوادم', 'السحابة', 'نقاط النهاية', 'الهوية', 'البيانات', 'السجلات', 'الأجهزة'];
+            const places = ['واجهات الويب', 'خوادم التطبيقات', 'قواعد البيانات', 'أنظمة الحاويات', 'شبكات VPN', 'شبكات داخلية', 'نقاط النهاية', 'أنظمة التشغيل', 'بوابة المصادقة', 'خدمة البريد'];
+            const toolPools = [
+                ['Wireshark', 'tcpdump', 'NetworkMiner'],
+                ['Nmap', 'Masscan', 'Rustscan'],
+                ['Burp Suite', 'OWASP ZAP', 'Fiddler'],
+                ['Hashcat', 'John the Ripper', 'Crunch'],
+                ['Metasploit', 'Cobalt Strike', 'Empire'],
+                ['Splunk', 'ELK', 'Graylog'],
+                ['Snort', 'Suricata', 'Zeek'],
+                ['Maltego', 'SpiderFoot', 'Recon-ng'],
+                ['Kali', 'Parrot', 'BackBox'],
+                ['CloudTrail', 'GuardDuty', 'Config']
+            ];
+            const tips = [
+                'ابدأ بفحص شامل ثم ركز على الأنماط غير الاعتيادية.',
+                'احفظ النتائج وراجع التغيرات بعد كل فحص.',
+                'استخدم وحدات التحقق المزدوج لتقليل الإيجابيات الكاذبة.',
+                'قم بتحديث القواعد والسجلات قبل الفحص.',
+                'حافظ على بيئة اختبار معزولة لتجنب التأثير على الإنتاج.',
+                'اجمع البيانات وادرسها عبر فترات زمنية متعددة.',
+                'تأكد من وجود احتياطيات قبل أي تعديل كبير.',
+                'قم بمشاركة النتائج مع الفريق لتحسين الإجراءات.',
+                'استخدم تقارير مفصلة لتوثيق الاكتشافات.',
+                'اختر الأدوات المناسبة لنوع البنية المستهدفة.'
+            ];
+            const existingNames = catalog.flatMap((entry) => (Array.isArray(entry.items) ? entry.items.map((item) => item.name || '') : []));
+            let added = 0;
+            let attempt = 0;
+            const maxAttempts = count * 8;
+
+            while (added < count && attempt < maxAttempts) {
+                const i = attempt;
+                const category = catalog[i % catalog.length];
+                if (!category || !Array.isArray(category.items)) {
+                    attempt += 1;
+                    continue;
+                }
+                const subject = subjects[i % subjects.length];
+                const type = types[(i + 3) % types.length];
+                const desc = descriptions[(i + 2) % descriptions.length];
+                const area = areas[(i + 4) % areas.length];
+                const place = places[(i + 1) % places.length];
+                const pool = toolPools[i % toolPools.length];
+                const suffix = Math.floor(i / subjects.length) + 1;
+                const name = `${subject} ${type} ${suffix}`;
+                if (_hasDuplicateName(name, existingNames)) {
+                    attempt += 1;
+                    continue;
+                }
+                category.items.push({
+                    id: `auto-${category.id}-${added + 1}`,
+                    name,
+                    how: `أداة ${subject} ${type} ${desc} في مجال ${area}.`, 
+                    where: `تُستخدم عادة على ${place} لتحسين الرصد والاستجابة والوقاية.`, 
+                    tools: [pool[0], pool[1], pool[2]],
+                    tips: [tips[i % tips.length], tips[(i + 3) % tips.length]]
+                });
+                existingNames.push(name);
+                added += 1;
+                attempt += 1;
+            }
+
+            _dedupeCatalogItems(catalog);
+        }
+
+        _toolskbGenerateExtraTools(TOOLSKB_CATEGORY_CATALOG, 500);
+
         let __learningQuizState = {
             attackId: '',
             attackName: '',
@@ -8360,6 +8742,391 @@ HTML_TEMPLATE = """
 
             __learningCatalogReady = true;
             learningCatalogApplyFilters(false);
+        }
+
+        function trainingToolsInit() {
+            if (__toolskbReady) {
+                toolskbApplyFilters(false);
+                return;
+            }
+            toolskbInit();
+        }
+
+        function _toolskbAllTools() {
+            const items = [];
+            TOOLSKB_CATEGORY_CATALOG.forEach((category) => {
+                if (Array.isArray(category.items)) {
+                    category.items.forEach((item) => {
+                        items.push({
+                            ...item,
+                            category_id: category.id,
+                            category_title: category.title
+                        });
+                    });
+                } else if (category && category.id && category.name) {
+                    items.push({
+                        ...category,
+                        category_id: category.id,
+                        category_title: category.title || category.name
+                    });
+                }
+            });
+            return items;
+        }
+
+        function _toolskbRenderStats(filtered, total, shown) {
+            const box = document.getElementById('toolskbCatalogStats');
+            if (!box) return;
+            const families = new Set((filtered || []).map((x) => x.category_id)).size;
+            const count = Number.isFinite(shown) ? shown : (filtered || []).length;
+            box.innerHTML = `
+                <span class="text-emerald-200 font-bold">${_resultEscape(count)}</span> أداة
+                <span class="mx-2 text-gray-600">|</span>
+                <span class="text-slate-300">من ${_resultEscape(total)}</span>
+                <span class="mx-2 text-gray-600">|</span>
+                <span class="text-cyan-300">${_resultEscape(families)}</span> فئة
+            `;
+        }
+
+        function _toolskbRenderToolCards(tools) {
+            const box = document.getElementById('toolskbCatalog');
+            const empty = document.getElementById('toolskbEmpty');
+            if (!box) return;
+            if (!tools.length) {
+                box.innerHTML = '';
+                if (empty) empty.classList.remove('hidden');
+                return;
+            }
+            if (empty) empty.classList.add('hidden');
+            const categories = tools.reduce((acc, item) => {
+                const key = item.category_id || 'other';
+                if (!acc[key]) {
+                    acc[key] = { title: item.category_title || 'عام', items: [] };
+                }
+                acc[key].items.push(item);
+                return acc;
+            }, {});
+
+            box.innerHTML = Object.values(categories).map((category) => `
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between gap-3 px-2 py-1 rounded-2xl bg-slate-900/80 border border-slate-700 text-xs text-slate-300">
+                        <div class="font-bold text-cyan-300">${_resultEscape(category.title)}</div>
+                        <div class="text-[11px] text-slate-500">${category.items.length} أداة</div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3">${category.items.map((item) => {
+                        const active = item.id === __toolskbSelectedToolId;
+                        return `
+                            <button onclick="toolskbOpen('${_resultEscape(item.id)}')" class="toolskb-card transition-all ${active ? 'border-emerald-500 bg-emerald-950/20' : 'border-slate-700 bg-black/30 hover:border-emerald-800/40 hover:bg-slate-950/60'}">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="text-sm font-semibold ${active ? 'text-emerald-200' : 'text-gray-200'}">${_resultEscape(item.name)}</div>
+                                    <span class="toolskb-category-pill">${_resultEscape(item.category_title)}</span>
+                                </div>
+                                <div class="text-[11px] text-slate-300 mt-3">${_resultEscape(item.how)}</div>
+                            </button>
+                        `;
+                    }).join('')}</div>
+                </div>
+            `).join('');
+        }
+
+        function toolskbOpen(toolId) {
+            const tool = toolskbFindToolById(toolId);
+            if (!tool) return;
+            __toolskbSelectedToolId = tool.id;
+            const detail = document.getElementById('toolskbDetail');
+            if (detail) {
+                detail.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/10 p-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-emerald-200">${_resultEscape(tool.name)}</div>
+                                    <div class="text-[10px] text-slate-400">${_resultEscape(tool.category_title)}</div>
+                                </div>
+                                <span class="text-[10px] rounded-full border border-slate-700 px-2 py-1 text-slate-300">${_resultEscape(tool.id)}</span>
+                            </div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-cyan-300 mb-1">الوصف</div>
+                            <div class="text-[11px] text-gray-200 leading-6">${_resultEscape(tool.how)}</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-amber-300 mb-1">متى تستخدمها؟</div>
+                            <div class="text-[11px] text-gray-200 leading-6">${_resultEscape(tool.where)}</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-fuchsia-300 mb-1">أدوات مرتبطة</div>
+                            <div class="space-y-1">${tool.tools.map((name) => `<div class="text-[11px] text-fuchsia-100">• ${_resultEscape(name)}</div>`).join('')}</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-emerald-300 mb-1">نصائح سريعة</div>
+                            <div class="space-y-1">${(Array.isArray(tool.tips) ? tool.tips : []).map((tip) => `<div class="text-[11px] text-emerald-100">• ${_resultEscape(tip)}</div>`).join('')}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            toolskbQuizLoadTool(tool);
+            toolskbApplyFilters(true);
+        }
+
+        function toolskbApplyFilters(skipDetailRefresh) {
+            const query = String((document.getElementById('toolskbSearchInput')?.value || '')).trim().toLowerCase();
+            const category = String((document.getElementById('toolskbCategoryFilter')?.value || 'all')).trim();
+            const all = _toolskbAllTools();
+            const filtered = all.filter((item) => {
+                if (category !== 'all' && item.category_id !== category) return false;
+                if (!query) return true;
+                const haystack = [item.name, item.how, item.where, item.category_title, ...(item.tools || [])].join(' ').toLowerCase();
+                return haystack.includes(query);
+            });
+            const pageSize = __toolskbDefaultPageLimit;
+            const isLimited = !__toolskbListExpanded && filtered.length > pageSize;
+            const visible = isLimited ? filtered.slice(0, pageSize) : filtered;
+            _toolskbRenderStats(filtered, all.length, visible.length);
+            _toolskbRenderToolCards(visible);
+            const showMoreButton = document.getElementById('toolskbCatalogShowMore');
+            if (showMoreButton) {
+                if (isLimited) {
+                    showMoreButton.classList.remove('hidden');
+                    showMoreButton.textContent = `عرض المزيد (${filtered.length - visible.length})`;
+                } else {
+                    showMoreButton.classList.add('hidden');
+                }
+            }
+            if (!skipDetailRefresh) {
+                if (!filtered.some((item) => item.id === __toolskbSelectedToolId) && filtered.length) {
+                    toolskbOpen(filtered[0].id);
+                }
+            }
+        }
+
+        function toolskbResetFilters() {
+            __toolskbListExpanded = false;
+            const input = document.getElementById('toolskbSearchInput');
+            const category = document.getElementById('toolskbCategoryFilter');
+            if (input) input.value = '';
+            if (category) category.value = 'all';
+            toolskbApplyFilters(false);
+        }
+
+        function toolskbShowMore() {
+            __toolskbListExpanded = true;
+            toolskbApplyFilters(true);
+        }
+
+        function toolskbQuizLoadTool(tool) {
+            __toolskbSelectedToolId = tool.id;
+            __toolskbQuizState = {
+                toolId: tool.id,
+                toolName: tool.name,
+                bank: [],
+                idx: 0,
+                score: 0,
+                answered: false,
+                completed: false
+            };
+            const container = document.getElementById('toolskbQuizContainer');
+            if (container) {
+                container.innerHTML = `جاهز لكويز ${_resultEscape(tool.name)}. اضغط زر <strong>بدء كويز الأداة</strong> لبدء الأسئلة.`;
+            }
+        }
+
+        function toolskbQuizStart() {
+            if (!__toolskbSelectedToolId) {
+                const container = document.getElementById('toolskbQuizContainer');
+                if (container) container.innerHTML = 'اختر أداة أولاً ثم اضغط زر بدء كويز الأداة.';
+                return;
+            }
+            const tool = toolskbFindToolById(__toolskbSelectedToolId);
+            if (!tool) {
+                const container = document.getElementById('toolskbQuizContainer');
+                if (container) container.innerHTML = 'لم يتم العثور على الأداة المختارة.';
+                return;
+            }
+            __toolskbQuizState.idx = 0;
+            __toolskbQuizState.score = 0;
+            __toolskbQuizState.answered = false;
+            __toolskbQuizState.completed = false;
+            __toolskbQuizState.bank = toolskbBuildQuizBank(tool);
+            if (!__toolskbQuizState.bank.length) {
+                const container = document.getElementById('toolskbQuizContainer');
+                if (container) container.innerHTML = 'لم تتوفر أسئلة كافية لهذه الأداة.';
+                return;
+            }
+            toolskbQuizRender();
+        }
+
+        function toolskbQuizRender() {
+            const container = document.getElementById('toolskbQuizContainer');
+            if (!container) return;
+            if (!__toolskbQuizState.toolId) {
+                container.innerHTML = 'اختر أداة ثم ابدأ الكويز.';
+                return;
+            }
+            if (!Array.isArray(__toolskbQuizState.bank) || !__toolskbQuizState.bank.length) {
+                container.innerHTML = 'لا توجد أسئلة متاحة حالياً.';
+                return;
+            }
+            if (__toolskbQuizState.completed) {
+                const lastQuestion = __toolskbQuizState.bank[__toolskbQuizState.bank.length - 1];
+                container.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="text-[11px] text-cyan-200 font-bold">انتهى الكويز!</div>
+                        <div class="text-[11px] text-gray-300">النتيجة النهائية: ${__toolskbQuizState.score}/${__toolskbQuizState.bank.length}</div>
+                        <div class="text-[11px] text-gray-300">السؤال الأخير: ${_resultEscape(lastQuestion.question)}</div>
+                        <div class="text-[11px] text-emerald-200">الجواب الصحيح: ${_resultEscape(lastQuestion.options[lastQuestion.answer] || '')}</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="toolskbQuizRestart()" class="py-2 rounded bg-emerald-900/30 border border-emerald-800/50 text-emerald-200 text-xs font-bold">أعد الاختبار</button>
+                            <button onclick="toolskbQuizStart()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs text-gray-200">كويز جديد</button>
+                        </div>
+                    </div>
+                `;
+                toolskbQuizSaveResult();
+                return;
+            }
+            const question = __toolskbQuizState.bank[__toolskbQuizState.idx];
+            const buttons = question.options.map((option, index) => {
+                const disabled = __toolskbQuizState.answered ? 'disabled' : '';
+                const tone = __toolskbQuizState.answered
+                    ? (index === question.answer ? 'border-emerald-500 bg-emerald-900/30 text-emerald-200' : 'border-slate-700 bg-slate-900/60 text-gray-300')
+                    : 'border-slate-700 bg-slate-900/60 text-gray-200 hover:bg-slate-800';
+                return `<button onclick="toolskbQuizSubmitAnswer(${index})" ${disabled} class="w-full text-right p-2 rounded border ${tone} text-xs">${_resultEscape(option)}</button>`;
+            }).join('');
+            const feedback = __toolskbQuizState.answered ? `
+                <div class="text-[11px] ${__toolskbQuizState.lastCorrect ? 'text-emerald-200' : 'text-rose-200'}">
+                    ${_resultEscape(__toolskbQuizState.lastCorrect ? '✅ صحيح' : '❌ غير دقيق')} - الجواب الصحيح: ${_resultEscape(question.options[question.answer] || '')}
+                </div>
+            ` : '<div class="text-[11px] text-gray-400">اختر الإجابة ثم اضغط التالي.</div>';
+            container.innerHTML = `
+                <div class="space-y-3">
+                    <div class="text-[11px] text-cyan-200 font-bold">سؤال ${__toolskbQuizState.idx + 1}/${__toolskbQuizState.bank.length}</div>
+                    <div class="text-[11px] text-gray-100">${_resultEscape(question.question)}</div>
+                    <div class="grid grid-cols-1 gap-2">${buttons}</div>
+                    ${feedback}
+                    <div class="flex gap-2">
+                        <button onclick="toolskbQuizNextQuestion()" class="flex-1 py-2 rounded bg-indigo-900/30 border border-indigo-800/50 text-indigo-200 text-xs font-bold" ${__toolskbQuizState.answered ? '' : 'disabled'}>التالي</button>
+                        <button onclick="toolskbQuizRestart()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs text-gray-200">إعادة</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toolskbQuizSubmitAnswer(index) {
+            if (__toolskbQuizState.answered || __toolskbQuizState.completed) return;
+            const question = __toolskbQuizState.bank[__toolskbQuizState.idx];
+            if (!question) return;
+            __toolskbQuizState.lastCorrect = index === question.answer;
+            if (index === question.answer) {
+                __toolskbQuizState.score += 1;
+            }
+            __toolskbQuizState.answered = true;
+            if (__toolskbQuizState.idx === __toolskbQuizState.bank.length - 1) {
+                __toolskbQuizState.completed = true;
+            }
+            toolskbQuizRender();
+        }
+
+        function toolskbQuizNextQuestion() {
+            if (!__toolskbQuizState.answered || __toolskbQuizState.completed) return;
+            __toolskbQuizState.idx += 1;
+            __toolskbQuizState.answered = false;
+            __toolskbQuizState.lastCorrect = false;
+            if (__toolskbQuizState.idx >= __toolskbQuizState.bank.length) {
+                __toolskbQuizState.completed = true;
+            }
+            toolskbQuizRender();
+        }
+
+        function toolskbQuizRestart() {
+            if (!__toolskbQuizState.toolId) return;
+            __toolskbQuizState.idx = 0;
+            __toolskbQuizState.score = 0;
+            __toolskbQuizState.answered = false;
+            __toolskbQuizState.completed = false;
+            __toolskbQuizState.lastCorrect = false;
+            toolskbQuizRender();
+        }
+
+        function _toolskbShuffleArray(array) {
+            const result = Array.isArray(array) ? [...array] : [];
+            for (let i = result.length - 1; i > 0; i -= 1) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [result[i], result[j]] = [result[j], result[i]];
+            }
+            return result;
+        }
+
+        function toolskbBuildQuizBank(tool) {
+            const all = _toolskbAllTools();
+            const distractors = all.filter((item) => item.id !== tool.id);
+            const randomItems = (count) => {
+                const result = [];
+                const pool = [...distractors];
+                while (result.length < count && pool.length) {
+                    const idx = Math.floor(Math.random() * pool.length);
+                    const item = pool.splice(idx, 1)[0];
+                    result.push(item);
+                }
+                return result;
+            };
+            const randomTools = randomItems(2);
+            const randomHow = randomItems(2);
+            const randomWhere = randomItems(2);
+            const questions = [
+                {
+                    question: `ما هو الدور الرئيسي لأداة ${tool.name}؟`,
+                    correct: tool.how,
+                    options: [tool.how, ...randomHow.map((item) => item.how)]
+                },
+                {
+                    question: `في أي موقف تُستخدم ${tool.name} عادةً؟`,
+                    correct: tool.where,
+                    options: [tool.where, ...randomWhere.map((item) => item.where)]
+                },
+                {
+                    question: `أي من الأدوات التالية يرتبط أكثر بـ ${tool.name}?`,
+                    correct: tool.name,
+                    options: [tool.name, ...randomTools.map((item) => item.name)]
+                }
+            ];
+            return questions.map((entry) => {
+                const shuffled = _toolskbShuffleArray(entry.options);
+                return {
+                    question: entry.question,
+                    options: shuffled,
+                    answer: shuffled.findIndex((option) => option === entry.correct)
+                };
+            });
+        }
+
+        function toolskbFindToolById(id) {
+            const all = _toolskbAllTools();
+            return all.find((item) => item.id === id) || null;
+        }
+
+        function toolskbQuizSaveResult() {
+            if (!__toolskbQuizState.toolId) return;
+            const saved = JSON.parse(localStorage.getItem(TOOLSKB_QUIZ_STORAGE_KEY) || '{}');
+            saved[__toolskbQuizState.toolId] = {
+                toolName: __toolskbQuizState.toolName,
+                score: __toolskbQuizState.score,
+                total: __toolskbQuizState.bank.length,
+                completed_at: new Date().toISOString()
+            };
+            localStorage.setItem(TOOLSKB_QUIZ_STORAGE_KEY, JSON.stringify(saved));
+        }
+
+        function toolskbInit() {
+            if (__toolskbReady) {
+                toolskbApplyFilters(false);
+                return;
+            }
+            const categorySelect = document.getElementById('toolskbCategoryFilter');
+            if (categorySelect) {
+                categorySelect.innerHTML = '<option value="all">كل الفئات</option>' + TOOLSKB_CATEGORY_CATALOG.map((category) => `<option value="${_resultEscape(category.id)}">${_resultEscape(category.title || category.name || category.id)}</option>`).join('');
+            }
+            __toolskbReady = true;
+            toolskbApplyFilters(false);
         }
 
         function _resultGetElement(target) {
