@@ -4191,9 +4191,6 @@ HTML_TEMPLATE = """
                     <div class="tab-grid">
                     <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
                     <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
-                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT Social Hybrid</button>
-                    <button onclick="showTab('ir')" id="btn-ir" class="px-3 py-1.5 rounded-lg hover:bg-red-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-red-500/30"><span>🚨</span> الحوادث</button>
-                    <button onclick="showTab('forensics')" id="btn-forensics" class="px-3 py-1.5 rounded-lg hover:bg-teal-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-teal-500/30"><span>🧪</span> الجنائي الرقمي</button>
                     <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
                 </div>
                 </div>
@@ -4483,14 +4480,14 @@ HTML_TEMPLATE = """
                             <div class="flex items-center justify-between gap-3 flex-wrap">
                                 <div>
                                     <h3 class="text-sm font-black text-cyan-300 tracking-wide">TITAN Crypto Studio</h3>
-                                    <p class="text-xs text-gray-400 mt-1">تشفير نصي متقدم + توصية فورية من TITAN AI مبنية على سياقك الفعلي.</p>
+                                    <p class="text-xs text-gray-400 mt-1">تشفير نصي متقدم مع إعدادات قوية ومباشرة.</p>
                                 </div>
-                                <div id="cryptAiSourceBadge" class="text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300 font-bold">AI: TITAN</div>
+                                <div class="text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300 font-bold">آمن</div>
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                            <div class="xl:col-span-2 space-y-4">
+                        <div class="grid grid-cols-1 gap-4 justify-items-center">
+                            <div class="w-full max-w-4xl space-y-4">
                                 <div class="rounded-2xl border border-fuchsia-800/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-fuchsia-950/20 p-4">
                                     <h3 class="text-sm font-black text-fuchsia-300 mb-3">إعدادات التشفير الأساسية</h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -4538,32 +4535,6 @@ HTML_TEMPLATE = """
                                 </div>
                             </div>
 
-                            <div class="space-y-4">
-                                <div class="rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-slate-900/85 via-slate-900/70 to-cyan-950/25 p-4 space-y-3">
-                                    <h3 class="text-sm font-black text-cyan-300">توصية TITAN AI للتشفير</h3>
-                                    <div class="grid grid-cols-1 gap-2">
-                                        <select id="cryptSensitivity" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none">
-                                            <option value="normal">حساسية عادية</option>
-                                            <option value="high" selected>حساسية عالية</option>
-                                            <option value="critical">حساسية حرجة</option>
-                                        </select>
-                                        <input id="cryptPurpose" type="text" class="p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-xs outline-none" placeholder="الغرض: قانوني / مالي / شخصي...">
-                                        <textarea id="cryptAudience" rows="2" class="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-700 text-sm outline-none focus:ring-2 focus:ring-cyan-600/50" placeholder="اكتب لمن سترسل النص ولماذا (كل التفاصيل)..."></textarea>
-                                    </div>
-
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                        <button onclick="startCryptAdvisorChat(true)" class="px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">تهيئة سياق AI</button>
-                                        <button onclick="applyCryptRecommendation()" class="px-3 py-2 rounded-lg bg-fuchsia-800/40 hover:bg-fuchsia-700/50 text-xs font-bold border border-fuchsia-700/50 text-fuchsia-200">تطبيق التوصية</button>
-                                    </div>
-
-                                    <div id="cryptAiChatFlow" class="h-64 overflow-y-auto rounded-xl border border-cyan-900/40 bg-black/35 p-3 space-y-2 text-sm"></div>
-
-                                    <div class="flex gap-2">
-                                        <input id="cryptAiChatInput" type="text" class="flex-1 p-2 rounded-lg bg-slate-950/70 border border-slate-700 text-sm outline-none" placeholder="اسأل TITAN AI عن أفضل إعداد تشفير لهذه الحالة...">
-                                        <button id="cryptAiSendBtn" onclick="sendCryptAdvisorMessage()" class="px-4 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold border border-cyan-600/50">إرسال</button>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -4993,58 +4964,23 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <div id="osint-section" class="hidden space-y-5">
-                <h2 class="text-xl font-bold text-indigo-300 border-b border-slate-700 pb-2 flex items-center gap-2"><span>🕵️</span> OSINT Username Hunter - Social Hybrid</h2>
-                <div class="bg-indigo-950/20 border border-indigo-900/40 rounded-xl p-4 text-xs text-indigo-100/90 leading-6">
-                    هذا القسم يعمل بثلاثة محركات: SocialScan + Profile Probe + WhatsMyName. الفحص يغطي كل المنصات المتاحة عبر المحركات: Instagram, Twitter/X, Reddit, Pinterest, Tumblr, GitHub, GitLab, Facebook, TikTok, LinkedIn, YouTube, Telegram, Snapchat, Threads, Twitch, Medium, VK وغيرها من منصات Social Category في WhatsMyName.
-                </div>
 
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="xl:col-span-2 space-y-2">
-                        <label class="block text-xs text-gray-400">Usernames (one per line)</label>
-                        <textarea id="osintUsernameInput" rows="7" placeholder="example_user\nexample.user\nexample-user" class="w-full p-3 rounded-xl bg-slate-900 border border-indigo-900/40 focus:ring-2 focus:ring-indigo-500/50 outline-none text-sm font-mono" dir="ltr"></textarea>
-                        <div class="text-[11px] text-gray-500">مسموح: حروف/أرقام و <span class="font-mono">._-</span> فقط. الحد الأعلى 8 يوزرنيمات في كل عملية.</div>
-                    </div>
 
-                    <div class="space-y-3 bg-slate-900/60 border border-slate-700 rounded-xl p-4">
-                        <div class="rounded-lg border border-indigo-900/40 bg-indigo-950/15 px-3 py-2 text-[11px] text-indigo-200">
-                            Platforms Scope: SocialScan + Profile Probe + WhatsMyName (all available social platforms)
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">Timeout لكل يوزرنيم</label>
-                            <select id="osintTimeoutSeconds" class="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm">
-                                <option value="10">10s</option>
-                                <option value="15" selected>15s</option>
-                                <option value="22">22s</option>
-                                <option value="30">30s</option>
-                            </select>
-                        </div>
-                        <button onclick="osintRunSocialscan()" class="w-full py-2.5 rounded-xl bg-indigo-900/40 hover:bg-indigo-800/50 border border-indigo-700/50 text-indigo-200 font-bold text-sm">بدء فحص OSINT Hybrid</button>
-                        <div id="osintRunHint" class="text-[11px] text-gray-500">Ctrl + Enter لتشغيل فحص OSINT Hybrid بسرعة.</div>
-                    </div>
-                </div>
-
-                <div id="osintResult" class="hidden"></div>
-            </div>
-
-            <div id="training-section" class="hidden space-y-4">
+            <div id="training-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-amber-300 border-b border-slate-700 pb-2">🎯 قسم التدريب</h2>
-                <div class="bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl text-xs text-amber-100/90 leading-6">
-                    هذا القسم يجمع عدة مسارات تدريبية في مكان واحد: موسوعة الهجمات، موسوعة الأدوات، AI Coach، CTF، والهندسة الاجتماعية.
-                </div>
-                <div class="training-subtabs-shell rounded-xl p-2">
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div class="training-subtabs-shell rounded-xl p-3 bg-slate-900/50 border border-slate-700 mb-4">
+                    <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
                         <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 موسوعة الهجمات</button>
                         <button id="btn-training-tools-kb" onclick="setTrainingSubTab('tools-kb')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🛠️ موسوعة الأدوات</button>
-                        <button id="btn-training-ai-lab" onclick="setTrainingSubTab('ai-lab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🤖 AI Coach</button>
+                        <button id="btn-training-vuln-kb" onclick="setTrainingSubTab('vuln-kb')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🐞 موسوعة الثغرات</button>
+                        <button id="btn-training-defense-kb" onclick="setTrainingSubTab('defense-kb')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🛡️ موسوعة الدفاع</button>
                         <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
-                        <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 الهندسة الاجتماعية</button>
+                        <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 هندسة اجتماعية</button>
                     </div>
                 </div>
-            </div>
-
-            <div id="tools-kb-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-emerald-300 border-b border-slate-700 pb-2">🛠️ موسوعة الأدوات</h2>
+                <div id="training-subtabs-content">
+                    <div id="tools-kb-section" class="hidden space-y-6">
+                        <h2 class="text-xl font-bold text-emerald-300 border-b border-slate-700 pb-2">🛠️ موسوعة الأدوات</h2>
 
                 <div class="bg-emerald-950/20 border border-emerald-900/40 p-4 rounded-3xl text-xs text-emerald-100/90 leading-6 shadow-[0_12px_40px_rgba(8,145,178,0.12)]">
                     هذا القسم يعرض أدوات وتطبيقات الأمن السيبراني مرتبة حسب مرحلة الاستخدام، مع تفاصيل لكل أداة وكويز مرتبط لفهمها بسرعة.
@@ -5092,6 +5028,114 @@ HTML_TEMPLATE = """
                         <div class="toolskb-quiz-shell p-5 rounded-[1.5rem] space-y-4">
                             <div class="text-sm font-bold text-emerald-300">كويز الأداة</div>
                             <div id="toolskbQuizContainer" class="p-4 rounded-2xl border border-slate-700 bg-black/40 text-xs text-gray-200">اختر أداة ثم ابدأ الكويز.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="vuln-kb-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-pink-300 border-b border-slate-700 pb-2">🐞 موسوعة الثغرات</h2>
+
+                <div class="bg-pink-950/20 border border-pink-900/40 p-4 rounded-3xl text-xs text-pink-100/90 leading-6 shadow-[0_12px_40px_rgba(139,34,82,0.12)]">
+                    هذا القسم يجمع 200 ثغرة في 5 فئات رئيسية مع شرح لكل ثغرة، أين تحدث، كيف يُستغل، وكيف تُحمي منها.
+                </div>
+
+                <div class="vuln-kb-filters-shell p-4">
+                    <div class="grid grid-cols-1 xl:grid-cols-5 gap-3">
+                        <input id="vulnKbSearchInput" type="text" oninput="vulnKbApplyFilters()" placeholder="ابحث باسم الثغرة أو الوصف..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none xl:col-span-3">
+                        <select id="vulnKbCategoryFilter" onchange="vulnKbApplyFilters()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="all">كل التصنيفات</option>
+                        </select>
+                        <button onclick="vulnKbResetFilters()" class="w-full px-4 py-2 rounded-2xl bg-pink-900/30 hover:bg-pink-800/45 border border-pink-800/50 text-pink-200 text-xs font-bold">إعادة ضبط الفلاتر</button>
+                        <div id="vulnKbCatalogStats" class="text-[11px] text-gray-400 xl:col-span-5"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-9 gap-5">
+                    <div class="xl:col-span-4 space-y-4">
+                        <div class="toolskb-panel p-5 rounded-[1.5rem] space-y-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-pink-300">قائمة الثغرات</div>
+                                    <div class="text-[11px] text-gray-400">انقر لعرض تفاصيل كل ثغرة ثم ابدأ الكويز للتأكد من فهمك.</div>
+                                </div>
+                                <span class="text-[10px] text-slate-400">البحث المباشر</span>
+                            </div>
+                            <div id="vulnKbCatalog" class="grid grid-cols-1 gap-3 max-h-[72vh] overflow-y-auto pr-1"></div>
+                            <div id="vulnKbEmpty" class="hidden text-[11px] text-rose-300 font-bold">لم يتم العثور على ثغرات مطابقة.</div>
+                            <div class="mt-3 text-center">
+                                <button id="vulnKbCatalogShowMore" onclick="vulnKbShowMore()" class="hidden w-full py-2 rounded-xl bg-pink-900/30 hover:bg-pink-800/45 border border-pink-800/50 text-pink-200 text-xs font-bold">عرض المزيد</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="xl:col-span-5 space-y-4">
+                        <div class="toolskb-detail-shell p-5 rounded-[1.5rem] space-y-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-pink-300">تفاصيل الثغرة</div>
+                                    <div class="text-[11px] text-gray-400">عرض الوصف وطريقة الاستغلال وخطوات الحماية.</div>
+                                </div>
+                                <button onclick="vulnKbQuizStart()" class="px-3 py-2 rounded-xl bg-pink-900/30 border border-pink-800/50 text-pink-200 text-xs font-bold">بدء كويز الثغرة</button>
+                            </div>
+                            <div id="vulnKbDetail" class="p-3 rounded-xl border border-slate-700 bg-black/30 text-xs text-gray-200 leading-6">اختر ثغرة من القائمة لعرض تفاصيلها، ثم اضغط زر كويز الثغرة.</div>
+                        </div>
+                        <div class="toolskb-quiz-shell p-5 rounded-[1.5rem] space-y-4">
+                            <div class="text-sm font-bold text-pink-300">كويز الثغرة</div>
+                            <div id="vulnKbQuizContainer" class="p-4 rounded-2xl border border-slate-700 bg-black/40 text-xs text-gray-200">اختر ثغرة ثم ابدأ الكويز.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="defense-kb-section" class="hidden space-y-6">
+                <h2 class="text-xl font-bold text-sky-300 border-b border-slate-700 pb-2">🛡️ موسوعة الدفاع السيبراني</h2>
+
+                <div class="bg-sky-950/20 border border-sky-900/40 p-4 rounded-3xl text-xs text-sky-100/90 leading-6 shadow-[0_12px_40px_rgba(14,165,233,0.12)]">
+                    هذا القسم يعرض أهم ممارسات وتقنيات الدفاع السيبراني، مع شرح لكل عنصر وكويز يساعدك تفهم كيف تحمي بيئتك بفعالية.
+                </div>
+
+                <div class="defense-kb-filters-shell p-4">
+                    <div class="grid grid-cols-1 xl:grid-cols-5 gap-3">
+                        <input id="defenseKbSearchInput" type="text" oninput="defenseKbApplyFilters()" placeholder="ابحث باسم التقنية أو الفئة..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none xl:col-span-3">
+                        <select id="defenseKbCategoryFilter" onchange="defenseKbApplyFilters()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
+                            <option value="all">كل التصنيفات</option>
+                        </select>
+                        <button onclick="defenseKbResetFilters()" class="w-full px-4 py-2 rounded-2xl bg-sky-900/30 hover:bg-sky-800/45 border border-sky-800/50 text-sky-200 text-xs font-bold">إعادة ضبط الفلاتر</button>
+                        <div id="defenseKbCatalogStats" class="text-[11px] text-gray-400 xl:col-span-5"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-9 gap-5">
+                    <div class="xl:col-span-4 space-y-4">
+                        <div class="toolskb-panel p-5 rounded-[1.5rem] space-y-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-sky-200">قائمة الدفاع</div>
+                                    <div class="text-[11px] text-gray-400">اختر تقنية دفاعية لعرض شرحها وتفاصيلها.</div>
+                                </div>
+                                <span class="text-[10px] text-slate-400">بحث مباشر</span>
+                            </div>
+                            <div id="defenseKbCatalog" class="grid grid-cols-1 gap-3 max-h-[72vh] overflow-y-auto pr-1"></div>
+                            <div id="defenseKbEmpty" class="hidden text-[11px] text-rose-300 font-bold">لم يتم العثور على عناصر دفاعية مطابقة.</div>
+                            <div class="mt-3 text-center">
+                                <button id="defenseKbCatalogShowMore" onclick="defenseKbShowMore()" class="hidden w-full py-2 rounded-xl bg-sky-900/30 hover:bg-sky-800/45 border border-sky-800/50 text-sky-200 text-xs font-bold">عرض المزيد</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="xl:col-span-5 space-y-4">
+                        <div class="toolskb-detail-shell p-5 rounded-[1.5rem] space-y-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-sky-200">تفاصيل الدفاع</div>
+                                    <div class="text-[11px] text-gray-400">عرض الوصف، نقاط التطبيق، أدوات الدعم وخيارات الحماية.</div>
+                                </div>
+                                <button onclick="defenseKbQuizStart()" class="px-3 py-2 rounded-xl bg-sky-900/30 border border-sky-800/50 text-sky-200 text-xs font-bold">بدء كويز الدفاع</button>
+                            </div>
+                            <div id="defenseKbDetail" class="p-3 rounded-xl border border-slate-700 bg-black/30 text-xs text-gray-200 leading-6">اختر عنصر دفاعي من القائمة لعرض تفاصيله، ثم اضغط زر كويز الدفاع.</div>
+                        </div>
+                        <div class="toolskb-quiz-shell p-5 rounded-[1.5rem] space-y-4">
+                            <div class="text-sm font-bold text-sky-200">كويز الدفاع</div>
+                            <div id="defenseKbQuizContainer" class="p-4 rounded-2xl border border-slate-700 bg-black/40 text-xs text-gray-200">اختر تقنية ثم ابدأ الكويز.</div>
                         </div>
                     </div>
                 </div>
@@ -5168,256 +5212,6 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <div id="ir-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-red-400 border-b border-slate-700 pb-2">🚨 Incident Response</h2>
-
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40 space-y-3">
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
-                        <h3 class="text-sm font-bold text-red-300">Incident Command Dashboard</h3>
-                        <button onclick="irRefreshSummary()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">تحديث</button>
-                    </div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 text-xs">
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Total</div><div id="irSumTotal" class="text-gray-100 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Open</div><div id="irSumOpen" class="text-blue-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Investigating</div><div id="irSumInvestigating" class="text-amber-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Contained</div><div id="irSumContained" class="text-emerald-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Closed</div><div id="irSumClosed" class="text-teal-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Critical</div><div id="irSumCritical" class="text-red-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">SLA Breached</div><div id="irSumSlaBreached" class="text-rose-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Avg IOC Risk</div><div id="irSumAvgRisk" class="text-fuchsia-300 font-bold">0</div></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-red-300">إنشاء قضية متقدمة</h3>
-                        <input id="irCaseTitle" type="text" placeholder="عنوان القضية" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm">
-                        <div class="grid grid-cols-2 gap-2">
-                            <select id="irCaseSeverity" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
-                                <option value="low">Severity: Low</option>
-                                <option value="medium" selected>Severity: Medium</option>
-                                <option value="high">Severity: High</option>
-                                <option value="critical">Severity: Critical</option>
-                            </select>
-                            <select id="irCasePriority" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
-                                <option value="p1">Priority P1</option>
-                                <option value="p2" selected>Priority P2</option>
-                                <option value="p3">Priority P3</option>
-                                <option value="p4">Priority P4</option>
-                            </select>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <select id="irCaseCategory" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
-                                <option value="general" selected>Category: General</option>
-                                <option value="phishing">Phishing</option>
-                                <option value="malware">Malware</option>
-                                <option value="account_takeover">Account Takeover</option>
-                                <option value="data_leak">Data Leak</option>
-                                <option value="insider">Insider</option>
-                                <option value="fraud">Fraud</option>
-                            </select>
-                            <select id="irCaseSource" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
-                                <option value="manual" selected>Source: Manual</option>
-                                <option value="siem">SIEM</option>
-                                <option value="user_report">User Report</option>
-                                <option value="external_feed">External Feed</option>
-                            </select>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <input id="irCaseOwner" type="text" placeholder="Owner (SOC/IR Team)" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs" dir="ltr">
-                            <input id="irCaseSla" type="number" min="15" max="10080" value="240" placeholder="SLA minutes" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-xs">
-                        </div>
-                        <textarea id="irCaseDesc" rows="3" placeholder="وصف سريع للحادث" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 outline-none text-sm"></textarea>
-                        <button onclick="irCreateCase()" class="w-full py-2 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 font-bold border border-red-800/40">إنشاء</button>
-                    </div>
-
-                    <div class="lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-red-900/40">
-                        <div class="flex items-center justify-between mb-3">
-                            <h3 class="text-sm font-bold text-red-300">قائمة القضايا</h3>
-                            <div class="flex items-center gap-2">
-                                <button onclick="irLoadCases()" class="text-xs px-3 py-1 rounded bg-slate-800 border border-slate-700">تحديث</button>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
-                            <input id="irCaseSearch" type="text" placeholder="بحث بالعنوان/الوصف..." class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2">
-                            <select id="irFilterStatus" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="all" selected>كل الحالات</option>
-                                <option value="open">Open</option>
-                                <option value="investigating">Investigating</option>
-                                <option value="contained">Contained</option>
-                                <option value="closed">Closed</option>
-                            </select>
-                            <select id="irFilterSeverity" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="all" selected>كل الشدات</option>
-                                <option value="low">Low</option>
-                                <option value="medium">Medium</option>
-                                <option value="high">High</option>
-                                <option value="critical">Critical</option>
-                            </select>
-                        </div>
-                        <div id="irCasesList" class="space-y-2 max-h-56 overflow-y-auto"></div>
-                    </div>
-                </div>
-
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-sm font-bold text-red-300">إدارة مؤشرات القضية</h3>
-                        <div id="irSelectedCase" class="text-xs text-gray-400">لم يتم اختيار قضية</div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2 text-xs">
-                        <div id="irSelectedMetaStatus" class="p-2 rounded bg-black/40 border border-slate-700">Status: --</div>
-                        <div id="irSelectedMetaSeverity" class="p-2 rounded bg-black/40 border border-slate-700">Severity/Priority: --</div>
-                        <div id="irSelectedMetaOwner" class="p-2 rounded bg-black/40 border border-slate-700">Owner: --</div>
-                        <div id="irSelectedMetaSla" class="p-2 rounded bg-black/40 border border-slate-700">SLA: --</div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                        <select id="irIocType" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="ip">IP</option>
-                            <option value="domain">Domain</option>
-                            <option value="url">URL</option>
-                            <option value="hash">Hash</option>
-                            <option value="username">Username</option>
-                            <option value="email">Email</option>
-                        </select>
-                        <input id="irIocValue" type="text" placeholder="IOC value" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr">
-                        <input id="irIocRisk" type="number" min="0" max="100" value="50" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                        <button onclick="irAddIoc()" class="p-2 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">إضافة IOC</button>
-                    </div>
-                    <div class="flex flex-wrap gap-2 mt-3">
-                        <button id="ir-btn-open" onclick="irUpdateStatus('open')" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Open</button>
-                        <button id="ir-btn-investigating" onclick="irUpdateStatus('investigating')" class="px-3 py-1 text-xs rounded bg-blue-900/30 border border-blue-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Investigating</button>
-                        <button id="ir-btn-contained" onclick="irUpdateStatus('contained')" class="px-3 py-1 text-xs rounded bg-amber-900/30 border border-amber-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Contained</button>
-                        <button id="ir-btn-closed" onclick="irUpdateStatus('closed')" class="px-3 py-1 text-xs rounded bg-green-900/30 border border-green-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Closed</button>
-                        <button id="ir-btn-export" onclick="irExportReport()" class="px-3 py-1 text-xs rounded bg-emerald-900/30 border border-emerald-800/50 disabled:opacity-50 disabled:cursor-not-allowed">تصدير تقرير</button>
-                        <button id="ir-btn-export-pdf" onclick="irExportReport('pdf')" class="px-3 py-1 text-xs rounded bg-indigo-900/30 border border-indigo-800/50 disabled:opacity-50 disabled:cursor-not-allowed">PDF</button>
-                        <button id="ir-btn-auto-priority" onclick="irRunAutoPriority()" class="px-3 py-1 text-xs rounded bg-fuchsia-900/30 border border-fuchsia-800/50 disabled:opacity-50 disabled:cursor-not-allowed">Auto Priority</button>
-                    </div>
-                    <div id="irIocTimeline" class="mt-3 p-3 rounded-lg bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
-                </div>
-
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-red-900/40 space-y-3">
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
-                        <h3 class="text-sm font-bold text-red-300">Incident Kanban Board</h3>
-                        <div class="text-[11px] text-gray-500">اسحب القضية وأفلتها لتغيير الحالة بسرعة.</div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                        <div class="rounded-lg border border-slate-700 bg-black/30 p-2">
-                            <div class="text-xs font-bold text-blue-300 mb-2">Open</div>
-                            <div id="irKanban-open" data-status="open" class="space-y-2 min-h-[120px]"></div>
-                        </div>
-                        <div class="rounded-lg border border-slate-700 bg-black/30 p-2">
-                            <div class="text-xs font-bold text-amber-300 mb-2">Investigating</div>
-                            <div id="irKanban-investigating" data-status="investigating" class="space-y-2 min-h-[120px]"></div>
-                        </div>
-                        <div class="rounded-lg border border-slate-700 bg-black/30 p-2">
-                            <div class="text-xs font-bold text-orange-300 mb-2">Contained</div>
-                            <div id="irKanban-contained" data-status="contained" class="space-y-2 min-h-[120px]"></div>
-                        </div>
-                        <div class="rounded-lg border border-slate-700 bg-black/30 p-2">
-                            <div class="text-xs font-bold text-emerald-300 mb-2">Closed</div>
-                            <div id="irKanban-closed" data-status="closed" class="space-y-2 min-h-[120px]"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-orange-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-orange-300">Incident Timeline Notes</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <select id="irNoteType" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="analysis" selected>Analysis</option>
-                                <option value="containment">Containment</option>
-                                <option value="eradication">Eradication</option>
-                                <option value="recovery">Recovery</option>
-                                <option value="lesson">Lesson Learned</option>
-                            </select>
-                            <textarea id="irNoteText" rows="2" placeholder="اكتب تحديث الحالة/الإجراء المتخذ..." class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2"></textarea>
-                        </div>
-                        <button onclick="irAddNote()" class="w-full py-2 rounded bg-orange-900/40 border border-orange-800/50 text-orange-300 text-xs font-bold">إضافة ملاحظة</button>
-                        <div id="irNotesTimeline" class="p-2 rounded bg-black/40 border border-slate-700 max-h-60 overflow-y-auto text-xs"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-emerald-300">Evidence Locker</h3>
-                        <input id="irEvidenceFile" type="file" class="block w-full text-sm text-slate-400 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-slate-800 file:text-emerald-300 border border-slate-700 p-2 rounded-xl">
-                        <input id="irEvidenceNote" type="text" placeholder="ملاحظة على الدليل" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                        <button onclick="irUploadEvidence()" class="w-full py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">رفع دليل</button>
-                        <div id="irEvidenceList" class="p-2 rounded bg-black/40 border border-slate-700 max-h-60 overflow-y-auto text-xs"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="forensics-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-teal-400 border-b border-slate-700 pb-2">🧪 Digital Forensics</h2>
-
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-teal-900/40 space-y-3">
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
-                        <h3 class="text-sm font-bold text-teal-300">Forensics Command Dashboard</h3>
-                        <button onclick="forensicsRefreshSummary()" class="px-3 py-1 rounded bg-teal-900/40 border border-teal-800/50 text-teal-300 text-xs font-bold">تحديث</button>
-                    </div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Sessions</div><div id="forensicsSumSessions" class="text-gray-100 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">High Risk</div><div id="forensicsSumHighRisk" class="text-red-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Avg Entropy</div><div id="forensicsSumEntropy" class="text-amber-300 font-bold">0</div></div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40"><div class="text-gray-400">Artifacts</div><div id="forensicsSumArtifacts" class="text-cyan-300 font-bold">0</div></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-teal-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-teal-300">Advanced File Triage</h3>
-                        <input id="forensicsFile" type="file" class="block w-full text-sm text-slate-400 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-slate-800 file:text-teal-300 border border-slate-700 p-2 rounded-xl">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <input id="forensicsMinStringLen" type="number" min="4" max="32" value="6" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" placeholder="Min string length">
-                            <button onclick="forensicsTriage()" class="py-2 rounded bg-teal-900/40 border border-teal-800/50 text-teal-300 text-xs font-bold">تحليل الدليل</button>
-                            <button onclick="forensicsLoadHistory()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs font-bold text-gray-300">تحديث السجل</button>
-                        </div>
-                        <div id="forensicsResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-cyan-300">IOC Extractor</h3>
-                        <textarea id="forensicsTextInput" rows="8" placeholder="الصق نص/لوج لفحص IOCs (IPs, URLs, Emails, Hashes)..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none font-mono" dir="ltr"></textarea>
-                        <button onclick="forensicsExtractIocs()" class="w-full py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">Extract IOCs</button>
-                        <div id="forensicsIocResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-60 overflow-y-auto text-xs"></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-3 xl:col-span-1">
-                        <h3 class="text-sm font-bold text-emerald-300">Forensics Sessions</h3>
-                        <div class="grid grid-cols-2 gap-2">
-                            <select id="forensicsFilterRisk" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="all">All Risk</option>
-                                <option value="high">High (>=70)</option>
-                                <option value="medium">Medium (40-69)</option>
-                                <option value="low">Low (&lt;40)</option>
-                            </select>
-                            <input id="forensicsFilterType" type="text" placeholder="file type (pdf, zip...)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
-                            <input id="forensicsFilterFrom" type="date" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <input id="forensicsFilterTo" type="date" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button onclick="forensicsApplyHistoryFilters()" class="py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">Apply Filters</button>
-                            <button onclick="forensicsResetHistoryFilters()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs font-bold text-gray-300">Reset</button>
-                        </div>
-                        <div id="forensicsHistory" class="p-2 rounded bg-black/40 border border-slate-700 max-h-80 overflow-y-auto text-xs"></div>
-                    </div>
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3 xl:col-span-2">
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
-                            <h3 class="text-sm font-bold text-indigo-300">Session Details</h3>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full sm:w-auto">
-                                <button onclick="forensicsExportSession('json')" class="px-3 py-1 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">Export JSON</button>
-                                <button onclick="forensicsExportSession('pdf')" class="px-3 py-1 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold">Export PDF</button>
-                                <button onclick="forensicsCreateIncidentFromSession()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">Create Incident</button>
-                            </div>
-                        </div>
-                        <div id="forensicsSessionDetail" class="p-2 rounded bg-black/40 border border-slate-700 max-h-80 overflow-y-auto text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
-                    </div>
-                </div>
-            </div>
-
-
             <div id="learninglab-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-indigo-400 border-b border-slate-700 pb-2">🎓 موسوعة الهجمات</h2>
 
@@ -5469,68 +5263,6 @@ HTML_TEMPLATE = """
                         </div>
                         <div id="learningQuizContainer" class="p-3 rounded bg-black/40 border border-slate-700 text-xs leading-6 text-gray-200">
                             اختر هجمة ثم اضغط زر الكويز السريع لبدء اختبار دفاعي قصير من 10 أسئلة.
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-
-            <div id="ai-lab-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-cyan-300 border-b border-slate-700 pb-2">🤖 AI Training Coach</h2>
-
-                <div class="bg-cyan-950/20 border border-cyan-900/40 p-4 rounded-xl text-xs text-cyan-100/90 leading-6">
-                    هذا المسار مخصص للتوعية والمحاكاة الدفاعية فقط. يتم شرح الهجمات بشكل مفاهيمي مع خطة كشف واحتواء وتحصين، بدون أوامر هجومية أو خطوات اختراق تنفيذية.
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                    <div class="p-2 rounded-lg border border-cyan-900/40 bg-cyan-950/20 text-[11px] text-cyan-200"><span class="font-black">1)</span> اختر نوع الهجمة ومستوى التدريب</div>
-                    <div class="p-2 rounded-lg border border-indigo-900/40 bg-indigo-950/20 text-[11px] text-indigo-200"><span class="font-black">2)</span> توليد سيناريو كامل + خطة دفاع</div>
-                    <div class="p-2 rounded-lg border border-emerald-900/40 bg-emerald-950/20 text-[11px] text-emerald-200"><span class="font-black">3)</span> اسأل المدرب الصوتي وخذ Quiz</div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-cyan-900/40 space-y-3 shadow-[0_8px_22px_rgba(0,0,0,0.26)]">
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
-                            <h3 class="text-sm font-bold text-cyan-300">AI Scenario Generator (Defensive)</h3>
-                            <span class="text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300">Safe Mode</span>
-                        </div>
-                        <div class="text-[11px] text-gray-400">ولّد سيناريو واقعي مرتب: مؤشرات، أثر، خطة احتواء، وخطوات التحصين.</div>
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                            <input id="trainingAiAttackType" type="text" placeholder="نوع الهجمة (مثال: phishing, ransomware, xss)" class="md:col-span-2 p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
-                            <select id="trainingAiLevel" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="beginner">Beginner</option>
-                                <option value="intermediate" selected>Intermediate</option>
-                                <option value="advanced">Advanced</option>
-                            </select>
-                            <select id="trainingAiLang" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="ar" selected>العربية</option>
-                                <option value="en">English</option>
-                            </select>
-                        </div>
-                        <textarea id="trainingAiObjective" rows="2" placeholder="هدف التمرين (اختياري)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
-                        <textarea id="trainingAiOrgContext" rows="2" placeholder="سياق المؤسسة/البيئة (اختياري)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
-                        <button onclick="trainingAiGenerateScenario()" class="w-full py-2 rounded bg-cyan-900/40 border border-cyan-800/50 text-cyan-300 text-xs font-bold hover:bg-cyan-800/40">توليد سيناريو تدريبي كامل</button>
-                        <div id="trainingAiResult" class="hidden p-3 rounded-lg bg-black/40 border border-slate-700 text-xs leading-6 max-h-[30rem] overflow-y-auto"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-indigo-900/40 space-y-3 shadow-[0_8px_22px_rgba(0,0,0,0.26)]">
-                        <h3 class="text-sm font-bold text-indigo-300">AI Coach Chat</h3>
-                        <div class="text-[11px] text-gray-400">اسأل المدرب مباشرة عن الكشف والاحتواء والتحصين، ثم حوّل الرد إلى صوت.</div>
-                        <div id="trainingAiChatFlow" class="h-80 overflow-y-auto rounded-lg border border-slate-700 bg-black/35 p-3 space-y-2 text-xs"></div>
-                        <textarea id="trainingAiChatInput" rows="2" placeholder="اسأل AI Coach عن الكشف والاحتواء والتحصين..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
-                        <button onclick="trainingAiCoachSend()" class="w-full py-2 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold hover:bg-indigo-800/40">إرسال</button>
-
-                        <div class="pt-2 border-t border-slate-800 space-y-2">
-                            <div class="text-[11px] text-indigo-200/90 font-bold">ElevenLabs Voice</div>
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                                <select id="trainingAiVoiceSelect" class="md:col-span-3 p-2 rounded bg-slate-900 border border-slate-700 text-[11px] outline-none"></select>
-                                <button onclick="trainingAiLoadVoices(true)" class="px-2 py-2 rounded bg-slate-800 border border-slate-700 text-[11px] font-bold text-gray-200 hover:bg-slate-700">تحديث الأصوات</button>
-                            </div>
-                            <input id="trainingAiVoiceId" type="text" placeholder="Voice ID يدوي (اختياري - يتجاوز القائمة)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-[11px] outline-none" dir="ltr">
-                            <textarea id="trainingAiTtsText" rows="2" placeholder="نص التحويل لصوت (إذا تركته فارغ سيتم استخدام آخر رد من AI Coach)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none resize-none"></textarea>
-                            <button onclick="trainingAiSpeakLatest()" class="w-full py-2 rounded bg-emerald-900/35 border border-emerald-800/50 text-emerald-300 text-xs font-bold hover:bg-emerald-800/40">تشغيل بالصوت (ElevenLabs)</button>
-                            <audio id="trainingAiVoicePlayer" controls class="w-full hidden"></audio>
-                            <a id="trainingAiVoiceDownload" class="hidden w-full text-center py-2 rounded bg-cyan-900/25 border border-cyan-800/50 text-cyan-300 text-xs font-bold hover:bg-cyan-800/35" download="titan-elevenlabs-tts.mp3">تنزيل الصوت MP3</a>
                         </div>
                     </div>
                 </div>
@@ -5718,6 +5450,8 @@ HTML_TEMPLATE = """
                     <div class="text-[11px] text-gray-500">هذا القسم دفاعي توعوي فقط: التحليل والاستجابة والرفع إلى SOC.</div>
                 </div>
             </div>
+        </div>
+    </div>
 
             <!-- ===== QR CODE SECTION ===== -->
             <div id="qr-section" class="hidden space-y-6">
@@ -6909,8 +6643,8 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','osint','training','ctf','ir','forensics','se','audio','video','qr','identity','admin'];
-        const TRAINING_SUB_TABS = ['learninglab', 'tools-kb', 'ai-lab', 'ctf', 'se'];
+        const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','training','ctf','se','audio','video','qr','identity','admin'];
+        const TRAINING_SUB_TABS = ['learninglab', 'tools-kb', 'vuln-kb', 'defense-kb', 'ai-lab', 'ctf', 'se'];
         let __trainingSubTab = 'learninglab';
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
@@ -7302,15 +7036,10 @@ HTML_TEMPLATE = """
             }
             if(type === 'tools' && typeof fetchIpIntel === 'function') fetchIpIntel();
             if(type === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
-            if(type === 'ir' && typeof irInitSection === 'function') irInitSection();
-            if(type === 'forensics' && typeof forensicsInitSection === 'function') forensicsInitSection();
+            if(type === 'training') setTrainingSubTab(__trainingSubTab || 'learninglab');
             if(type === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if(type === 'osint' && typeof osintInitSection === 'function') osintInitSection();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
-            if(type === 'crypt' && typeof startCryptAdvisorChat === 'function') startCryptAdvisorChat(false);
-            if(type === 'training') {
-                setTrainingSubTab(__trainingSubTab || 'learninglab');
-            }
 
             const activeBtn = document.getElementById('btn-' + type);
             if (activeBtn && typeof activeBtn.scrollIntoView === 'function') {
@@ -7343,6 +7072,8 @@ HTML_TEMPLATE = """
             if (next === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if (next === 'learninglab' && typeof learningInitCatalog === 'function') learningInitCatalog();
             if (next === 'tools-kb' && typeof trainingToolsInit === 'function') trainingToolsInit();
+            if (next === 'vuln-kb' && typeof trainingVulnInit === 'function') trainingVulnInit();
+            if (next === 'defense-kb' && typeof trainingDefenseInit === 'function') trainingDefenseInit();
             if (next === 'ai-lab' && typeof trainingAiCoachInit === 'function') trainingAiCoachInit();
         }
 
@@ -7807,6 +7538,769 @@ HTML_TEMPLATE = """
             }
         ];
 
+        const VULN_KB_RAW = [
+            {
+                id: 'web-vulns',
+                title: 'ثغرات تطبيقات الويب (Web App Vulnerabilities)',
+                names: [
+                    'In-Band SQLi',
+                    'Error-Based SQLi',
+                    'Union-Based SQLi',
+                    'Boolean-Based Blind SQLi',
+                    'Time-Based Blind SQLi',
+                    'Out-of-Band SQLi',
+                    'Reflected XSS',
+                    'Stored XSS',
+                    'DOM-based XSS',
+                    'Blind XSS',
+                    'Self-XSS',
+                    'X-Forwarded-For Header Injection',
+                    'Local File Inclusion (LFI)',
+                    'Remote File Inclusion (RFI)',
+                    'SSRF (Regular)',
+                    'Blind SSRF',
+                    'CSRF',
+                    'IDOR (Bypass Authorization)',
+                    'Directory Traversal',
+                    'OS Command Injection',
+                    'XXE (Internal Entity)',
+                    'XXE (External Entity)',
+                    'XXE (Blind)',
+                    'Insecure Deserialization (Java)',
+                    'Insecure Deserialization (PHP)',
+                    'Insecure Deserialization (Python/Pickle)',
+                    'Open Redirect',
+                    'Clickjacking',
+                    'HTTP Parameter Pollution (HPP)',
+                    'HTTP Request Smuggling',
+                    'HTTP Response Splitting',
+                    'Host Header Injection',
+                    'Server-Side Template Injection (SSTI)',
+                    'Client-Side Template Injection (CSTI)',
+                    'Broken Authentication',
+                    'Session Fixation',
+                    'Session Hijacking',
+                    'Insufficient Password Complexity',
+                    'Username Enumeration',
+                    'Credential Stuffing',
+                    'Brute Force (Login)',
+                    'NoSQL Injection',
+                    'LDAP Injection',
+                    'XPath Injection',
+                    'SMTP Injection',
+                    'GraphQL Injection',
+                    'Mass Assignment',
+                    'Information Disclosure (Files)',
+                    'Insecure CORS Policy',
+                    'Web Cache Poisoning',
+                    'Subdomain Takeover',
+                    'Broken Object Level Authorization (BOLA)',
+                    'Broken Function Level Authorization (BFLA)',
+                    'Excessive Data Exposure (API)',
+                    'Improper Assets Management (API)',
+                    'Lack of Resources Rate Limiting',
+                    'Security Misconfiguration',
+                    'Cross-Site Request Forgery (on API)',
+                    'Server Error Message Leakage',
+                    'Missing Security Headers (مثل HSTS, CSP)'
+                ]
+            },
+            {
+                id: 'system-binary',
+                title: 'ثغرات الأنظمة والذاكرة (System & Binary)',
+                names: [
+                    'Stack Buffer Overflow',
+                    'Heap Buffer Overflow',
+                    'Integer Overflow',
+                    'Integer Underflow',
+                    'Format String Vulnerability',
+                    'Use-After-Free (UAF)',
+                    'Double Free',
+                    'Null Pointer Dereference',
+                    'Race Condition (TOCTOU)',
+                    'Uninitialized Variable',
+                    'Memory Leak',
+                    'Off-by-One Error',
+                    'Return-to-libc (Arc Injection)',
+                    'Return Oriented Programming (ROP)',
+                    'Jump Oriented Programming (JOP)',
+                    'DLL Hijacking',
+                    'Shared Library Injection',
+                    'Symbolic Link Race',
+                    'Privilege Escalation (Vertical)',
+                    'Privilege Escalation (Horizontal)',
+                    'Sudo Misconfiguration',
+                    'Kernel Exploit',
+                    'Dirty COW (CVE-2016-5195)',
+                    'SUID Executables Leakage',
+                    'Unquoted Service Path',
+                    'Insecure File Permissions',
+                    'Cron Job Exploitation',
+                    'Side-Channel Attack (Spectre)',
+                    'Side-Channel Attack (Meltdown)',
+                    'Rowhammer Attack',
+                    'Cold Boot Attack',
+                    'Dangling Pointers',
+                    'Stack Smashing',
+                    'Buffer Over-read',
+                    'Type Confusion',
+                    'Arbitrary File Write',
+                    'Arbitrary File Read',
+                    'Code Injection',
+                    'Path Traversal in Archive (Zip Slip)',
+                    'Process Injection'
+                ]
+            },
+            {
+                id: 'network',
+                title: 'ثغرات الشبكات والاتصالات (Network)',
+                names: [
+                    'ARP Cache Poisoning',
+                    'DNS Cache Poisoning',
+                    'DNS Hijacking',
+                    'DHCP Starvation',
+                    'DHCP Rogue Server',
+                    'ICMP Redirect Attack',
+                    'VLAN Hopping (Switch Squatting)',
+                    'VLAN Hopping (Double Tagging)',
+                    'STP (Spanning Tree Protocol) Manipulation',
+                    'MAC Flooding',
+                    'MAC Spoofing',
+                    'TCP SYN Flood (DoS)',
+                    'UDP Flood (DoS)',
+                    'ICMP Flood (Smurf Attack)',
+                    'Slowloris (HTTP DoS)',
+                    'NTP Amplification Attack',
+                    'DNS Amplification Attack',
+                    'SSL Stripping',
+                    'MITM (Man-In-The-Middle)',
+                    'BGP Hijacking',
+                    'SMB Relay Attack',
+                    'LLMNR/NBT-NS Poisoning',
+                    'IPv6 SLAAC Attack',
+                    'SNMP Default Community String',
+                    'Telnet Eavesdropping',
+                    'FTP Bounce Attack',
+                    'RDP BlueKeep Vulnerability',
+                    'WiFi WEP Cracking',
+                    'WiFi WPA2 KRACK Attack',
+                    'WPS PIN Brute Force (Reaver)',
+                    'Evil Twin (WiFi)',
+                    'Rogue Access Point',
+                    'Bluetooth Bluejacking',
+                    'Bluetooth Bluesnarfing',
+                    'Bluetooth BlueBorne',
+                    'SS7 Vulnerability (Telecom)',
+                    'SIP Digest Leakage (VoIP)',
+                    'Insecure MQTT Broker (IoT)',
+                    'Modbus Vulnerability (SCADA/Industrial)',
+                    'UPnP Security Flaw'
+                ]
+            },
+            {
+                id: 'crypto-identity',
+                title: 'ثغرات التشفير والهوية (Crypto & Identity)',
+                names: [
+                    'Weak Encryption Key',
+                    'Hardcoded Keys',
+                    'Insufficient Entropy',
+                    'Predictable Random Numbers',
+                    'MD5 Collision Attack',
+                    'SHA-1 Collision Attack',
+                    'Padding Oracle Attack',
+                    'Length Extension Attack',
+                    'Known Plaintext Attack',
+                    'Ciphertext-Only Attack',
+                    'Birthday Attack',
+                    'Replay Attack',
+                    'Man-in-the-Browser',
+                    'Golden Ticket (Kerberos)',
+                    'Silver Ticket (Kerberos)',
+                    'AS-REP Roasting',
+                    'Kerberoasting',
+                    'Pass-the-Hash (PtH)',
+                    'Pass-the-Ticket (PtT)',
+                    'Brute Forcing MFA',
+                    'MFA Fatigue (Push Spamming)',
+                    'OAuth Misconfiguration',
+                    'SAML Assertion Hijacking',
+                    'Insecure Storage of Secrets (Vaults)',
+                    'Weak JWT Signature (None Algorithm)',
+                    'JWT Secret Brute Force',
+                    'PKI Mismanagement',
+                    'SSL/TLS BEAST Attack',
+                    'SSL/TLS POODLE Attack',
+                    'SSL/TLS CRIME Attack'
+                ]
+            },
+            {
+                id: 'modern-tech',
+                title: 'ثغرات الهواتف والسحابة وتطبيقات حديثة (Modern Tech)',
+                names: [
+                    'Android Intent Spoofing',
+                    'Android Insecure Content Provider',
+                    'Android Logcat Data Leak',
+                    'iOS URL Scheme Hijacking',
+                    'iOS Insecure Keychain Storage',
+                    'AWS S3 Bucket Public Access',
+                    'AWS EC2 Metadata SSRF (v1)',
+                    'Azure Blob Storage Leak',
+                    'GCP IAM Misconfiguration',
+                    'Docker Escape (Container Breakout)',
+                    'Kubernetes API Unauthenticated Access',
+                    'Serverless Function Injection (Lambda)',
+                    'Smart Contract Reentrancy (Blockchain)',
+                    'Smart Contract Integer Overflow',
+                    'API Key Leakage in JS Files',
+                    'Insecure Firebase Database Rules',
+                    'GraphQL Introspection Enabled',
+                    'Webhook URL Hijacking',
+                    'Prompt Injection (AI/LLM)',
+                    'Insecure Deserialization in ML Models',
+                    'Data Poisoning (AI Training)',
+                    'Sensitive Information in AI Chat History',
+                    'Cryptojacking (Browser Mining)',
+                    'Supply Chain Attack (NPM/PyPI Malicious Package)',
+                    'Typosquatting (Package Managers)',
+                    'Shadow IT Vulnerabilities',
+                    'Insecure WebSockets (CSWSH)',
+                    'Business Logic Flaw (Price Manipulation)',
+                    'Business Logic Flaw (Coupon Abuse)',
+                    'Ghost Login (Hidden Admin Accounts)'
+                ]
+            }
+        ];
+
+        const VULN_KB_CATALOG = _vulnKbBuildCatalog();
+        const DEFENSE_KB_RAW = [
+            {
+                id: 'network-defense',
+                title: 'حماية الشبكات (Network Defense)',
+                names: [
+                    'Stateful Firewall',
+                    'Next-Generation Firewall (NGFW)',
+                    'Intrusion Detection System (IDS)',
+                    'Intrusion Prevention System (IPS)',
+                    'Web Application Firewall (WAF)',
+                    'Virtual Private Network (VPN)',
+                    'Network Segmentation',
+                    'Micro-segmentation',
+                    'DMZ (Demilitarized Zone)',
+                    'Proxy Server',
+                    'Reverse Proxy',
+                    'Load Balancer Security',
+                    'DDoS Mitigation',
+                    'Anycast Routing',
+                    'Network Access Control (NAC)',
+                    'Port Security',
+                    'DHCP Snooping',
+                    'Dynamic ARP Inspection (DAI)',
+                    'IP Source Guard',
+                    'Access Control Lists (ACLs)',
+                    'DNSSEC',
+                    'SSH Hardening',
+                    'TLS/SSL Encryption',
+                    'HSTS',
+                    'Certificate Pinning',
+                    'Traffic Shaping',
+                    'HoneyNet',
+                    'VLAN Tagging Security',
+                    'BGP Sec',
+                    'Email Gateway Security',
+                    'Sender Policy Framework (SPF)',
+                    'DKIM',
+                    'DMARC',
+                    'Anti-Spam Filters',
+                    'Air Gapping',
+                    'SD-WAN Security',
+                    'Zero Trust Network Access (ZTNA)',
+                    'Packet Filtering',
+                    'Deep Packet Inspection (DPI)',
+                    'Network Flow Analysis'
+                ]
+            },
+            {
+                id: 'endpoint-defense',
+                title: 'حماية الأجهزة والنقاط الطرفية (Endpoint Defense)',
+                names: [
+                    'Antivirus (AV)',
+                    'Endpoint Detection and Response (EDR)',
+                    'Extended Detection and Response (XDR)',
+                    'Host-based Firewall (HFW)',
+                    'Host-based IDS (HIDS)',
+                    'Data Loss Prevention (DLP)',
+                    'Full Disk Encryption (FDE)',
+                    'File Integrity Monitoring (FIM)',
+                    'Device Control',
+                    'Patch Management',
+                    'Application Whitelisting',
+                    'Sandboxing',
+                    'Anti-Exploit',
+                    'Rootkit Detection',
+                    'Mobile Device Management (MDM)',
+                    'BIOS/UEFI Password',
+                    'Secure Boot',
+                    'TPM (Trusted Platform Module)',
+                    'Endpoint Hardening',
+                    'User Behavior Analytics (UBA)',
+                    'Privileged Access Management (PAM)',
+                    'Local Administrator Password Solution (LAPS)',
+                    'Multi-Factor Authentication (MFA)',
+                    'Biometric Authentication',
+                    'Smart Cards',
+                    'Single Sign-On (SSO) Security',
+                    'Session Timeout',
+                    'Password Vaulting',
+                    'Hardware Security Module (HSM)',
+                    'Virtual Desktop Infrastructure (VDI) Security'
+                ]
+            },
+            {
+                id: 'iam',
+                title: 'إدارة الهوية والوصول (IAM)',
+                names: [
+                    'Role-Based Access Control (RBAC)',
+                    'Attribute-Based Access Control (ABAC)',
+                    'Principle of Least Privilege (PoLP)',
+                    'Just-In-Time (JIT) Access',
+                    'Active Directory Hardening',
+                    'LDAP over TLS',
+                    'OAuth 2.0 Security',
+                    'OpenID Connect (OIDC) Security',
+                    'SAML 2.0 Hardening',
+                    'Identity Federation',
+                    'Identity Proofing',
+                    'Conditional Access Policies',
+                    'Adaptive Authentication',
+                    'Passwordless Authentication',
+                    'Account Lockout Policy',
+                    'Credential Rotation',
+                    'Identity Governance and Administration (IGA)',
+                    'Directory Service Monitoring',
+                    'Risk-based Authentication',
+                    'Self-Service Password Reset (SSPR) Security'
+                ]
+            },
+            {
+                id: 'monitoring-and-ir',
+                title: 'مراقبة الأمن والاستجابة (Monitoring & IR)',
+                names: [
+                    'Security Information and Event Management (SIEM)',
+                    'Security Orchestration, Automation and Response (SOAR)',
+                    'Log Management',
+                    'Centralized Logging',
+                    'Security Operations Center (SOC)',
+                    'Vulnerability Scanning',
+                    'Penetration Testing (Purple Teaming)',
+                    'Incident Response Plan (IRP)',
+                    'Digital Forensics',
+                    'Chain of Custody',
+                    'Threat Intelligence Feeds',
+                    'Threat Hunting',
+                    'Indicator of Compromise (IoC) Analysis',
+                    'Indicator of Attack (IoA) Analysis',
+                    'MITRE ATT&CK Mapping',
+                    'Anomaly Detection',
+                    'Integrity Checks',
+                    'Backup and Disaster Recovery (BDR)',
+                    'Offsite Backups',
+                    'Immutable Backups',
+                    'Ransomware Protection Modules',
+                    'Dark Web Monitoring',
+                    'Vulnerability Disclosure Programs (VDP)',
+                    'Bug Bounty Programs',
+                    'Security Auditing',
+                    'Compliance Monitoring',
+                    'Configuration Drift Detection',
+                    'Network Forensics Analysis Tools (NFAT)',
+                    'Malware Analysis (Static & Dynamic)',
+                    'Security Awareness Training'
+                ]
+            },
+            {
+                id: 'app-cloud-security',
+                title: 'أمن التطبيقات والسحابة (App & Cloud Security)',
+                names: [
+                    'Static Application Security Testing (SAST)',
+                    'Dynamic Application Security Testing (DAST)',
+                    'Interactive Application Security Testing (IAST)',
+                    'Software Composition Analysis (SCA)',
+                    'Secure Code Review',
+                    'Input Validation',
+                    'Output Encoding',
+                    'Parameterized Queries',
+                    'Content Security Policy (CSP)',
+                    'Subresource Integrity (SRI)',
+                    'Security Headers Configuration',
+                    'API Security Gateway',
+                    'API Rate Limiting',
+                    'Cloud Access Security Broker (CASB)',
+                    'Cloud Security Posture Management (CSPM)',
+                    'Cloud Workload Protection Platforms (CWPP)',
+                    'Infrastructure as Code (IaC) Scanning',
+                    'Container Security (Docker/Kubernetes)',
+                    'Image Signing (Docker Images)',
+                    'Secrets Management (HashiCorp Vault)',
+                    'Serverless Security',
+                    'DevSecOps Integration',
+                    'Database Activity Monitoring (DAM)',
+                    'Data Masking/Obfuscation',
+                    'Tokenization',
+                    'Homomorphic Encryption',
+                    'Virtualization Security',
+                    'Hypervisor Hardening',
+                    'Secure Software Development Lifecycle (SDLC)',
+                    'Security Regression Testing'
+                ]
+            }
+        ];
+        const DEFENSE_KB_CATALOG = _defenseKbBuildCatalog();
+        const VULN_KB_SEVERITY_BY_ID = {};
+
+        function _vulnKbBuildCatalog() {
+            return VULN_KB_RAW.map((category) => ({
+                id: category.id,
+                title: category.title,
+                items: Array.isArray(category.names) ? category.names.map((name) => _vulnKbBuildItem(name, category)) : []
+            }));
+        }
+
+        function _vulnKbBuildItem(name, category) {
+            const details = _vulnKbAnalyzeName(name);
+            return {
+                id: _vulnKbNormalizeId(name),
+                name,
+                how: details.how,
+                where: details.where,
+                tools: details.tools,
+                protection: details.protection,
+                category_id: category.id,
+                category_title: category.title
+            };
+        }
+
+        function _vulnKbNormalizeId(name) {
+            return String(name || '')
+                .trim()
+                .toLowerCase()
+                .replace(/\\s+/g, '-')
+                .replace(/[^a-z0-9\\-]/g, '');
+        }
+
+        function _vulnKbAnalyzeName(name) {
+            const key = String(name || '').toLowerCase();
+            const defaultTools = ['Burp Suite', 'OWASP ZAP', 'Browser DevTools'];
+            const defaultProtection = ['التحقق من صحة المدخلات', 'التحكم في الوصول', 'تحديث سريع', 'مراقبة السجلات'];
+            let how = 'هذه الثغرة تعتمد على استغلال ضعف في التطبيق أو التكوين الأمني.';
+            let where = 'تحدث عادة في الأماكن التي تتعامل مع بيانات المستخدم أو التكوينات غير الآمنة.';
+            let tools = defaultTools.slice();
+            let protection = defaultProtection.slice();
+
+            if (key.includes('sqli')) {
+                how = 'يحدث عندما تمرر مدخلات ضارة تُضمن في استعلام SQL وتُنفذ من قبل قاعدة البيانات.';
+                where = 'غالباً في نماذج البحث، تسجيل الدخول، أو واجهات API التي تبني SQL ديناميكياً.';
+                tools = ['sqlmap', 'Burp Suite', 'OWASP ZAP'];
+                protection = ['استخدم Prepared Statements', 'فرض التحقق الصارم للمدخلات', 'تعطيل رسائل الخطأ المفصلة', 'استخدم أذونات قاعدة بيانات أقل امتيازاً'];
+            } else if (key.includes('xss')) {
+                how = 'يُحقن كود JavaScript خبيث في الصفحة ثم يُنفذ داخل متصفح الضحية.';
+                where = 'يحدث في الحقول التي تعرض مدخلات المستخدم دون ترميز مناسب.';
+                tools = ['Burp Suite', 'XSS Hunter', 'OWASP ZAP'];
+                protection = ['ترميز المخرجات حسب السياق', 'تفعيل CSP', 'منع inline scripts', 'فلترة المدخلات الخطرة'];
+                if (key.includes('reflected')) {
+                    how = 'تُعاد الاستجابة بسرعة مع سكربت خبيث عبر رابط أو طلب، فيُنفذ في جلسة الضحية.';
+                }
+                if (key.includes('stored')) {
+                    how = 'يُخزن الكود الخبيث في قاعدة البيانات أو النظام ثم يُعرض للضحايا لاحقاً.';
+                }
+                if (key.includes('dom')) {
+                    how = 'يُستغل تغير DOM على جانب العميل لحقن سكربت ينفذ داخل المتصفح.';
+                }
+                if (key.includes('blind')) {
+                    how = 'تحدث دون أن يرى المهاجم نتيجة فورية، لكنه يعتمد على تفاعل المستخدم أو نظام خارجي.';
+                }
+                if (key.includes('self')) {
+                    how = 'يُخدع المستخدم لإدخال كود بنفسه ثم يُنفّذ في متصفحه.';
+                }
+            } else if (key.includes('x-forwarded-for')) {
+                how = 'يُرسل رأس X-Forwarded-For مزيف لتجاوز فلاتر IP أو تسجيلات المصدر.';
+                where = 'في التطبيقات التي تعتمد على رؤوس HTTP لتحديد عنوان العميل.';
+                tools = ['Burp Suite', 'Browser DevTools', 'WAF testing'];
+                protection = ['لا تعتمد على رؤوس المصدر غير الموثوقة', 'تحقق من العنوان الحقيقي', 'استخدم مصادقة إضافية', 'سجل المصدر الحقيقي عبر الشبكة'];
+            } else if (key.includes('lfi')) {
+                how = 'يُمرر مسار ملف محلي غير موثوق في include أو تحميل ملف بحيث يقرأ النظام ملفاً غير مصرح به.';
+                where = 'نقاط تحميل الملفات، صفحات المحتوى الديناميكية، ومكتبات القوالب.';
+                tools = ['Burp Suite', 'ffuf', 'OWASP ZAP'];
+                protection = ['طبعنة المسار Canonicalization', 'حصر الوصول داخل مجلد آمن', 'استخدم معرفات ملف ثابتة', 'تعطيل الوصول إلى الملفات الحساسة'];
+            } else if (key.includes('rfi')) {
+                how = 'يُسمح بتحميل ملف من عنوان خارجي، فيُنفذ محتوى خبيث على الخادم.';
+                where = 'أنظمة القوالب أو تحميل اللغات أو الرمازات التي تقبل URL.';
+                tools = ['Burp Suite', 'OWASP ZAP', 'Nuclei'];
+                protection = ['منع تحميل الملفات الخارجية', 'السماح بمصادر موثوقة فقط', 'عزل المستعرضات الخادمة', 'تعطيل include الديناميكي'];
+            } else if (key.includes('ssrf')) {
+                how = 'يتم إجبار الخادم على إرسال طلبات إلى عناوين داخلية أو موارد مخفية نيابة عن المهاجم.';
+                where = 'خدمات معاينة الروابط، fetch URL، وواجهات التكامل الخارجية.';
+                tools = ['Burp Suite', 'Interactsh', 'OAST'];
+                protection = ['فرض allowlist للوجهات', 'منع عناوين metadata/internal', 'عزل الشبكة الداخلية', 'إيقاف إعادة التوجيه غير المصرح بها'];
+                if (key.includes('blind')) {
+                    how = 'تُرسل الطلبات دون رؤية استجابة مباشرة، ويعتمد الاستغلال على قناة جانبية أو تنبيهات.';
+                }
+            } else if (key.includes('csrf') || key.includes('cross-site request forgery')) {
+                how = 'يُخدع المستخدم الموثق لإرسال طلب شرعي من متصفحه دون علمه.';
+                where = 'عمليات تغيير الحالة مثل نقل الأموال وتغيير كلمة المرور.';
+                tools = ['Burp Suite', 'Browser DevTools', 'OWASP ZAP'];
+                protection = ['الرموز CSRF لكل جلسة', 'SameSite Cookies', 'التحقق من Origin/Referer', 'إعادة المصادقة للعمليات الحرجة'];
+            } else if (key.includes('idor') || key.includes('direct object')) {
+                how = 'يُغير المهاجم معرّف المورد للوصول إلى بيانات مستخدم آخر لغياب التحقق المنطقي.';
+                where = 'الروابط والباراميترات التي تستخدم IDs مباشرة مثل profile/order.';
+                tools = ['Burp Suite', 'Postman', 'OWASP ZAP'];
+                protection = ['تحقق من الملكية Authorization لكل مورد', 'لا تعتمد على ID فقط', 'استخدم معرفات غير قابلة للتخمين', 'اختبر BOLA بانتظام'];
+            } else if (key.includes('directory traversal')) {
+                how = 'يُستخدم ../ أو مسارات أخرى للوصول إلى ملفات خارج الدليل المسموح.';
+                where = 'تحميل الملفات، تنزيل الملفات، معالج مسارات الملفات.';
+                tools = ['Burp Suite', 'ffuf', 'OWASP ZAP'];
+                protection = ['طبعنة المسار', 'منع السلاسل ../', 'استخدم ID ثابت للملفات', 'حصر الوصول داخل مجلد آمن'];
+            } else if (key.includes('command injection')) {
+                how = 'تُمرر مدخلات المستخدم إلى أمر نظام التشغيل دون تعقيم، فتُنفذ أوامر إضافية.';
+                where = 'وظائف ping/traceroute/backup أو أي استدعاء shell.';
+                tools = ['Burp Suite', 'Semgrep', 'SAST'];
+                protection = ['تجنب shell execution', 'استخدم APIs آمنة', 'ضع allowlist على القيم', 'شغّل الخدمات بحساب محدود'];
+            } else if (key.includes('xxe')) {
+                how = 'يسمح معالج XML بكيانات خارجية للوصول إلى ملفات محلية أو إرسال طلبات خارجية.';
+                where = 'SOAP APIs، XML uploads، parsers القديمة.';
+                tools = ['Burp Suite', 'OWASP ZAP', 'xmllint'];
+                protection = ['تعطيل DTD وExternal Entities', 'استخدم مكتبات XML آمنة', 'تحقق من الإدخال XML', 'تحديث المكونات القديمة'];
+                if (key.includes('internal')) {
+                    how = 'يستغل كيانات داخلية للوصول إلى ملفات أو موارد محلية.';
+                }
+                if (key.includes('external')) {
+                    how = 'يستغل كيانات خارجية لإرسال طلبات إلى شبكات خارجية.';
+                }
+                if (key.includes('blind')) {
+                    how = 'يُرسل XML خبيث دون الحصول على استجابة مباشرة، ويعتمد على سلوك النظام أو حالة الوقت.';
+                }
+            } else if (key.includes('insecure deserialization')) {
+                how = 'يُنفّذ محتوى خبيث عند فك تسلسل بيانات غير موثوقة إلى كائنات في النظام.';
+                where = 'واجهات API، ملفات حفظ الحالة، أو أي نقطة تقبل كائنات مسلسلة.';
+                tools = ['Burp Suite', 'ysoserial', 'Java deserialization scanners'];
+                protection = ['تحقق من مصدر البيانات الموثوق', 'استخدم تنسيقات آمنة مثل JSON', 'تطويق التنفيذ', 'تحديث المكتبات المستخدمة'];
+                if (key.includes('java')) {
+                    where = 'تطبيقات Java التي تستخدم Java Serialization أو RMI.';
+                }
+                if (key.includes('php')) {
+                    where = 'تطبيقات PHP التي تستخدم unserialize على بيانات خارجية.';
+                }
+                if (key.includes('python')) {
+                    where = 'تطبيقات Python التي تستخدم pickle أو قنوات مسلسلة غير آمنة.';
+                }
+            } else if (key.includes('open redirect')) {
+                how = 'يُسمح بتغيير وجهة إعادة التوجيه إلى موقع خبيث بدلاً من وجهة موثوقة.';
+                where = 'روابط تسجيل الدخول، عمليات التحقق من البريد، أو أي redirect يعتمد على باراميتر URL.';
+                tools = ['Burp Suite', 'Browser DevTools', 'open redirect scanners'];
+                protection = ['سماح بقائمة النطاقات فقط', 'استخدم معرفات وجهة ثابتة', 'التحقق من الوجهة قبل إعادة التوجيه', 'تجنب إعادة التوجيه المباشر من بيانات المستخدم'];
+            } else if (key.includes('clickjacking')) {
+                how = 'يُعرض الموقع ضمن إطار مخفي أو شفاف ليُجبر المستخدم على النقر على واجهة ضارة.';
+                where = 'الصفحات الحساسة التي تقبل iframes من مصادر خارجية.';
+                tools = ['X-Frame-Options testers', 'Burp Suite', 'Clickjacking scanners'];
+                protection = ['إضافة X-Frame-Options', 'Content Security Policy frame-ancestors', 'تأكيد النقرات عبر JavaScript', 'عدم السماح بالإطار من مصادر غير موثوقة'];
+            } else if (key.includes('hpp') || key.includes('parameter pollution')) {
+                how = 'يُستغل تعدد قيم باراميتر HTTP لتجاوز التحقق أو سرد القيم غير المتوقعة.';
+                where = 'واجهات الويب التي تعالج باراميترات GET/POST دون تطهير جيد.';
+                tools = ['Burp Suite', 'PARAM_HUNTER', 'OWASP ZAP'];
+                protection = ['طبعنة وتصفية الباراميترات', 'افترض قيمة واحدة لكل باراميتر', 'تحقق من نوع البيانات', 'رفض الباراميترات المكررة'];
+            } else if (key.includes('request smuggling')) {
+                how = 'يُرسل طلب HTTP بصيغة مختلطة لخوادم الوكيل والخادم الخلفي لتجاوز قواعد الأمان.';
+                where = 'شبكة بروكسي عكسية، load balancer، وواجهات API مركبة.';
+                tools = ['Burp Suite', 'smuggling scanners', "Matt's proxy tests"];
+                protection = ['توحيد تحليل الطلبات', 'التأكد من رؤوس Content-Length وTransfer-Encoding', 'رفض الطلبات الغامضة', 'فحص البروكسي بدقة'];
+            } else if (key.includes('response splitting')) {
+                how = 'يُحقن عنوان HTTP مزيف يؤدّي إلى إنشاء استجابات متعددة أو هجمات XSS.';
+                where = 'الرؤوس القابلة للتحرير مثل Set-Cookie أو Location.';
+                tools = ['Burp Suite', 'HTTP response smuggling tools', 'scanner'];
+                protection = ['تنظيف الرؤوس', 'رفض أحرف CR/LF غير المتوقعة', 'استخدم APIs لإنشاء الرؤوس', 'تأكد من صيغة القيم'];
+            } else if (key.includes('host header')) {
+                how = 'يُستغل رأس Host المزيف لتسميم الروابط، تجاوز التحقق، أو التوجيه الخبيث.';
+                where = 'تطبيقات تعتمد على رأس Host لبناء URLs أو التحقق من المصدر.';
+                tools = ['Burp Suite', 'Header testing', 'OAST platforms'];
+                protection = ['تحقق من Host ضمن allowlist', 'استخدم أسماء مضيف ثابتة', 'تحقق من Origin/Referer', 'لا تعتمد على Host في أمن الطلب'];
+            } else if (key.includes('ssti')) {
+                how = 'يُحقن محتوى خبيث في قالب على الجانب الخادم ليُنفّذ داخل محرك القوالب.';
+                where = 'نظام قوالب يستقبل مدخلات المستخدم غير الموثوقة.';
+                tools = ['Burp Suite', 'template injection cheat sheets', 'OWASP ZAP'];
+                protection = ['منع إدخال المستخدم في القوالب', 'استخدم محفوظات القوالب', 'تحديث محركات القوالب', 'تعقيم المدخلات النصية'];
+            } else if (key.includes('csti')) {
+                how = 'يُستغل نموذج القوالب داخل المتصفح لحقن كود JavaScript ضار.';
+                where = 'قوالب JS client-side أو مكتبات rendering ديناميكية.';
+                tools = ['Burp Suite', 'DOM scanners', 'browser devtools'];
+                protection = ['ترميز المخرجات النصية', 'تقييد المدخلات', 'تحديث مكتبات التمبلت', 'استخدم مكانات آمنة'];
+            } else if (key.includes('broken authentication')) {
+                how = 'فشل المصادقة يسمح بالوصول دون التحقق الكامل أو باستخدام بيانات اعتماد ضعيفة.';
+                where = 'نموذج تسجيل الدخول، reset password، أو إدارة الجلسة.';
+                tools = ['Burp Suite', 'Hydra', 'auth assessment tools'];
+                protection = ['اعتماد كلمات مرور قوية', 'MFA', 'مراقبة محاولات المصادقة', 'تأمين سياسات إعادة التعيين'];
+            } else if (key.includes('session fixation')) {
+                how = 'يثبت المهاجم معرف جلسة ثابتة قبل مصادقة الضحية ثم يستخدم الجلسة نفسها.';
+                where = 'تطبيقات تحتفظ بمعرف الجلسة قبل وبعد المصادقة.';
+                tools = ['Burp Suite', 'session testing', 'proxy tools'];
+                protection = ['تدوير معرف الجلسة بعد تسجيل الدخول', 'عدم قبول معرفات الجلسة من المستخدم', 'تقييد عمر الجلسة', 'استخدام كوكيز آمنة'];
+            } else if (key.includes('session hijacking')) {
+                how = 'يسرق المهاجم رمز الجلسة أو الكوكيز لاستخدامه في جلسة الضحية.';
+                where = 'جلسات الويب، واجهات API، تطبيقات الجوال.';
+                tools = ['Wireshark', 'Burp Suite', 'cookie stealers'];
+                protection = ['استخدام كوكيز أمنة HttpOnly', 'تشفير TLS', 'مراقبة النشاط غير الطبيعي', 'تدوير الجلسات'];
+            } else if (key.includes('password complexity') || key.includes('weak encryption key') || key.includes('hardcoded keys') || key.includes('jwt secret') || key.includes('secret')) {
+                how = 'يعتمد الاستغلال على استخدام مفاتيح ضعيفة أو كلمات مرور سهلة التخمين.';
+                where = 'آليات المصادقة والتشفير، واجهات الإدارة، التعليمات البرمجية المخزنة.';
+                tools = ['password crackers', 'secret scanners', 'hashcat'];
+                protection = ['استخدام مفاتيح قوية', 'تخزين الأسرار بأمان', 'فرض سياسات كلمة المرور', 'تدوير المفاتيح'];
+            } else if (key.includes('username') || key.includes('credential stuffing') || key.includes('brute force')) {
+                how = 'يُستخدم التحقق من الأسماء أو بيانات الاعتماد المسربة للوصول غير المصرح به.';
+                where = 'بوابات تسجيل الدخول، APIs، خدمات المصادقة.';
+                tools = ['Hydra', 'Burp Suite', 'Sentry MBA'];
+                protection = ['MFA', 'rate limiting', 'كشف البوتات', 'حظر المحاولات المتكررة'];
+            } else if (key.includes('nosql') || key.includes('ldap') || key.includes('xpath') || key.includes('smtp') || key.includes('graphql')) {
+                how = 'يقوم المهاجم بحقن استعلامات خاصة بالبروتوكول المستهدف لتجاوز التحقق أو عرض بيانات.';
+                where = 'واجهات الإدخال التي تبني استعلامات NoSQL/LDAP/XPath/SMTP/GraphQL ديناميكياً.';
+                tools = ['Burp Suite', 'protocol fuzzers', 'query testers'];
+                protection = ['التحقق من المدخلات', 'استخدام استعلامات parameterized', 'تصفية الأحرف الخطرة', 'مراجعة نقاط الإدخال'];
+            } else if (key.includes('mass assignment')) {
+                how = 'يعطي المهاجم بيانات إضافية تُخزن في الكائن دون التحقق من الحقول المسموح بها.';
+                where = 'واجهات API التي تربط مدخلات المستخدم مباشرةً بالكائنات.';
+                tools = ['Burp Suite', 'payload testers', 'API security scanners'];
+                protection = ['استخدم white-list للحقول', 'فصل إدخال المستخدم عن الكائنات الداخلية', 'تحقق من صلاحية الحقول', 'مراجعة واجهات API'];
+            } else if (key.includes('information disclosure') || key.includes('server error message leakage') || key.includes('missing security headers') || key.includes('insecure cors') || key.includes('security misconfiguration') || key.includes('subdomain takeover') || key.includes('cache poisoning') || key.includes('improper assets management') || key.includes('excessive data exposure') || key.includes('lack of resources rate limiting')) {
+                how = 'يستغل المهاجم ضعف التكوين أو كشف معلومات لبناء هجوم أعمق.';
+                where = 'التكوينات العامة، رؤوس HTTP، السياسات الأمنية، والواجهة الخارجية.';
+                tools = ['scanner التكوين', 'Burp Suite', 'مراجعة سياسة الأمان'];
+                protection = ['تدقيق التكوينات', 'إخفاء المعلومات الحساسة', 'فرض رؤوس أمان قوية', 'تقليل الهجوم السطحي'];
+            } else if (key.includes('stack buffer overflow') || key.includes('heap buffer overflow') || key.includes('integer overflow') || key.includes('format string') || key.includes('use-after-free') || key.includes('double free') || key.includes('null pointer') || key.includes('off-by-one') || key.includes('buffer over-read') || key.includes('type confusion') || key.includes('arbitrary file write') || key.includes('arbitrary file read') || key.includes('code injection') || key.includes('zip slip') || key.includes('process injection')) {
+                how = 'يستغل المهاجم ضعفاً في الذاكرة أو في التحقق من البيانات لقراءة أو تغيير سلوك البرنامج.';
+                where = 'البرامج المشتقة من C/C++، برامج النظام، معالجة الملفات، وواجهات برمجة التطبيقات المحلية.';
+                tools = ['gdb', 'pwndbg', 'fuzzers', 'binary analysis tools'];
+                protection = ['استخدم حماية الذاكرة مثل ASLR/DEP', 'تحقق من الحدود', 'اعتماد مكتبات آمنة', 'اختبار fuzzing'];
+            } else if (key.includes('race condition') || key.includes('use-after-free') || key.includes('memory leak') || key.includes('dangling pointers') || key.includes('cold boot') || key.includes('rowhammer') || key.includes('symbolic link race')) {
+                how = 'يستغل المهاجم ظروف التزامن أو الإدارة السيئة للذاكرة للوصول غير المصرح به أو تسريب البيانات.';
+                where = 'الكود متعدد الخيوط، مدخلات الذاكرة المشتركة، وبيئات الذاكرة الموزعة.';
+                tools = ['debuggers', 'thread analysis tools', 'leak detectors'];
+                protection = ['استخدم أقفال مناسبة', 'تأكد من تهيئة المتغيرات', 'إدارة الذاكرة بدقة', 'مراجعة السيناريوهات المتزامنة'];
+            } else if (key.includes('privilege escalation') || key.includes('sudo misconfiguration') || key.includes('kernel exploit') || key.includes('dirty cow') || key.includes('suid') || key.includes('unquoted service path')) {
+                how = 'يستغل المهاجم حقوقاً أو إعدادات نظام غير آمنة للحصول على صلاحيات أعلى.';
+                where = 'خوادم UNIX/Linux، خدمات النظام، ملفات SUID، وإعدادات النظام.';
+                tools = ['exploit frameworks', 'privilege escalation checkers', 'audit tools'];
+                protection = ['استخدم أقل صلاحية ممكنة', 'راجع الأذونات بانتظام', 'أصلح مسارات الخدمات غير المقتبسة', 'اتبع ممارسات أفضل للأمن'];
+            } else if (key.includes('dns') || key.includes('arp') || key.includes('dhcp') || key.includes('icmp') || key.includes('tcp syn') || key.includes('udp flood') || key.includes('mitm') || key.includes('bgp hijacking') || key.includes('smb relay') || key.includes('llmnr') || key.includes('ipv6') || key.includes('snmp') || key.includes('telnet') || key.includes('ftp') || key.includes('rdp') || key.includes('wifi') || key.includes('bluejacking') || key.includes('blueborne') || key.includes('ss7') || key.includes('sip') || key.includes('mqtt') || key.includes('modbus') || key.includes('upnp')) {
+                how = 'يستغل المهاجم بروتوكولاً أو ضعفاً في إعدادات الشبكة أو الأجهزة للوصول أو تعطيل الاتصالات.';
+                where = 'الشبكات المحلية، بروتوكولات الاتصالات، الأجهزة اللاسلكية، والبنية التحتية للإنترنت.';
+                tools = ['Wireshark', 'Bettercap', 'Nmap', 'Scapy'];
+                protection = ['تأمين الشبكة', 'إغلاق المنافذ غير الضرورية', 'استخدام تشفير قوي', 'مراقبة شذوذ الحركة'];
+            } else if (key.includes('weak encryption key') || key.includes('hardcoded keys') || key.includes('insufficient entropy') || key.includes('predictable random') || key.includes('md5') || key.includes('sha-1') || key.includes('padding oracle') || key.includes('length extension') || key.includes('known plaintext') || key.includes('ciphertext-only') || key.includes('birthday') || key.includes('replay') || key.includes('golden ticket') || key.includes('silver ticket') || key.includes('as-rep') || key.includes('kerberoasting') || key.includes('pass-the-hash') || key.includes('pass-the-ticket') || key.includes('mfa') || key.includes('oauth') || key.includes('saml') || key.includes('jwt') || key.includes('pki') || key.includes('beast') || key.includes('poodle') || key.includes('crime')) {
+                how = 'يستغل المهاجم ضعف التشفير أو المصادقة للوصول أو تزوير البيانات.';
+                where = 'أنظمة التشفير، بروتوكولات المصادقة، شهادات TLS، وخدمات الهوية.';
+                tools = ['cryptographic analyzers', 'Kerberos tools', 'auth assessment tools'];
+                protection = ['استخدم معايير تشفير حديثة', 'اعتمد سياسات مفتاح قوية', 'مراقبة المصادقة', 'تحديث البروتوكولات والمكتبات'];
+            } else if (key.includes('android') || key.includes('ios') || key.includes('aws') || key.includes('azure') || key.includes('gcp') || key.includes('docker') || key.includes('kubernetes') || key.includes('serverless') || key.includes('smart contract') || key.includes('api key') || key.includes('firebase') || key.includes('graphql') || key.includes('webhook') || key.includes('prompt injection') || key.includes('ml') || key.includes('ai') || key.includes('cryptojacking') || key.includes('supply chain') || key.includes('typosquatting') || key.includes('shadow it') || key.includes('websockets') || key.includes('business logic') || key.includes('ghost login')) {
+                how = 'يستغل المهاجم منصة حديثة أو تكاملاً سحابياً أو تقنية جديدة عبر إعدادات غير آمنة أو منطق ضعيف.';
+                where = 'تطبيقات الجوال، الخدمات السحابية، الحاويات، البيئات الخفية، ونماذج الذكاء الاصطناعي.';
+                tools = ['Cloud security tools', 'mobile security tools', 'analytics and monitoring'];
+                protection = ['تطبيق ضوابط خاصة بالتقنية', 'تحكم في الوصول الصارم', 'تحديث مكونات التكنولوجيا الحديثة', 'مراجعة عمليات النشر'];
+            }
+
+            return { how, where, tools, protection };
+        }
+
+        function _defenseKbBuildCatalog() {
+            return DEFENSE_KB_RAW.map((category) => ({
+                id: category.id,
+                title: category.title,
+                items: Array.isArray(category.names) ? category.names.map((name) => _defenseKbBuildItem(name, category)) : []
+            }));
+        }
+
+        function _defenseKbBuildItem(name, category) {
+            const details = _defenseKbAnalyzeName(name);
+            return {
+                id: _defenseKbNormalizeId(name),
+                name,
+                how: details.how,
+                where: details.where,
+                tools: details.tools,
+                protection: details.protection,
+                category_id: category.id,
+                category_title: category.title
+            };
+        }
+
+        function _defenseKbNormalizeId(name) {
+            return String(name || '')
+                .trim()
+                .toLowerCase()
+                .replace(/\\s+/g, '-')
+                .replace(/[^a-z0-9\\-]/g, '');
+        }
+
+        function _defenseKbAnalyzeName(name) {
+            const key = String(name || '').toLowerCase();
+            const defaultTools = ['SIEM', 'EDR', 'Firewall', 'Cloud Monitor'];
+            const defaultProtection = ['مراقبة مستمرة', 'سياسة أمان واضحة', 'تحكم وصول صارم', 'تحديث منتظم'];
+            let how = 'هذه التقنية تستخدم لتحسين دفاعات النظام والكشف المبكر عن التهديدات.';
+            let where = 'تطبق عادة في بنية الشبكة، الأنظمة، التطبيقات، وسياسات الأمن.';
+            let tools = defaultTools.slice();
+            let protection = defaultProtection.slice();
+
+            if (key.includes('multi-factor') || key.includes('mfa')) {
+                how = 'تضيف طبقة تحقق ثانية بعد كلمة المرور لتقليل خطر الوصول غير المصرح.';
+                where = 'أنظمة الدخول والتطبيقات والخدمات التي تتطلب مصادقة.';
+                tools = ['Duo', 'Microsoft Authenticator', 'Yubikey'];
+                protection = ['اعتماد MFA لكل الحسابات', 'منع استخدام عوامل تحقق ضعيفة', 'تمكين السياسات المشددة'];
+            } else if (key.includes('privileged access') || key.includes('least privilege') || key.includes('role-based')) {
+                how = 'يحد من الصلاحيات لمنع الإساءة وتقليل سطح الهجوم.';
+                where = 'الخوادم، قواعد البيانات، الأذونات الإدارية، وحسابات الخدمة.';
+                tools = ['BeyondTrust', 'CyberArk', 'Okta'];
+                protection = ['تقليل الامتيازات', 'مراجعة الأذونات بانتظام', 'تطبيق سياسات least privilege'];
+            } else if (key.includes('network segmentation') || key.includes('microsegmentation') || key.includes('zero trust')) {
+                how = 'يفصل الشبكة إلى مناطق آمنة لتقليل حركة المهاجم وتقييد الوصول.';
+                where = 'مراكز البيانات، بيئات السحابة، شبكات الوصول البعيد، وشبكات التطبيقات.';
+                tools = ['Cisco', 'Palo Alto', 'Illumio'];
+                protection = ['تصنيف الشبكة', 'فصل المناطق الحساسة', 'تطبيق ضوابط قائمة على السياسات'];
+            } else if (key.includes('firewall') || key.includes('ids') || key.includes('ips') || key.includes('dns security')) {
+                how = 'يرصد ويمنع حركة الشبكة الخبيثة أو غير المصرح بها قبل وصولها إلى الموارد الحيوية.';
+                where = 'حدود الشبكة، نقاط الدخول الخارجي، ونقاط الربط بين الشبكات.';
+                tools = ['Snort', 'Suricata', 'Fortinet'];
+                protection = ['ضبط قواعد صارمة', 'مراقبة التنبيهات', 'تحديث قوائم التهديدات'];
+            } else if (key.includes('vpn access') || key.includes('secure remote')) {
+                how = 'يؤمن الوصول البعيد ويضمن تشفير الاتصال للمستخدمين والمستخدمين الخارجيين.';
+                where = 'البوابات الخارجية، شبكات العمل عن بعد، وموفري الخدمة السحابية.';
+                tools = ['OpenVPN', 'Zscaler', 'Perimeter 81'];
+                protection = ['استخدام تشفير قوي', 'تسجيل الدخول متعدد العوامل', 'تصفية الوصول بناءً على الهوية'];
+            } else if (key.includes('siem') || key.includes('log aggregation') || key.includes('threat hunting') || key.includes('anomaly detection')) {
+                how = 'يجمع البيانات ويحللها لاكتشاف الهجمات والتصرف بسرعة قبل تفاقم الحادث.';
+                where = 'أنظمة السجلات، نقاط النهاية، الشبكات، وخدمات السحابة.';
+                tools = ['Splunk', 'Elastic SIEM', 'QRadar'];
+                protection = ['جمع السجلات الشاملة', 'تحليل الأنماط', 'تنبيه الأحداث المشبوهة'];
+            } else if (key.includes('edr') || key.includes('endpoint') || key.includes('incident response')) {
+                how = 'يراقب نقاط النهاية ويستطيع استجابة تلقائية لحظر الأنشطة الخبيثة.';
+                where = 'أجهزة المستخدمين، الخوادم، والحواسيب المحمولة في الشبكة.';
+                tools = ['CrowdStrike', 'SentinelOne', 'Carbon Black'];
+                protection = ['كشف السلوكيات المشبوهة', 'إغلاق الحوادث', 'استعادة النظام بعد الهجوم'];
+            } else if (key.includes('web application firewall') || key.includes('api security') || key.includes('secure software')) {
+                how = 'يحمي التطبيقات من هجمات الويب ويحسن تطويرها بأمان.';
+                where = 'واجهات المستخدم، واجهات برمجة التطبيقات، وخطوط التطبيقات الداخلية.';
+                tools = ['ModSecurity', 'AWS WAF', 'Snyk'];
+                protection = ['تنظيف المدخلات', 'منع هجمات التطبيق', 'اختبار الأمان المستمر'];
+            } else if (key.includes('data loss prevention') || key.includes('encryption') || key.includes('backup')) {
+                how = 'يحافظ على سرية وسلامة البيانات عبر الترميز والسياسات المناسبة.';
+                where = 'المستودعات، قواعد البيانات، النسخ الاحتياطية، والحركة بين الأنظمة.';
+                tools = ['Varonis', 'Symantec DLP', 'Veeam'];
+                protection = ['تشفير البيانات', 'سياسات DLP', 'اختبار النسخ الاحتياطي'];
+            } else if (key.includes('governance') || key.includes('compliance') || key.includes('awareness') || key.includes('risk')) {
+                how = 'يبني ثقافة وعمليات تقدم حماية فعّالة وتشغيل آمن للمؤسسة.';
+                where = 'التدريب، اللوائح، المراجعات، وعمليات الأمن المؤسسية.';
+                tools = ['ServiceNow', 'RSA Archer', 'OneTrust'];
+                protection = ['تدريب منتظم', 'سياسات أمنية محدثة', 'مراجعة الامتثال'];
+            }
+
+            return { how, where, tools, protection };
+        }
+
         function _normalizeCatalogName(text) {
             return String(text || '')
                 .toLowerCase()
@@ -7962,10 +8456,38 @@ HTML_TEMPLATE = """
         };
         let __learningSelectedAttackId = '';
         let __learningListExpanded = false;
+        let __vulnKbReady = false;
+        let __vulnKbSelectedVulnId = '';
+        let __vulnKbListExpanded = false;
+        let __vulnKbQuizState = {
+            vulnId: '',
+            vulnName: '',
+            bank: [],
+            idx: 0,
+            score: 0,
+            answered: false,
+            completed: false
+        };
+        let __defenseKbReady = false;
+        let __defenseKbSelectedDefenseId = '';
+        let __defenseKbListExpanded = false;
+        let __defenseKbQuizState = {
+            defenseId: '',
+            defenseName: '',
+            bank: [],
+            idx: 0,
+            score: 0,
+            answered: false,
+            completed: false
+        };
         const __toolskbDefaultPageLimit = 5;
         const __learningDefaultPageLimit = 5;
+        const __vulnKbDefaultPageLimit = 5;
+        const __defenseKbDefaultPageLimit = 5;
+        const TRAINING_QUIZ_LIMIT = 10;
         const LEARNING_QUIZ_STORAGE_KEY = 'titan_learning_quiz_result';
         const TOOLSKB_QUIZ_STORAGE_KEY = 'titan_toolskb_quiz_result';
+        const VULN_KB_QUIZ_STORAGE_KEY = 'titan_vulnkb_quiz_result';
         const TOOLSKB_CATALOG = [
             { id: 'digital-forensics', name: 'التحقيق الجنائي الرقمي', description: 'أدوات تحليل الحوادث واسترداد الأدلة والفحص الرقمي للمحتوى المشبوه.', tools: ['Autopsy', 'FTK Imager', 'Volatility'] },
             { id: 'network-security', name: 'أمن الشبكات', description: 'أدوات فحص الشبكات، كشف التسلل ومراقبة حركة البيانات في الوقت الحقيقي.', tools: ['Wireshark', 'Zeek', 'Suricata'] },
@@ -8279,10 +8801,10 @@ HTML_TEMPLATE = """
             bank.push(buildQuestion(`ما الفئة الأقرب لهجوم ${attack.name}؟`, attack.category_title || 'هجوم عام', allCategoryTitles));
             bank.push(buildQuestion(`ما مستوى الخطورة المتوقع لهذا النوع من الهجمات؟`, severityLabel, ['Low', 'Medium', 'High', 'Critical']));
 
-            if (bank.length > 10) {
-                return bank.slice(0, 10);
+            if (bank.length > TRAINING_QUIZ_LIMIT) {
+                return bank.slice(0, TRAINING_QUIZ_LIMIT);
             }
-            if (bank.length < 10) {
+            if (bank.length < TRAINING_QUIZ_LIMIT) {
                 const extra = [
                     { text: `أيهما يمثل أفضل وسيلة للحماية من ${attack.name}؟`, correct: 'تقييد الوصول والتشفير' },
                     { text: `ما العنصر الذي يجب مراقبته عند حدوث ${attack.name}؟`, correct: 'سجلات النظام وحركة الشبكة' },
@@ -8744,6 +9266,771 @@ HTML_TEMPLATE = """
             learningCatalogApplyFilters(false);
         }
 
+        function trainingVulnInit() {
+            if (__vulnKbReady) {
+                vulnKbApplyFilters(false);
+                return;
+            }
+            vulnKbInitCatalog();
+        }
+
+        function trainingDefenseInit() {
+            if (__defenseKbReady) {
+                defenseKbApplyFilters(false);
+                return;
+            }
+            defenseKbInitCatalog();
+        }
+
+        function _defenseKbAllItems() {
+            const items = [];
+            DEFENSE_KB_CATALOG.forEach((category) => {
+                if (Array.isArray(category.items)) {
+                    category.items.forEach((item) => {
+                        items.push({
+                            ...item,
+                            category_id: category.id,
+                            category_title: category.title
+                        });
+                    });
+                }
+            });
+            return items;
+        }
+
+        function _defenseKbRenderStats(filtered, total, shown) {
+            const box = document.getElementById('defenseKbCatalogStats');
+            if (!box) return;
+            const families = new Set((filtered || []).map((x) => x.category_id)).size;
+            const matched = (filtered || []).length;
+            box.innerHTML = `
+                <span class="text-sky-200 font-bold">${_resultEscape(matched)}</span> دفاعية
+                <span class="mx-2 text-gray-600">|</span>
+                <span class="text-slate-300">من ${_resultEscape(total)}</span>
+                <span class="mx-2 text-gray-600">|</span>
+                <span class="text-cyan-300">${_resultEscape(families)}</span> فئة
+            `;
+        }
+
+        function _defenseKbRenderDefenseCards(items) {
+            const box = document.getElementById('defenseKbCatalog');
+            const empty = document.getElementById('defenseKbEmpty');
+            if (!box) return;
+            if (!items.length) {
+                box.innerHTML = '';
+                if (empty) empty.classList.remove('hidden');
+                return;
+            }
+            if (empty) empty.classList.add('hidden');
+            const categories = items.reduce((acc, item) => {
+                const key = item.category_id || 'other';
+                if (!acc[key]) {
+                    acc[key] = { title: item.category_title || 'عام', items: [] };
+                }
+                acc[key].items.push(item);
+                return acc;
+            }, {});
+
+            box.innerHTML = Object.values(categories).map((category) => `
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between gap-3 px-2 py-1 rounded-2xl bg-slate-900/80 border border-slate-700 text-xs text-slate-300">
+                        <div class="font-bold text-sky-300">${_resultEscape(category.title)}</div>
+                        <div class="text-[11px] text-slate-500">${category.items.length} عنصر</div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3">${category.items.map((item) => {
+                        const active = item.id === __defenseKbSelectedDefenseId;
+                        return `
+                            <button onclick="defenseKbOpen('${_resultEscape(item.id)}')" class="toolskb-card transition-all ${active ? 'border-sky-500 bg-sky-950/20' : 'border-slate-700 bg-black/30 hover:border-sky-800/40 hover:bg-sky-950/10'}">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="text-sm font-semibold ${active ? 'text-sky-200' : 'text-gray-200'}">${_resultEscape(item.name)}</div>
+                                    <span class="toolskb-category-pill">${_resultEscape(item.category_title)}</span>
+                                </div>
+                                <div class="text-[11px] text-slate-300 mt-3">${_resultEscape(item.how)}</div>
+                            </button>
+                        `;
+                    }).join('')}</div>
+                </div>
+            `).join('');
+        }
+
+        function defenseKbOpen(defenseId) {
+            const defense = defenseKbFindDefenseById(defenseId);
+            if (!defense) return;
+            __defenseKbSelectedDefenseId = defense.id;
+            const detail = document.getElementById('defenseKbDetail');
+            if (detail) {
+                detail.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="rounded-lg border border-sky-900/40 bg-sky-950/10 p-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-sky-200">${_resultEscape(defense.name)}</div>
+                                    <div class="text-[10px] text-slate-400">${_resultEscape(defense.category_title)}</div>
+                                </div>
+                                <span class="text-[10px] rounded-full border border-slate-700 px-2 py-1 text-slate-300">${_resultEscape(defense.id)}</span>
+                            </div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-cyan-300 mb-1">ما هو؟</div>
+                            <div class="text-[11px] text-gray-200 leading-6">${_resultEscape(defense.how)}</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-amber-300 mb-1">أين؟</div>
+                            <div class="text-[11px] text-gray-200 leading-6">${_resultEscape(defense.where)}</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-fuchsia-300 mb-1">أدوات مساعدة</div>
+                            <div class="space-y-1">${(Array.isArray(defense.tools) ? defense.tools : []).map((tool) => `<div class="text-[11px] text-fuchsia-100">• ${_resultEscape(tool)}</div>`).join('')}</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-emerald-300 mb-1">احمِ نفسك بـ</div>
+                            <div class="space-y-1">${(Array.isArray(defense.protection) ? defense.protection : []).map((step) => `<div class="text-[11px] text-emerald-100">• ${_resultEscape(step)}</div>`).join('')}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            defenseKbQuizLoadDefense(defense);
+            defenseKbApplyFilters(true);
+        }
+
+        function defenseKbApplyFilters(skipDetailRefresh) {
+            const query = String((document.getElementById('defenseKbSearchInput')?.value || '')).trim().toLowerCase();
+            const category = String((document.getElementById('defenseKbCategoryFilter')?.value || 'all')).trim();
+            const all = _defenseKbAllItems();
+            const filtered = all.filter((item) => {
+                if (category !== 'all' && item.category_id !== category) return false;
+                if (!query) return true;
+                const haystack = [item.name, item.how, item.where, item.category_title, ...(item.tools || []), ...(item.protection || [])].join(' ').toLowerCase();
+                return haystack.includes(query);
+            });
+            const pageSize = __defenseKbDefaultPageLimit;
+            const isLimited = !__defenseKbListExpanded && filtered.length > pageSize;
+            const visible = isLimited ? filtered.slice(0, pageSize) : filtered;
+            _defenseKbRenderStats(filtered, all.length, visible.length);
+            _defenseKbRenderDefenseCards(visible);
+            const showMoreButton = document.getElementById('defenseKbCatalogShowMore');
+            if (showMoreButton) {
+                if (isLimited) {
+                    showMoreButton.classList.remove('hidden');
+                    showMoreButton.textContent = `عرض المزيد (${filtered.length - visible.length})`;
+                } else {
+                    showMoreButton.classList.add('hidden');
+                }
+            }
+            if (!skipDetailRefresh) {
+                if (!filtered.some((item) => item.id === __defenseKbSelectedDefenseId) && filtered.length) {
+                    defenseKbOpen(filtered[0].id);
+                }
+            }
+        }
+
+        function defenseKbShowMore() {
+            __defenseKbListExpanded = true;
+            defenseKbApplyFilters(true);
+        }
+
+        function defenseKbResetFilters() {
+            __defenseKbListExpanded = false;
+            const input = document.getElementById('defenseKbSearchInput');
+            const category = document.getElementById('defenseKbCategoryFilter');
+            if (input) input.value = '';
+            if (category) category.value = 'all';
+            defenseKbApplyFilters(false);
+        }
+
+        function defenseKbQuizLoadDefense(defense) {
+            __defenseKbQuizState = {
+                defenseId: defense.id,
+                defenseName: defense.name,
+                bank: defenseKbBuildQuizBank(defense),
+                idx: 0,
+                score: 0,
+                answered: false,
+                completed: false
+            };
+            const container = document.getElementById('defenseKbQuizContainer');
+            if (container) {
+                container.innerHTML = `جاهز لكويز ${_resultEscape(defense.name)}. اضغط زر <strong>بدء كويز الدفاع</strong> لعرض الأسئلة.`;
+            }
+        }
+
+        function defenseKbBuildQuizBank(defense) {
+            if (!defense) return [];
+            const allCategoryTitles = DEFENSE_KB_CATALOG.map((cat) => String(cat.title || ''));
+            const genericTools = ['مراجعة التكوين', 'التدقيق الأمني', 'مراقبة النشاط'];
+            const genericProtections = ['تحديث مستمر', 'تخطيط الاستجابة', 'تطبيق سياسات صارمة'];
+            const bank = [];
+            const tools = Array.isArray(defense.tools) ? defense.tools.slice(0, 4) : [];
+            const protection = Array.isArray(defense.protection) ? defense.protection.slice(0, 4) : [];
+            const wrongToolPool = [...genericTools, ...tools, ...protection];
+            const wrongProtectionPool = [...genericProtections, ...tools, ...protection];
+
+            function buildQuestion(text, correct, wrongPool) {
+                const wrongs = _learningPickWrongOptions(correct, 3, wrongPool);
+                const options = _learningShuffle([correct, ...wrongs]).slice(0, 4);
+                return {
+                    question: text,
+                    options,
+                    answer: options.findIndex((o) => String(o || '') === String(correct || '')),
+                    explain: correct
+                };
+            }
+
+            if (defense.how) {
+                bank.push(buildQuestion(`ما هو الهدف الأساسي من ${defense.name}?`, defense.how, ['تحسين الأداء', 'زيادة الربحية', 'تسريع النشر']));
+            }
+            if (defense.where) {
+                bank.push(buildQuestion(`أين يُطبق ${defense.name} عادة؟`, defense.where, ['بيئة التطوير فقط', 'مستودع الكود', 'شبكة الضيف']));
+            }
+            if (tools.length) {
+                tools.forEach((tool) => bank.push(buildQuestion(`أي من الأدوات التالية يستخدم عادة مع ${defense.name}?`, tool, wrongToolPool)));
+            }
+            if (protection.length) {
+                protection.forEach((step) => bank.push(buildQuestion(`أي من الإجراءات التالية يساهم في تنفيذ ${defense.name}?`, step, wrongProtectionPool)));
+            }
+            bank.push(buildQuestion(`ما الفئة الأقرب لـ ${defense.name}?`, defense.category_title || 'دفاع عام', allCategoryTitles));
+            bank.push(buildQuestion(`ما الهدف الأمني الرئيسي من ${defense.name}?`, defense.protection[0] || 'حماية أفضل', ['سرعة أعلى', 'تكلفة أقل', 'وظائف جديدة']));
+
+            if (bank.length > TRAINING_QUIZ_LIMIT) {
+                return bank.slice(0, TRAINING_QUIZ_LIMIT);
+            }
+            if (bank.length < TRAINING_QUIZ_LIMIT) {
+                const extra = [
+                    { text: `أي من الخطوات التالية يعزز دور ${defense.name}?`, correct: 'التدقيق وتحديث السياسات' },
+                    { text: `ما الذي يجب مراقبته بعد تطبيق ${defense.name}?`, correct: 'نشاط الأمان والسجلات' },
+                    { text: `ما الفائدة الأساسية من ${defense.name}?`, correct: 'تقليل مخاطر الهجوم' }
+                ];
+                extra.forEach((item) => {
+                    if (bank.length < TRAINING_QUIZ_LIMIT) {
+                        bank.push(buildQuestion(item.text, item.correct, wrongProtectionPool));
+                    }
+                });
+            }
+            return bank;
+        }
+
+        function defenseKbQuizRender() {
+            const container = document.getElementById('defenseKbQuizContainer');
+            if (!container) return;
+            if (!__defenseKbQuizState.defenseId) {
+                container.innerHTML = 'اختر تقنية ثم ابدأ الكويز.';
+                return;
+            }
+            if (!Array.isArray(__defenseKbQuizState.bank) || !__defenseKbQuizState.bank.length) {
+                container.innerHTML = 'لا توجد أسئلة لهذا العنصر الدفاعي حالياً.';
+                return;
+            }
+            if (__defenseKbQuizState.completed) {
+                const lastQuestion = __defenseKbQuizState.bank[__defenseKbQuizState.bank.length - 1];
+                container.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="text-[11px] text-sky-200 font-bold">انتهى الكويز!</div>
+                        <div class="text-[11px] text-gray-300">النتيجة النهائية: ${__defenseKbQuizState.score}/${__defenseKbQuizState.bank.length}</div>
+                        <div class="text-[11px] text-gray-300">السؤال الأخير: ${_resultEscape(lastQuestion.question)}</div>
+                        <div class="text-[11px] text-sky-200">الجواب الصحيح: ${_resultEscape(lastQuestion.options[lastQuestion.answer] || '')}</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="defenseKbQuizRestart()" class="py-2 rounded bg-sky-900/30 border border-sky-800/50 text-sky-200 text-xs font-bold">أعد الاختبار</button>
+                            <button onclick="defenseKbQuizStart()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs text-gray-200">كويز جديد</button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            const question = __defenseKbQuizState.bank[__defenseKbQuizState.idx];
+            const buttons = question.options.map((option, index) => {
+                const disabled = __defenseKbQuizState.answered ? 'disabled' : '';
+                const tone = __defenseKbQuizState.answered
+                    ? (index === question.answer ? 'border-sky-500 bg-sky-900/30 text-sky-200' : 'border-slate-700 bg-slate-900/60 text-gray-300')
+                    : 'border-slate-700 bg-slate-900/60 text-gray-200 hover:bg-slate-800';
+                return `<button onclick="defenseKbQuizSubmitAnswer(${index})" ${disabled} class="w-full text-right p-2 rounded border ${tone} text-xs">${_resultEscape(option)}</button>`;
+            }).join('');
+            const feedback = __defenseKbQuizState.answered ? `
+                <div class="text-[11px] ${__defenseKbQuizState.lastCorrect ? 'text-emerald-200' : 'text-rose-200'}">
+                    ${_resultEscape(__defenseKbQuizState.lastCorrect ? '✅ صحيح' : '❌ غير دقيق')} - الجواب الصحيح: ${_resultEscape(question.options[question.answer] || '')}
+                </div>
+            ` : '<div class="text-[11px] text-gray-400">اختر الإجابة ثم اضغط التالي.</div>';
+            container.innerHTML = `
+                <div class="space-y-3">
+                    <div class="text-[11px] text-sky-200 font-bold">سؤال ${__defenseKbQuizState.idx + 1}/${__defenseKbQuizState.bank.length}</div>
+                    <div class="text-[11px] text-gray-100">${_resultEscape(question.question)}</div>
+                    <div class="grid grid-cols-1 gap-2">${buttons}</div>
+                    ${feedback}
+                    <div class="flex gap-2">
+                        <button onclick="defenseKbQuizNextQuestion()" class="flex-1 py-2 rounded bg-sky-900/30 border border-sky-800/50 text-sky-200 text-xs font-bold" ${__defenseKbQuizState.answered ? '' : 'disabled'}>التالي</button>
+                        <button onclick="defenseKbQuizRestart()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs text-gray-200">إعادة</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function defenseKbQuizStart() {
+            if (!__defenseKbQuizState.defenseId) {
+                const container = document.getElementById('defenseKbQuizContainer');
+                if (container) container.innerHTML = 'اختر تقنية أولاً ثم اضغط زر بدء كويز الدفاع.';
+                return;
+            }
+            const defense = defenseKbFindDefenseById(__defenseKbQuizState.defenseId);
+            if (!defense) {
+                const container = document.getElementById('defenseKbQuizContainer');
+                if (container) container.innerHTML = 'لم يتم العثور على التقنية الدفاعية المختارة.';
+                return;
+            }
+            __defenseKbQuizState.idx = 0;
+            __defenseKbQuizState.score = 0;
+            __defenseKbQuizState.answered = false;
+            __defenseKbQuizState.completed = false;
+            __defenseKbQuizState.bank = defenseKbBuildQuizBank(defense);
+            if (!__defenseKbQuizState.bank.length) {
+                const container = document.getElementById('defenseKbQuizContainer');
+                if (container) container.innerHTML = 'لا توجد أسئلة كافية لهذا العنصر الدفاعي.';
+                return;
+            }
+            defenseKbQuizRender();
+        }
+
+        function defenseKbQuizSubmitAnswer(index) {
+            if (__defenseKbQuizState.answered || __defenseKbQuizState.completed) return;
+            const question = __defenseKbQuizState.bank[__defenseKbQuizState.idx];
+            if (!question) return;
+            __defenseKbQuizState.lastCorrect = index === question.answer;
+            if (index === question.answer) {
+                __defenseKbQuizState.score += 1;
+            }
+            __defenseKbQuizState.answered = true;
+            if (__defenseKbQuizState.idx === __defenseKbQuizState.bank.length - 1) {
+                __defenseKbQuizState.completed = true;
+            }
+            defenseKbQuizRender();
+        }
+
+        function defenseKbQuizNextQuestion() {
+            if (!__defenseKbQuizState.answered || __defenseKbQuizState.completed) return;
+            __defenseKbQuizState.idx += 1;
+            __defenseKbQuizState.answered = false;
+            __defenseKbQuizState.lastCorrect = false;
+            if (__defenseKbQuizState.idx >= __defenseKbQuizState.bank.length) {
+                __defenseKbQuizState.completed = true;
+            }
+            defenseKbQuizRender();
+        }
+
+        function defenseKbQuizRestart() {
+            if (!__defenseKbQuizState.defenseId) return;
+            __defenseKbQuizState.idx = 0;
+            __defenseKbQuizState.score = 0;
+            __defenseKbQuizState.answered = false;
+            __defenseKbQuizState.completed = false;
+            defenseKbQuizRender();
+        }
+
+        function defenseKbFindDefenseById(id) {
+            const all = _defenseKbAllItems();
+            return all.find((x) => x.id === id) || null;
+        }
+
+        function defenseKbInitCatalog() {
+            if (__defenseKbReady) {
+                defenseKbApplyFilters(false);
+                return;
+            }
+            const categorySelect = document.getElementById('defenseKbCategoryFilter');
+            if (categorySelect) {
+                const sortedCategories = [...DEFENSE_KB_CATALOG].sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ar'));
+                categorySelect.innerHTML = '<option value="all">كل التصنيفات</option>' + sortedCategories.map((c) => `<option value="${_resultEscape(c.id)}">${_resultEscape(c.title)}</option>`).join('');
+            }
+            __defenseKbReady = true;
+            defenseKbApplyFilters(false);
+        }
+
+        function _vulnKbAllVulns() {
+            const items = [];
+            VULN_KB_CATALOG.forEach((category) => {
+                if (Array.isArray(category.items)) {
+                    category.items.forEach((item) => {
+                        items.push({
+                            ...item,
+                            category_id: category.id,
+                            category_title: category.title
+                        });
+                    });
+                }
+            });
+            return items;
+        }
+
+        function _vulnKbRenderStats(filtered, total, shown) {
+            const box = document.getElementById('vulnKbCatalogStats');
+            if (!box) return;
+            const families = new Set((filtered || []).map((x) => x.category_id)).size;
+            const matched = (filtered || []).length;
+            box.innerHTML = `
+                <span class="text-pink-200 font-bold">${_resultEscape(matched)}</span> ثغرة
+                <span class="mx-2 text-gray-600">|</span>
+                <span class="text-slate-300">من ${_resultEscape(total)}</span>
+                <span class="mx-2 text-gray-600">|</span>
+                <span class="text-cyan-300">${_resultEscape(families)}</span> فئة
+            `;
+        }
+
+        function _vulnKbRenderVulnCards(vulnerabilities) {
+            const box = document.getElementById('vulnKbCatalog');
+            const empty = document.getElementById('vulnKbEmpty');
+            if (!box) return;
+            if (!vulnerabilities.length) {
+                box.innerHTML = '';
+                if (empty) empty.classList.remove('hidden');
+                return;
+            }
+            if (empty) empty.classList.add('hidden');
+            const categories = vulnerabilities.reduce((acc, item) => {
+                const key = item.category_id || 'other';
+                if (!acc[key]) {
+                    acc[key] = { title: item.category_title || 'عام', items: [] };
+                }
+                acc[key].items.push(item);
+                return acc;
+            }, {});
+
+            box.innerHTML = Object.values(categories).map((category) => `
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between gap-3 px-2 py-1 rounded-2xl bg-slate-900/80 border border-slate-700 text-xs text-slate-300">
+                        <div class="font-bold text-pink-300">${_resultEscape(category.title)}</div>
+                        <div class="text-[11px] text-slate-500">${category.items.length} ثغرة</div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3">${category.items.map((item) => {
+                        const active = item.id === __vulnKbSelectedVulnId;
+                        return `
+                            <button onclick="vulnKbOpen('${_resultEscape(item.id)}')" class="toolskb-card transition-all ${active ? 'border-pink-500 bg-pink-950/20' : 'border-slate-700 bg-black/30 hover:border-pink-800/40 hover:bg-pink-950/10'}">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="text-sm font-semibold ${active ? 'text-pink-200' : 'text-gray-200'}">${_resultEscape(item.name)}</div>
+                                    <span class="toolskb-category-pill">${_resultEscape(item.category_title)}</span>
+                                </div>
+                                <div class="text-[11px] text-slate-300 mt-3">${_resultEscape(item.how)}</div>
+                            </button>
+                        `;
+                    }).join('')}</div>
+                </div>
+            `).join('');
+        }
+
+        function vulnKbOpen(vulnId) {
+            const vuln = vulnKbFindVulnById(vulnId);
+            if (!vuln) return;
+            __vulnKbSelectedVulnId = vuln.id;
+            const detail = document.getElementById('vulnKbDetail');
+            if (detail) {
+                detail.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="rounded-lg border border-pink-900/40 bg-pink-950/10 p-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-bold text-pink-200">${_resultEscape(vuln.name)}</div>
+                                    <div class="text-[10px] text-slate-400">${_resultEscape(vuln.category_title)}</div>
+                                </div>
+                                <span class="text-[10px] rounded-full border border-slate-700 px-2 py-1 text-slate-300">${_resultEscape(vuln.id)}</span>
+                            </div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-cyan-300 mb-1">كيف بتصير؟</div>
+                            <div class="text-[11px] text-gray-200 leading-6">${_resultEscape(vuln.how)}</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-amber-300 mb-1">وين بتصير؟</div>
+                            <div class="text-[11px] text-gray-200 leading-6">${_resultEscape(vuln.where)}</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-fuchsia-300 mb-1">أدوات مرتبطة</div>
+                            <div class="space-y-1">${(Array.isArray(vuln.tools) ? vuln.tools : []).map((tool) => `<div class="text-[11px] text-fuchsia-100">• ${_resultEscape(tool)}</div>`).join('')}</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-700 bg-black/30 p-3">
+                            <div class="text-[11px] font-bold text-emerald-300 mb-1">إجراءات الحماية</div>
+                            <div class="space-y-1">${(Array.isArray(vuln.protection) ? vuln.protection : []).map((step) => `<div class="text-[11px] text-emerald-100">• ${_resultEscape(step)}</div>`).join('')}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            vulnKbQuizLoadVuln(vuln);
+            vulnKbApplyFilters(true);
+        }
+
+        function vulnKbApplyFilters(skipDetailRefresh) {
+            const query = String((document.getElementById('vulnKbSearchInput')?.value || '')).trim().toLowerCase();
+            const category = String((document.getElementById('vulnKbCategoryFilter')?.value || 'all')).trim();
+            const all = _vulnKbAllVulns();
+            const filtered = all.filter((item) => {
+                if (category !== 'all' && item.category_id !== category) return false;
+                if (!query) return true;
+                const haystack = [item.name, item.how, item.where, item.category_title, ...(item.tools || []), ...(item.protection || [])].join(' ').toLowerCase();
+                return haystack.includes(query);
+            });
+            const pageSize = __vulnKbDefaultPageLimit;
+            const isLimited = !__vulnKbListExpanded && filtered.length > pageSize;
+            const visible = isLimited ? filtered.slice(0, pageSize) : filtered;
+            _vulnKbRenderStats(filtered, all.length, visible.length);
+            _vulnKbRenderVulnCards(visible);
+            const showMoreButton = document.getElementById('vulnKbCatalogShowMore');
+            if (showMoreButton) {
+                if (isLimited) {
+                    showMoreButton.classList.remove('hidden');
+                    showMoreButton.textContent = `عرض المزيد (${filtered.length - visible.length})`;
+                } else {
+                    showMoreButton.classList.add('hidden');
+                }
+            }
+            if (!skipDetailRefresh) {
+                if (!filtered.some((item) => item.id === __vulnKbSelectedVulnId) && filtered.length) {
+                    vulnKbOpen(filtered[0].id);
+                }
+            }
+        }
+
+        function vulnKbShowMore() {
+            __vulnKbListExpanded = true;
+            vulnKbApplyFilters(true);
+        }
+
+        function vulnKbResetFilters() {
+            __vulnKbListExpanded = false;
+            const input = document.getElementById('vulnKbSearchInput');
+            const category = document.getElementById('vulnKbCategoryFilter');
+            if (input) input.value = '';
+            if (category) category.value = 'all';
+            vulnKbApplyFilters(false);
+        }
+
+        function vulnKbQuizLoadVuln(vuln) {
+            __vulnKbQuizState = {
+                vulnId: vuln.id,
+                vulnName: vuln.name,
+                bank: vulnKbBuildQuizBank(vuln),
+                idx: 0,
+                score: 0,
+                answered: false,
+                completed: false
+            };
+            const container = document.getElementById('vulnKbQuizContainer');
+            if (container) {
+                container.innerHTML = `جاهز لكويز ${_resultEscape(vuln.name)}. اضغط زر <strong>بدء كويز الثغرة</strong> لعرض الأسئلة.`;
+            }
+        }
+
+        function vulnKbBuildQuizBank(vuln) {
+            if (!vuln) return [];
+            const allCategoryTitles = VULN_KB_CATALOG.map((cat) => String(cat.title || ''));
+            const genericTools = ['تحليل السجلات', 'فحص المدخلات', 'مراقبة الشبكة', 'كشف التسرب', 'إدارة الصلاحيات', 'فحص التكوين'];
+            const genericProtections = ['التحقق من صحة الإدخال', 'عزل الشبكة', 'تقييد الوصول', 'تحديث سريع', 'استخدام MFA', 'تشفير البيانات'];
+            const severityLabel = _learningSeverityMeta(VULN_KB_SEVERITY_BY_ID[vuln.id] || 'medium').label;
+            const bank = [];
+            const tools = Array.isArray(vuln.tools) ? vuln.tools.slice(0, 4) : [];
+            const protection = Array.isArray(vuln.protection) ? vuln.protection.slice(0, 4) : [];
+            const wrongToolPool = [...genericTools, ...tools, ...protection];
+            const wrongProtectionPool = [...genericProtections, ...tools, ...protection];
+
+            function buildQuestion(text, correct, wrongPool) {
+                const wrongs = _learningPickWrongOptions(correct, 3, wrongPool);
+                const options = _learningShuffle([correct, ...wrongs]).slice(0, 4);
+                return {
+                    question: text,
+                    options,
+                    answer: options.findIndex((o) => String(o || '') === String(correct || '')),
+                    explain: correct
+                };
+            }
+
+            if (vuln.how) {
+                bank.push(buildQuestion(`ما هو الوصف الأكثر دقة للثغرة ${vuln.name}؟`, vuln.how, ['استغلال ضعف المصادقة', 'حقن بيانات ضارة', 'هجوم رفض الخدمة']));
+            }
+            if (vuln.where) {
+                bank.push(buildQuestion('أين يحدث هذا النوع من الثغرات عادة؟', vuln.where, ['خوادم البريد', 'مستودعات الكود', 'شبكات الضيف']));
+            }
+            if (tools.length) {
+                tools.forEach((tool) => bank.push(buildQuestion(`أي من الأدوات التالية يرتبط عادة بالثغرة ${vuln.name}؟`, tool, wrongToolPool)));
+            }
+            if (protection.length) {
+                protection.forEach((step) => bank.push(buildQuestion(`أي من الإجراءات التالية يساعد في حماية النظام من ${vuln.name}؟`, step, wrongProtectionPool)));
+            }
+            bank.push(buildQuestion(`ما الفئة الأقرب للثغرة ${vuln.name}؟`, vuln.category_title || 'ثغرة عامة', allCategoryTitles));
+            bank.push(buildQuestion(`ما مستوى الخطورة المتوقع لهذه الثغرة؟`, severityLabel, ['Low', 'Medium', 'High', 'Critical']));
+
+            if (bank.length > TRAINING_QUIZ_LIMIT) {
+                return bank.slice(0, TRAINING_QUIZ_LIMIT);
+            }
+            if (bank.length < TRAINING_QUIZ_LIMIT) {
+                const extra = [
+                    { text: `أيهما يمثل أفضل وسيلة للحماية من ${vuln.name}؟`, correct: 'تقييد الوصول وتدقيق المدخلات' },
+                    { text: `ما العنصر الذي يجب مراقبته عند حدوث ${vuln.name}؟`, correct: 'سجلات النظام وحركة الشبكة' },
+                    { text: `ما من العبارات التالية تصف هدف المهاجم في ${vuln.name}؟`, correct: 'الحصول على بيانات أو الوصول غير المصرح' }
+                ];
+                extra.forEach((item) => {
+                    if (bank.length < 10) {
+                        bank.push(buildQuestion(item.text, item.correct, wrongProtectionPool));
+                    }
+                });
+            }
+            return bank;
+        }
+
+        function vulnKbQuizRender() {
+            const container = document.getElementById('vulnKbQuizContainer');
+            if (!container) return;
+            if (!__vulnKbQuizState.vulnId) {
+                container.innerHTML = 'اختر ثغرة ثم اضغط زر كويز الثغرة لبدء اختبار دفاعي قصير.';
+                return;
+            }
+            if (!Array.isArray(__vulnKbQuizState.bank) || !__vulnKbQuizState.bank.length) {
+                container.innerHTML = 'لم تتوفر أسئلة كافية لهذه الثغرة بعد.';
+                return;
+            }
+            if (__vulnKbQuizState.completed) {
+                const lastQuestion = __vulnKbQuizState.bank[__vulnKbQuizState.bank.length - 1];
+                container.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="text-[11px] text-pink-200 font-bold">انتهى الكويز!</div>
+                        <div class="text-[11px] text-gray-300">النتيجة النهائية: ${__vulnKbQuizState.score}/${__vulnKbQuizState.bank.length}</div>
+                        <div class="text-[11px] text-gray-300">السؤال الأخير: ${_resultEscape(lastQuestion.question)}</div>
+                        <div class="text-[11px] text-pink-200">الجواب الصحيح: ${_resultEscape(lastQuestion.options[lastQuestion.answer] || '')}</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="vulnKbQuizRestart()" class="py-2 rounded bg-pink-900/30 border border-pink-800/50 text-pink-200 text-xs font-bold">أعد الاختبار</button>
+                            <button onclick="vulnKbQuizStart()" class="py-2 rounded bg-slate-800 border border-slate-700 text-xs text-gray-200">كويز جديد</button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            const question = __vulnKbQuizState.bank[__vulnKbQuizState.idx];
+            const buttons = question.options.map((option, index) => {
+                const disabled = __vulnKbQuizState.answered ? 'disabled' : '';
+                const tone = __vulnKbQuizState.answered
+                    ? (index === question.answer ? 'border-pink-500 bg-pink-900/30 text-pink-200' : 'border-slate-700 bg-slate-900/60 text-gray-300')
+                    : 'border-slate-700 bg-slate-900/60 text-gray-200 hover:bg-slate-800';
+                return `<button onclick="vulnKbQuizSubmitAnswer(${index})" ${disabled} class="w-full text-right p-2 rounded border ${tone} text-xs">${_resultEscape(option)}</button>`;
+            }).join('');
+            const feedback = __vulnKbQuizState.answered ? `
+                <div class="text-[11px] ${__vulnKbQuizState.lastCorrect ? 'text-emerald-200' : 'text-rose-200'}">
+                    ${_resultEscape(__vulnKbQuizState.lastCorrect ? '✅ صحيح' : '❌ غير دقيق')} - الجواب الصحيح: ${_resultEscape(question.options[question.answer] || '')}
+                </div>
+            ` : '<div class="text-[11px] text-gray-400">اختر الإجابة ثم اضغط التالي.</div>';
+            container.innerHTML = `
+                <div class="space-y-3">
+                    <div class="text-[11px] text-pink-200 font-bold">سؤال ${__vulnKbQuizState.idx + 1}/${__vulnKbQuizState.bank.length}</div>
+                    <div class="text-[11px] text-gray-100">${_resultEscape(question.question)}</div>
+                    <div class="grid grid-cols-1 gap-2">${buttons}</div>
+                    ${feedback}
+                    <div class="flex gap-2">
+                        <button onclick="vulnKbQuizNextQuestion()" class="flex-1 py-2 rounded bg-pink-900/30 border border-pink-800/50 text-pink-200 text-xs font-bold" ${__vulnKbQuizState.answered ? '' : 'disabled'}>التالي</button>
+                        <button onclick="vulnKbQuizRestart()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs text-gray-200">إعادة</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function vulnKbQuizStart() {
+            if (!__vulnKbQuizState.vulnId) {
+                const container = document.getElementById('vulnKbQuizContainer');
+                if (container) container.innerHTML = 'اختر ثغرة أولاً حتى يتم إنشاء كويز مناسب لها.';
+                return;
+            }
+            const vuln = vulnKbQuizFindVulnById(__vulnKbQuizState.vulnId);
+            if (!vuln) {
+                const container = document.getElementById('vulnKbQuizContainer');
+                if (container) container.innerHTML = 'لم يتم العثور على الثغرة المختارة.';
+                return;
+            }
+            __vulnKbQuizState.idx = 0;
+            __vulnKbQuizState.score = 0;
+            __vulnKbQuizState.answered = false;
+            __vulnKbQuizState.completed = false;
+            __vulnKbQuizState.bank = vulnKbBuildQuizBank(vuln);
+            if (!__vulnKbQuizState.bank.length) {
+                const container = document.getElementById('vulnKbQuizContainer');
+                if (container) container.innerHTML = 'لم تتوفر أسئلة كافية لهذه الثغرة.';
+                return;
+            }
+            vulnKbQuizRender();
+        }
+
+        function vulnKbQuizSubmitAnswer(index) {
+            if (__vulnKbQuizState.answered || __vulnKbQuizState.completed) return;
+            const question = __vulnKbQuizState.bank[__vulnKbQuizState.idx];
+            if (!question) return;
+            __vulnKbQuizState.lastCorrect = index === question.answer;
+            if (index === question.answer) {
+                __vulnKbQuizState.score += 1;
+            }
+            __vulnKbQuizState.answered = true;
+            if (__vulnKbQuizState.idx === __vulnKbQuizState.bank.length - 1) {
+                __vulnKbQuizState.completed = true;
+                const saved = JSON.parse(localStorage.getItem(VULN_KB_QUIZ_STORAGE_KEY) || '{}');
+                saved[__vulnKbQuizState.vulnId] = {
+                    vulnName: __vulnKbQuizState.vulnName,
+                    score: __vulnKbQuizState.score,
+                    total: __vulnKbQuizState.bank.length,
+                    completed_at: new Date().toISOString()
+                };
+                localStorage.setItem(VULN_KB_QUIZ_STORAGE_KEY, JSON.stringify(saved));
+            }
+            vulnKbQuizRender();
+        }
+
+        function vulnKbQuizNextQuestion() {
+            if (!__vulnKbQuizState.answered || __vulnKbQuizState.completed) return;
+            __vulnKbQuizState.idx += 1;
+            __vulnKbQuizState.answered = false;
+            __vulnKbQuizState.lastCorrect = false;
+            if (__vulnKbQuizState.idx >= __vulnKbQuizState.bank.length) {
+                __vulnKbQuizState.completed = true;
+                const saved = JSON.parse(localStorage.getItem(VULN_KB_QUIZ_STORAGE_KEY) || '{}');
+                saved[__vulnKbQuizState.vulnId] = {
+                    vulnName: __vulnKbQuizState.vulnName,
+                    score: __vulnKbQuizState.score,
+                    total: __vulnKbQuizState.bank.length,
+                    completed_at: new Date().toISOString()
+                };
+                localStorage.setItem(VULN_KB_QUIZ_STORAGE_KEY, JSON.stringify(saved));
+            }
+            vulnKbQuizRender();
+        }
+
+        function vulnKbQuizRestart() {
+            if (!__vulnKbQuizState.vulnId) return;
+            __vulnKbQuizState.idx = 0;
+            __vulnKbQuizState.score = 0;
+            __vulnKbQuizState.answered = false;
+            __vulnKbQuizState.completed = false;
+            __vulnKbQuizState.lastCorrect = false;
+            vulnKbQuizRender();
+        }
+
+        function vulnKbFindVulnById(id) {
+            const all = _vulnKbAllVulns();
+            return all.find((x) => x.id === id) || null;
+        }
+
+        function vulnKbQuizFindVulnById(id) {
+            return vulnKbFindVulnById(id);
+        }
+
+        function vulnKbQuizLoadSelectedVuln(vulnId) {
+            const vuln = vulnKbFindVulnById(vulnId);
+            if (vuln) {
+                vulnKbQuizLoadVuln(vuln);
+            }
+        }
+
+        function vulnKbInitCatalog() {
+            if (__vulnKbReady) {
+                vulnKbApplyFilters(false);
+                return;
+            }
+            const categorySelect = document.getElementById('vulnKbCategoryFilter');
+            if (categorySelect) {
+                const sortedCategories = [...VULN_KB_CATALOG].sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ar'));
+                categorySelect.innerHTML = '<option value="all">كل التصنيفات</option>' + sortedCategories.map((c) => `<option value="${_resultEscape(c.id)}">${_resultEscape(c.title)}</option>`).join('');
+            }
+            __vulnKbReady = true;
+            vulnKbApplyFilters(false);
+        }
+
         function trainingToolsInit() {
             if (__toolskbReady) {
                 toolskbApplyFilters(false);
@@ -8778,9 +10065,9 @@ HTML_TEMPLATE = """
             const box = document.getElementById('toolskbCatalogStats');
             if (!box) return;
             const families = new Set((filtered || []).map((x) => x.category_id)).size;
-            const count = Number.isFinite(shown) ? shown : (filtered || []).length;
+            const matched = (filtered || []).length;
             box.innerHTML = `
-                <span class="text-emerald-200 font-bold">${_resultEscape(count)}</span> أداة
+                <span class="text-emerald-200 font-bold">${_resultEscape(matched)}</span> أداة
                 <span class="mx-2 text-gray-600">|</span>
                 <span class="text-slate-300">من ${_resultEscape(total)}</span>
                 <span class="mx-2 text-gray-600">|</span>
@@ -9069,9 +10356,10 @@ HTML_TEMPLATE = """
                 }
                 return result;
             };
-            const randomTools = randomItems(2);
-            const randomHow = randomItems(2);
-            const randomWhere = randomItems(2);
+            const randomTools = randomItems(3);
+            const randomHow = randomItems(3);
+            const randomWhere = randomItems(3);
+            const categoryTitles = [...new Set(all.map((item) => item.category_title).filter(Boolean))];
             const questions = [
                 {
                     question: `ما هو الدور الرئيسي لأداة ${tool.name}؟`,
@@ -9087,9 +10375,44 @@ HTML_TEMPLATE = """
                     question: `أي من الأدوات التالية يرتبط أكثر بـ ${tool.name}?`,
                     correct: tool.name,
                     options: [tool.name, ...randomTools.map((item) => item.name)]
+                },
+                {
+                    question: `ما الفئة الأقرب لأداة ${tool.name}؟`,
+                    correct: tool.category_title || 'أدوات أمنية عامة',
+                    options: [tool.category_title || 'أدوات أمنية عامة', ...categoryTitles.filter((title) => title !== tool.category_title).slice(0, 3)]
+                },
+                {
+                    question: `أي وصف يوضح استخدام ${tool.name}؟`,
+                    correct: tool.how,
+                    options: [tool.how, ...randomHow.map((item) => item.how)]
+                },
+                {
+                    question: `أي من هذه العبارات يناسب حالة استخدام ${tool.name}؟`,
+                    correct: tool.where,
+                    options: [tool.where, ...randomWhere.map((item) => item.where)]
+                },
+                {
+                    question: `ما السمة المميزة لأداة ${tool.name}؟`,
+                    correct: tool.how,
+                    options: [tool.how, ...randomHow.map((item) => item.how)]
+                },
+                {
+                    question: `أين من المرجح أن تستخدم ${tool.name}؟`,
+                    correct: tool.where,
+                    options: [tool.where, ...randomWhere.map((item) => item.where)]
+                },
+                {
+                    question: `أي أداة أخرى تعمل في نفس فئة ${tool.name}؟`,
+                    correct: randomTools[0]?.name || tool.name,
+                    options: [randomTools[0]?.name || tool.name, randomTools[1]?.name || tool.name, randomTools[2]?.name || tool.name, tool.name]
+                },
+                {
+                    question: `أي من الخيارات التالية يصف أفضل وظيفة لـ ${tool.name}؟`,
+                    correct: tool.how,
+                    options: [tool.how, ...randomHow.map((item) => item.how)]
                 }
             ];
-            return questions.map((entry) => {
+            return questions.slice(0, TRAINING_QUIZ_LIMIT).map((entry) => {
                 const shuffled = _toolskbShuffleArray(entry.options);
                 return {
                     question: entry.question,
@@ -11577,6 +12900,48 @@ HTML_TEMPLATE = """
                 options: ['التنفيذ لأن المرسل مدير', 'التحقق الثنائي ورفع الحالة', 'تجاهل الرسالة بلا توثيق'],
                 answer: 1,
                 explain: 'انتحال السلطة يتطلب تحقق ثنائي ومسار تصعيد رسمي.'
+            },
+            {
+                question: 'عرضت رابطاً لموقع دفع عبر البريد. كيف تتصرف؟',
+                options: ['فتح الرابط للتحقق', 'التأكد من عنوان URL والمصدر أولاً', 'إعادة إرسال الرابط للزملاء'],
+                answer: 1,
+                explain: 'التحقق المسبق من الرابط والمصدر يحمي من الهجمات.'
+            },
+            {
+                question: 'شخص يطلب معلومات سرية عبر الهاتف بدعوى الدعم الفني. التصرف الأفضل؟',
+                options: ['تقديم المعلومات', 'طلب تحويل المكالمة إلى المسؤول', 'إغلاق المكالمة بسرعة'],
+                answer: 1,
+                explain: 'التحقق من هوية المتصل عبر قناة رسمية ضروري.'
+            },
+            {
+                question: 'تلقىت طلب تحديث الحساب عبر رسالة SMS ويحتوي على رابط. ماذا تفعل؟',
+                options: ['فتح الرابط وتسجيل الدخول', 'التحقق مع المؤسسة عبر موقعها الرسمي', 'حذف الرسالة دون تفكير'],
+                answer: 1,
+                explain: 'التأكد من القناة الرسمية يقلل مخاطر التصيد.'
+            },
+            {
+                question: 'عرض عليك أحد الزملاء مشاركة بيانات العميل عبر البريد. كيف تُستجيب؟',
+                options: ['مشاركة البيانات فوراً', 'التحقق من طلبه وأسباب المشاركة', 'إرسال البيانات إلى المجموعة كلها'],
+                answer: 1,
+                explain: 'التحقق من الطلب وحماية الخصوصية واجبان.'
+            },
+            {
+                question: 'وجدت مستنداً غير متوقع يحتوي على روابط داخلية. ماذا يجب أن تفعل؟',
+                options: ['النقر على الروابط لفحصها', 'عدم فتح الروابط والإبلاغ لأمن المعلومات', 'طباعة المستند ومراجعته لاحقاً'],
+                answer: 1,
+                explain: 'التعامل بحذر مع الروابط غير المتوقعة هو سلوك آمن.'
+            },
+            {
+                question: 'زارك أحدهم شخصياً يطلب الوصول إلى جهازك لسبب طارئ. كيف تتصرف؟',
+                options: ['تمنحه الوصول سريعاً', 'تطلب مصادقة رسمية وتستشير المسؤول', 'تجاهل الطلب تماماً'],
+                answer: 1,
+                explain: 'الحصول على مصادقة رسمية يحمي من الاختراق الاجتماعي.'
+            },
+            {
+                question: 'استلمت ملفاً مرفقاً غير متوقع من مرسل معروف. ما الفعل الصحيح؟',
+                options: ['فتح الملف فوراً', 'التحقق من طلب المرسل ومالكية الملف', 'حفظ الملف للعمل لاحقاً'],
+                answer: 1,
+                explain: 'التحقق من صحة المرفق قبل فتحه يمنع البرمجيات الخبيثة.'
             }
         ];
 
