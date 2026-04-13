@@ -5189,23 +5189,38 @@ HTML_TEMPLATE = """
                                 <button onclick="ctfLoadChallenges(true)" class="w-full lg:w-auto px-4 py-2.5 rounded-xl bg-amber-900/35 hover:bg-amber-800/55 border border-amber-800/50 text-amber-200 text-xs font-bold">تحديث التحديات</button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
-                            <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none w-full md:col-span-2">
-                            <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="all" selected>كل الصعوبات</option>
-                                <option value="easy">Easy</option>
-                                <option value="medium">Medium</option>
-                                <option value="hard">Hard</option>
-                            </select>
-                            <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="all" selected>كل التصنيفات</option>
-                            </select>
+                        <div class="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr_1fr_1.1fr] gap-2 mb-2 items-end">
+                            <div class="space-y-2">
+                                <label for="ctfSearchInput" class="text-[11px] uppercase tracking-[0.16em] text-slate-400">🔎 بحث ذكي</label>
+                                <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="w-full p-2.5 rounded-3xl bg-slate-900 border border-slate-700 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30">
+                            </div>
+                            <div class="space-y-2">
+                                <label for="ctfFilterDifficulty" class="text-[11px] uppercase tracking-[0.16em] text-slate-400">🎯 مستوى الصعوبة</label>
+                                <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="w-full p-2.5 rounded-3xl bg-slate-900 border border-slate-700 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30">
+                                    <option value="all" selected>كل الصعوبات</option>
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
+                            <div class="space-y-2">
+                                <label for="ctfFilterCategory" class="text-[11px] uppercase tracking-[0.16em] text-slate-400">🧠 نوع التحدي</label>
+                                <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="w-full p-2.5 rounded-3xl bg-slate-900 border border-slate-700 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30">
+                                    <option value="all" selected>كل التصنيفات</option>
+                                </select>
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-[11px] uppercase tracking-[0.16em] text-slate-400">♻️ خيارات العرض</label>
+                                <div class="flex flex-col gap-2">
+                                    <label class="flex items-center gap-2 text-xs px-3 py-2 rounded-3xl border border-slate-700 bg-slate-900/70 hover:bg-slate-900/90 transition duration-150">
+                                        <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
+                                        <span class="text-gray-300">عرض غير المحلولة فقط</span>
+                                    </label>
+                                    <button onclick="ctfLoadChallenges(true)" class="w-full px-4 py-2 rounded-3xl bg-gradient-to-r from-amber-900/35 to-amber-800/50 hover:from-amber-900/55 hover:to-amber-700/60 border border-amber-800/50 text-amber-200 text-xs font-bold transition duration-150">تحديث التحديات</button>
+                                </div>
+                            </div>
                         </div>
-                        <label class="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/60 w-fit">
-                            <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
-                            <span class="text-gray-300">عرض غير المحلولة فقط</span>
-                        </label>
-                        <div id="ctfMeta" class="ctf-meta-text text-gray-300 bg-black/40 border border-slate-700 rounded-lg p-2 ctf-bidi mt-2">جار تحميل بيانات CTF...</div>
+                        <div id="ctfMeta" class="ctf-meta-text text-gray-300 bg-black/45 border border-slate-700 rounded-3xl p-3 ctf-bidi mt-2">جار تحميل بيانات CTF...</div>
                     </div>
 
                     <div id="ctfList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
@@ -12059,7 +12074,11 @@ HTML_TEMPLATE = """
                     return;
                 } else {
                     out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 ctf-bidi';
-                    out.innerText = `❌ غير صحيح. ${data.message || 'حاول مرة ثانية.'}`;
+                    let text = `❌ غير صحيح. ${data.message || 'حاول مرة ثانية.'}`;
+                    if (data.solution) {
+                        text += `\n\n${data.solution}`;
+                    }
+                    out.innerText = text;
                 }
             } catch (e) {
                 out.className = 'p-2 rounded-lg bg-rose-900/20 border border-rose-800/50 text-sm text-rose-300 ctf-bidi';
@@ -21215,6 +21234,369 @@ def _ctf_xor_hex(text: str, key_char: str) -> str:
     return ''.join(f"{(ord(c) ^ kb):02x}" for c in text)
 
 
+def _build_kali_tool_challenges(rng):
+    def make_challenge(challenge_id, title, difficulty, points, flag_format, description, hints, method, answer, category='kali-tools'):
+        return {
+            'id': challenge_id,
+            'title': title,
+            'category': category,
+            'difficulty': difficulty,
+            'points': points,
+            'flag_format': flag_format,
+            'description': description,
+            'hints': hints,
+            'method': method,
+            'answer': answer,
+        }
+
+    challenges = []
+
+    nmap_targets = [
+        '10.11.1.5', '10.13.7.21', '10.14.9.18', '10.12.3.44', '192.168.50.103',
+        '172.16.9.4', '172.16.8.99', '10.0.0.158', '10.1.12.77', '10.2.2.222'
+    ]
+    nmap_ports = [
+        (2222, 'ssh', 'OpenSSH 8.4p1'),
+        (3128, 'http-proxy', 'Squid 5.2'),
+        (4444, 'glrpc', 'Metasploit RPC'),
+        (5000, 'upnp', 'MiniDLNA 1.0.0'),
+        (5985, 'http', 'Microsoft HTTPAPI httpd 2.0'),
+        (5900, 'vnc', 'RealVNC 6.7'),
+        (6379, 'redis', 'Redis key-value store'),
+        (9200, 'http', 'Elasticsearch 7.17'),
+        (27017, 'mongodb', 'MongoDB 5.0'),
+        (8080, 'http', 'Apache Tomcat 9.0')
+    ]
+    for idx in range(1, 11):
+        target = rng.choice(nmap_targets)
+        port, service, version = rng.choice(nmap_ports)
+        output = (
+            f"Nmap scan report for {target}\n"
+            "Host is up (0.12s latency).\n"
+            "Not shown: 994 filtered ports\n"
+            "PORT     STATE SERVICE VERSION\n"
+            "22/tcp   open  ssh     OpenSSH 8.2p1\n"
+            f"{port}/tcp open  {service}    {version}\n"
+            "80/tcp   open  http    nginx 1.22\n"
+        )
+        challenges.append(make_challenge(
+            f'kali_nmap_{idx:02d}',
+            f'Kali Tool Drill: Nmap service discovery #{idx}',
+            'medium' if idx % 3 != 0 else 'hard',
+            170 + (idx % 3) * 20,
+            'TITAN{PORT}',
+            f"تدريب Kali (nmap): حلّل نتائج الفحص وحدد رقم البورت الذي يوفر الخدمة المكتشفة ({service}).\n\n{output}",
+            [
+                'ابحث عن السطر الذي يحتوي الخدمة المحددة وراجع رقم البورت المرتبط بها.',
+                'النتيجة الصحيحة هي رقم البورت فقط داخل العلم.'
+            ],
+            'قراءة مخرجات nmap واستخراج رقم البورت الخاص بالخدمة المستهدفة.',
+            f'TITAN{{{port}}}'
+        ))
+
+    gobuster_paths = [
+        '/admin', '/backup', '/hidden', '/dev', '/staging', '/secret', '/files', '/oldsite', '/uploads', '/console'
+    ]
+    for idx in range(1, 9):
+        path = rng.choice(gobuster_paths)
+        output = (
+            "===============================================================\n"
+            "Gobuster v3.6\n"
+            "===============================================================\n"
+            "/assets               (Status: 301) [Size: 312]\n"
+            "/api                  (Status: 200) [Size: 845]\n"
+            f"{path:<22} (Status: 200) [Size: {rng.randint(800, 2500)}]\n"
+            "/server-status        (Status: 403) [Size: 277]\n"
+        )
+        challenges.append(make_challenge(
+            f'kali_gobuster_{idx:02d}',
+            f'Kali Tool Drill: Gobuster discovery #{idx}',
+            'easy' if idx <= 4 else 'medium',
+            140 + (idx % 2) * 20,
+            'TITAN{path}',
+            f"تدريب Kali (gobuster): من مخرجات الاكتشاف السابقة، حدّد المسار الذي نجح بحالة 200.\nاكتب اسم المسار بدون الشرطة / داخل العلم.\n\n{output}",
+            [
+                'ابحث عن السطر الذي يحتوي Status: 200 والمسار غير التقليدي.',
+                'احذف الشرطة الأمامية قبل وضع المسار داخل العلم.'
+            ],
+            'استخراج المسار الصالح من نتائج gobuster وإدخاله داخل العلم.',
+            f'TITAN{{{path.strip("/")}}}'
+        ))
+
+    sql_endpoints = [
+        '/login.php?id=1', '/product.php?id=44', '/search.php?q=test', '/item.php?item=12',
+        '/user.php?uid=5', '/category.php?cat=2', '/view.php?post=33', '/article.php?aid=11'
+    ]
+    sql_dbs = ['employees', 'customers', 'inventory', 'finances', 'cms', 'portal', 'reports', 'analytics']
+    sql_tables = ['users', 'orders', 'credentials', 'sessions', 'payments', 'logs', 'products', 'employees']
+    for idx in range(1, 9):
+        endpoint = rng.choice(sql_endpoints)
+        db = rng.choice(sql_dbs)
+        table = rng.choice(sql_tables)
+        if idx % 2 == 0:
+            challenges.append(make_challenge(
+                f'kali_sqlmap_db_{idx:02d}',
+                f'Kali Tool Drill: SQLMap database enum #{idx}',
+                'medium',
+                180,
+                'TITAN{database}',
+                f"تدريب Kali (sqlmap): كشف قاعدة البيانات عبر نقطة حقن SQL.\nالناتج التالي يظهر قواعد البيانات الممكن استرجاعها.\n\n[*] databases: {db}, information_schema, mysql\n\nاكتب اسم قاعدة البيانات فقط داخل العلم.",
+                [
+                    'الهدف هو اسم قاعدة البيانات المحددة الموجودة في الناتج.',
+                    'لا تضع أي أحرف إضافية خارج اسم القاعدة.'
+                ],
+                'استخرج اسم قاعدة البيانات الواقعة ضمن نتائج sqlmap.',
+                f'TITAN{{{db}}}'
+            ))
+        else:
+            challenges.append(make_challenge(
+                f'kali_sqlmap_table_{idx:02d}',
+                f'Kali Tool Drill: SQLMap table enum #{idx}',
+                'hard',
+                220,
+                'TITAN{table}',
+                f"تدريب Kali (sqlmap): بعد تحديد قاعدة البيانات، يعرض sqlmap جدولاً حساساً.\nالناتج:\n[+] table: {table}\n[+] table: products\n[+] table: orders\n\nاكتب اسم الجدول داخل العلم.",
+                [
+                    'الناتج يذكر الجدول المطلوب مباشرة.',
+                    'اكتب اسم الجدول بدون أي مسافات.'
+                ],
+                'تحليل نتائج sqlmap واستخراج اسم الجدول الهدف.',
+                f'TITAN{{{table}}}'
+            ))
+
+    nikto_vulns = ['X-XSS-Protection header missing', 'Server header reveals version', 'Directory indexing found', 'Outdated Apache version']
+    wpscan_items = ['timthumb vulnerability', 'weak plugin found', 'wp-config exposure', 'user enumeration enabled']
+    for idx in range(1, 9):
+        if idx <= 4:
+            vuln = rng.choice(nikto_vulns)
+            challenges.append(make_challenge(
+                f'kali_nikto_{idx:02d}',
+                f'Kali Tool Drill: Nikto web scan #{idx}',
+                'easy' if idx <= 2 else 'medium',
+                150 + (idx % 2) * 20,
+                'TITAN{finding}',
+                f"تدريب Kali (nikto): من نتائج المسح أعلاه، حدّد الإصابة الرئيسية التي يجب معالجتها.\nالناتج:\n+ {vuln}\n+ OSVDB-12345\n\nاكتب اسم الإصابة داخل العلم كما هو تقريباً.",
+                [
+                    'ابحث عن الوصف الأوضح للمشكلة في الناتج.',
+                    'اكتب النص الرئيسي بدون إعدادات إضافية.'
+                ],
+                'تفسير ناتج Nikto وتحديد رسالة الضعف الأساسية.',
+                f'TITAN{{{vuln}}}'
+            ))
+        else:
+            item = rng.choice(wpscan_items)
+            standard = item.replace(' ', '_')
+            challenges.append(make_challenge(
+                f'kali_wpscan_{idx:02d}',
+                f'Kali Tool Drill: WPScan auditing #{idx}',
+                'medium',
+                170,
+                'TITAN{finding}',
+                f"تدريب Kali (wpscan): علّم أداة WPScan بنظام ووردبريس.\nالناتج يذكر التالي:\n[!] {item}\n\nاكتب وصف الإصابة مصغّراً داخل العلم (استبدل الفراغات بـ underscore).",
+                [
+                    'احفظ النص الرئيسي كما هو بلغة إنجليزية بسيطة.',
+                    'استبدل الفراغات بـ underscore داخل العلم.'
+                ],
+                'تحديد تقرير WPScan وإعادة صياغته داخل علم متوافق.',
+                f'TITAN{{{standard}}}'
+            ))
+
+    password_entries = [
+        ('rebelforce77', 'MD5'), ('kaliagent93', 'SHA1'), ('securepath24', 'NTLM'),
+        ('ghostecho11', 'MD5'), ('netstorm82', 'SHA1'), ('darkroot55', 'NTLM'),
+        ('redteam2026', 'MD5'), ('sniperwolf9', 'SHA1'), ('cryptic88', 'NTLM'), ('rootkit12', 'MD5')
+    ]
+    for idx, (plaintext, hash_type) in enumerate(password_entries, start=1):
+        hashed = hashlib.md5(plaintext.encode('utf-8')).hexdigest() if hash_type == 'MD5' else hashlib.sha1(plaintext.encode('utf-8')).hexdigest() if hash_type == 'SHA1' else 'aad3b435b51404eeaad3b435b51404ee'
+        challenges.append(make_challenge(
+            f'kali_password_crack_{idx:02d}',
+            f'Kali Tool Drill: {hash_type} password cracking #{idx}',
+            'medium' if idx % 3 != 0 else 'hard',
+            180 + (idx % 3) * 20,
+            'TITAN{password}',
+            f"تدريب Kali (john/hashcat): عليك كسر الهاش التالي.\nHash type: {hash_type}\nHash: {hashed}\n\nأرسل كلمة المرور كما هي داخل العلم.",
+            [
+                'حدد نوع الهاش ثم استخدم أداة كسر مناسبة.',
+                'الناتج هو كلمة مرور lowercase مع أرقام.'
+            ],
+            'استخدم john أو hashcat لكسر الهاش واستخراج كلمة المرور النصية.',
+            f'TITAN{{{plaintext}}}'
+        ))
+
+    hydra_targets = [
+        ('http-post-form', '/login.php:username=^USER^&password=^PASS^:F=incorrect'),
+        ('ftp', 'ftp://192.168.50.103'), ('ssh', 'ssh://10.11.1.5'), ('smtp', 'smtp://mail.corp.local'),
+        ('telnet', 'telnet://172.16.8.99'), ('mysql', 'mysql://10.0.0.158'), ('vsftpd', 'ftp://10.1.12.77'),
+        ('ldap', 'ldap://10.3.4.5')
+    ]
+    hydra_creds = [
+        ('admin', 'trustme12'), ('root', 'kali1234'), ('webadmin', 'SecurePass1'), ('support', 'HelpDesk9'),
+        ('backup', 'Storage99'), ('user', 'NetOps88'), ('sales', 'Guest2026'), ('dev', 'CodeFlow7')
+    ]
+    for idx in range(1, 9):
+        user, pwd = hydra_creds[idx - 1]
+        service, target = hydra_targets[idx - 1]
+        challenges.append(make_challenge(
+            f'kali_hydra_{idx:02d}',
+            f'Kali Tool Drill: Hydra brute force #{idx}',
+            'hard' if idx > 5 else 'medium',
+            190 + (idx % 4) * 15,
+            'TITAN{password}',
+            f"تدريب Kali (hydra): تحليل نتائجتان هجومية.\nService: {service}\nTarget: {target}\n\n[80][http-post-form] host: {target}   login: {user}   password: {pwd}   status: SUCCESS\n\nأرسل كلمة المرور التي نجحت داخل العلم.",
+            [
+                'النتيجة تعرض المستخدم الناجح وكلمة المرور المصاحبة.',
+                'اكتب كلمة المرور فقط داخل العلم.'
+            ],
+            'قراءة نتائج Hydra واستخراج كلمة المرور الناجحة لعملية تسجيل الدخول.',
+            f'TITAN{{{pwd}}}'
+        ))
+
+    wireless_ssids = ['RedSpider', 'GhostNet', 'BlackLotus', 'BluePhantom', 'CipherWave', 'SilentRogue', 'ZeroFrame', 'DarkPulse']
+    wifi_passwords = ['kaliwifi2026', 'redteam44', 'securelink7', 'phantom99', 'nmap4life', 'aircrack23', 'wifiscan1', 'handshake8']
+    for idx in range(1, 9):
+        ssid = wireless_ssids[idx - 1]
+        pwd = wifi_passwords[idx - 1]
+        challenges.append(make_challenge(
+            f'kali_aircrack_{idx:02d}',
+            f'Kali Tool Drill: Aircrack-ng handshake #{idx}',
+            'medium' if idx % 2 == 1 else 'hard',
+            180 + (idx % 3) * 15,
+            'TITAN{ssid}',
+            f"تدريب Kali (aircrack-ng): من مخرجات airodump-ng وجدنا الشبكة التالية مع دليل handshake.\nSSID: {ssid}\nBSSID: 00:14:22:01:23:{idx:02d}\nChannel: {rng.choice([1,6,11,3,9])}\nEncryption: WPA2\n\nأرسل اسم SSID داخل العلم.",
+            [
+                'هوية الشبكة تظهر مباشرة في الناتج.',
+                'اكتب SSRID كما هو داخل العلم.'
+            ],
+            'تحليل بيانات airodump-ng واستخراج اسم الشبكة SSID.',
+            f'TITAN{{{ssid}}}'
+        ))
+
+    metasploit_payloads = [
+        ('windows/rdp/cve_2019_0708_bluekeep', 'cve_2019_0708_bluekeep')
+    ]
+    for idx, (module, answer_token) in enumerate(metasploit_payloads, start=1):
+        challenges.append(make_challenge(
+            f'kali_metasploit_{idx:02d}',
+            'Kali Tool Drill: Metasploit module',
+            'medium',
+            220,
+            'TITAN{module}',
+            f"تدريب Kali (msfconsole): اخترت module: {module}\n\nضمن نتائج البحث يظهر المسار الكامل للموديول.\nاكتب المصطلح الأخير داخل العلم بدون الشرطة المائلة النهائية.",
+            [
+                'حدد الجزء الأخير من اسم المسار.',
+                'لا تضع أي شرطات مائلة أو أجزاء إضافية داخل العلم.'
+            ],
+            'قراءة مسار Metasploit module واستخراج الاسم النهائي المستخدم في العلم.',
+            f'TITAN{{{answer_token}}}'
+        ))
+
+    burp_tokens = [
+        ('JSESSIONID=abc123xyz', 'JSESSIONID'), ('Authorization=Bearer token_45', 'Bearer'),
+        ('X-CSRF-Token=csrf-9876', 'csrf-9876'), ('Cookie=sessionid=jh34k9', 'sessionid=jh34k9'),
+        ('Authorization=Basic dXNlcjpwYXNz', 'Basic'), ('X-Api-Key=KIJ45L9', 'KIJ45L9'),
+        ('Referer=https://admin.portal', 'admin.portal'), ('User-Agent=sqlmap/1.6', 'sqlmap/1.6')
+    ]
+    for idx, (token, answer_token) in enumerate(burp_tokens, start=1):
+        challenges.append(make_challenge(
+            f'kali_burp_{idx:02d}',
+            f'Kali Tool Drill: Burp header analysis #{idx}',
+            'easy' if idx <= 3 else 'medium',
+            150 + (idx % 4) * 15,
+            'TITAN{token}',
+            f"تدريب Kali (Burp Suite): راجع الرأس يلي مرّ خلال interception.\nHeader found: {token}\n\nالسؤال: ما الجزء الذي يجب أن تستخدمه داخل العلم؟",
+            [
+                'ركز على قيمة الرأس أو مفتاحه المفرد.',
+                'إذا كان المطلوب هو المفتاح فقط، لا تضع القيمة كلها.'
+            ],
+            'تحديد العنصر المناسب في رأس HTTP لإدخاله داخل العلم.',
+            f'TITAN{{{answer_token}}}'
+        ))
+
+    binwalk_artifacts = [
+        ('config.bin', 'config.bin'), ('secret.txt', 'secret.txt'), ('payload.sh', 'payload.sh'),
+        ('credentials.csv', 'credentials.csv'), ('recover.key', 'recover.key'),
+        ('unlock.dat', 'unlock.dat'), ('firmware.sig', 'firmware.sig'), ('machine.id', 'machine.id')
+    ]
+    for idx, (artifact, answer_token) in enumerate(binwalk_artifacts, start=1):
+        challenges.append(make_challenge(
+            f'kali_binwalk_{idx:02d}',
+            f'Kali Tool Drill: Binwalk artifact #{idx}',
+            'medium',
+            180 + (idx % 3) * 10,
+            'TITAN{artifact}',
+            f"تدريب Kali (binwalk): تحليلك ل firmware يكشف عن artefact مهم.\nالسطر الأخير في النتيجة: {artifact}\n\nاكتب اسم الـ artifact داخل العلم.",
+            [
+                'ابحث عن اسم الملف الموجود في مخرجات binwalk.',
+                'اكتب اسم الملف كاملاً داخل العلم.'
+            ],
+            'قراءة مخرجات binwalk واستخراج اسم الملف المضمّن داخل العلم.',
+            f'TITAN{{{answer_token}}}'
+        ))
+
+    responder_hosts = [
+        'WIN-CLIENT01', 'SALES-WORK', 'ADMIN-PC', 'PRINT-SRV', 'FILESTORE', 'BACKUP01', 'DEV-LAB', 'OFFICE-WS'
+    ]
+    dns_domains = [
+        'corp.local', 'internal.corp', 'secure.lan', 'prod.domain', 'dev.private', 'team.net', 'office.local', 'lab.corp'
+    ]
+    for idx in range(1, 9):
+        if idx % 2 == 1:
+            host = responder_hosts[idx - 1]
+            challenges.append(make_challenge(
+                f'kali_responder_{idx:02d}',
+                f'Kali Tool Drill: Responder poisoning #{idx}',
+                'medium',
+                170,
+                'TITAN{hostname}',
+                f"تدريب Kali (Responder): تم اكتشاف طلب LLMNR/NBT-NS.\nالهدف هو: {host}.corp.local\n\nما هو اسم الجهاز فقط داخل العلم؟",
+                [
+                    'استخدم اسم الهدف قبل النطاق.',
+                    'لا تضع .corp.local داخل العلم.'
+                ],
+                'استخراج اسم الجهاز من نتائج Responder.',
+                f'TITAN{{{host}}}'
+            ))
+        else:
+            domain = rng.choice(dns_domains)
+            challenges.append(make_challenge(
+                f'kali_dns_{idx:02d}',
+                f'Kali Tool Drill: DNS enumeration #{idx}',
+                'easy',
+                150,
+                'TITAN{domain}',
+                f"تدريب Kali (dnsenum): تحليل نتائج كشف نطاق داخلي.\nالنطاق المكتشف: {domain}\n\nاكتب النطاق داخل العلم كما هو.\n",
+                [
+                    'النطاق يظهر كاملاً في السطر.',
+                    'اكتب النطاق بنفس التنسيق بما في ذلك النقطة.'
+                ],
+                'قراءة ناتج DNS enumeration واستخراج اسم النطاق.',
+                f'TITAN{{{domain}}}'
+            ))
+
+    ssl_items = [
+        ('TLSv1.2', 'TLSv1.2'), ('TLSv1.3', 'TLSv1.3'), ('openssl.cnf', 'openssl.cnf'),
+        ('Subject: CN=secure.corp.local', 'secure.corp.local'), ('Certificate chain', 'secure.corp.local'),
+        ('HTTP/1.1 200 OK', '200_OK'), ('Server: nginx/1.22', 'nginx_1.22'), ('X-Powered-By: Express', 'Express')
+    ]
+    for idx, (output_item, answer_token) in enumerate(ssl_items, start=1):
+        challenges.append(make_challenge(
+            f'kali_ssl_{idx:02d}',
+            f'Kali Tool Drill: SSL/WhatWeb scan #{idx}',
+            'easy' if idx <= 4 else 'medium',
+            140 + (idx % 3) * 20,
+            'TITAN{finding}',
+            f"تدريب Kali (sslscan/openssl/whatweb): من مخرجات الفحص التالية حدّد العنصر المفيد.\n{output_item}\n\nاكتب المعلومة المهمة داخل العلم باستخدام underscore بدل المسافات إذا لزم الأمر.",
+            [
+                'ركز على الكلمة أو العبارة الأبرز في المخرجات.',
+                'إذا كان هناك فراغ، استبدله بـ underscore داخل العلم.'
+            ],
+            'تحديد المعلومة الرئيسية من نتائج فحص TLS أو WhatWeb.',
+            f'TITAN{{{answer_token}}}'
+        ))
+
+    return challenges
+
+
 def _build_ctf_challenges(user_id, force_nonce: str = ''):
     rotation_key = _ctf_rotation_key()
     rng = random.Random(_ctf_seed_for_user(user_id, rotation_key, force_nonce))
@@ -21609,6 +21991,8 @@ def _build_ctf_challenges(user_id, force_nonce: str = ''):
         },
     ]
 
+    challenges += _build_kali_tool_challenges(rng)
+
     return challenges, rotation_key
 
 
@@ -21628,6 +22012,7 @@ def _get_ctf_session_state(force_refresh: bool = False):
     session.setdefault('ctf_solved', [])
     session.setdefault('ctf_total_solved', 0)
     session.setdefault('ctf_total_points', 0)
+    session.setdefault('ctf_attempts', {})
 
     solved_set = set(session.get('ctf_solved', []))
     public = []
@@ -21711,7 +22096,31 @@ def ctf_submit_route():
             "next_batch": True
         })
 
-    return jsonify({"success": True, "correct": False, "message": "حل قريب؟ جرّب منهجية مختلفة أو اطلب تلميح AI."})
+    attempts = session.get('ctf_attempts', {}) or {}
+    count = int(attempts.get(challenge_id, 0) or 0) + 1
+    attempts[challenge_id] = count
+    session['ctf_attempts'] = attempts
+
+    solution = None
+    final_answer = None
+    if count >= 3:
+        target = next((c for c in _get_ctf_session_state(force_refresh=False)[0] if c.get('id') == challenge_id), None)
+        if target:
+            solution = (
+                f"الطريقة الكاملة: {target.get('method', 'استخدم نهجاً ممنهجاً لحل التحدي.')}\n\n"
+                f"الوصف: {target.get('description', '')}\n\n"
+                f"العلم النهائي: {expected}"
+            )
+            final_answer = expected
+
+    return jsonify({
+        "success": True,
+        "correct": False,
+        "message": "حل قريب؟ جرّب منهجية مختلفة أو اطلب تلميح AI.",
+        "attempts": count,
+        "solution": solution,
+        "final_answer": final_answer
+    })
 
 
 @app.route('/api/ctf/challenge-file/<challenge_id>', methods=['GET'])
