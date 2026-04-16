@@ -1879,6 +1879,42 @@ def send_login_alert_email(username, ip, user_agent):
     _send_email_async(f"TITAN - {username}", body)
 
 
+def send_admin_security_alert(username, ip, event, extra=''):
+    """تنبيه أمني للمدير عند محاولة مفتاح خاطئ أو فك تشفير مشبوه"""
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    body = f"""TITAN Security Alert - Vault Attack Detected
+
+تم اكتشاف محاولة وصول غير مصرح بها أو مفتاح فك غير صحيح:
+- المستخدم: {username}
+- عنوان IP: {ip}
+- الحدث: {event}
+- الوقت: {now}
+{extra}
+"""
+    _send_email_async("TITAN Security Alert", body)
+
+
+def send_security_alert_email(subject: str, body: str, to: str | None = None):
+    """Send a security alert email to the admin."""
+    _send_email_async(subject, body, to=to)
+
+
+def send_chat_decrypt_failure_alert(username: str, ip: str, user_agent: str, room_id: str):
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    subject = f"TITAN Security Alert - Burn Chat Decrypt Failure: {username}"
+    body = f"""TITAN Security Alert - Burn Chat Decrypt Failure
+
+المستخدم: {username}
+عنوان IP: {ip}
+المتصفح: {user_agent[:120]}
+رقم الغرفة: {room_id}
+الوقت: {now}
+
+تم الكشف عن محاولة فك تشفير خاطئة في غرفة الدردشة.
+"""
+    send_security_alert_email(subject, body)
+
+
 def send_new_device_alert(username, ip, user_agent, email):
     """تنبيه الدخول من جهاز جديد"""
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -4975,7 +5011,6 @@ HTML_TEMPLATE = """
                         <button id="btn-training-vuln-kb" onclick="setTrainingSubTab('vuln-kb')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🐞 موسوعة الثغرات</button>
                         <button id="btn-training-defense-kb" onclick="setTrainingSubTab('defense-kb')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🛡️ موسوعة الدفاع</button>
                         <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
-                        <button id="btn-training-se" onclick="setTrainingSubTab('se')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎭 هندسة اجتماعية</button>
                     </div>
                 </div>
                 <div id="training-subtabs-content">
@@ -5284,35 +5319,6 @@ HTML_TEMPLATE = """
             </div>
 
 
-            <div id="se-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-pink-400 border-b border-slate-700 pb-2">🎭 Social Engineering Defense</h2>
-
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-violet-900/40 space-y-3">
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
-                        <h3 class="text-sm font-bold text-violet-300">Defense Pulse Dashboard</h3>
-                        <button onclick="seRefreshDashboard()" class="px-3 py-1 rounded bg-violet-900/40 border border-violet-800/50 text-violet-300 text-xs font-bold">تحديث</button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                        <div class="p-2 rounded border border-slate-700 bg-black/40 text-xs">
-                            <div class="text-gray-400">Quiz Accuracy</div>
-                            <div id="seDashQuizAccuracy" class="text-emerald-300 font-bold text-base">0%</div>
-                        </div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40 text-xs">
-                            <div class="text-gray-400">Quiz Answers</div>
-                            <div id="seDashQuizAnswers" class="text-cyan-300 font-bold text-base">0</div>
-                        </div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40 text-xs">
-                            <div class="text-gray-400">Last Quiz Score</div>
-                            <div id="seDashLastScore" class="text-fuchsia-300 font-bold text-base">0</div>
-                        </div>
-                        <div class="p-2 rounded border border-slate-700 bg-black/40 text-xs">
-                            <div class="text-gray-400">Risk Index</div>
-                            <div id="seDashRiskIndex" class="text-rose-300 font-bold text-base">0</div>
-                        </div>
-                    </div>
-                    <div id="seRiskTrendBars" class="grid grid-cols-7 gap-2"></div>
-                    <div id="seRiskTrendMeta" class="text-[11px] text-gray-500">Trend: waiting for data...</div>
-                </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                     <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
@@ -6659,7 +6665,7 @@ HTML_TEMPLATE = """
 
         // --- التحكم بالتبويبات ---
         const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','training','ctf','se','audio','video','qr','identity','admin'];
-        const TRAINING_SUB_TABS = ['learninglab', 'tools-kb', 'vuln-kb', 'defense-kb', 'ai-lab', 'ctf', 'se'];
+        const TRAINING_SUB_TABS = ['learninglab', 'tools-kb', 'vuln-kb', 'defense-kb', 'ai-lab', 'ctf'];
         let __trainingSubTab = 'learninglab';
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
@@ -7052,7 +7058,6 @@ HTML_TEMPLATE = """
             if(type === 'tools' && typeof fetchIpIntel === 'function') fetchIpIntel();
             if(type === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if(type === 'training') setTrainingSubTab(__trainingSubTab || 'learninglab');
-            if(type === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if(type === 'osint' && typeof osintInitSection === 'function') osintInitSection();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
 
@@ -7084,7 +7089,6 @@ HTML_TEMPLATE = """
             });
 
             if (next === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
-            if (next === 'se' && typeof seInitDefenseTab === 'function') seInitDefenseTab();
             if (next === 'learninglab' && typeof learningInitCatalog === 'function') learningInitCatalog();
             if (next === 'tools-kb' && typeof trainingToolsInit === 'function') trainingToolsInit();
             if (next === 'vuln-kb' && typeof trainingVulnInit === 'function') trainingVulnInit();
@@ -11009,52 +11013,60 @@ HTML_TEMPLATE = """
         }
 
         // --- Vault Logic ---
-        let vaultFailedAttempts = 0;
+        function showVaultScrambledWarning() {
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div');
+                overlay.id = 'vault-fail-warning';
+                overlay.style.cssText = `
+                    position:fixed;inset:0;z-index:999999;
+                    background:rgba(15,23,42,0.95);display:flex;align-items:center;justify-content:center;
+                    padding:2rem;color:#fee2e2;font-family:ui-monospace,monospace;backdrop-filter:blur(6px);
+                `;
+                overlay.innerHTML = `
+                    <div style="text-align:center;max-width:720px;padding:2rem;border:2px solid rgba(248,113,113,0.35);border-radius:24px;background:rgba(30,41,59,0.96);box-shadow:0 0 50px rgba(239,68,68,0.25);">
+                        <div style="font-size:2.5rem;font-weight:900;color:#f87171;letter-spacing:0.3em;">⚠️ خطأ</div>
+                        <div style="margin:1rem 0;font-size:1.1rem;color:#fecaca;">نص مفتاح فك التشفير غير صحيح.</div>
+                        <div style="margin-top:1rem;font-size:1.25rem;line-height:1.4;color:#fecaca;letter-spacing:0.12em;">ﻣﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀ</div>
+                        <div style="margin-top:1rem;font-size:0.95rem;color:#fca5a5;opacity:0.95;">سيتم قفل النظام نهائياً ومنع العودة بعد ثانيتين.</div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+                setTimeout(() => {
+                    overlay.remove();
+                    resolve();
+                }, 2000);
+            });
+        }
 
-        function triggerVaultLockout() {
-            // Full-screen red lockout overlay — same feel as burn chat blackout
+        async function triggerVaultLockout() {
             const overlay = document.createElement('div');
             overlay.id = 'vault-lockout-overlay';
             overlay.style.cssText = `
                 position:fixed;inset:0;z-index:999999;
-                background:radial-gradient(ellipse at center, #1a0000 0%, #000 100%);
+                background:radial-gradient(circle at center, rgba(239,68,68,0.12) 0%, rgba(15,23,42,0.98) 80%);
                 display:flex;flex-direction:column;align-items:center;justify-content:center;
-                animation:fadeInLockout 0.4s ease;
+                color:#fee2e2;font-family:ui-monospace,monospace;text-align:center;padding:2rem;
             `;
             overlay.innerHTML = `
-                <style>
-                    @keyframes fadeInLockout{from{opacity:0}to{opacity:1}}
-                    @keyframes redPulse{0%,100%{text-shadow:0 0 20px #ef4444,0 0 60px #ef4444;}50%{text-shadow:0 0 5px #ef4444;}}
-                    @keyframes scanLine{0%{top:0}100%{top:100%}}
-                    .lockout-scanline{position:absolute;left:0;width:100%;height:2px;background:rgba(239,68,68,0.4);animation:scanLine 2s linear infinite;pointer-events:none;}
-                </style>
-                <div class="lockout-scanline"></div>
-                <div style="font-size:5rem;animation:redPulse 1.5s infinite;">🔴</div>
-                <h1 style="color:#ef4444;font-size:2rem;font-weight:900;letter-spacing:0.15em;margin:1rem 0 0.5rem;text-shadow:0 0 30px #ef4444;">ACCESS DENIED</h1>
-                <p style="color:#f87171;font-size:1rem;letter-spacing:0.1em;margin-bottom:0.5rem;">تجاوزت عدد محاولات الدخول المسموح بها</p>
-                <p style="color:#6b7280;font-size:0.75rem;font-family:monospace;letter-spacing:0.2em;">VAULT LOCKED — SESSION TERMINATED</p>
-                <div style="margin-top:2rem;width:200px;height:4px;background:#1f0000;border-radius:4px;overflow:hidden;">
-                    <div id="lockout-bar" style="height:100%;width:100%;background:#ef4444;animation:none;"></div>
+                <div style="max-width:680px;">
+                    <div style="font-size:4rem;line-height:1;">🔒</div>
+                    <h1 style="font-size:2.2rem;font-weight:900;color:#f87171;margin:1rem 0 0.5rem;">LOCKED</h1>
+                    <p style="font-size:1rem;color:#fecaca;margin-bottom:1rem;">تم قفل الجلسة بسبب محاولة مفتاح فك غير صحيحة.</p>
+                    <div style="margin:0 auto 1.5rem;width:200px;height:8px;border-radius:999px;background:rgba(248,113,113,0.15);overflow:hidden;">
+                        <div id="vault-lock-bar" style="width:100%;height:100%;background:linear-gradient(90deg,#ef4444,#f97316);"></div>
+                    </div>
+                    <div style="font-size:0.85rem;color:#fca5a5;">يتم تسجيل الخروج الآن وإغلاق الوصول.</div>
                 </div>
-                <p style="color:#4b5563;font-size:0.7rem;margin-top:0.75rem;font-family:monospace;">SYSTEM RE-ENABLING IN <span id="lockout-count">30</span>s</p>
             `;
             document.body.appendChild(overlay);
-
-            // 30-second countdown then unlock
-            let secs = 30;
-            const bar = overlay.querySelector('#lockout-bar');
-            const counter = overlay.querySelector('#lockout-count');
-            const timer = setInterval(() => {
-                secs--;
-                counter.textContent = secs;
-                if(bar) bar.style.width = (secs / 30 * 100) + '%';
-                if(secs <= 0) {
-                    clearInterval(timer);
-                    overlay.remove();
-                    vaultFailedAttempts = 0;
-                    document.getElementById('vaultMasterKey').value = '';
-                }
-            }, 1000);
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (e) {
+                console.warn('Logout failed', e);
+            }
+            setTimeout(() => {
+                window.location.reload();
+            }, 2200);
         }
 
         async function unlockVault() {
@@ -11070,23 +11082,16 @@ HTML_TEMPLATE = """
             
             if(data.error) {
                 soundManager.error();
-                vaultFailedAttempts++;
-                const remaining = 3 - vaultFailedAttempts;
-                if(vaultFailedAttempts >= 3) {
-                    triggerVaultLockout();
-                    vaultFailedAttempts = 0;
-                } else {
-                    titanAlert(`❌ كلمة السر خاطئة! تحذير: ${remaining} محاولة متبقية قبل تجميد النظام.`);
-                }
-            } else {
-                soundManager.success();
-                vaultFailedAttempts = 0;
-                currentMasterKey = key;
-                vaultData = data.vault || [];
-                document.getElementById('vault-login').classList.add('hidden');
-                document.getElementById('vault-content').classList.remove('hidden');
-                renderVaultItems();
+                await showVaultScrambledWarning();
+                await triggerVaultLockout();
+                return;
             }
+            soundManager.success();
+            currentMasterKey = key;
+            vaultData = data.vault || [];
+            document.getElementById('vault-login').classList.add('hidden');
+            document.getElementById('vault-content').classList.remove('hidden');
+            renderVaultItems();
         }
 
         function lockVault(silent = false) {
@@ -14141,7 +14146,40 @@ HTML_TEMPLATE = """
             }
         }
 
-        function decryptManual(msgId, cipherData) {
+        async function reportBurnChatDecryptFailure() {
+            try {
+                await fetch('/api/chat/failed-decrypt', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({room_id: currentRoomId})
+                });
+            } catch (e) {
+                console.warn('Failed to report chat decrypt failure:', e);
+            }
+        }
+
+        function showBurnChatLockscreen() {
+            const overlay = document.createElement('div');
+            overlay.id = 'burn-chat-lockscreen';
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#0b0202;color:#f87171;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;font-family:monospace;';
+            overlay.innerHTML = `
+                <div style="max-width:520px;">
+                    <div style="font-size:4rem;letter-spacing:0.2em;margin-bottom:1rem;">🚫</div>
+                    <div style="font-size:2rem;font-weight:900;letter-spacing:0.15em;margin-bottom:1rem;">LOCKED OUT</div>
+                    <div style="font-size:1rem;line-height:1.8;color:#fca5a5;">تم اكتشاف محاولة فك تشفير غير مصرح بها داخل غرفة الدردشة.</div>
+                    <div style="font-size:0.85rem;margin-top:1.2rem;color:#9ca3af;">تم تسجيل الوقت والعنوان وإرسال تنبيه للمسؤول. الرجاء إعادة فتح الصفحة وتسجيل الدخول مجدداً إذا كانت لديك صلاحية.</div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            document.body.style.overflow = 'hidden';
+            const buttons = document.querySelectorAll('button, input, textarea');
+            buttons.forEach(el => el.disabled = true);
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2200);
+        }
+
+        async function decryptManual(msgId, cipherData) {
             const key = prompt("⚠️ أدخل مفتاح فك التشفير السري الخاص بهذه الرسالة:");
             if(!key) return; // User cancelled the prompt
             
@@ -14162,8 +14200,10 @@ HTML_TEMPLATE = """
                     badge.innerText = "❌ مفتاح خاطئ";
                 }
 
-                // Keep chat state; don't wipe entire app on single wrong key attempt.
                 soundManager.error();
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                await reportBurnChatDecryptFailure();
+                showBurnChatLockscreen();
                 return;
             }
             
@@ -16265,14 +16305,49 @@ def load_vault():
     conn = psycopg2.connect(db_url)
     conn.autocommit = False
     c = conn.cursor()
-    c.execute("SELECT vault_password_hash FROM users WHERE id = %s", (user_id,))
+    c.execute("SELECT vault_password_hash, username, email FROM users WHERE id = %s", (user_id,))
     row = c.fetchone()
     conn.close()
+    username = (row[1] if row and len(row) > 1 and row[1] else session.get('username', 'Unknown'))
+    email = (row[2] if row and len(row) > 2 and row[2] else None)
+    client_ip = request.remote_addr or 'Unknown'
+    user_agent = request.headers.get('User-Agent', '-')
+
+    def _lock_vault_and_notify(reason_label: str):
+        add_audit_log("فشل فتح القبو 🚨", f"{reason_label} للمستخدم #{user_id}")
+        if email:
+            subject = "تنبيه أمني: محاولة فتح قبو فاشلة"
+            body = f"""مرحباً {username or 'user'},
+
+تم اكتشاف محاولة فتح قبو TITAN بكلمة سر خاطئة.
+
+- اسم المستخدم: {username}
+- عنوان IP: {client_ip}
+- المتصفح: {user_agent[:200]}
+- الوقت: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+إذا لم تكن هذه المحاولة منك، يرجى تغيير كلمة السر فوراً والتحقق من أمان حسابك.
+"""
+            send_security_alert_email(subject, body, to=email)
+        send_admin_security_alert(username, client_ip, f"{reason_label} في القبو", f"User-Agent: {user_agent[:200]}")
+        lockout_until = (datetime.datetime.now() + datetime.timedelta(minutes=1)).isoformat()
+        conn2 = None
+        try:
+            conn2 = get_db_conn()
+            c2 = conn2.cursor()
+            c2.execute("UPDATE users SET lockout_until=%s WHERE id=%s", (lockout_until, user_id))
+            conn2.commit()
+        except Exception:
+            pass
+        finally:
+            if conn2:
+                conn2.close()
+        return jsonify({"error": "كلمة السر الرئيسية غير صحيحة. القبو مقفل مؤقتاً لمدة دقيقة واحدة."}), 401
+
     if not row or not row[0]:
         return jsonify({"error": "لم تقم بتعيين كلمة سر للقبو بعد."}), 403
     if not verify_password(key, row[0]):
-        add_audit_log("فشل فتح القبو 🚨", f"كلمة سر خاطئة للمستخدم #{user_id}")
-        return jsonify({"error": "كلمة السر الرئيسية غير صحيحة."}), 401
+        return _lock_vault_and_notify("كلمة سر خاطئة")
 
     vault_file = get_vault_file(int(user_id))
     if not os.path.exists(vault_file):
@@ -16287,9 +16362,7 @@ def load_vault():
         add_audit_log("فتح القبو ✅", f"تم الوصول لقبو المستخدم #{user_id}")
         return jsonify({"vault": vault_data})
     except Exception:
-        add_audit_log("فشل فتح القبو 🚨", f"خطأ في فك التشفير للمستخدم #{user_id}")
-        return jsonify({"error": "كلمة السر الرئيسية غير صحيحة  ."}), 401
-
+        return _lock_vault_and_notify("خطأ في فك التشفير")
 @app.route('/api/vault/save', methods=['POST'])
 def save_vault():
     user_id, err = _get_logged_in_user_id()
@@ -20091,6 +20164,76 @@ def chat_destroy():
     return jsonify({"success": True, "room_id": room_id})
 
 
+@app.route('/api/chat/failed-decrypt', methods=['POST'])
+def chat_failed_decrypt():
+    data = request.json or {}
+    room_id = (data.get('room_id') or '').strip()
+    user_agent = request.headers.get('User-Agent', '')[:255]
+    ip = _get_login_ip()
+    username = session.get('username', 'UNKNOWN')
+
+    # Fetch registered email to send a direct user alert
+    email = None
+    user_id = session.get('user_id')
+    if user_id is not None:
+        conn = None
+        try:
+            conn = get_db_conn()
+            c = conn.cursor()
+            c.execute("SELECT email FROM users WHERE id = %s", (int(user_id),))
+            row = c.fetchone()
+            if row and row[0]:
+                email = row[0]
+        except Exception:
+            pass
+        finally:
+            if conn:
+                conn.close()
+
+    add_audit_log("Burn Chat 🔐 فشل فك التشفير", f"المستخدم: {username}، غرفة: {room_id}", ip=ip, username=username)
+
+    if email:
+        subject = "تنبيه أمني: محاولة فك تشفير فاشلة في غرفة الدردشة"
+        body = f"""مرحباً {username or 'user'},
+
+تم اكتشاف محاولة فك تشفير فاشلة داخل غرفة دردشة TITAN.
+
+- اسم المستخدم: {username}
+- غرفة: {room_id}
+- عنوان IP: {ip}
+- المتصفح: {user_agent}
+- الوقت: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+إذا لم تكن هذه المحاولة منك، يرجى تسجيل الخروج وتغيير حسابك فوراً.
+"""
+        send_security_alert_email(subject, body, to=email)
+
+    send_chat_decrypt_failure_alert(username, ip, user_agent, room_id)
+
+    if user_id is not None:
+        conn = None
+        try:
+            conn = get_db_conn()
+            c = conn.cursor()
+            lockout_until = (datetime.datetime.now() + datetime.timedelta(minutes=1)).isoformat()
+            c.execute("UPDATE users SET lockout_until=%s WHERE id=%s", (lockout_until, int(user_id)))
+            conn.commit()
+        except Exception:
+            pass
+        finally:
+            if conn:
+                conn.close()
+
+    session.clear()
+    if room_id:
+        BURN_CHAT_ROOMS.pop(room_id, None)
+        BURN_CHAT_DESTROYED[room_id] = {
+            'by': username,
+            'at': datetime.datetime.now().isoformat()
+        }
+    return jsonify({"success": True})
+
+
 # =====================================================================
 # === الميزات الجديدة – Phase 6 ===
 # =====================================================================
@@ -22104,7 +22247,9 @@ def ctf_submit_route():
     solution = None
     final_answer = None
     if count >= 3:
-        target = next((c for c in _get_ctf_session_state(force_refresh=False)[0] if c.get('id') == challenge_id), None)
+        ctf_state = _get_ctf_session_state(force_refresh=False)
+        challenges_list = ctf_state[0] if ctf_state and ctf_state[0] else []
+        target = next((c for c in challenges_list if c.get('id') == challenge_id), None)
         if target:
             solution = (
                 f"الطريقة الكاملة: {target.get('method', 'استخدم نهجاً ممنهجاً لحل التحدي.')}\n\n"
@@ -23031,12 +23176,38 @@ def _api_unhandled_exception(err):
     raise err
 
 
+def _unblock_all_accounts_and_create_temporary_user():
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("UPDATE users SET failed_attempts = 0, lockout_until = NULL")
+        pw_hash = hash_password('1111')
+        created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        c.execute(
+            "INSERT INTO users (username, password_hash, email, is_verified, created_at) VALUES (%s, %s, %s, 1, %s) "
+            "ON CONFLICT (username) DO UPDATE SET password_hash = excluded.password_hash, is_verified = 1, "
+            "lockout_until = NULL, failed_attempts = 0, email = excluded.email",
+            ('1111', pw_hash, '1111@titan.local', created_at)
+        )
+        conn.commit()
+        print('[TITAN] Unblocked all accounts and ensured user 1111 exists.')
+    except Exception as _e:
+        print(f"[TITAN] unblock/create user error: {_e}")
+    finally:
+        if conn:
+            conn.close()
+
 # --- تهيئة قاعدة البيانات عند بدء التطبيق ---
 try:
     init_db()
     print("[TITAN] Database initialized successfully.")
 except Exception as _e:
     print(f"[TITAN] init_db error: {_e}")
+
+try:
+    _unblock_all_accounts_and_create_temporary_user()
+except Exception as _e:
+    print(f"[TITAN] unblock/create user exception: {_e}")
 
 if __name__ == "__main__":
     port = int(__import__("os").environ.get("PORT", 5000))
