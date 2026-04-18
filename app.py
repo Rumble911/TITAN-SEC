@@ -5181,7 +5181,7 @@ HTML_TEMPLATE = """
                     <div class="flex flex-col items-start gap-3">
                         <div>
                             <h2 class="ctf-main-title font-bold text-amber-300 border-b border-transparent pb-0 flex items-center gap-2"><span class="inline-block animate-pulse">🏁</span> TITAN CTF ARENA</h2>
-                            <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">منصة تحديات متجددة مع مساعد AI للتلميحات المنهجية بدون كشف العلم النهائي.</p>
+                            <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">منصة تحديات متجددة مع مساعد AI للتلميحات المنهجية.</p>
                         </div>
                         <div id="ctfAiSourceBadge" class="text-[10px] px-2 py-1 rounded border border-cyan-800/50 bg-cyan-900/20 text-cyan-300 font-bold">AI: TITAN</div>
                     </div>
@@ -5217,45 +5217,48 @@ HTML_TEMPLATE = """
                     <div class="bg-slate-900/60 p-4 rounded-2xl border border-amber-900/40 shadow-[0_8px_22px_rgba(0,0,0,0.28)]">
                         <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-3">
                             <div>
-                                <div class="ctf-section-label text-amber-300">Challenge Filters</div>
-                                <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">ابحث بسرعة بالتصنيف/الصعوبة أو اعرض غير المحلول فقط.</p>
+                                <div class="ctf-section-label text-amber-300">🔎 نظام الفلترة الذكي</div>
+                                <p class="ctf-meta-text text-gray-300 mt-1 ctf-bidi">ابحث بذكاء عن التحديات حسب العنوان، الوصف، النوع، أو الصعوبة. يدعم البحث العربي المتقدم.</p>
                             </div>
-                            <div class="w-full lg:w-auto">
-                                <button onclick="ctfLoadChallenges(true)" class="w-full lg:w-auto px-4 py-2.5 rounded-xl bg-amber-900/35 hover:bg-amber-800/55 border border-amber-800/50 text-amber-200 text-xs font-bold">تحديث التحديات</button>
+                            <div class="w-full lg:w-auto flex gap-2">
+                                <button onclick="ctfLoadChallenges(true)" class="flex-1 lg:flex-none px-4 py-2.5 rounded-xl bg-amber-900/35 hover:bg-amber-800/55 border border-amber-800/50 text-amber-200 text-xs font-bold transition duration-150">🔄 تحديث</button>
+                                <button onclick="(function(){document.getElementById('ctfSearchInput').value=''; document.getElementById('ctfFilterDifficulty').value='all'; document.getElementById('ctfFilterCategory').value='all'; document.getElementById('ctfFilterUnsolved').checked=false; ctfApplyFilters();})();" class="flex-1 lg:flex-none px-4 py-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 text-slate-300 text-xs font-bold transition duration-150">↺ إعادة تعيين</button>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr_1fr_1.1fr] gap-2 mb-2 items-end">
                             <div class="space-y-2">
-                                <label for="ctfSearchInput" class="text-[11px] uppercase tracking-[0.16em] text-slate-400">🔎 بحث ذكي</label>
-                                <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث بالعنوان/الوصف/التصنيف..." class="w-full p-2.5 rounded-3xl bg-slate-900 border border-slate-700 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30">
+                                <label for="ctfSearchInput" class="text-[11px] uppercase tracking-[0.16em] text-slate-400">🔍 بحث ذكي (عربي محسّن)</label>
+                                <input id="ctfSearchInput" type="text" oninput="ctfApplyFilters()" placeholder="ابحث: Cryptography، تشفير، SQL أو أي كلمة..." class="w-full p-2.5 rounded-3xl bg-slate-900 border border-slate-700 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30 transition duration-150">
                             </div>
                             <div class="space-y-2">
-                                <label for="ctfFilterDifficulty" class="text-[11px] uppercase tracking-[0.16em] text-slate-400">🎯 مستوى الصعوبة</label>
-                                <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="w-full p-2.5 rounded-3xl bg-slate-900 border border-slate-700 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30">
+                                <label for="ctfFilterDifficulty" class="text-[11px] uppercase tracking-[0.16em] text-slate-400">🎯 الصعوبة</label>
+                                <select id="ctfFilterDifficulty" onchange="ctfApplyFilters()" class="w-full p-2.5 rounded-3xl bg-slate-900 border border-slate-700 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30 transition duration-150">
                                     <option value="all" selected>كل الصعوبات</option>
-                                    <option value="easy">Easy</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="hard">Hard</option>
+                                    <option value="easy">🟢 Easy</option>
+                                    <option value="medium">🟡 Medium</option>
+                                    <option value="hard">🔴 Hard</option>
                                 </select>
                             </div>
                             <div class="space-y-2">
-                                <label for="ctfFilterCategory" class="text-[11px] uppercase tracking-[0.16em] text-slate-400">🧠 نوع التحدي</label>
-                                <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="w-full p-2.5 rounded-3xl bg-slate-900 border border-slate-700 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30">
+                                <label for="ctfFilterCategory" class="text-[11px] uppercase tracking-[0.16em] text-slate-400">🧠 النوع</label>
+                                <select id="ctfFilterCategory" onchange="ctfApplyFilters()" class="w-full p-2.5 rounded-3xl bg-slate-900 border border-slate-700 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30 transition duration-150">
                                     <option value="all" selected>كل التصنيفات</option>
                                 </select>
                             </div>
                             <div class="space-y-2">
-                                <label class="text-[11px] uppercase tracking-[0.16em] text-slate-400">♻️ خيارات العرض</label>
-                                <div class="flex flex-col gap-2">
-                                    <label class="flex items-center gap-2 text-xs px-3 py-2 rounded-3xl border border-slate-700 bg-slate-900/70 hover:bg-slate-900/90 transition duration-150">
-                                        <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
-                                        <span class="text-gray-300">عرض غير المحلولة فقط</span>
-                                    </label>
-                                    <button onclick="ctfLoadChallenges(true)" class="w-full px-4 py-2 rounded-3xl bg-gradient-to-r from-amber-900/35 to-amber-800/50 hover:from-amber-900/55 hover:to-amber-700/60 border border-amber-800/50 text-amber-200 text-xs font-bold transition duration-150">تحديث التحديات</button>
-                                </div>
+                                <label class="text-[11px] uppercase tracking-[0.16em] text-slate-400">♻️ الخيارات</label>
+                                <label class="flex items-center gap-2 text-xs px-3 py-2.5 rounded-3xl border border-slate-700 bg-slate-900/70 hover:bg-slate-900/90 transition duration-150 cursor-pointer">
+                                    <input id="ctfFilterUnsolved" type="checkbox" onchange="ctfApplyFilters()" class="accent-amber-500">
+                                    <span class="text-gray-300">عرض غير المحلولة فقط</span>
+                                </label>
                             </div>
                         </div>
                         <div id="ctfMeta" class="ctf-meta-text text-gray-300 bg-black/45 border border-slate-700 rounded-3xl p-3 ctf-bidi mt-2">جار تحميل بيانات CTF...</div>
+                    </div>
+
+                    <div id="ctf-search-empty" class="hidden text-center py-8 px-4">
+                        <div class="text-sm text-gray-400 ctf-bidi">❌ لم نجد تحديات تطابق بحثك</div>
+                        <button onclick="document.getElementById('ctfSearchInput').value=''; document.getElementById('ctfFilterDifficulty').value='all'; document.getElementById('ctfFilterCategory').value='all'; document.getElementById('ctfFilterUnsolved').checked=false; ctfApplyFilters();" class="mt-3 px-4 py-2 rounded-lg bg-amber-900/35 border border-amber-800/50 text-amber-200 text-xs font-bold hover:bg-amber-800/50">إعادة تعيين الفلاتر</button>
                     </div>
 
                     <div id="ctfList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
@@ -11714,20 +11717,30 @@ HTML_TEMPLATE = """
         function ctfApplyFilters() {
             const diff = (document.getElementById('ctfFilterDifficulty')?.value || 'all').toLowerCase();
             const cat = (document.getElementById('ctfFilterCategory')?.value || 'all').toLowerCase();
-            const q = (document.getElementById('ctfSearchInput')?.value || '').trim().toLowerCase();
+            const rawQuery = (document.getElementById('ctfSearchInput')?.value || '').trim();
+            const query = normalizeArabicSearchText(rawQuery);
             const unsolvedOnly = !!document.getElementById('ctfFilterUnsolved')?.checked;
             const source = Array.isArray(_ctfChallenges) ? _ctfChallenges : [];
             const filtered = source.filter((c) => {
                 if (diff !== 'all' && String(c.difficulty || '').toLowerCase() !== diff) return false;
                 if (cat !== 'all' && String(c.category || '').toLowerCase() !== cat) return false;
                 if (unsolvedOnly && c.solved) return false;
-                if (q) {
-                    const blob = [c.title, c.description, c.category, c.method].map((x) => String(x || '').toLowerCase()).join(' ');
-                    if (!blob.includes(q)) return false;
+                if (query) {
+                    const blob = normalizeArabicSearchText(
+                        [c.title, c.description, c.category, c.method].map((x) => String(x || '')).join(' ')
+                    );
+                    if (!blob.includes(query)) return false;
                 }
                 return true;
             });
             _ctfRenderList(filtered);
+            
+            // عرض/إخفاء رسالة عدم وجود نتائج
+            const emptyMsg = document.getElementById('ctf-search-empty');
+            if (emptyMsg) {
+                const hasNoResults = rawQuery && filtered.length === 0;
+                emptyMsg.classList.toggle('hidden', !hasNoResults);
+            }
         }
 
         function _ctfUpdateDashboard(payload) {
@@ -11755,8 +11768,49 @@ HTML_TEMPLATE = """
             if (!el) return;
             const categories = Array.from(new Set((_ctfChallenges || []).map((c) => String(c.category || '').trim()).filter(Boolean))).sort();
             const oldVal = (el.value || 'all').toLowerCase();
-            el.innerHTML = '<option value="all" selected>كل التصنيفات</option>' + categories.map((c) => `<option value="${_osintEscape(c.toLowerCase())}">${_osintEscape(c)}</option>`).join('');
+            
+            // عد التحديات في كل فئة
+            const categoryCounts = {};
+            (_ctfChallenges || []).forEach((c) => {
+                const cat = String(c.category || '').trim();
+                if (cat) {
+                    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+                }
+            });
+            
+            const totalCount = _ctfChallenges?.length || 0;
+            el.innerHTML = `<option value="all" selected>كل التصنيفات (${totalCount})</option>` + categories.map((c) => {
+                const count = categoryCounts[c] || 0;
+                return `<option value="${_osintEscape(c.toLowerCase())}">${_osintEscape(c)} (${count})</option>`;
+            }).join('');
+            
             if (oldVal !== 'all' && categories.some((c) => c.toLowerCase() === oldVal)) {
+                el.value = oldVal;
+            }
+        }
+
+        function _ctfRefreshDifficultyFilter() {
+            const el = document.getElementById('ctfFilterDifficulty');
+            if (!el) return;
+            
+            // عد التحديات في كل صعوبة
+            const difficultyCounts = { easy: 0, medium: 0, hard: 0 };
+            (_ctfChallenges || []).forEach((c) => {
+                const diff = String(c.difficulty || '').toLowerCase();
+                if (diff in difficultyCounts) {
+                    difficultyCounts[diff] += 1;
+                }
+            });
+            
+            const totalCount = _ctfChallenges?.length || 0;
+            const oldVal = (el.value || 'all').toLowerCase();
+            
+            el.innerHTML = `<option value="all" selected>كل الصعوبات (${totalCount})</option>
+                <option value="easy">🟢 Easy (${difficultyCounts.easy})</option>
+                <option value="medium">🟡 Medium (${difficultyCounts.medium})</option>
+                <option value="hard">🔴 Hard (${difficultyCounts.hard})</option>`;
+            
+            if (oldVal !== 'all' && (oldVal in difficultyCounts)) {
                 el.value = oldVal;
             }
         }
@@ -11861,6 +11915,7 @@ HTML_TEMPLATE = """
                 }
                 _ctfLastPayload = data;
                 _ctfChallenges = data.challenges || [];
+                _ctfRefreshDifficultyFilter();
                 _ctfRefreshCategoryFilter();
                 _ctfUpdateDashboard(data);
                 ctfApplyFilters();
@@ -21859,9 +21914,9 @@ def _build_ctf_challenges(user_id, force_nonce: str = ''):
         'difficulty': 'easy',
         'points': 130,
         'flag_format': 'TITAN{word}',
-        'description': f"اكسر هاش MD5 التالي:\n{md5_hash}",
-        'hints': ['الكلمة بسيطة بالإنجليزية', 'جرب قاموس شامل'],
-        'method': 'استخدام آلة حاسبة MD5 أو قاموس للبحث',
+        'description': f"اكسر هاش MD5 التالي لاستخراج الكلمة الأصلية:\nMD5 Hash: {md5_hash}",
+        'hints': ['الكلمة بسيطة بالإنجليزية', 'جرب قاموس شامل أو online MD5 lookup', 'الكلمة واحدة فقط بدون مسافات'],
+        'method': 'استخدام أداة كسر MD5 أو قاموس للبحث عن الكلمة المطابقة',
         'answer': f'TITAN{{{md5_word}}}'
     })
 
@@ -21969,9 +22024,9 @@ def _build_ctf_challenges(user_id, force_nonce: str = ''):
         'difficulty': 'medium',
         'points': 150,
         'flag_format': 'TITAN{analysis}',
-        'description': f"السلسلة: {num_pattern}\nما الخاصية المشتركة؟",
-        'hints': ['كلها أرقام', 'ابحث عن الخاصية المشتركة'],
-        'method': 'تحليل الأرقام وفهم النمط',
+        'description': f"السلسلة: {num_pattern}\nما الخاصية المشتركة؟ (جميع الأرقام المعطاة هي powers of 2)",
+        'hints': ['كلها أرقام', 'ابحث عن: 2^10, 2^11, 2^12, 2^13, 2^14...', 'الإجابة: power_of_2'],
+        'method': 'تحليل الأرقام وفهم النمط - كل الأرقام المعطاة هي قوى العدد 2',
         'answer': f'TITAN{{power_of_2}}'
     })
 
@@ -22204,25 +22259,26 @@ def _build_ctf_challenges(user_id, force_nonce: str = ''):
         'difficulty': 'easy',
         'points': 100,
         'flag_format': 'TITAN{count}',
-        'description': f"عد مجموع الحروف المكررة المتتالية:\n{dup_str}",
-        'hints': ['احسب الأزواج المتتالية', 'aa=1, bb=1...'],
-        'method': 'عد الحروف المكررة المتتالية',
+        'description': f"عد عدد الأزواج المتتالية المكررة في النص:\n{dup_str}\nمثال: aabbcc يحتوي على aa, bb, cc = 3 أزواج",
+        'hints': ['احسب الأزواج المتتالية المكررة', 'كل زوج متتالي يُحسب مرة واحدة', 'xxxyyzz = xx, yy, zz = 3'],
+        'method': 'عد الأزواج المتتالية المكررة في النص',
         'answer': f'TITAN{{3}}'
     })
 
     # Challenge 32: Unicode character
-    unicode_char = chr(rng.choice([128512, 128513, 128514]))  # emoji
+    unicode_codepoint = rng.choice([128512, 128513, 128514])
+    unicode_char = chr(unicode_codepoint)
     challenges.append({
         'id': 'ctf_unicode',
         'title': 'Unicode Point Analyzer',
         'category': 'forensics',
         'difficulty': 'medium',
         'points': 150,
-        'flag_format': 'TITAN{codepoint}',
-        'description': f"ما رمز Unicode للحرف:\n{unicode_char}",
-        'hints': ['في Python: ord(char)', 'البحث عن Unicode table'],
-        'method': 'معرفة رمز Unicode للحرف',
-        'answer': f'TITAN{{emoji}}'
+        'flag_format': 'TITAN{codepoint_number}',
+        'description': f"ما رمز Unicode (codepoint) للحرف التالي:\n{unicode_char}",
+        'hints': ['في Python: ord(char)', 'استخدم جدول Unicode', 'يجب أن تكون النتيجة رقم'],
+        'method': 'معرفة رمز Unicode الفعلي للحرف باستخدام ord()',
+        'answer': f'TITAN{{{unicode_codepoint}}}'
     })
 
     # Challenge 33: Whitespace detection
@@ -22316,9 +22372,9 @@ def _build_ctf_challenges(user_id, force_nonce: str = ''):
         'difficulty': 'easy',
         'points': 95,
         'flag_format': 'TITAN{result}',
-        'description': f"استبدل 'l' بـ 'x' في:\n{replace_text}",
-        'hints': ['كل l -> x', 'استخدم replace()'],
-        'method': 'استبدال أحرف في النص',
+        'description': f"استبدل كل حرف 'l' بـ 'x' في النص التالي:\n{replace_text}",
+        'hints': ['كل l -> x', 'استخدم replace() function', 'مثال: hello -> hexxo'],
+        'method': 'استبدال أحرف في النص باستخدام replace()',
         'answer': f'TITAN{{{replaced}}}'
     })
 
