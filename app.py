@@ -5475,7 +5475,7 @@ HTML_TEMPLATE = """
     </div>
 
             <!-- ===== QR CODE SECTION ===== -->
-            <div id="qr-section" class="hidden space-y-6">
+            <div id="qr-section" class="hidden space-y-6" style="max-width:800px;margin:0 auto;">
                 <h2 class="text-xl font-bold text-green-400 border-b border-slate-700 pb-2">🔳 QR Code مشفر</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-slate-900/70 rounded-xl p-5 border border-green-900/40 space-y-3">
@@ -5499,7 +5499,7 @@ HTML_TEMPLATE = """
             </div>
 
             <!-- FAKE IDENTITY SECTION -->
-            <div id="identity-section" class="hidden space-y-6">
+            <div id="identity-section" class="hidden space-y-6" style="max-width:800px;margin:0 auto;">
                 <div class="flex items-center justify-between border-b border-teal-900/30 pb-4 mb-2">
                     <h2 class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400 flex items-center gap-3">
                         <span class="w-10 h-10 rounded-full bg-teal-500/10 flex items-center justify-center text-xl shadow-[0_0_15px_rgba(20,184,166,0.2)]">🪪</span>
@@ -11026,7 +11026,7 @@ HTML_TEMPLATE = """
                     <div style="text-align:center;max-width:720px;padding:2rem;border:2px solid rgba(248,113,113,0.35);border-radius:24px;background:rgba(30,41,59,0.96);box-shadow:0 0 50px rgba(239,68,68,0.25);">
                         <div style="font-size:2.5rem;font-weight:900;color:#f87171;letter-spacing:0.3em;">⚠️ خطأ</div>
                         <div style="margin:1rem 0;font-size:1.1rem;color:#fecaca;">نص مفتاح فك التشفير غير صحيح.</div>
-                        <div style="margin-top:1rem;font-size:1.25rem;line-height:1.4;color:#fecaca;letter-spacing:0.12em;">ﻣﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀﻀ</div>
+                        <div style="margin-top:1rem;font-size:1.25rem;line-height:1.4;color:#fecaca;letter-spacing:0.12em;">تم ارسال بريد الكتروني الى المسؤول </div>
                         <div style="margin-top:1rem;font-size:0.95rem;color:#fca5a5;opacity:0.95;">سيتم قفل النظام نهائياً ومنع العودة بعد ثانيتين.</div>
                     </div>
                 `;
@@ -23177,6 +23177,7 @@ def _api_unhandled_exception(err):
 
 
 def _unblock_all_accounts_and_create_temporary_user():
+    conn = None
     try:
         conn = get_db_conn()
         c = conn.cursor()
