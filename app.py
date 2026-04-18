@@ -5317,173 +5317,21 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
             </div>
-
-
-
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
-                            <h3 class="text-sm font-bold text-pink-300">Scenario Lab (Defensive)</h3>
-                            <span id="seScenarioDifficulty" class="text-[10px] px-2 py-1 rounded border border-slate-700 text-gray-300">Difficulty: --</span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
-                            <select id="seScenarioType" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2">
-                                <option value="phishing_email">Phishing Email</option>
-                                <option value="vishing_call">Vishing Call</option>
-                                <option value="pretexting">Pretexting</option>
-                                <option value="baiting_usb">Baiting USB</option>
-                                <option value="banking_ar">Arabic Sector - Banking</option>
-                                <option value="education_ar">Arabic Sector - Education</option>
-                                <option value="healthcare_ar">Arabic Sector - Healthcare</option>
-                                <option value="sector_ar">Arabic Sector (Auto by selector)</option>
-                            </select>
-                            <select id="seScenarioSector" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="banking" selected>Sector: Banking</option>
-                                <option value="education">Sector: Education</option>
-                                <option value="healthcare">Sector: Healthcare</option>
-                            </select>
-                            <select id="seScenarioPressure" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="normal" selected>Pressure: Normal</option>
-                                <option value="high">Pressure: High</option>
-                                <option value="critical">Pressure: Critical</option>
-                            </select>
-                            <button onclick="seGenerateScenario()" class="py-2 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">Generate Scenario</button>
-                        </div>
-                        <div id="seScenarioResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs whitespace-pre-wrap"></div>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-fuchsia-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-fuchsia-300">Micro Drill Quiz</h3>
-                        <div id="seQuizMeta" class="text-[11px] text-gray-400">اختبار سريع يرفع جاهزيتك الدفاعية.</div>
-                        <div id="seQuizQuestion" class="p-2 rounded bg-black/40 border border-slate-700 text-xs text-gray-100"></div>
-                        <div id="seQuizOptions" class="space-y-2"></div>
-                        <div class="flex gap-2">
-                            <button onclick="seNextQuizQuestion()" class="flex-1 py-2 rounded bg-fuchsia-900/40 border border-fuchsia-800/50 text-fuchsia-300 text-xs font-bold">التالي</button>
-                            <button onclick="seRestartQuiz()" class="flex-1 py-2 rounded bg-slate-800 border border-slate-700 text-xs font-bold text-gray-300">إعادة</button>
-                        </div>
-                        <div id="seQuizFeedback" class="text-[11px] text-gray-400"></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-rose-900/40 space-y-3">
-                        <h3 class="text-sm font-bold text-rose-300">Threat Signal Analyzer</h3>
-                        <div class="grid grid-cols-1 gap-2">
-                            <select id="seSignalChannel" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="email" selected>Email</option>
-                                <option value="chat">Chat</option>
-                                <option value="phone">Phone</option>
-                                <option value="social_dm">Social DM</option>
-                            </select>
-                            <select id="seSignalSenderTrust" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="known" selected>Known Sender</option>
-                                <option value="unknown">Unknown Sender</option>
-                                <option value="spoofed">Likely Spoofed</option>
-                            </select>
-                            <select id="seSignalUrgency" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="low">Urgency: Low</option>
-                                <option value="medium" selected>Urgency: Medium</option>
-                                <option value="high">Urgency: High</option>
-                            </select>
-                            <label class="flex items-center gap-2 text-xs"><input id="seSignalHasLink" type="checkbox" class="accent-rose-500"> يحتوي رابط مختصر أو غامض</label>
-                            <label class="flex items-center gap-2 text-xs"><input id="seSignalSensitiveReq" type="checkbox" class="accent-rose-500"> يطلب بيانات حساسة / OTP</label>
-                            <label class="flex items-center gap-2 text-xs"><input id="seSignalPolicyBypass" type="checkbox" class="accent-rose-500"> يطلب تجاوز السياسة</label>
-                            <button onclick="seAnalyzeSignal()" class="w-full py-2 rounded bg-rose-900/40 border border-rose-800/50 text-rose-300 text-xs font-bold">تحليل الإشارة</button>
-                        </div>
-                        <div id="seSignalResult" class="p-2 rounded bg-black/40 border border-slate-700 text-xs"></div>
-                    </div>
-
-                    <div class="xl:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-emerald-900/40 space-y-3">
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
-                            <h3 class="text-sm font-bold text-emerald-300">Response Playbook Builder</h3>
-                            <div class="flex gap-2">
-                                <button onclick="sePlaybookInjectTemplate()" class="px-3 py-1 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">قالب جاهز</button>
-                                <button onclick="seExportPlaybook()" class="px-3 py-1 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تصدير</button>
-                                <button onclick="seClearPlaybook()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">تفريغ</button>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
-                            <select id="sePlaybookPhase" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                                <option value="detect" selected>Detect</option>
-                                <option value="verify">Verify</option>
-                                <option value="contain">Contain</option>
-                                <option value="report">Report</option>
-                                <option value="lessons">Lessons Learned</option>
-                            </select>
-                            <input id="sePlaybookOwner" type="text" placeholder="Owner (SOC/IT/Manager)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
-                            <input id="sePlaybookEta" type="text" placeholder="ETA (e.g. 15m)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
-                            <input id="sePlaybookAction" type="text" placeholder="Action description" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2">
-                            <button onclick="seAddPlaybookStep()" class="py-2 rounded bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 text-xs font-bold">إضافة</button>
-                        </div>
-                        <div id="sePlaybookResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-56 overflow-y-auto text-xs"></div>
-                    </div>
-                </div>
-
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-pink-900/40 space-y-3">
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
-                        <h3 class="text-sm font-bold text-pink-300">Information Collection Board</h3>
-                        <div class="flex gap-2">
-                            <button onclick="seSortIntelBoard()" class="px-3 py-1 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">ترتيب تلقائي</button>
-                            <button onclick="seExportIntelBoard()" class="px-3 py-1 rounded bg-indigo-900/40 border border-indigo-800/50 text-indigo-300 text-xs font-bold">تصدير JSON</button>
-                            <button onclick="seClearIntelBoard()" class="px-3 py-1 rounded bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-bold">تفريغ</button>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                        <div id="seIntelTotal" class="p-2 rounded border border-slate-700 bg-black/40 text-xs">Total: 0</div>
-                        <div id="seIntelHighRisk" class="p-2 rounded border border-red-900/50 bg-red-900/10 text-xs text-red-300">High Risk: 0</div>
-                        <div id="seIntelMediumRisk" class="p-2 rounded border border-amber-900/50 bg-amber-900/10 text-xs text-amber-300">Medium Risk: 0</div>
-                        <div id="seIntelLowRisk" class="p-2 rounded border border-emerald-900/50 bg-emerald-900/10 text-xs text-emerald-300">Low Risk: 0</div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
-                        <input id="seIntelSubject" type="text" placeholder="Subject (person/domain)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none md:col-span-2" dir="ltr">
-                        <input id="seIntelSource" type="text" placeholder="Source (email/chat/call)" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none" dir="ltr">
-                        <select id="seIntelCategory" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="identity">Identity</option>
-                            <option value="behavior">Behavior</option>
-                            <option value="infrastructure">Infrastructure</option>
-                            <option value="message">Message Pattern</option>
-                        </select>
-                        <select id="seIntelConfidence" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="high">High Confidence</option>
-                            <option value="medium" selected>Medium Confidence</option>
-                            <option value="low">Low Confidence</option>
-                        </select>
-                    </div>
-                    <textarea id="seIntelNote" rows="3" placeholder="اكتب المعلومة أو الملاحظة الأمنية هنا..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none"></textarea>
-                    <button onclick="seAddIntelItem()" class="w-full py-2 rounded bg-pink-900/40 border border-pink-800/50 text-pink-300 text-xs font-bold">إضافة معلومة</button>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <input id="seIntelSearch" type="text" placeholder="بحث في الملاحظات/الموضوع..." class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                        <select id="seIntelFilterConfidence" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="all" selected>كل مستويات الثقة</option>
-                            <option value="high">High Confidence</option>
-                            <option value="medium">Medium Confidence</option>
-                            <option value="low">Low Confidence</option>
-                        </select>
-                        <select id="seIntelFilterCategory" class="p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="all" selected>كل الفئات</option>
-                            <option value="identity">Identity</option>
-                            <option value="behavior">Behavior</option>
-                            <option value="infrastructure">Infrastructure</option>
-                            <option value="message">Message Pattern</option>
-                        </select>
-                    </div>
-                    <div id="seIntelBoardResult" class="p-2 rounded bg-black/40 border border-slate-700 max-h-72 overflow-y-auto text-xs"></div>
-                    <div class="text-[11px] text-gray-500">هذا القسم دفاعي توعوي فقط: التحليل والاستجابة والرفع إلى SOC.</div>
-                </div>
-            </div>
         </div>
     </div>
 
             <!-- ===== QR CODE SECTION ===== -->
             <div id="qr-section" class="hidden space-y-6" style="max-width:800px;margin:0 auto;">
                 <h2 class="text-xl font-bold text-green-400 border-b border-slate-700 pb-2">🔳 QR Code مشفر</h2>
+                <div class="text-center text-sm text-gray-300 bg-slate-800/50 p-4 rounded-xl border border-slate-700 mb-4">👋 أهلاً! اضغط على التوليد أسفل لإنشاء QR Code أو حمّل صورة لفك التشفير</div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-slate-900/70 rounded-xl p-5 border border-green-900/40 space-y-3">
                         <h3 class="font-bold text-green-400 text-sm">توليد QR</h3>
-                        <textarea id="qrText" rows="3" placeholder="النص أو الرابط..." class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm focus:ring-2 focus:ring-green-500"></textarea>
+                        <textarea id="qrText" rows="3" placeholder="النص أو الرابط..." class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm focus:ring-2 focus:ring-green-500">https://example.com</textarea>
                         <input type="password" id="qrPass" placeholder="كلمة سر (اختياري للتشفير)" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
                         <button onclick="generateQR()" class="w-full bg-green-900/50 hover:bg-green-800 text-green-300 font-bold p-3 rounded-xl border border-green-800/50 transition-all">توليد QR 🔳</button>
-                        <div id="qrResult" class="hidden text-center">
+                        <div id="qrResult" class="text-center text-gray-400 text-sm py-6">سيظهر QR Code هنا بعد الضغط على التوليد</div>
+                        <div id="qrResult2" class="hidden text-center">
                             <img id="qrImg" src="" class="mx-auto rounded-lg border border-green-800/40 max-w-[200px]">
                             <a id="qrDownload" download="qr.png" class="block mt-2 text-xs text-green-400 underline cursor-pointer">تنزيل الصورة</a>
                         </div>
@@ -5784,6 +5632,7 @@ HTML_TEMPLATE = """
             </div>
 
         </div>
+    </div>
     </div>
 
     <!-- Panic Button Removed as per User Request -->
@@ -7025,8 +6874,12 @@ HTML_TEMPLATE = """
                 const btn = document.getElementById('btn-' + t);
                 if(sec) {
                     const shouldShow = (t === type);
-                    sec.classList.toggle('hidden', !shouldShow);
-                    if (shouldShow) _animateTabSection(sec);
+                    if (shouldShow) {
+                        sec.classList.remove('hidden');
+                        _animateTabSection(sec);
+                    } else {
+                        sec.classList.add('hidden');
+                    }
                 }
                 if(btn) {
                     if(t === type) {
@@ -7058,6 +6911,8 @@ HTML_TEMPLATE = """
             if(type === 'tools' && typeof fetchIpIntel === 'function') fetchIpIntel();
             if(type === 'ctf' && typeof ctfLoadChallenges === 'function') ctfLoadChallenges(false);
             if(type === 'training') setTrainingSubTab(__trainingSubTab || 'learninglab');
+            if(type === 'qr' && typeof generateQR === 'function') { setTimeout(() => { document.getElementById('qrText').focus(); }, 100); }
+            if(type === 'identity' && typeof generateIdentity === 'function') { setTimeout(() => { document.getElementById('identityLang').focus(); }, 100); }
             if(type === 'osint' && typeof osintInitSection === 'function') osintInitSection();
             if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
 
@@ -21394,348 +21249,207 @@ def _build_kali_tool_challenges(rng):
 
     challenges = []
 
-    nmap_targets = [
-        '10.11.1.5', '10.13.7.21', '10.14.9.18', '10.12.3.44', '192.168.50.103',
-        '172.16.9.4', '172.16.8.99', '10.0.0.158', '10.1.12.77', '10.2.2.222'
-    ]
-    nmap_ports = [
-        (2222, 'ssh', 'OpenSSH 8.4p1'),
-        (3128, 'http-proxy', 'Squid 5.2'),
-        (4444, 'glrpc', 'Metasploit RPC'),
-        (5000, 'upnp', 'MiniDLNA 1.0.0'),
-        (5985, 'http', 'Microsoft HTTPAPI httpd 2.0'),
-        (5900, 'vnc', 'RealVNC 6.7'),
-        (6379, 'redis', 'Redis key-value store'),
-        (9200, 'http', 'Elasticsearch 7.17'),
-        (27017, 'mongodb', 'MongoDB 5.0'),
-        (8080, 'http', 'Apache Tomcat 9.0')
-    ]
-    for idx in range(1, 11):
-        target = rng.choice(nmap_targets)
-        port, service, version = rng.choice(nmap_ports)
-        output = (
-            f"Nmap scan report for {target}\n"
-            "Host is up (0.12s latency).\n"
-            "Not shown: 994 filtered ports\n"
-            "PORT     STATE SERVICE VERSION\n"
-            "22/tcp   open  ssh     OpenSSH 8.2p1\n"
-            f"{port}/tcp open  {service}    {version}\n"
-            "80/tcp   open  http    nginx 1.22\n"
-        )
-        challenges.append(make_challenge(
-            f'kali_nmap_{idx:02d}',
-            f'Kali Tool Drill: Nmap service discovery #{idx}',
-            'medium' if idx % 3 != 0 else 'hard',
-            170 + (idx % 3) * 20,
-            'TITAN{PORT}',
-            f"تدريب Kali (nmap): حلّل نتائج الفحص وحدد رقم البورت الذي يوفر الخدمة المكتشفة ({service}).\n\n{output}",
-            [
-                'ابحث عن السطر الذي يحتوي الخدمة المحددة وراجع رقم البورت المرتبط بها.',
-                'النتيجة الصحيحة هي رقم البورت فقط داخل العلم.'
-            ],
-            'قراءة مخرجات nmap واستخراج رقم البورت الخاص بالخدمة المستهدفة.',
-            f'TITAN{{{port}}}'
-        ))
+    # Nmap - تحدي واحد فقط
+    nmap_target = f"10.{rng.randint(10, 200)}.{rng.randint(1, 254)}.{rng.randint(1, 254)}"
+    nmap_ports = [(2222, 'ssh', 'OpenSSH 8.4p1'), (3128, 'http-proxy', 'Squid 5.2'), (8080, 'http', 'Apache Tomcat 9.0')]
+    port, service, version = rng.choice(nmap_ports)
+    nmap_output = (
+        f"Nmap scan report for {nmap_target}\n"
+        "Host is up (0.12s latency).\n"
+        "PORT     STATE SERVICE VERSION\n"
+        "22/tcp   open  ssh     OpenSSH 8.2p1\n"
+        f"{port}/tcp open  {service}    {version}\n"
+        "80/tcp   open  http    nginx 1.22\n"
+    )
+    challenges.append(make_challenge(
+        'kali_nmap_01',
+        'Kali Tool Drill: Nmap Port Scanning',
+        'medium',
+        170,
+        'TITAN{PORT}',
+        f"تدريب Kali (nmap): حلّل نتائج المسح واستخرج رقم البورت الذي يوفر {service}.\n\n{nmap_output}",
+        ['ابحث عن الخدمة المطلوبة في الناتج', 'أدخل رقم البورت فقط داخل العلم'],
+        'قراءة مخرجات nmap واستخراج رقم البورت',
+        f'TITAN{{{port}}}'
+    ))
 
-    gobuster_paths = [
-        '/admin', '/backup', '/hidden', '/dev', '/staging', '/secret', '/files', '/oldsite', '/uploads', '/console'
-    ]
-    for idx in range(1, 9):
-        path = rng.choice(gobuster_paths)
-        output = (
-            "===============================================================\n"
-            "Gobuster v3.6\n"
-            "===============================================================\n"
-            "/assets               (Status: 301) [Size: 312]\n"
-            "/api                  (Status: 200) [Size: 845]\n"
-            f"{path:<22} (Status: 200) [Size: {rng.randint(800, 2500)}]\n"
-            "/server-status        (Status: 403) [Size: 277]\n"
-        )
-        challenges.append(make_challenge(
-            f'kali_gobuster_{idx:02d}',
-            f'Kali Tool Drill: Gobuster discovery #{idx}',
-            'easy' if idx <= 4 else 'medium',
-            140 + (idx % 2) * 20,
-            'TITAN{path}',
-            f"تدريب Kali (gobuster): من مخرجات الاكتشاف السابقة، حدّد المسار الذي نجح بحالة 200.\nاكتب اسم المسار بدون الشرطة / داخل العلم.\n\n{output}",
-            [
-                'ابحث عن السطر الذي يحتوي Status: 200 والمسار غير التقليدي.',
-                'احذف الشرطة الأمامية قبل وضع المسار داخل العلم.'
-            ],
-            'استخراج المسار الصالح من نتائج gobuster وإدخاله داخل العلم.',
-            f'TITAN{{{path.strip("/")}}}'
-        ))
+    # Gobuster - تحدي واحد فقط
+    paths = ['/admin', '/backup', '/hidden', '/dev', '/staging', '/secret']
+    path = rng.choice(paths)
+    gobuster_output = (
+        "===============================================================\n"
+        "Gobuster v3.6\n"
+        "===============================================================\n"
+        "/assets               (Status: 301)\n"
+        "/api                  (Status: 200)\n"
+        f"{path:<22} (Status: 200)\n"
+        "/server-status        (Status: 403)\n"
+    )
+    challenges.append(make_challenge(
+        'kali_gobuster_01',
+        'Kali Tool Drill: Gobuster Directory Discovery',
+        'easy',
+        160,
+        'TITAN{path}',
+        f"تدريب Kali (gobuster): حدّد المسار المخفي الذي نجح.\n\n{gobuster_output}",
+        ['ابحث عن Status: 200', 'احذف الشرطة من المسار'],
+        'استخراج المسار الناجح من نتائج gobuster',
+        f'TITAN{{{path.strip("/")}}}'
+    ))
 
-    sql_endpoints = [
-        '/login.php?id=1', '/product.php?id=44', '/search.php?q=test', '/item.php?item=12',
-        '/user.php?uid=5', '/category.php?cat=2', '/view.php?post=33', '/article.php?aid=11'
-    ]
-    sql_dbs = ['employees', 'customers', 'inventory', 'finances', 'cms', 'portal', 'reports', 'analytics']
-    sql_tables = ['users', 'orders', 'credentials', 'sessions', 'payments', 'logs', 'products', 'employees']
-    for idx in range(1, 9):
-        endpoint = rng.choice(sql_endpoints)
-        db = rng.choice(sql_dbs)
-        table = rng.choice(sql_tables)
-        if idx % 2 == 0:
-            challenges.append(make_challenge(
-                f'kali_sqlmap_db_{idx:02d}',
-                f'Kali Tool Drill: SQLMap database enum #{idx}',
-                'medium',
-                180,
-                'TITAN{database}',
-                f"تدريب Kali (sqlmap): كشف قاعدة البيانات عبر نقطة حقن SQL.\nالناتج التالي يظهر قواعد البيانات الممكن استرجاعها.\n\n[*] databases: {db}, information_schema, mysql\n\nاكتب اسم قاعدة البيانات فقط داخل العلم.",
-                [
-                    'الهدف هو اسم قاعدة البيانات المحددة الموجودة في الناتج.',
-                    'لا تضع أي أحرف إضافية خارج اسم القاعدة.'
-                ],
-                'استخرج اسم قاعدة البيانات الواقعة ضمن نتائج sqlmap.',
-                f'TITAN{{{db}}}'
-            ))
-        else:
-            challenges.append(make_challenge(
-                f'kali_sqlmap_table_{idx:02d}',
-                f'Kali Tool Drill: SQLMap table enum #{idx}',
-                'hard',
-                220,
-                'TITAN{table}',
-                f"تدريب Kali (sqlmap): بعد تحديد قاعدة البيانات، يعرض sqlmap جدولاً حساساً.\nالناتج:\n[+] table: {table}\n[+] table: products\n[+] table: orders\n\nاكتب اسم الجدول داخل العلم.",
-                [
-                    'الناتج يذكر الجدول المطلوب مباشرة.',
-                    'اكتب اسم الجدول بدون أي مسافات.'
-                ],
-                'تحليل نتائج sqlmap واستخراج اسم الجدول الهدف.',
-                f'TITAN{{{table}}}'
-            ))
+    # SQLMap - تحدي واحد فقط
+    db = rng.choice(['employees', 'customers', 'inventory', 'finances'])
+    challenges.append(make_challenge(
+        'kali_sqlmap_01',
+        'Kali Tool Drill: SQLMap Database Enumeration',
+        'medium',
+        180,
+        'TITAN{database}',
+        f"تدريب Kali (sqlmap): كشف قاعدة البيانات.\n\n[*] databases: {db}, information_schema, mysql",
+        ['اكتب اسم قاعدة البيانات المحددة', 'بدون مسافات'],
+        'استخراج اسم قاعدة البيانات من نتائج sqlmap',
+        f'TITAN{{{db}}}'
+    ))
 
-    nikto_vulns = ['X-XSS-Protection header missing', 'Server header reveals version', 'Directory indexing found', 'Outdated Apache version']
-    wpscan_items = ['timthumb vulnerability', 'weak plugin found', 'wp-config exposure', 'user enumeration enabled']
-    for idx in range(1, 9):
-        if idx <= 4:
-            vuln = rng.choice(nikto_vulns)
-            challenges.append(make_challenge(
-                f'kali_nikto_{idx:02d}',
-                f'Kali Tool Drill: Nikto web scan #{idx}',
-                'easy' if idx <= 2 else 'medium',
-                150 + (idx % 2) * 20,
-                'TITAN{finding}',
-                f"تدريب Kali (nikto): من نتائج المسح أعلاه، حدّد الإصابة الرئيسية التي يجب معالجتها.\nالناتج:\n+ {vuln}\n+ OSVDB-12345\n\nاكتب اسم الإصابة داخل العلم كما هو تقريباً.",
-                [
-                    'ابحث عن الوصف الأوضح للمشكلة في الناتج.',
-                    'اكتب النص الرئيسي بدون إعدادات إضافية.'
-                ],
-                'تفسير ناتج Nikto وتحديد رسالة الضعف الأساسية.',
-                f'TITAN{{{vuln}}}'
-            ))
-        else:
-            item = rng.choice(wpscan_items)
-            standard = item.replace(' ', '_')
-            challenges.append(make_challenge(
-                f'kali_wpscan_{idx:02d}',
-                f'Kali Tool Drill: WPScan auditing #{idx}',
-                'medium',
-                170,
-                'TITAN{finding}',
-                f"تدريب Kali (wpscan): علّم أداة WPScan بنظام ووردبريس.\nالناتج يذكر التالي:\n[!] {item}\n\nاكتب وصف الإصابة مصغّراً داخل العلم (استبدل الفراغات بـ underscore).",
-                [
-                    'احفظ النص الرئيسي كما هو بلغة إنجليزية بسيطة.',
-                    'استبدل الفراغات بـ underscore داخل العلم.'
-                ],
-                'تحديد تقرير WPScan وإعادة صياغته داخل علم متوافق.',
-                f'TITAN{{{standard}}}'
-            ))
+    # Nikto Web Scanner - تحدي واحد فقط
+    vuln = rng.choice(['X-XSS-Protection header missing', 'Directory indexing found', 'Outdated Apache version'])
+    challenges.append(make_challenge(
+        'kali_nikto_01',
+        'Kali Tool Drill: Nikto Web Vulnerability Scanner',
+        'easy',
+        150,
+        'TITAN{vulnerability}',
+        f"تدريب Kali (nikto): حدّد الضعف الأساسي.\n\n+ {vuln}\n+ OSVDB-12345",
+        ['اكتب وصف الضعف', 'استخدم underscore للمسافات'],
+        'تحديد الضعف من نتائج Nikto',
+        f'TITAN{{{vuln.replace(" ", "_")}}}'
+    ))
 
-    password_entries = [
-        ('rebelforce77', 'MD5'), ('kaliagent93', 'SHA1'), ('securepath24', 'NTLM'),
-        ('ghostecho11', 'MD5'), ('netstorm82', 'SHA1'), ('darkroot55', 'NTLM'),
-        ('redteam2026', 'MD5'), ('sniperwolf9', 'SHA1'), ('cryptic88', 'NTLM'), ('rootkit12', 'MD5')
-    ]
-    for idx, (plaintext, hash_type) in enumerate(password_entries, start=1):
-        hashed = hashlib.md5(plaintext.encode('utf-8')).hexdigest() if hash_type == 'MD5' else hashlib.sha1(plaintext.encode('utf-8')).hexdigest() if hash_type == 'SHA1' else 'aad3b435b51404eeaad3b435b51404ee'
-        challenges.append(make_challenge(
-            f'kali_password_crack_{idx:02d}',
-            f'Kali Tool Drill: {hash_type} password cracking #{idx}',
-            'medium' if idx % 3 != 0 else 'hard',
-            180 + (idx % 3) * 20,
-            'TITAN{password}',
-            f"تدريب Kali (john/hashcat): عليك كسر الهاش التالي.\nHash type: {hash_type}\nHash: {hashed}\n\nأرسل كلمة المرور كما هي داخل العلم.",
-            [
-                'حدد نوع الهاش ثم استخدم أداة كسر مناسبة.',
-                'الناتج هو كلمة مرور lowercase مع أرقام.'
-            ],
-            'استخدم john أو hashcat لكسر الهاش واستخراج كلمة المرور النصية.',
-            f'TITAN{{{plaintext}}}'
-        ))
+    # John The Ripper / Hashcat - تحدي واحد فقط
+    password = rng.choice(['rebelforce77', 'kaliagent93', 'securepath24', 'ghostecho11'])
+    pwd_hash = hashlib.md5(password.encode('utf-8')).hexdigest()
+    challenges.append(make_challenge(
+        'kali_john_01',
+        'Kali Tool Drill: John Password Cracking',
+        'medium',
+        190,
+        'TITAN{password}',
+        f"تدريب Kali (john/hashcat): اكسر هاش MD5.\n\nHash: {pwd_hash}",
+        ['استخدم قاموس أو brute force', 'كلمة مرور قوية'],
+        'كسر الهاش واستخراج كلمة المرور',
+        f'TITAN{{{password}}}'
+    ))
 
-    hydra_targets = [
-        ('http-post-form', '/login.php:username=^USER^&password=^PASS^:F=incorrect'),
-        ('ftp', 'ftp://192.168.50.103'), ('ssh', 'ssh://10.11.1.5'), ('smtp', 'smtp://mail.corp.local'),
-        ('telnet', 'telnet://172.16.8.99'), ('mysql', 'mysql://10.0.0.158'), ('vsftpd', 'ftp://10.1.12.77'),
-        ('ldap', 'ldap://10.3.4.5')
-    ]
-    hydra_creds = [
-        ('admin', 'trustme12'), ('root', 'kali1234'), ('webadmin', 'SecurePass1'), ('support', 'HelpDesk9'),
-        ('backup', 'Storage99'), ('user', 'NetOps88'), ('sales', 'Guest2026'), ('dev', 'CodeFlow7')
-    ]
-    for idx in range(1, 9):
-        user, pwd = hydra_creds[idx - 1]
-        service, target = hydra_targets[idx - 1]
-        challenges.append(make_challenge(
-            f'kali_hydra_{idx:02d}',
-            f'Kali Tool Drill: Hydra brute force #{idx}',
-            'hard' if idx > 5 else 'medium',
-            190 + (idx % 4) * 15,
-            'TITAN{password}',
-            f"تدريب Kali (hydra): تحليل نتائجتان هجومية.\nService: {service}\nTarget: {target}\n\n[80][http-post-form] host: {target}   login: {user}   password: {pwd}   status: SUCCESS\n\nأرسل كلمة المرور التي نجحت داخل العلم.",
-            [
-                'النتيجة تعرض المستخدم الناجح وكلمة المرور المصاحبة.',
-                'اكتب كلمة المرور فقط داخل العلم.'
-            ],
-            'قراءة نتائج Hydra واستخراج كلمة المرور الناجحة لعملية تسجيل الدخول.',
-            f'TITAN{{{pwd}}}'
-        ))
+    # Hydra Brute Force - تحدي واحد فقط
+    user, pwd = rng.choice([('admin', 'trustme12'), ('root', 'kali1234'), ('webadmin', 'SecurePass1')])
+    challenges.append(make_challenge(
+        'kali_hydra_01',
+        'Kali Tool Drill: Hydra Brute Force',
+        'hard',
+        200,
+        'TITAN{password}',
+        f"تدريب Kali (hydra): نتيجة هجوم brute force ناجح.\n\n[+] login: {user}   password: {pwd}   SUCCESS",
+        ['ابحث عن كلمة المرور الناجحة', 'بدون مسافات'],
+        'استخراج كلمة المرور من نتائج Hydra',
+        f'TITAN{{{pwd}}}'
+    ))
 
-    wireless_ssids = ['RedSpider', 'GhostNet', 'BlackLotus', 'BluePhantom', 'CipherWave', 'SilentRogue', 'ZeroFrame', 'DarkPulse']
-    wifi_passwords = ['kaliwifi2026', 'redteam44', 'securelink7', 'phantom99', 'nmap4life', 'aircrack23', 'wifiscan1', 'handshake8']
-    for idx in range(1, 9):
-        ssid = wireless_ssids[idx - 1]
-        pwd = wifi_passwords[idx - 1]
-        challenges.append(make_challenge(
-            f'kali_aircrack_{idx:02d}',
-            f'Kali Tool Drill: Aircrack-ng handshake #{idx}',
-            'medium' if idx % 2 == 1 else 'hard',
-            180 + (idx % 3) * 15,
-            'TITAN{ssid}',
-            f"تدريب Kali (aircrack-ng): من مخرجات airodump-ng وجدنا الشبكة التالية مع دليل handshake.\nSSID: {ssid}\nBSSID: 00:14:22:01:23:{idx:02d}\nChannel: {rng.choice([1,6,11,3,9])}\nEncryption: WPA2\n\nأرسل اسم SSID داخل العلم.",
-            [
-                'هوية الشبكة تظهر مباشرة في الناتج.',
-                'اكتب SSRID كما هو داخل العلم.'
-            ],
-            'تحليل بيانات airodump-ng واستخراج اسم الشبكة SSID.',
-            f'TITAN{{{ssid}}}'
-        ))
+    # Aircrack-ng Wireless - تحدي واحد فقط
+    ssid = rng.choice(['RedSpider', 'GhostNet', 'BlackLotus', 'CipherWave'])
+    challenges.append(make_challenge(
+        'kali_aircrack_01',
+        'Kali Tool Drill: Aircrack-ng Wireless Analysis',
+        'medium',
+        180,
+        'TITAN{ssid}',
+        f"تدريب Kali (aircrack-ng): تحليل شبكة WiFi مكتشفة.\n\nSSID: {ssid}\nBSSID: 00:14:22:01:23:45\nChannel: 6\nEncryption: WPA2",
+        ['اسم الشبكة يظهر مباشرة', 'اكتبه كما هو'],
+        'استخراج اسم الشبكة من نتائج الفحص',
+        f'TITAN{{{ssid}}}'
+    ))
 
-    metasploit_payloads = [
-        ('windows/rdp/cve_2019_0708_bluekeep', 'cve_2019_0708_bluekeep')
-    ]
-    for idx, (module, answer_token) in enumerate(metasploit_payloads, start=1):
-        challenges.append(make_challenge(
-            f'kali_metasploit_{idx:02d}',
-            'Kali Tool Drill: Metasploit module',
-            'medium',
-            220,
-            'TITAN{module}',
-            f"تدريب Kali (msfconsole): اخترت module: {module}\n\nضمن نتائج البحث يظهر المسار الكامل للموديول.\nاكتب المصطلح الأخير داخل العلم بدون الشرطة المائلة النهائية.",
-            [
-                'حدد الجزء الأخير من اسم المسار.',
-                'لا تضع أي شرطات مائلة أو أجزاء إضافية داخل العلم.'
-            ],
-            'قراءة مسار Metasploit module واستخراج الاسم النهائي المستخدم في العلم.',
-            f'TITAN{{{answer_token}}}'
-        ))
+    # Metasploit MSFConsole - تحدي واحد (موجود بالفعل)
+    challenges.append(make_challenge(
+        'kali_metasploit_01',
+        'Kali Tool Drill: Metasploit Module',
+        'medium',
+        220,
+        'TITAN{module}',
+        "تدريب Kali (msfconsole): حدّد اسم الـ module.\n\nModule path: exploit/windows/rdp/cve_2019_0708_bluekeep",
+        ['الجزء الأخير من المسار هو الاسم', 'بدون شرطات مائلة'],
+        'استخراج اسم module من المسار',
+        'TITAN{cve_2019_0708_bluekeep}'
+    ))
 
-    burp_tokens = [
-        ('JSESSIONID=abc123xyz', 'JSESSIONID'), ('Authorization=Bearer token_45', 'Bearer'),
-        ('X-CSRF-Token=csrf-9876', 'csrf-9876'), ('Cookie=sessionid=jh34k9', 'sessionid=jh34k9'),
-        ('Authorization=Basic dXNlcjpwYXNz', 'Basic'), ('X-Api-Key=KIJ45L9', 'KIJ45L9'),
-        ('Referer=https://admin.portal', 'admin.portal'), ('User-Agent=sqlmap/1.6', 'sqlmap/1.6')
-    ]
-    for idx, (token, answer_token) in enumerate(burp_tokens, start=1):
-        challenges.append(make_challenge(
-            f'kali_burp_{idx:02d}',
-            f'Kali Tool Drill: Burp header analysis #{idx}',
-            'easy' if idx <= 3 else 'medium',
-            150 + (idx % 4) * 15,
-            'TITAN{token}',
-            f"تدريب Kali (Burp Suite): راجع الرأس يلي مرّ خلال interception.\nHeader found: {token}\n\nالسؤال: ما الجزء الذي يجب أن تستخدمه داخل العلم؟",
-            [
-                'ركز على قيمة الرأس أو مفتاحه المفرد.',
-                'إذا كان المطلوب هو المفتاح فقط، لا تضع القيمة كلها.'
-            ],
-            'تحديد العنصر المناسب في رأس HTTP لإدخاله داخل العلم.',
-            f'TITAN{{{answer_token}}}'
-        ))
+    # Burp Suite - تحدي واحد فقط
+    header_name = rng.choice(['JSESSIONID', 'Authorization', 'X-CSRF-Token', 'X-Api-Key'])
+    challenges.append(make_challenge(
+        'kali_burp_01',
+        'Kali Tool Drill: Burp Suite Header Analysis',
+        'easy',
+        150,
+        'TITAN{header}',
+        f"تدريب Kali (Burp Suite): حدّد الـ header الحساس.\n\nHeaders: {header_name}=value123, Cookie=..., User-Agent=...",
+        ['ابحث عن الـ header المهم أمنياً', 'اكتب الاسم فقط'],
+        'تحديد الـ header الحساس من القائمة',
+        f'TITAN{{{header_name}}}'
+    ))
 
-    binwalk_artifacts = [
-        ('config.bin', 'config.bin'), ('secret.txt', 'secret.txt'), ('payload.sh', 'payload.sh'),
-        ('credentials.csv', 'credentials.csv'), ('recover.key', 'recover.key'),
-        ('unlock.dat', 'unlock.dat'), ('firmware.sig', 'firmware.sig'), ('machine.id', 'machine.id')
-    ]
-    for idx, (artifact, answer_token) in enumerate(binwalk_artifacts, start=1):
-        challenges.append(make_challenge(
-            f'kali_binwalk_{idx:02d}',
-            f'Kali Tool Drill: Binwalk artifact #{idx}',
-            'medium',
-            180 + (idx % 3) * 10,
-            'TITAN{artifact}',
-            f"تدريب Kali (binwalk): تحليلك ل firmware يكشف عن artefact مهم.\nالسطر الأخير في النتيجة: {artifact}\n\nاكتب اسم الـ artifact داخل العلم.",
-            [
-                'ابحث عن اسم الملف الموجود في مخرجات binwalk.',
-                'اكتب اسم الملف كاملاً داخل العلم.'
-            ],
-            'قراءة مخرجات binwalk واستخراج اسم الملف المضمّن داخل العلم.',
-            f'TITAN{{{answer_token}}}'
-        ))
+    # Binwalk Firmware Analysis - تحدي واحد فقط
+    artifact = rng.choice(['config.bin', 'secret.txt', 'payload.sh', 'credentials.csv'])
+    challenges.append(make_challenge(
+        'kali_binwalk_01',
+        'Kali Tool Drill: Binwalk Firmware Analysis',
+        'medium',
+        180,
+        'TITAN{artifact}',
+        f"تدريب Kali (binwalk): تحليل firmware يكشف عن ملف.\n\nFound artifact: {artifact}",
+        ['اسم الملف يظهر في النتيجة', 'اكتبه كما هو'],
+        'استخراج اسم الملف المكتشف',
+        f'TITAN{{{artifact}}}'
+    ))
 
-    responder_hosts = [
-        'WIN-CLIENT01', 'SALES-WORK', 'ADMIN-PC', 'PRINT-SRV', 'FILESTORE', 'BACKUP01', 'DEV-LAB', 'OFFICE-WS'
-    ]
-    dns_domains = [
-        'corp.local', 'internal.corp', 'secure.lan', 'prod.domain', 'dev.private', 'team.net', 'office.local', 'lab.corp'
-    ]
-    for idx in range(1, 9):
-        if idx % 2 == 1:
-            host = responder_hosts[idx - 1]
-            challenges.append(make_challenge(
-                f'kali_responder_{idx:02d}',
-                f'Kali Tool Drill: Responder poisoning #{idx}',
-                'medium',
-                170,
-                'TITAN{hostname}',
-                f"تدريب Kali (Responder): تم اكتشاف طلب LLMNR/NBT-NS.\nالهدف هو: {host}.corp.local\n\nما هو اسم الجهاز فقط داخل العلم؟",
-                [
-                    'استخدم اسم الهدف قبل النطاق.',
-                    'لا تضع .corp.local داخل العلم.'
-                ],
-                'استخراج اسم الجهاز من نتائج Responder.',
-                f'TITAN{{{host}}}'
-            ))
-        else:
-            domain = rng.choice(dns_domains)
-            challenges.append(make_challenge(
-                f'kali_dns_{idx:02d}',
-                f'Kali Tool Drill: DNS enumeration #{idx}',
-                'easy',
-                150,
-                'TITAN{domain}',
-                f"تدريب Kali (dnsenum): تحليل نتائج كشف نطاق داخلي.\nالنطاق المكتشف: {domain}\n\nاكتب النطاق داخل العلم كما هو.\n",
-                [
-                    'النطاق يظهر كاملاً في السطر.',
-                    'اكتب النطاق بنفس التنسيق بما في ذلك النقطة.'
-                ],
-                'قراءة ناتج DNS enumeration واستخراج اسم النطاق.',
-                f'TITAN{{{domain}}}'
-            ))
+    # Responder LLMNR Poisoning - تحدي واحد فقط
+    host = rng.choice(['WIN-CLIENT01', 'ADMIN-PC', 'FILESERVER', 'WORKSTATION'])
+    challenges.append(make_challenge(
+        'kali_responder_01',
+        'Kali Tool Drill: Responder LLMNR Poisoning',
+        'medium',
+        170,
+        'TITAN{hostname}',
+        f"تدريب Kali (Responder): اكتشاف طلب LLMNR.\n\nTarget: {host}.corp.local",
+        ['اسم الجهاز فقط بدون النطاق', 'قبل .corp.local'],
+        'استخراج اسم الجهاز من LLMNR request',
+        f'TITAN{{{host}}}'
+    ))
 
-    ssl_items = [
-        ('TLSv1.2', 'TLSv1.2'), ('TLSv1.3', 'TLSv1.3'), ('openssl.cnf', 'openssl.cnf'),
-        ('Subject: CN=secure.corp.local', 'secure.corp.local'), ('Certificate chain', 'secure.corp.local'),
-        ('HTTP/1.1 200 OK', '200_OK'), ('Server: nginx/1.22', 'nginx_1.22'), ('X-Powered-By: Express', 'Express')
-    ]
-    for idx, (output_item, answer_token) in enumerate(ssl_items, start=1):
-        challenges.append(make_challenge(
-            f'kali_ssl_{idx:02d}',
-            f'Kali Tool Drill: SSL/WhatWeb scan #{idx}',
-            'easy' if idx <= 4 else 'medium',
-            140 + (idx % 3) * 20,
-            'TITAN{finding}',
-            f"تدريب Kali (sslscan/openssl/whatweb): من مخرجات الفحص التالية حدّد العنصر المفيد.\n{output_item}\n\nاكتب المعلومة المهمة داخل العلم باستخدام underscore بدل المسافات إذا لزم الأمر.",
-            [
-                'ركز على الكلمة أو العبارة الأبرز في المخرجات.',
-                'إذا كان هناك فراغ، استبدله بـ underscore داخل العلم.'
-            ],
-            'تحديد المعلومة الرئيسية من نتائج فحص TLS أو WhatWeb.',
-            f'TITAN{{{answer_token}}}'
-        ))
+    # DNS Enumeration - تحدي واحد فقط
+    domain = rng.choice(['corp.local', 'internal.corp', 'secure.lan', 'prod.domain'])
+    challenges.append(make_challenge(
+        'kali_dns_enum_01',
+        'Kali Tool Drill: DNS Enumeration',
+        'easy',
+        150,
+        'TITAN{domain}',
+        f"تدريب Kali (dnsenum): كشف نطاق داخلي.\n\nDomain found: {domain}",
+        ['النطاق يظهر كاملاً', 'بدون تعديلات'],
+        'استخراج النطاق من نتائج DNS enumeration',
+        f'TITAN{{{domain}}}'
+    ))
+
+    # SSL/OpenSSL Analysis - تحدي واحد فقط
+    ssl_version = rng.choice(['TLSv1.2', 'TLSv1.3'])
+    challenges.append(make_challenge(
+        'kali_ssl_01',
+        'Kali Tool Drill: SSL/OpenSSL Analysis',
+        'easy',
+        140,
+        'TITAN{version}',
+        f"تدريب Kali (sslscan/openssl): حدّد نسخة TLS المستخدمة.\n\nSSL Version: {ssl_version}",
+        ['اسم النسخة يظهر مباشرة', 'استخدم underscore للنقاط إن لزم'],
+        'استخراج نسخة TLS من النتيجة',
+        f'TITAN{{{ssl_version}}}'
+    ))
 
     return challenges
 
@@ -22133,6 +21847,480 @@ def _build_ctf_challenges(user_id, force_nonce: str = ''):
             'answer': binwalk_flag
         },
     ]
+
+    # --- 30 NEW CHALLENGES ---
+    # Challenge 9: MD5 crack
+    md5_word = rng.choice(['fortress', 'sentinel', 'phantom', 'nexus', 'cipher'])
+    md5_hash = hashlib.md5(md5_word.encode('utf-8')).hexdigest()
+    challenges.append({
+        'id': 'ctf_md5',
+        'title': 'MD5 Cracker',
+        'category': 'crypto',
+        'difficulty': 'easy',
+        'points': 130,
+        'flag_format': 'TITAN{word}',
+        'description': f"اكسر هاش MD5 التالي:\n{md5_hash}",
+        'hints': ['الكلمة بسيطة بالإنجليزية', 'جرب قاموس شامل'],
+        'method': 'استخدام آلة حاسبة MD5 أو قاموس للبحث',
+        'answer': f'TITAN{{{md5_word}}}'
+    })
+
+    # Challenge 10: JSON parsing
+    json_data = {'secret': rng.choice(['key123', 'vault99', 'access42']), 'level': rng.randint(1, 9)}
+    json_str = json.dumps(json_data)
+    challenges.append({
+        'id': 'ctf_json_parse',
+        'title': 'JSON Secret Extractor',
+        'category': 'osint',
+        'difficulty': 'easy',
+        'points': 100,
+        'flag_format': 'TITAN{secret_value}',
+        'description': f"استخرج قيمة المفتاح 'secret' من JSON:\n{json_str}",
+        'hints': ['ابحث عن مفتاح secret', 'استخدم أي أداة JSON parser'],
+        'method': 'تحليل JSON واستخراج القيمة المطلوبة',
+        'answer': f'TITAN{{{json_data["secret"]}}}'
+    })
+
+    # Challenge 11: Base32 encoding
+    base32_text = rng.choice(['ADMIN_BYPASS', 'CRYPTO_KEY', 'VAULT_DOOR'])
+    base32_encoded = base64.b32encode(base32_text.encode()).decode()
+    challenges.append({
+        'id': 'ctf_base32',
+        'title': 'Base32 Decoder',
+        'category': 'crypto',
+        'difficulty': 'easy',
+        'points': 110,
+        'flag_format': 'TITAN{decoded_text}',
+        'description': f"فك ترميز Base32:\n{base32_encoded}",
+        'hints': ['استخدم Base32 decoder', 'النتيجة نص بسيط'],
+        'method': 'تحويل Base32 إلى نص عادي',
+        'answer': f'TITAN{{{base32_text}}}'
+    })
+
+    # Challenge 12: URL parsing
+    url_param = rng.choice(['admin', 'secret', 'token123', 'flag_here'])
+    challenges.append({
+        'id': 'ctf_url_parse',
+        'title': 'URL Parameter Extraction',
+        'category': 'osint',
+        'difficulty': 'easy',
+        'points': 105,
+        'flag_format': 'TITAN{param_value}',
+        'description': f"من الرابط التالي استخرج قيمة المعامل 'key':\nhttps://example.com?key={url_param}&debug=1",
+        'hints': ['ابحث عن key=...', 'القيمة بعد علامة ='],
+        'method': 'تحليل URL واستخراج معامل محدد',
+        'answer': f'TITAN{{{url_param}}}'
+    })
+
+    # Challenge 13: Reverse text
+    rev_text = rng.choice(['dlrow_olleh', 'cihpyrc_enecs', 'sgnirts_desrever'])
+    original = rev_text[::-1]
+    challenges.append({
+        'id': 'ctf_reverse_text',
+        'title': 'Text Reverser',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 95,
+        'flag_format': 'TITAN{reversed}',
+        'description': f"اعكس النص التالي:\n{rev_text}",
+        'hints': ['اقرأ من اليمين إلى اليسار', 'اعكس الترتيب'],
+        'method': 'عكس ترتيب الأحرف',
+        'answer': f'TITAN{{{original}}}'
+    })
+
+    # Challenge 14: Hex string to text
+    hex_str = rng.choice(['48656c6c6f', '50617373776f7264', '536563726574'])
+    hex_decoded = bytes.fromhex(hex_str).decode('utf-8', errors='ignore')
+    challenges.append({
+        'id': 'ctf_hex_decode2',
+        'title': 'Hex String Conversion',
+        'category': 'reverse',
+        'difficulty': 'medium',
+        'points': 140,
+        'flag_format': 'TITAN{text}',
+        'description': f"حول Hex string إلى نص:\n{hex_str}",
+        'hints': ['استخدم hex to ASCII converter', 'كل بايتين = حرف واحد'],
+        'method': 'تحويل hex إلى ASCII text',
+        'answer': f'TITAN{{{hex_decoded}}}'
+    })
+
+    # Challenge 15: URL encoding
+    encoded_text = 'Hello%20World%21%40%23'
+    decoded_text = 'Hello World!@#'
+    challenges.append({
+        'id': 'ctf_url_encode',
+        'title': 'URL Decoder',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 100,
+        'flag_format': 'TITAN{decoded}',
+        'description': f"فك URL encoding:\n{encoded_text}",
+        'hints': ['%20 = space', '%21 = !'],
+        'method': 'فك URL encoded strings',
+        'answer': f'TITAN{{{decoded_text}}}'
+    })
+
+    # Challenge 16: Number cipher
+    num_pattern = rng.choice([1337, 2048, 4096, 8192, 16384])
+    challenges.append({
+        'id': 'ctf_number_cipher',
+        'title': 'Number Pattern Solver',
+        'category': 'forensics',
+        'difficulty': 'medium',
+        'points': 150,
+        'flag_format': 'TITAN{analysis}',
+        'description': f"السلسلة: {num_pattern}\nما الخاصية المشتركة؟",
+        'hints': ['كلها أرقام', 'ابحث عن الخاصية المشتركة'],
+        'method': 'تحليل الأرقام وفهم النمط',
+        'answer': f'TITAN{{power_of_2}}'
+    })
+
+    # Challenge 17: ASCII shift
+    shift_num = rng.randint(1, 5)
+    shift_char = chr(ord('A') + shift_num)
+    challenges.append({
+        'id': 'ctf_ascii_shift',
+        'title': 'ASCII Shift Cipher',
+        'category': 'crypto',
+        'difficulty': 'medium',
+        'points': 145,
+        'flag_format': 'TITAN{char}',
+        'description': f"حرف مزاح بمقدار {shift_num} من A هو:\n{shift_char}",
+        'hints': [f'أزح A بمقدار {shift_num}', 'استخدم جدول ASCII'],
+        'method': 'تحويل ASCII مع إزاحة',
+        'answer': f'TITAN{{{shift_char}}}'
+    })
+
+    # Challenge 18: Email parsing
+    email = f"{rng.choice(['admin', 'user', 'root'])}@{rng.choice(['titan.com', 'secure.io', 'ops.net'])}"
+    domain = email.split('@')[1]
+    challenges.append({
+        'id': 'ctf_email_domain',
+        'title': 'Email Domain Extractor',
+        'category': 'osint',
+        'difficulty': 'easy',
+        'points': 100,
+        'flag_format': 'TITAN{domain}',
+        'description': f"استخرج الـ domain من البريد:\n{email}",
+        'hints': ['ابحث عن @ وما بعده', 'الجزء الثاني من البريد'],
+        'method': 'تقسيم البريد واستخراج domain',
+        'answer': f'TITAN{{{domain}}}'
+    })
+
+    # Challenge 19: IPv4 validation
+    ip_parts = [rng.randint(1, 255), rng.randint(1, 255), rng.randint(1, 255), rng.randint(1, 255)]
+    ip_addr = '.'.join(str(p) for p in ip_parts)
+    challenges.append({
+        'id': 'ctf_ipv4_parse',
+        'title': 'IPv4 Address Parser',
+        'category': 'osint',
+        'difficulty': 'easy',
+        'points': 105,
+        'flag_format': 'TITAN{octet_sum}',
+        'description': f"جمّع أرقام IP:{ip_addr}",
+        'hints': ['أجمع الأرقام الأربعة', 'مثال: 192+168+1+1=362'],
+        'method': 'جمع أجزاء IP address',
+        'answer': f'TITAN{{{sum(ip_parts)}}}'
+    })
+
+    # Challenge 20: Morse code
+    morse_dict = {'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.'}
+    morse_char = rng.choice(['A', 'B', 'C', 'D', 'E'])
+    challenges.append({
+        'id': 'ctf_morse_code',
+        'title': 'Morse Code Decoder',
+        'category': 'crypto',
+        'difficulty': 'easy',
+        'points': 120,
+        'flag_format': 'TITAN{char}',
+        'description': f"فك Morse:\n{morse_dict[morse_char]}\nما الحرف؟",
+        'hints': ['جدول morse code', f'الحل حرف واحد'],
+        'method': 'ترجمة morse code إلى حرف',
+        'answer': f'TITAN{{{morse_char}}}'
+    })
+
+    # Challenge 21: String manipulation
+    source_str = rng.choice(['UPPERCASE', 'lowercase', 'MixedCase'])
+    challenges.append({
+        'id': 'ctf_string_upper',
+        'title': 'String Transformation',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 95,
+        'flag_format': 'TITAN{transformed}',
+        'description': f"حول إلى UPPERCASE:\n{source_str}",
+        'hints': ['استخدم upper() function', 'جميع الأحرف كبيرة'],
+        'method': 'تحويل أحرف إلى كبيرة',
+        'answer': f'TITAN{{{source_str.upper()}}}'
+    })
+
+    # Challenge 22: File extension detection
+    extensions = ['txt', 'pdf', 'jpg', 'exe', 'zip']
+    ext = rng.choice(extensions)
+    challenges.append({
+        'id': 'ctf_file_ext',
+        'title': 'File Type Identifier',
+        'category': 'forensics',
+        'difficulty': 'easy',
+        'points': 100,
+        'flag_format': 'TITAN{ext}',
+        'description': f"ملف بصيغة .{ext}\nما نوع الملف؟",
+        'hints': [f'الصيغة: .{ext}', 'النوع الشامل للملف'],
+        'method': 'معرفة نوع الملف من الامتداد',
+        'answer': f'TITAN{{{ext}}}'
+    })
+
+    # Challenge 23: Checksum validation
+    numbers = [rng.randint(1, 99) for _ in range(5)]
+    checksum = sum(numbers) % 256
+    challenges.append({
+        'id': 'ctf_checksum',
+        'title': 'Checksum Calculator',
+        'category': 'forensics',
+        'difficulty': 'medium',
+        'points': 135,
+        'flag_format': 'TITAN{checksum}',
+        'description': f"احسب checksum (mod 256) للأرقام:\n{', '.join(str(n) for n in numbers)}",
+        'hints': ['أجمع الأرقام', 'خذ mod 256'],
+        'method': 'حساب checksum مع modulo',
+        'answer': f'TITAN{{{checksum}}}'
+    })
+
+    # Challenge 24: Date format conversion
+    day, month, year = rng.randint(1, 28), rng.randint(1, 12), rng.randint(2020, 2026)
+    challenges.append({
+        'id': 'ctf_date_format',
+        'title': 'Date Formatter',
+        'category': 'osint',
+        'difficulty': 'easy',
+        'points': 110,
+        'flag_format': 'TITAN{YYYYMMDD}',
+        'description': f"اكتب التاريخ بصيغة YYYYMMDD:\n{day}/{month}/{year}",
+        'hints': ['الصيغة: سنة شهر يوم', 'بدون فواصل'],
+        'method': 'تحويل تنسيق التاريخ',
+        'answer': f'TITAN{{{year:04d}{month:02d}{day:02d}}}'
+    })
+
+    # Challenge 25: Binary to decimal
+    bin_num = rng.randint(1, 255)
+    bin_str = bin(bin_num)[2:]
+    challenges.append({
+        'id': 'ctf_bin2dec',
+        'title': 'Binary Converter',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 105,
+        'flag_format': 'TITAN{decimal}',
+        'description': f"حول من binary إلى decimal:\n{bin_str}",
+        'hints': ['قوى العدد 2', '2^0, 2^1, 2^2...'],
+        'method': 'تحويل binary إلى decimal',
+        'answer': f'TITAN{{{bin_num}}}'
+    })
+
+    # Challenge 26: Octal conversion
+    oct_num = rng.randint(10, 255)
+    oct_str = oct(oct_num)[2:]
+    challenges.append({
+        'id': 'ctf_oct2dec',
+        'title': 'Octal Converter',
+        'category': 'reverse',
+        'difficulty': 'medium',
+        'points': 140,
+        'flag_format': 'TITAN{decimal}',
+        'description': f"حول من octal إلى decimal:\n{oct_str}",
+        'hints': ['نظام الأساس 8', 'كل خانة × 8^position'],
+        'method': 'تحويل octal إلى decimal',
+        'answer': f'TITAN{{{oct_num}}}'
+    })
+
+    # Challenge 27: Hex to decimal
+    hex_num = rng.randint(100, 4095)
+    hex_str = hex(hex_num)[2:].upper()
+    challenges.append({
+        'id': 'ctf_hex2dec',
+        'title': 'Hex Converter',
+        'category': 'reverse',
+        'difficulty': 'medium',
+        'points': 145,
+        'flag_format': 'TITAN{decimal}',
+        'description': f"حول من hex إلى decimal:\n{hex_str}",
+        'hints': ['نظام الأساس 16', 'A=10, B=11, C=12...'],
+        'method': 'تحويل hexadecimal إلى decimal',
+        'answer': f'TITAN{{{hex_num}}}'
+    })
+
+    # Challenge 28: Prime number check
+    num_to_check = rng.choice([2, 3, 5, 7, 11, 13, 17, 19, 23, 29])
+    challenges.append({
+        'id': 'ctf_prime_check',
+        'title': 'Prime Number Identifier',
+        'category': 'forensics',
+        'difficulty': 'easy',
+        'points': 115,
+        'flag_format': 'TITAN{prime/composite}',
+        'description': f"هل {num_to_check} عدد أولي أم مركب؟",
+        'hints': ['الأعداد الأولية: 2,3,5,7...', 'لا تقبل القسمة إلا على نفسها و1'],
+        'method': 'التحقق من أولية العدد',
+        'answer': f'TITAN{{prime}}'
+    })
+
+    # Challenge 29: String length counter
+    count_str = rng.choice(['cryptography', 'filesystem', 'networking'])
+    challenges.append({
+        'id': 'ctf_strlen',
+        'title': 'String Length Counter',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 95,
+        'flag_format': 'TITAN{length}',
+        'description': f"طول النص:\n{count_str}",
+        'hints': ['عد الأحرف', 'بدون فواصل'],
+        'method': 'عد عدد الأحرف في النص',
+        'answer': f'TITAN{{{len(count_str)}}}'
+    })
+
+    # Challenge 30: Vowel counter
+    vowel_str = rng.choice(['education', 'security', 'information'])
+    vowel_count = sum(1 for c in vowel_str if c.lower() in 'aeiou')
+    challenges.append({
+        'id': 'ctf_vowels',
+        'title': 'Vowel Counter',
+        'category': 'forensics',
+        'difficulty': 'easy',
+        'points': 105,
+        'flag_format': 'TITAN{count}',
+        'description': f"عد حروف العلة في:\n{vowel_str}",
+        'hints': ['حروف العلة: a,e,i,o,u', 'استخدم طريقة البحث'],
+        'method': 'عد حروف العلة في النص',
+        'answer': f'TITAN{{{vowel_count}}}'
+    })
+
+    # Challenge 31: Consecutive duplicates
+    dup_str = rng.choice(['aabbcc', 'xxxyyzz', 'mmnnoo'])
+    challenges.append({
+        'id': 'ctf_duplicates',
+        'title': 'Duplicate Character Finder',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 100,
+        'flag_format': 'TITAN{count}',
+        'description': f"عد مجموع الحروف المكررة المتتالية:\n{dup_str}",
+        'hints': ['احسب الأزواج المتتالية', 'aa=1, bb=1...'],
+        'method': 'عد الحروف المكررة المتتالية',
+        'answer': f'TITAN{{3}}'
+    })
+
+    # Challenge 32: Unicode character
+    unicode_char = chr(rng.choice([128512, 128513, 128514]))  # emoji
+    challenges.append({
+        'id': 'ctf_unicode',
+        'title': 'Unicode Point Analyzer',
+        'category': 'forensics',
+        'difficulty': 'medium',
+        'points': 150,
+        'flag_format': 'TITAN{codepoint}',
+        'description': f"ما رمز Unicode للحرف:\n{unicode_char}",
+        'hints': ['في Python: ord(char)', 'البحث عن Unicode table'],
+        'method': 'معرفة رمز Unicode للحرف',
+        'answer': f'TITAN{{emoji}}'
+    })
+
+    # Challenge 33: Whitespace detection
+    ws_text = rng.choice(['hello world', 'cyber security', 'network admin'])
+    space_count = ws_text.count(' ')
+    challenges.append({
+        'id': 'ctf_whitespace',
+        'title': 'Whitespace Counter',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 95,
+        'flag_format': 'TITAN{count}',
+        'description': f"عد المسافات في:\n{ws_text}",
+        'hints': ['كل space = 1', 'استخدم count()'],
+        'method': 'عد المسافات في النص',
+        'answer': f'TITAN{{{space_count}}}'
+    })
+
+    # Challenge 34: Case sensitivity check
+    case_text = rng.choice(['Python', 'JavaScript', 'Assembly'])
+    upper_chars = sum(1 for c in case_text if c.isupper())
+    challenges.append({
+        'id': 'ctf_case_count',
+        'title': 'Uppercase Counter',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 100,
+        'flag_format': 'TITAN{count}',
+        'description': f"عد الأحرف الكبيرة في:\n{case_text}",
+        'hints': ['A-Z فقط', 'استخدم isupper()'],
+        'method': 'عد الأحرف الكبيرة',
+        'answer': f'TITAN{{{upper_chars}}}'
+    })
+
+    # Challenge 35: Alphanumeric filter
+    mixed_str = rng.choice(['test123', 'pass456word', 'key789secret'])
+    digit_sum = sum(int(c) for c in mixed_str if c.isdigit())
+    challenges.append({
+        'id': 'ctf_digit_sum',
+        'title': 'Digit Sum Calculator',
+        'category': 'forensics',
+        'difficulty': 'easy',
+        'points': 110,
+        'flag_format': 'TITAN{sum}',
+        'description': f"أجمع الأرقام في:\n{mixed_str}",
+        'hints': ['استخرج الأرقام فقط', 'أجمعها'],
+        'method': 'استخراج الأرقام وجمعها',
+        'answer': f'TITAN{{{digit_sum}}}'
+    })
+
+    # Challenge 36: Character type identifier
+    identifier_str = rng.choice(['Str1ng', 'P@ssw0rd', 'Test#123'])
+    special_chars = sum(1 for c in identifier_str if not c.isalnum())
+    challenges.append({
+        'id': 'ctf_special_chars',
+        'title': 'Special Character Counter',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 105,
+        'flag_format': 'TITAN{count}',
+        'description': f"عد الأحرف الخاصة في:\n{identifier_str}",
+        'hints': ['ليست حروف أو أرقام', 'مثل: @#$%'],
+        'method': 'عد الأحرف غير الأبجدية',
+        'answer': f'TITAN{{{special_chars}}}'
+    })
+
+    # Challenge 37: Substring search
+    haystack = rng.choice(['heartbeat', 'underground', 'overlook'])
+    needle = haystack[1:4]
+    position = haystack.find(needle)
+    challenges.append({
+        'id': 'ctf_substring',
+        'title': 'Substring Finder',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 100,
+        'flag_format': 'TITAN{position}',
+        'description': f"موضع '{needle}' في '{haystack}':",
+        'hints': ['الموضع من اليسار', 'أول ظهور = 0'],
+        'method': 'البحث عن موضع substring',
+        'answer': f'TITAN{{{position}}}'
+    })
+
+    # Challenge 38: Character replacement
+    replace_text = rng.choice(['hello', 'world', 'cipher'])
+    replaced = replace_text.replace('l', 'x')
+    challenges.append({
+        'id': 'ctf_replace_char',
+        'title': 'Character Replacer',
+        'category': 'reverse',
+        'difficulty': 'easy',
+        'points': 95,
+        'flag_format': 'TITAN{result}',
+        'description': f"استبدل 'l' بـ 'x' في:\n{replace_text}",
+        'hints': ['كل l -> x', 'استخدم replace()'],
+        'method': 'استبدال أحرف في النص',
+        'answer': f'TITAN{{{replaced}}}'
+    })
 
     challenges += _build_kali_tool_challenges(rng)
 
