@@ -4195,7 +4195,7 @@ HTML_TEMPLATE = """
                 <div style="font-size:4.5rem;font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,#c084fc,#a855f7,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;text-shadow:none;filter:drop-shadow(0 0 20px rgba(168,85,247,0.5));">TITAN</div>
                 <div style="color:#a855f7;font-size:0.6rem;letter-spacing:0.5em;text-transform:uppercase;margin-top:1px;opacity:0.75;">SEC</div>
             </div>
-            <p class="text-gray-400 text-lg text-purple-400">نظام التشفير وحماية البيانات المتطور</p>
+            <p class="text-gray-400 text-lg text-purple-400">نظام التعلم وحماية البيانات المتطور</p>
             
             <div style="position:absolute;top:0;left:0;display:flex;align-items:center;gap:0.5rem;">
                 <span id="header-username" style="color:#a855f7;font-size:0.75rem;font-weight:700;letter-spacing:0.05em;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);padding:4px 10px;border-radius:8px;"></span>
@@ -4274,7 +4274,6 @@ HTML_TEMPLATE = """
                     <div class="lg:col-span-1 bg-slate-900/60 rounded-xl border border-purple-900/30 p-3">
                         <div class="flex items-center justify-between mb-2">
                             <div class="text-xs font-bold text-purple-300">المحادثات السابقة</div>
-                            <button type="button" onclick="loadAiConversations()" class="text-[11px] px-2 py-1 rounded border border-slate-700 text-gray-300 hover:bg-slate-800">تحديث</button>
                         </div>
                         <div id="ai-conv-list" class="max-h-44 overflow-y-auto overflow-x-hidden space-y-1 text-xs text-gray-300"></div>
                     </div>
@@ -4282,13 +4281,10 @@ HTML_TEMPLATE = """
                     <div class="lg:col-span-2 bg-slate-900/60 rounded-xl border border-indigo-900/30 p-3 space-y-2">
                         <div class="flex items-center justify-between gap-2 flex-wrap">
                             <div class="text-xs font-bold text-indigo-300">إجراءات سريعة</div>
-                            <button type="button" onclick="startNewAiConversation()" class="text-[11px] px-2.5 py-1 rounded-lg border border-indigo-800/50 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30">+ محادثة جديدة</button>
+                            <button type="button" onclick="loadAiConversations(); startNewAiConversation(); updateQuickActions(); updateBottomQuickActions();" class="text-[11px] px-2.5 py-1 rounded-lg border border-indigo-800/50 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30 transition-all active:scale-95" id="ai-quick-refresh-btn">🔄 تحديث</button>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <button onclick="aiQuickPrompt('اعطني خطة تعلم امن سيبراني لمدة 30 يوم بطريقة عملية')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">خطة تعلم 30 يوم</button>
-                            <button onclick="aiQuickPrompt('اشرح لي الفرق بين XSS و SQLi مع مثال دفاعي مختصر')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">XSS vs SQLi</button>
-                            <button onclick="aiQuickPrompt('عندي تنبيه مشبوه في الشبكة، اعطني خطوات Incident Response مرتبة')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">Incident Response</button>
-                            <button onclick="aiQuickPrompt('اشرح لي التصيد الاحتيالي بشكل دفاعي: مؤشرات الكشف، الاحتواء، وخطة التحصين')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200">دفاع ضد التصيّد</button>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="ai-quick-actions-container">
+                            <!-- سيتم ملء هذا ديناميكياً -->
                         </div>
                     </div>
                 </div>
@@ -4318,10 +4314,8 @@ HTML_TEMPLATE = """
                             إرسال
                         </button>
                     </div>
-                    <div class="flex flex-wrap gap-1.5">
-                        <button onclick="aiQuickPrompt('اشرحلي مبادئ Zero Trust بشكل بسيط')" class="px-2 py-1 text-[10px] rounded border border-slate-700 text-gray-300 bg-slate-900/40 hover:bg-slate-800">Zero Trust</button>
-                        <button onclick="aiQuickPrompt('اعطني checklist سريعة لتأمين سيرفر لينكس')" class="px-2 py-1 text-[10px] rounded border border-slate-700 text-gray-300 bg-slate-900/40 hover:bg-slate-800">Linux Hardening</button>
-                        <button onclick="aiQuickPrompt('كيف افحص ايميل مشبوه بطريقة دفاعية آمنة؟')" class="px-2 py-1 text-[10px] rounded border border-slate-700 text-gray-300 bg-slate-900/40 hover:bg-slate-800">Email Defense</button>
+                    <div class="flex flex-wrap gap-1.5" id="ai-quick-actions-bottom">
+                        <!-- سيتم ملء هذا ديناميكياً -->
                     </div>
                     </div>
                 </div>
@@ -14518,6 +14512,7 @@ HTML_TEMPLATE = """
                 });
             }
             loadAiConversations();
+            initQuickActions();
         });
 
         function aiTopicLabel(v) {
@@ -14754,6 +14749,126 @@ HTML_TEMPLATE = """
             if (!input) return;
             input.value = String(text || '').trim();
             input.focus();
+        }
+
+        // ===== Dynamic Quick Actions System =====
+        const QUICK_ACTIONS_DB = [
+            // أساسيات الأمن السيبراني
+            { label: 'خطة تعلم 30 يوم', prompt: 'اعطني خطة تعلم امن سيبراني لمدة 30 يوم بطريقة عملية' },
+            { label: 'XSS vs SQLi', prompt: 'اشرح لي الفرق بين XSS و SQLi مع مثال دفاعي مختصر' },
+            { label: 'Incident Response', prompt: 'عندي تنبيه مشبوه في الشبكة، اعطني خطوات Incident Response مرتبة' },
+            { label: 'دفاع ضد التصيّد', prompt: 'اشرح لي التصيد الاحتيالي بشكل دفاعي: مؤشرات الكشف، الاحتواء، وخطة التحصين' },
+            { label: 'Zero Trust', prompt: 'اشرحلي مبادئ Zero Trust بشكل بسيط' },
+            { label: 'Linux Hardening', prompt: 'اعطني checklist سريعة لتأمين سيرفر لينكس' },
+            { label: 'Email Defense', prompt: 'كيف افحص ايميل مشبوه بطريقة دفاعية آمنة؟' },
+            
+            // موضوعات الهندسة الاجتماعية
+            { label: 'هندسة اجتماعية', prompt: 'شرح تفصيلي لتقنيات الهندسة الاجتماعية وكيفية مقاومتها' },
+            { label: 'استخلاص المعلومات', prompt: 'ما أفضل الطرق للتعرف على محاولات استخلاص المعلومات؟' },
+            { label: 'الانتحال الإلكتروني', prompt: 'كيف أتعامل مع محاولات الانتحال والتقليد الإلكتروني؟' },
+            
+            // موضوعات الشبكات والبنية التحتية
+            { label: 'أمن الشبكات', prompt: 'أعطني نصائح عملية لتأمين الشبكة من الاختراقات' },
+            { label: 'الجدران الناريّة', prompt: 'ما دور الجدار الناري وكيفية إعداده بشكل صحيح؟' },
+            { label: 'VPN والشبكات الخاصة', prompt: 'شرح تفصيلي حول VPN وفوائدها الأمنية' },
+            { label: 'أمن DNS', prompt: 'كيفية حماية خوادم DNS من الهجمات؟' },
+            { label: 'مراقبة الشبكة', prompt: 'ما أفضل أدوات ومنصات مراقبة الشبكات؟' },
+            
+            // موضوعات البرمجيات الخبيثة والفحص
+            { label: 'البرمجيات الخبيثة', prompt: 'ما أنواع البرمجيات الخبيثة الشائعة وكيفية الكشف عنها؟' },
+            { label: 'تحليل البرمجيات الخبيثة', prompt: 'خطوات تحليل البرمجيات الخبيثة بشكل آمن ومعزول' },
+            { label: 'Ransomware', prompt: 'شرح شامل لهجمات Ransomware والحماية منها' },
+            { label: 'استرجاع البيانات', prompt: 'كيفية استرجاع البيانات من هجوم Ransomware؟' },
+            { label: 'الفيروسات والديدان', prompt: 'الفرق بين الفيروسات والديدان وكيفية الحماية منها' },
+            
+            // موضوعات التشفير والبيانات
+            { label: 'تشفير البيانات', prompt: 'ما أفضل معايير التشفير للبيانات الحساسة؟' },
+            { label: 'إدارة المفاتيح', prompt: 'أفضل الممارسات في إدارة المفاتيح التشفيرية' },
+            { label: 'البيانات الشخصية', prompt: 'كيف أحمي بيانات العملاء من الاختراق؟' },
+            { label: 'GDPR والامتثال', prompt: 'شرح متطلبات GDPR والامتثال الأمني' },
+            { label: 'نسخ احتياطية آمنة', prompt: 'كيفية عمل نسخ احتياطية آمنة وفعالة للبيانات' },
+            
+            // موضوعات التطبيقات والأكواد
+            { label: 'أمان التطبيقات', prompt: 'كيف أحمي تطبيقي الويب من الثغرات الشائعة؟' },
+            { label: 'OWASP Top 10', prompt: 'شرح تفصيلي لثغرات OWASP Top 10 وكيفية تجنبها' },
+            { label: 'البرمجة الآمنة', prompt: 'أفضل الممارسات في كتابة أكواد آمنة من الثغرات' },
+            { label: 'اختبار التطبيقات', prompt: 'كيفية اختبار تطبيقي للبحث عن الثغرات الأمنية؟' },
+            { label: 'الحقن SQL', prompt: 'شرح تفصيلي لهجمات SQL Injection وكيفية الحماية' },
+            { label: 'XSS والحقن', prompt: 'تفاصيل حول هجمات XSS والحقن والحماية منها' },
+            
+            // موضوعات المصادقة والوصول
+            { label: 'المصادقة الثنائية', prompt: 'اشرح أنواع المصادقة الثنائية وأفضلها' },
+            { label: 'إدارة الوصول', prompt: 'أفضل الممارسات في إدارة والتحكم في الوصول' },
+            { label: 'بيوميتري وتقنيات المصادقة', prompt: 'شرح تقنيات المصادقة البيومترية والمتقدمة' },
+            { label: 'كلمات المرور القوية', prompt: 'كيفية إنشاء سياسات كلمات مرور قوية وآمنة؟' },
+            { label: 'إدارة الهويات', prompt: 'شرح أنظمة إدارة الهويات والوصول (IAM)' },
+            
+            // موضوعات التدريب والسياسات
+            { label: 'تدريب الموظفين', prompt: 'ما أهمية تدريب الموظفين على الأمن السيبراني؟' },
+            { label: 'سياسات الأمن', prompt: 'ما أفضل السياسات الأمنية للمؤسسات؟' },
+            { label: 'الوعي الأمني', prompt: 'برامج فعالة لرفع الوعي الأمني في المؤسسة' },
+            { label: 'استجابة الحوادث', prompt: 'خطة استجابة شاملة للحوادث الأمنية' },
+            { label: 'خطة الاستمرارية', prompt: 'كيفية وضع خطة استمرارية عمل فعالة؟' },
+            
+            // موضوعات الاختبار والتقييم
+            { label: 'Penetration Testing', prompt: 'اشرح خطوات اختبار الاختراق للأنظمة' },
+            { label: 'اختبار الثغرات', prompt: 'منهجية شاملة لاختبار الثغرات الأمنية' },
+            { label: 'تقييم المخاطر', prompt: 'كيفية إجراء تقييم شامل للمخاطر الأمنية؟' },
+            { label: 'التدقيق الأمني', prompt: 'عملية التدقيق الأمني الشامل للأنظمة' },
+            { label: 'سحب العينات الأمنية', prompt: 'طرق فحص واختبار الأمان بشكل دوري' },
+            
+            // موضوعات متقدمة
+            { label: 'تصنيف التهديدات', prompt: 'صنف أنواع التهديدات السيبرانية الرئيسية وكيفية التعامل معها' },
+            { label: 'التحليل السلوكي', prompt: 'استخدام التحليل السلوكي للكشف عن التهديدات' },
+            { label: 'التعلم الآلي والأمن', prompt: 'دور التعلم الآلي في تحسين الأمن السيبراني' },
+            { label: 'الذكاء الاصطناعي والأمن', prompt: 'تطبيقات الذكاء الاصطناعي في الدفاع الأمني' },
+            { label: 'تتبع التهديدات', prompt: 'كيفية تتبع ومطاردة المهاجمين والتهديدات' },
+            { label: 'الحوسبة السحابية الآمنة', prompt: 'أفضل الممارسات لأمان البيئات السحابية' },
+            { label: 'IoT والأمن', prompt: 'تحديات أمن أجهزة إنترنت الأشياء والحلول' },
+            { label: 'البلوكتشين والأمن', prompt: 'دور البلوكتشين في تحسين الأمن السيبراني' },
+        ];
+
+        let window_QuickActionsState = {
+            currentIndices: null,
+            displayCount: 4, // عدد الإجراءات المعروضة في كل مرة
+            bottomActionsCount: 3 // عدد الأزرار الثلاث في الأسفل
+        };
+
+        function initQuickActions() {
+            // تهيئة الإجراءات السريعة عند تحميل الصفحة
+            updateQuickActions();
+            updateBottomQuickActions();
+        }
+
+        function updateQuickActions() {
+            const container = document.getElementById('ai-quick-actions-container');
+            if (!container) return;
+            
+            // اختيار عشوائي من الإجراءات
+            const shuffled = QUICK_ACTIONS_DB.sort(() => Math.random() - 0.5);
+            const selected = shuffled.slice(0, window_QuickActionsState.displayCount);
+            window_QuickActionsState.currentIndices = selected.map(a => QUICK_ACTIONS_DB.indexOf(a));
+            
+            // بناء HTML للأزرار
+            container.innerHTML = selected.map(action => {
+                const escapedPrompt = String(action.prompt || '').replace(/'/g, "\\'");
+                return `<button onclick="aiQuickPrompt('${escapedPrompt}')" class="text-[11px] text-right px-2 py-2 rounded-lg border border-slate-700 bg-black/25 hover:bg-slate-800/50 text-gray-200 transition-all active:scale-95">${_osintEscape(action.label)}</button>`;
+            }).join('');
+        }
+
+        function updateBottomQuickActions() {
+            const container = document.getElementById('ai-quick-actions-bottom');
+            if (!container) return;
+            
+            // اختيار عشوائي 3 أزرار من الإجراءات
+            const shuffled = QUICK_ACTIONS_DB.sort(() => Math.random() - 0.5);
+            const selected = shuffled.slice(0, window_QuickActionsState.bottomActionsCount);
+            
+            // بناء HTML للأزرار الثلاث
+            container.innerHTML = selected.map(action => {
+                const escapedPrompt = String(action.prompt || '').replace(/'/g, "\\'");
+                return `<button onclick="aiQuickPrompt('${escapedPrompt}')" class="px-2 py-1 text-[10px] rounded border border-slate-700 text-gray-300 bg-slate-900/40 hover:bg-slate-800 transition-all active:scale-95">${_osintEscape(action.label)}</button>`;
+            }).join('');
         }
 
         async function typeAiReplyPretty(targetEl, text) {
