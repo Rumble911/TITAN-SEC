@@ -4942,17 +4942,13 @@ HTML_TEMPLATE = """
                     <div class="bg-slate-900/40 border border-slate-700/60 rounded-xl p-3 mb-2 relative z-10">
                         <div class="space-y-2 mb-2">
                             <button type="button" onclick="triggerBurnNoteImagePicker()" class="w-full py-2 rounded-lg border border-orange-700/50 bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 text-xs font-bold">🖼️ اختيار صورة</button>
-                            <div class="flex gap-2">
-                                <button type="button" id="burnNoteRecStartBtn" onclick="startBurnNoteAudioRecording()" class="flex-1 py-2 rounded-lg border border-emerald-700/50 bg-emerald-900/20 hover:bg-emerald-800/30 text-emerald-300 text-xs font-bold">🎙️ بدء التسجيل الصوتي</button>
-                                <button type="button" id="burnNoteRecStopBtn" onclick="stopBurnNoteAudioRecording()" class="flex-1 py-2 rounded-lg border border-amber-700/50 bg-amber-900/20 hover:bg-amber-800/30 text-amber-300 text-xs font-bold" disabled>⏹️ إيقاف التسجيل</button>
-                            </div>
                         </div>
                         <div class="flex items-center justify-between gap-2">
-                            <div id="burnNoteMediaState" class="text-[11px] text-gray-400 truncate">لم يتم اختيار صورة أو تسجيل صوت بعد.</div>
+                            <div id="burnNoteMediaState" class="text-[11px] text-gray-400 truncate">لم يتم اختيار صورة بعد.</div>
                             <button type="button" onclick="clearBurnNoteSelectedMedia()" class="text-[11px] px-2 py-1 rounded border border-slate-700 text-gray-300 hover:bg-slate-800">مسح</button>
                         </div>
                     </div>
-                    <p class="text-[11px] text-gray-500 mb-3 relative z-10">اختياري: أرسل نص فقط، أو صورة، أو سجّل صوتك مباشرة من الميكروفون.</p>
+                    <p class="text-[11px] text-gray-500 mb-3 relative z-10">اختياري: أرسل نص فقط، أو صورة.</p>
                     <button onclick="createBurnNote()" class="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold px-4 py-2 rounded-xl transition-all text-sm shadow-[0_0_15px_rgba(234,88,12,0.35)] flex items-center justify-center gap-2 relative z-10">
                         توليد رابط التدمير السري 🔥
                     </button>
@@ -4977,6 +4973,21 @@ HTML_TEMPLATE = """
                             <button id="burnChatDestroyBtn" onclick="destroyBurnChatRoom()" class="bg-rose-900/30 hover:bg-rose-800/40 text-rose-300 px-5 py-2 rounded border border-rose-800/50 transition-all font-bold" disabled>تدمير الغرفة</button>
                         </div>
 
+                        <div class="mb-4 p-3 rounded-lg border border-amber-700/50 bg-amber-950/40">
+                            <label class="text-xs font-bold text-amber-300 mb-2 block">عدد الأشخاص في الغرفة</label>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                <button type="button" id="btn-people-2" onclick="setBurnChatPeopleCount('2')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">2</button>
+                                <button type="button" id="btn-people-3" onclick="setBurnChatPeopleCount('3')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">3</button>
+                                <button type="button" id="btn-people-4" onclick="setBurnChatPeopleCount('4')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">4</button>
+                                <button type="button" id="btn-people-5" onclick="setBurnChatPeopleCount('5')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">5</button>
+                            </div>
+                            <input type="hidden" id="burnChatPeopleCount" value="">
+                        </div>
+
+                        <div id="burnChatPeopleBadge" class="hidden mb-3 text-center text-[11px] font-bold text-amber-200 bg-amber-900/30 border border-amber-700/40 rounded-lg py-2">
+                            عدد المشاركين المختار: <span id="burnChatPeopleBadgeValue">-</span>
+                        </div>
+
                         <div id="burnChatDisplay" class="h-64 bg-black rounded-lg border border-pink-900/30 mb-4 p-4 overflow-y-auto flex flex-col gap-2 shadow-inner">
                             <div class="text-center text-gray-600 text-[10px] tracking-widest uppercase mt-auto">-- Secure RAM Storage Only --</div>
                         </div>
@@ -4984,11 +4995,8 @@ HTML_TEMPLATE = """
                         <div class="flex gap-2 items-center flex-wrap">
                             <input type="text" id="burnChatInput" placeholder="اكتب رسالتك السرية هنا..." class="flex-1 p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-pink-500 outline-none" disabled>
                             <button id="burnChatSendBtn" onclick="sendBurnChat()" class="bg-slate-800 text-gray-500 px-8 rounded-lg font-bold transition-all border border-slate-700" disabled>إرسال</button>
-                            <input id="burnChatMediaInput" type="file" accept="image/*,audio/*,video/*" class="hidden" disabled>
-                            <button id="burnChatMediaBtn" onclick="document.getElementById('burnChatMediaInput').click()" class="bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700" disabled>📎 صورة/صوت/فيديو</button>
-                            <button id="burnChatRecStartBtn" onclick="startBurnChatRecording()" class="bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700" disabled>🎙️ بدء تسجيل</button>
-                            <button id="burnChatRecStopBtn" onclick="stopBurnChatRecording()" class="bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700" disabled>⏹️ إيقاف</button>
-                            <span id="burnChatRecState" class="text-[10px] text-gray-500">تسجيل مباشر غير مفعل</span>
+                            <input id="burnChatMediaInput" type="file" accept="image/*,video/*" class="hidden" disabled>
+                            <button id="burnChatMediaBtn" onclick="document.getElementById('burnChatMediaInput').click()" class="bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700" disabled>📎 صورة/فيديو</button>
                         </div>
                     </div>
                 </div>
@@ -13457,26 +13465,17 @@ HTML_TEMPLATE = """
             }
         }
 
-        let burnNoteRecorder = null;
-        let burnNoteRecordChunks = [];
-        let burnNoteRecordStream = null;
-        window.__burnNoteRecordedBlob = null;
-
         async function createBurnNote() {
             const textEl = document.getElementById('burnNoteText');
             const mediaEl = document.getElementById('burnNoteMedia');
             const text = (textEl.value || '').trim();
             const media = mediaEl.files && mediaEl.files[0] ? mediaEl.files[0] : null;
-            const recordedBlob = window.__burnNoteRecordedBlob || null;
-            if(!text && !media && !recordedBlob) return titanAlert("يرجى كتابة رسالة أو اختيار صورة أو تسجيل صوت قبل التوليد!");
+            if(!text && !media) return titanAlert("يرجى كتابة رسالة أو اختيار صورة قبل التوليد!");
             
             const formData = new FormData();
             if (text) formData.append('text', text);
             if (media) {
                 formData.append('media', media);
-            } else if (recordedBlob) {
-                const voiceFile = new File([recordedBlob], 'burn-note-voice.webm', { type: recordedBlob.type || 'audio/webm' });
-                formData.append('media', voiceFile);
             }
             
             try {
@@ -13512,76 +13511,16 @@ HTML_TEMPLATE = """
             if (!mediaEl) return;
             mediaEl.onchange = () => {
                 if (mediaEl.files && mediaEl.files[0]) {
-                    window.__burnNoteRecordedBlob = null;
                     _setBurnNoteMediaStateLabel('🖼️ تم اختيار صورة: ' + mediaEl.files[0].name, 'text-orange-300');
                 }
             };
             mediaEl.click();
         }
 
-        async function startBurnNoteAudioRecording() {
-            try {
-                const mediaEl = document.getElementById('burnNoteMedia');
-                if (mediaEl) mediaEl.value = '';
-                window.__burnNoteRecordedBlob = null;
-
-                burnNoteRecordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                burnNoteRecordChunks = [];
-                burnNoteRecorder = new MediaRecorder(burnNoteRecordStream);
-
-                burnNoteRecorder.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) burnNoteRecordChunks.push(e.data);
-                };
-
-                burnNoteRecorder.onstop = () => {
-                    if (burnNoteRecordChunks.length > 0) {
-                        window.__burnNoteRecordedBlob = new Blob(burnNoteRecordChunks, { type: 'audio/webm' });
-                        _setBurnNoteMediaStateLabel('🎤 تم تسجيل الصوت وجاهز للإرسال', 'text-emerald-300');
-                    }
-                    if (burnNoteRecordStream) {
-                        burnNoteRecordStream.getTracks().forEach(t => t.stop());
-                        burnNoteRecordStream = null;
-                    }
-                    const startBtn = document.getElementById('burnNoteRecStartBtn');
-                    const stopBtn = document.getElementById('burnNoteRecStopBtn');
-                    if (startBtn) startBtn.disabled = false;
-                    if (stopBtn) stopBtn.disabled = true;
-                };
-
-                burnNoteRecorder.start();
-                const startBtn = document.getElementById('burnNoteRecStartBtn');
-                const stopBtn = document.getElementById('burnNoteRecStopBtn');
-                if (startBtn) startBtn.disabled = true;
-                if (stopBtn) stopBtn.disabled = false;
-                _setBurnNoteMediaStateLabel('🔴 جاري تسجيل الصوت...', 'text-rose-300');
-            } catch (e) {
-                titanAlert('تعذر الوصول للميكروفون. اسمح بصلاحية الميكروفون أولاً.', 'error');
-            }
-        }
-
-        function stopBurnNoteAudioRecording() {
-            if (burnNoteRecorder && burnNoteRecorder.state === 'recording') {
-                burnNoteRecorder.stop();
-            }
-        }
-
         function clearBurnNoteSelectedMedia(showToast = true) {
             const mediaEl = document.getElementById('burnNoteMedia');
             if (mediaEl) mediaEl.value = '';
-            window.__burnNoteRecordedBlob = null;
-            burnNoteRecordChunks = [];
-            if (burnNoteRecorder && burnNoteRecorder.state === 'recording') {
-                burnNoteRecorder.stop();
-            }
-            if (burnNoteRecordStream) {
-                burnNoteRecordStream.getTracks().forEach(t => t.stop());
-                burnNoteRecordStream = null;
-            }
-            const startBtn = document.getElementById('burnNoteRecStartBtn');
-            const stopBtn = document.getElementById('burnNoteRecStopBtn');
-            if (startBtn) startBtn.disabled = false;
-            if (stopBtn) stopBtn.disabled = true;
-            _setBurnNoteMediaStateLabel('لم يتم اختيار صورة أو تسجيل صوت بعد.', 'text-gray-400');
+            _setBurnNoteMediaStateLabel('لم يتم اختيار صورة بعد.', 'text-gray-400');
             if (showToast) titanAlert('تم مسح الوسيط المحدد', 'info');
         }
 
@@ -13666,9 +13605,6 @@ HTML_TEMPLATE = """
         let burnChatTimer = null;
         let currentRoomId = null;
         let currentUser = null;
-        let burnChatRecorder = null;
-        let burnChatRecordStream = null;
-        let burnChatRecordChunks = [];
 
         function _burnCipherPreview(cipherText) {
             const raw = String(cipherText || '');
@@ -13683,9 +13619,6 @@ HTML_TEMPLATE = """
             const mediaInput = document.getElementById('burnChatMediaInput');
             const mediaBtn = document.getElementById('burnChatMediaBtn');
             const destroyBtn = document.getElementById('burnChatDestroyBtn');
-            const recStartBtn = document.getElementById('burnChatRecStartBtn');
-            const recStopBtn = document.getElementById('burnChatRecStopBtn');
-            const recState = document.getElementById('burnChatRecState');
 
             if (input) input.disabled = !isConnected;
             if (sendBtn) {
@@ -13701,19 +13634,6 @@ HTML_TEMPLATE = """
                     ? 'bg-pink-900/40 hover:bg-pink-800 text-pink-300 px-4 py-2 rounded-lg font-bold transition-all border border-pink-800/50'
                     : 'bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700';
             }
-            if (recStartBtn) {
-                recStartBtn.disabled = !isConnected;
-                recStartBtn.className = isConnected
-                    ? 'bg-emerald-900/40 hover:bg-emerald-800 text-emerald-300 px-4 py-2 rounded-lg font-bold transition-all border border-emerald-800/50'
-                    : 'bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700';
-            }
-            if (recStopBtn) {
-                recStopBtn.disabled = true;
-                recStopBtn.className = isConnected
-                    ? 'bg-amber-900/40 hover:bg-amber-800 text-amber-300 px-4 py-2 rounded-lg font-bold transition-all border border-amber-800/50'
-                    : 'bg-slate-800 text-gray-500 px-4 py-2 rounded-lg font-bold transition-all border border-slate-700';
-            }
-            if (recState) recState.textContent = isConnected ? 'جاهز لتسجيل الصوت داخل الغرفة' : 'تسجيل مباشر غير مفعل';
             if (destroyBtn) destroyBtn.disabled = !isConnected;
         }
 
@@ -13752,14 +13672,8 @@ HTML_TEMPLATE = """
                     </div>
                 `;
             } else {
-                display.innerHTML += `
-                    <div class="flex justify-start mt-4">
-                        <div class="bg-indigo-900/40 border border-indigo-700/50 text-indigo-200 px-4 py-3 rounded-lg text-sm max-w-[85%] break-y relative">
-                            <span class="text-[10px] text-indigo-400 font-bold mb-1 block">أنت (${currentUser}) <span class="text-indigo-600 bg-indigo-950 px-1 rounded ml-2">🔒 صوت مشفر</span></span>
-                            <audio controls controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false;" class="w-full mt-2"><source src="${dataUrl}"></audio>
-                        </div>
-                    </div>
-                `;
+                titanAlert('نوع وسائط غير مدعوم. مسموح صورة أو فيديو فقط.', 'warning');
+                return;
             }
             display.scrollTop = display.scrollHeight;
 
@@ -13768,64 +13682,6 @@ HTML_TEMPLATE = """
                 body: JSON.stringify({room_id: currentRoomId, sender: currentUser, msg: encryptedMsg})
             });
             soundManager.success();
-        }
-
-        async function startBurnChatRecording() {
-            if (!currentRoomId) return titanAlert('انضم للغرفة أولاً', 'warning');
-            const recStartBtn = document.getElementById('burnChatRecStartBtn');
-            const recStopBtn = document.getElementById('burnChatRecStopBtn');
-            const recState = document.getElementById('burnChatRecState');
-
-            try {
-                burnChatRecordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                burnChatRecordChunks = [];
-                burnChatRecorder = new MediaRecorder(burnChatRecordStream);
-
-                burnChatRecorder.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) burnChatRecordChunks.push(e.data);
-                };
-
-                burnChatRecorder.onstop = async () => {
-                    const mime = burnChatRecorder?.mimeType || 'audio/webm';
-                    const blob = new Blob(burnChatRecordChunks, { type: mime });
-
-                    if (burnChatRecordStream) {
-                        burnChatRecordStream.getTracks().forEach(t => t.stop());
-                        burnChatRecordStream = null;
-                    }
-
-                    if (recStartBtn) recStartBtn.disabled = false;
-                    if (recStopBtn) recStopBtn.disabled = true;
-                    if (recState) recState.textContent = 'تم إيقاف التسجيل، جاري الإرسال...';
-
-                    try {
-                        const dataUrl = await new Promise((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onload = () => resolve(String(reader.result || ''));
-                            reader.onerror = () => reject(new Error('read_failed'));
-                            reader.readAsDataURL(blob);
-                        });
-                        await _sendBurnChatMediaDataUrl(String(dataUrl), mime, 'burn-chat-recording.webm');
-                        if (recState) recState.textContent = 'تم إرسال التسجيل المشفّر ✅';
-                    } catch (e) {
-                        if (recState) recState.textContent = 'فشل إرسال التسجيل';
-                        titanAlert('فشل إرسال التسجيل الصوتي', 'error');
-                    }
-                };
-
-                burnChatRecorder.start();
-                if (recStartBtn) recStartBtn.disabled = true;
-                if (recStopBtn) recStopBtn.disabled = false;
-                if (recState) recState.textContent = '🔴 جاري التسجيل... اضغط إيقاف للإرسال';
-            } catch (e) {
-                titanAlert('تعذر الوصول إلى الميكروفون. اسمح بصلاحية الميكروفون.', 'error');
-            }
-        }
-
-        function stopBurnChatRecording() {
-            if (burnChatRecorder && burnChatRecorder.state !== 'inactive') {
-                burnChatRecorder.stop();
-            }
         }
 
         // Custom E2E Encryption (XOR + Base64 Safe) with Signature
@@ -13858,17 +13714,49 @@ HTML_TEMPLATE = """
             }
         }
 
+        function setBurnChatPeopleCount(count) {
+            const hidden = document.getElementById('burnChatPeopleCount');
+            if (hidden) hidden.value = String(count);
+            const badge = document.getElementById('burnChatPeopleBadge');
+            const badgeValue = document.getElementById('burnChatPeopleBadgeValue');
+            if (badge) badge.classList.remove('hidden');
+            if (badgeValue) badgeValue.textContent = String(count);
+            ['2', '3', '4', '5'].forEach((n) => {
+                const btn = document.getElementById('btn-people-' + n);
+                if (!btn) return;
+                btn.className = (n === String(count))
+                    ? 'py-2 rounded-lg border border-amber-300 bg-amber-600 text-white text-sm font-extrabold transition-all shadow-[0_0_18px_rgba(245,158,11,0.55)] ring-2 ring-amber-200/60 scale-[1.02]'
+                    : 'py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all';
+                if (n === String(count) && typeof btn.animate === 'function') {
+                    btn.animate(
+                        [
+                            { transform: 'scale(1)', filter: 'brightness(1)' },
+                            { transform: 'scale(1.08)', filter: 'brightness(1.15)' },
+                            { transform: 'scale(1)', filter: 'brightness(1)' }
+                        ],
+                        { duration: 260, easing: 'ease-out', iterations: 1 }
+                    );
+                }
+            });
+        }
+
         function joinBurnChat() {
             const roomId = document.getElementById('burnChatId').value.trim();
             const user = document.getElementById('burnChatUser').value.trim() || 'Anonymous';
+            const peopleCount = document.getElementById('burnChatPeopleCount').value.trim();
             
             if(!roomId) return titanAlert("الرجاء إدخال رقم الغرفة للاتصال المشفر!");
+            if(!peopleCount) return titanAlert("حدد عدد الأشخاص أولاً: 2 أو 3 أو 4 أو 5");
             
             currentRoomId = roomId;
             currentUser = user;
 
             _setBurnChatUiConnected(true);
             document.getElementById('burnChatDisplay').innerHTML = '<div class="text-center text-pink-500 font-bold tracking-widest text-xs uppercase mt-auto mb-2 animate-pulse">-- 🔒 تم الاتصال بنفق مشفر (End-to-End) --</div><div class="text-center text-gray-500 tracking-widest text-[10px] uppercase">يتم تشفير/فك تشفير الرسائل محلياً داخل متصفحك فقط</div>';
+            const badge = document.getElementById('burnChatPeopleBadge');
+            const badgeValue = document.getElementById('burnChatPeopleBadgeValue');
+            if (badge) badge.classList.remove('hidden');
+            if (badgeValue) badgeValue.textContent = peopleCount;
 
             const mediaInput = document.getElementById('burnChatMediaInput');
             if (mediaInput) {
@@ -13925,8 +13813,8 @@ HTML_TEMPLATE = """
 
             const file = mediaInput.files[0];
             if (!file) return;
-            if (!(file.type || '').startsWith('image/') && !(file.type || '').startsWith('audio/') && !(file.type || '').startsWith('video/')) {
-                titanAlert('الملف غير مدعوم. مسموح فقط صورة أو صوت أو فيديو.', 'error');
+            if (!(file.type || '').startsWith('image/') && !(file.type || '').startsWith('video/')) {
+                titanAlert('الملف غير مدعوم. مسموح فقط صورة أو فيديو.', 'error');
                 mediaInput.value = '';
                 return;
             }
@@ -13952,13 +13840,6 @@ HTML_TEMPLATE = """
         }
 
         function _handleBurnRoomDestroyed(byUser) {
-            if (burnChatRecorder && burnChatRecorder.state !== 'inactive') {
-                burnChatRecorder.stop();
-            }
-            if (burnChatRecordStream) {
-                burnChatRecordStream.getTracks().forEach(t => t.stop());
-                burnChatRecordStream = null;
-            }
             if (burnChatTimer) {
                 clearInterval(burnChatTimer);
                 burnChatTimer = null;
@@ -13975,6 +13856,17 @@ HTML_TEMPLATE = """
                     </div>
                 `;
             }
+            const peopleHidden = document.getElementById('burnChatPeopleCount');
+            if (peopleHidden) peopleHidden.value = '';
+            const badge = document.getElementById('burnChatPeopleBadge');
+            const badgeValue = document.getElementById('burnChatPeopleBadgeValue');
+            if (badge) badge.classList.add('hidden');
+            if (badgeValue) badgeValue.textContent = '-';
+            ['2', '3', '4', '5'].forEach((n) => {
+                const btn = document.getElementById('btn-people-' + n);
+                if (!btn) return;
+                btn.className = 'py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all';
+            });
             titanAlert('💥 تم تدمير غرفة الدردشة وحذف جميع الرسائل', 'warning');
         }
 
