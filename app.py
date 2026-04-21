@@ -4226,6 +4226,7 @@ HTML_TEMPLATE = """
                     <div class="tab-group-title px-1"><span>🧭</span> التحليل والاستقصاء</div>
                     <div class="tab-grid">
                     <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
+                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
                     <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
                     <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
                 </div>
@@ -4795,6 +4796,9 @@ HTML_TEMPLATE = """
 
             </div>
             <!-- /vault-section -->
+
+            <!-- ===== OSINT SECTION ===== -->
+            <div id="osint-section" class="hidden"></div>
 
             <div id="tools-section" class="hidden space-y-8">
                 <!-- IP Tool With Radar -->
@@ -6518,7 +6522,7 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','ghost','training','ctf','se','audio','video','qr','identity','admin'];
+        const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','osint','ghost','training','ctf','se','audio','video','qr','identity','admin'];
         const TRAINING_SUB_TABS = ['learninglab', 'tools-kb', 'vuln-kb', 'defense-kb', 'ai-lab', 'ctf'];
         let __trainingSubTab = 'learninglab';
         let _aiActiveSubTab = 'chat';
