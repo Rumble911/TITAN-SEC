@@ -12154,7 +12154,7 @@ HTML_TEMPLATE = """
                     const avatarUrl = String(acc.avatar || acc.picture || acc.profile_picture || acc.image || acc.photo || acc.img || acc.profile_image_url || acc.avatar_url || '').trim();
                     const activeGoogleApps = Array.isArray(acc.active_google_apps)
                         ? acc.active_google_apps
-                        : String(acc.active_google_apps || acc.google_apps || '').split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+                        : String(acc.active_google_apps || acc.google_apps || '').split(/[,;\\n]+/).map((x) => x.trim()).filter(Boolean);
                     const mapsActivity = String(acc.maps_activity || acc.maps || '').trim();
                     const reviewsArray = Array.isArray(acc.reviews) ? acc.reviews : [];
                     const reviewCount = reviewsArray.length || (Number.isFinite(Number(acc.review_count)) ? Number(acc.review_count) : 0);
