@@ -4798,7 +4798,44 @@ HTML_TEMPLATE = """
             <!-- /vault-section -->
 
             <!-- ===== OSINT SECTION ===== -->
-            <div id="osint-section" class="hidden"></div>
+            <div id="osint-section" class="hidden space-y-8">
+                <!-- Username & Social Media Search -->
+                <div>
+                    <h2 class="text-xl font-bold text-indigo-400 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
+                        <span>🔍</span> بحث عن اليوزرنيم (Username Hunt)
+                    </h2>
+                    <p class="text-xs text-gray-400 mb-3">ابحث عن اسم مستخدم عبر آلاف المنصات الاجتماعية والويب لتحديد الحسابات المرتبطة بهدفك.</p>
+                    <div class="flex gap-2 mb-4">
+                        <textarea id="osintUsernameInput" placeholder="أدخل اسم مستخدم واحد أو أكثر (مثل: admin, user.name)&#10;اترك المحرر وأضغط Ctrl+Enter لتشغيل البحث" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-left min-h-20 resize-none" dir="ltr"></textarea>
+                        <div class="flex flex-col gap-2">
+                            <button onclick="osintRunSocialscan()" class="bg-indigo-900/40 hover:bg-indigo-800 px-6 py-3 rounded-xl font-bold border border-indigo-800/50 transition-all text-indigo-400 flex items-center justify-center min-w-[120px] h-10">
+                                بحث 🔎
+                            </button>
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-gray-500">المهلة (ثانية):</label>
+                                <input type="number" id="osintTimeoutSeconds" value="15" min="6" max="35" class="w-16 p-2 rounded-lg bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-xs text-center">
+                            </div>
+                        </div>
+                    </div>
+                    <p id="osintRunHint" class="text-xs text-gray-500 mb-2"></p>
+                    <div id="osintResult" class="hidden"></div>
+                </div>
+
+                <!-- Email Intelligence & Breach Lookup -->
+                <div>
+                    <h2 class="text-xl font-bold text-green-400 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
+                        <span>📧</span> استخبارات الإيميل (Email Intelligence)
+                    </h2>
+                    <p class="text-xs text-gray-400 mb-3">استخدم IntelBase API للتحقق من بيانات الإيميل، تسريبات البيانات، والعروض المدفوعة بالبريد الإلكتروني.</p>
+                    <div class="flex gap-2 mb-4">
+                        <input type="email" id="osintEmailInput" placeholder="أدخل بريد إلكتروني..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-green-500 outline-none font-mono text-left" dir="ltr">
+                        <button onclick="osintLookupEmail()" class="bg-green-900/40 hover:bg-green-800 px-6 py-3 rounded-xl font-bold border border-green-800/50 transition-all text-green-400 flex items-center justify-center min-w-[140px]">
+                            بحث البريد 📬
+                        </button>
+                    </div>
+                    <div id="osintEmailResult" class="hidden"></div>
+                </div>
+            </div>
 
             <div id="tools-section" class="hidden space-y-8">
                 <!-- IP Tool With Radar -->
@@ -11704,6 +11741,271 @@ HTML_TEMPLATE = """
             }
         }
 
+        async function osintLookupEmail() {
+            const emailInput = document.getElementById('osintEmailInput');
+            const resultBox = document.getElementById('osintEmailResult');
+
+            if (!emailInput || !resultBox) return;
+
+            const email = String(emailInput.value || '').trim().toLowerCase();
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                titanAlert('أدخل بريد إلكتروني صالح.');
+                return;
+            }
+
+            resultBox.classList.remove('hidden');
+            setResultLoading(resultBox, 'IntelBase Email Intelligence', 'جار جمع معلومات البريد الإلكتروني والحسابات المرتبطة...');
+            if (typeof soundManager !== 'undefined' && soundManager.terminalType) soundManager.terminalType();
+
+            try {
+                const res = await fetch('/api/osint/intelbase-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: email,
+                        include_data_breaches: true
+                    })
+                });
+
+                const data = await _parseJsonOrThrow(res, 'IntelBase Email Intelligence');
+                if (!res.ok || !data.success) {
+                    setResultError(resultBox, data.error || `HTTP ${res.status}`);
+                    if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
+                    return;
+                }
+
+                osintRenderFullEmailResult(resultBox, data, email);
+                if (typeof soundManager !== 'undefined' && soundManager.success) soundManager.success();
+            } catch (e) {
+                setResultError(resultBox, e.message || 'فشل الاتصال بخادم IntelBase.');
+                if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
+            }
+        }
+
+        function osintRenderFullEmailResult(box, payload, email) {
+            // استخرج البيانات من raw_response إذا كانت موجودة
+            const rawResp = payload?.raw_response || payload || {};
+            
+            // إذا كان payload نفسه هو الـ raw response بدون raw_response key
+            let meta = payload?.meta || rawResp?.meta || {};
+            let identifier = payload?.identifier || rawResp?.identifier || {};
+            let breaches = payload?.data_breaches?.results || rawResp?.data_breaches?.results || [];
+            let stealerLogs = payload?.stealer_logs || rawResp?.stealer_logs || [];
+            let validator = payload?.validator || rawResp?.validator || {};
+            
+            // حول identifier.accounts من array إلى dict إذا كانت array
+            let accounts = {};
+            const accountsData = identifier.accounts || [];
+            
+            if (Array.isArray(accountsData)) {
+                // تحويل array من الحسابات إلى dict مع اسم المنصة كـ key
+                accountsData.forEach(account => {
+                    if (account && account.module && account.data) {
+                        const platform = account.module.name_formatted || account.module.name || 'Unknown';
+                        accounts[platform] = {
+                            ...account.data,
+                            platform: platform,
+                            domain: account.module.domain,
+                            module_id: account.module.id
+                        };
+                    }
+                });
+            } else if (typeof accountsData === 'object') {
+                // إذا كانت بالفعل dict
+                accounts = accountsData;
+            }
+            
+            // معلومات البريد الأساسية
+            const firstSeen = meta.first_seen || 'Unknown';
+            const lastSeen = meta.last_seen || 'Unknown';
+            const canReceiveEmail = validator.deliverable !== false ? 'Yes' : 'No';
+            const emailProvider = email.split('@')[1] || 'Unknown';
+            
+            let html = `<div class="space-y-6">`;
+            
+            // Header with basic info
+            html += `
+                <div class="rounded-lg border border-slate-700/50 bg-gradient-to-r from-slate-900/80 to-slate-800/60 p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">Email Address</h3>
+                            <p class="text-lg font-mono text-emerald-300">${_osintEscape(email)}</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <h4 class="text-xs text-gray-500 font-bold mb-1">First Seen</h4>
+                                <p class="text-sm text-cyan-300">${_osintEscape(firstSeen)}</p>
+                            </div>
+                            <div>
+                                <h4 class="text-xs text-gray-500 font-bold mb-1">Last Seen</h4>
+                                <p class="text-sm text-cyan-300">${_osintEscape(lastSeen)}</p>
+                            </div>
+                            <div>
+                                <h4 class="text-xs text-gray-500 font-bold mb-1">Can Receive Email</h4>
+                                <p class="text-sm ${canReceiveEmail === 'Yes' ? 'text-emerald-300' : 'text-rose-300'}">${canReceiveEmail}</p>
+                            </div>
+                            <div>
+                                <h4 class="text-xs text-gray-500 font-bold mb-1">Email Provider</h4>
+                                <p class="text-sm text-indigo-300">${_osintEscape(emailProvider)}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            // Summary section with counters
+            const namesCount = Object.keys(accounts).filter(k => accounts[k]?.full_name).length;
+            const usernamesCount = Object.keys(accounts).filter(k => accounts[k]?.username).length;
+            const locationsCount = Object.keys(accounts).filter(k => accounts[k]?.country || accounts[k]?.locations).length;
+            const registrationsCount = Object.keys(accounts).length;
+            
+            html += `
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-emerald-400">${namesCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Names Found</div>
+                    </div>
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-cyan-400">${usernamesCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Usernames</div>
+                    </div>
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-blue-400">${locationsCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Locations</div>
+                    </div>
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-purple-400">${registrationsCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Registrations</div>
+                    </div>
+                </div>`;
+
+            // Names Found section
+            const names = [];
+            Object.keys(accounts).forEach(platform => {
+                const acc = accounts[platform];
+                if (acc.full_name) {
+                    names.push({ name: acc.full_name, platform });
+                }
+            });
+            
+            if (names.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/15 p-4">
+                        <h3 class="text-sm font-bold text-emerald-300 mb-3">👤 Names Found</h3>
+                        <div class="space-y-2">`;
+                names.forEach(item => {
+                    html += `<div class="flex justify-between items-center text-sm text-emerald-200"><span>${_osintEscape(item.name)}</span><span class="text-xs text-emerald-500">${_osintEscape(item.platform)}</span></div>`;
+                });
+                html += '</div></div>';
+            }
+
+            // Usernames section
+            const usernames = [];
+            Object.keys(accounts).forEach(platform => {
+                const acc = accounts[platform];
+                if (acc.username) {
+                    usernames.push({ username: acc.username, platform });
+                }
+            });
+            
+            if (usernames.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-cyan-900/40 bg-cyan-950/15 p-4">
+                        <h3 class="text-sm font-bold text-cyan-300 mb-3">👥 Usernames</h3>
+                        <div class="space-y-2">`;
+                usernames.forEach(item => {
+                    html += `<div class="flex justify-between items-center text-sm text-cyan-200"><span class="font-mono">${_osintEscape(item.username)}</span><span class="text-xs text-cyan-500">${_osintEscape(item.platform)}</span></div>`;
+                });
+                html += '</div></div>';
+            }
+
+            // Data Breaches section
+            if (breaches.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-rose-900/40 bg-rose-950/15 p-4">
+                        <h3 class="text-sm font-bold text-rose-300 mb-3">🚨 Data Breaches (${breaches.length})</h3>
+                        <div class="space-y-2">`;
+                breaches.forEach((breach, idx) => {
+                    const safeName = _osintEscape(breach.name || 'Unknown');
+                    const safeDate = _osintEscape(breach.date || 'Unknown');
+                    const safeRecords = _osintEscape(String(breach.records || '?'));
+                    html += `<div class="rounded border border-rose-800/30 bg-rose-900/20 p-2 text-[11px] text-rose-200"><strong>${idx + 1}. ${safeName}</strong> - ${safeDate} | ${safeRecords} records</div>`;
+                });
+                html += '</div></div>';
+            } else {
+                html += `
+                    <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/15 p-4">
+                        <h3 class="text-sm font-bold text-emerald-300 mb-2">✓ Data Breaches</h3>
+                        <p class="text-sm text-emerald-200">No data breaches found for this email address.</p>
+                    </div>`;
+            }
+
+            // Infostealer Logs section
+            if (stealerLogs.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-orange-900/40 bg-orange-950/15 p-4">
+                        <h3 class="text-sm font-bold text-orange-300 mb-2">⚠️ Infostealer Logs</h3>
+                        <p class="text-xs text-orange-300">Total Results: <strong>${stealerLogs.length}</strong></p>
+                    </div>`;
+            }
+
+            // Accounts Details section
+            if (Object.keys(accounts).length > 0) {
+                html += `
+                    <div>
+                        <h3 class="text-lg font-bold text-indigo-300 mb-4">📋 Accounts</h3>
+                        <div class="space-y-4">`;
+                
+                Object.keys(accounts).forEach(platform => {
+                    const acc = accounts[platform];
+                    if (!acc.full_name && !acc.username) return;  // Skip if no relevant data
+                    
+                    html += `
+                        <div class="rounded-lg border border-indigo-900/40 bg-indigo-950/15 p-4">
+                            <h4 class="text-sm font-bold text-indigo-300 mb-3">${_osintEscape(platform)}</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-indigo-200">`;
+                    
+                    if (acc.full_name) html += `<div><strong>Full Name:</strong> ${_osintEscape(acc.full_name)}</div>`;
+                    if (acc.username) html += `<div><strong>Username:</strong> ${_osintEscape(acc.username)}</div>`;
+                    if (acc.country) html += `<div><strong>Country:</strong> ${_osintEscape(acc.country)}</div>`;
+                    if (acc.user_id) html += `<div><strong>User ID:</strong> ${_osintEscape(String(acc.user_id))}</div>`;
+                    if (acc.followers !== undefined) html += `<div><strong>Followers:</strong> ${acc.followers}</div>`;
+                    if (acc.bio) html += `<div class="md:col-span-2"><strong>Bio:</strong> ${_osintEscape(acc.bio)}</div>`;
+                    
+                    html += `</div></div>`;
+                });
+                
+                html += '</div></div>';
+            }
+
+            // Registrations section - List all platforms
+            if (Object.keys(accounts).length > 0) {
+                html += `
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <h3 class="text-sm font-bold text-slate-300 mb-3">📱 Registrations</h3>
+                        <div class="flex flex-wrap gap-2">`;
+                
+                Object.keys(accounts).forEach(platform => {
+                    html += `<span class="text-xs bg-slate-800/50 border border-slate-700/50 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`;
+                });
+                
+                html += '</div></div>';
+            }
+
+            html += '</div>';
+
+            setResultMarkup(
+                box,
+                'IntelBase Email Intelligence - Full Report',
+                html,
+                { 
+                    badge: breaches.length > 0 ? `⚠️ ${breaches.length} Breaches` : '✓ Clean', 
+                    riskScore: breaches.length > 0 ? 70 : 35 
+                }
+            );
+        }
+
+
+
         function _osintEscape(value) {
             const div = document.createElement('div');
             div.textContent = String(value ?? '');
@@ -18191,6 +18493,111 @@ def scan_email_route():
     res = check_email_intelligence(email)
     add_audit_log("فحص إيميل (IPQualityScore)", f"تم فحص البريد: {email}")
     return jsonify(res)
+
+
+@app.route('/api/osint/intelbase-email', methods=['POST'])
+def osint_intelbase_email_route():
+    """استخدام IntelBase API للبحث عن معلومات الإيميل والتسريبات"""
+    data = request.get_json(silent=True) or {}
+    email = str(data.get('email', '')).strip().lower()
+    include_breaches = bool(data.get('include_data_breaches', True))
+    
+    if not email or '@' not in email:
+        return jsonify({
+            'success': False,
+            'error': 'يجب تمرير بريد إلكتروني صالح'
+        }), 400
+    
+    # IntelBase API Configuration
+    INTELBASE_API_KEY = os.environ.get('INTELBASE_API_KEY', 'in_ryLuN70FA969M5AYkrp5')
+    intelbase_url = 'https://api.intelbase.is/lookup/email'
+    
+    payload = {
+        'email': email,
+        'timeout_ms': 5000,
+        'include_data_breaches': include_breaches,
+        'exclude_modules': []
+    }
+    
+    headers = {
+        'x-api-key': INTELBASE_API_KEY,
+        'Content-Type': 'application/json'
+    }
+    
+    try:
+        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=10)
+        
+        # تعامل مع أي حالة من الحالات بما فيها 401
+        if response.status_code != 200:
+            error_msg = f'خطأ من IntelBase API: {response.status_code}'
+            add_audit_log('OSINT IntelBase Email Error', f'email={email} status={response.status_code}')
+            return jsonify({
+                'success': False,
+                'error': error_msg,
+                'email': email
+            }), response.status_code
+        
+        result = response.json()
+        
+        # استخراج البيانات من الصيغة الفعلية لـ IntelBase API
+        # data_breaches هو dict يحتوي على: {amount, redacted, results, sources}
+        breaches_data = result.get('data_breaches', {})
+        if isinstance(breaches_data, dict):
+            breaches_list = breaches_data.get('results', [])
+        else:
+            breaches_list = breaches_data if isinstance(breaches_data, list) else []
+        
+        # استخراج معلومات الحسابات من identifier.accounts
+        # هام: IntelBase ترجع accounts كـ array، نحتاج لتحويلها إلى dict
+        identifier = result.get('identifier', {})
+        accounts_array = identifier.get('accounts', []) if isinstance(identifier, dict) else []
+        
+        # تحويل array من الحسابات إلى dict مع اسم المنصة كـ key
+        accounts_data = {}
+        if isinstance(accounts_array, list):
+            for account in accounts_array:
+                if isinstance(account, dict):
+                    module = account.get('module', {})
+                    data_account = account.get('data', {})
+                    platform_name = module.get('name_formatted') or module.get('name') or 'Unknown'
+                    
+                    # دمج module و data معاً
+                    accounts_data[platform_name] = {
+                        **data_account,  # كل بيانات المستخدم (full_name, username, etc.)
+                        'platform': platform_name,
+                        'domain': module.get('domain'),
+                        'module_id': module.get('id')
+                    }
+        
+        # استخراج معلومات Meta
+        meta_data = result.get('meta', {}) if isinstance(result.get('meta'), dict) else {}
+        
+        # تحويل النتيجة إلى صيغة متوافقة مع التطبيق
+        processed_result = {
+            'success': True,
+            'email': email,
+            'data_breaches': {'results': breaches_list, 'amount': len(breaches_list)},
+            'identifier': {'accounts': accounts_data},
+            'meta': meta_data,
+            'stealer_logs': result.get('stealer_logs') or [],
+            'validator': result.get('validator') or {},
+            'raw_response': result  # أرسل البيانات الخام أيضاً
+        }
+        
+        add_audit_log(
+            'OSINT IntelBase Email',
+            f'email={email} breaches={len(breaches_list)} accounts={len(accounts_data)} first_seen={meta_data.get("first_seen", "unknown")}'
+        )
+        return jsonify(processed_result)
+        
+    except requests.exceptions.RequestException as e:
+        error_msg = f'خطأ في الاتصال بـ IntelBase API: {str(e)}'
+        add_audit_log('OSINT IntelBase Email Error', f'email={email} error={str(e)}')
+        return jsonify({
+            'success': False,
+            'error': error_msg,
+            'email': email
+        }), 500
 
 
 def _ir_priority_rank(priority: str) -> int:
