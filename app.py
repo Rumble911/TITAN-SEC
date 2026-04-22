@@ -18519,6 +18519,14 @@ def osint_intelbase_email_route():
         'exclude_modules': []
     }
     
+    if not INTELBASE_API_KEY:
+        add_audit_log('OSINT IntelBase Email Error', f'email={email} missing_api_key')
+        return jsonify({
+            'success': False,
+            'error': 'INTELBASE_API_KEY غير مضبوطة في متغيرات البيئة على Heroku',
+            'email': email
+        }), 500
+
     headers = {
         'x-api-key': INTELBASE_API_KEY,
         'Content-Type': 'application/json'
@@ -18529,8 +18537,9 @@ def osint_intelbase_email_route():
         
         # تعامل مع أي حالة من الحالات بما فيها 401
         if response.status_code != 200:
-            error_msg = f'خطأ من IntelBase API: {response.status_code}'
-            add_audit_log('OSINT IntelBase Email Error', f'email={email} status={response.status_code}')
+            body = response.text or ''
+            error_msg = f'خطأ من IntelBase API: {response.status_code} - {body[:200]}'
+            add_audit_log('OSINT IntelBase Email Error', f'email={email} status={response.status_code} body={body[:200]}')
             return jsonify({
                 'success': False,
                 'error': error_msg,
