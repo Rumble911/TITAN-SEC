@@ -11748,7 +11748,7 @@ HTML_TEMPLATE = """
             if (!emailInput || !resultBox) return;
 
             const email = String(emailInput.value || '').trim().toLowerCase();
-            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
                 titanAlert('أدخل بريد إلكتروني صالح.');
                 return;
             }
@@ -11983,17 +11983,18 @@ HTML_TEMPLATE = """
                         <h3 class="text-sm font-bold text-rose-300 mb-3">🚨 Data Breaches (${breachCountDisplay})</h3>
                         <div class="space-y-2">`;
                 breaches.forEach((breach, idx) => {
-                    const safeName = _osintEscape(breach.name || breach.title || 'Unknown');
-                    const safeDate = _osintEscape(breach.date || breach.source?.date || 'Unknown');
+                    const safeName = _osintEscape(breach.name || breach.title || `Breach ${idx + 1}`);
+                    const safeDate = _osintEscape(breach.date || breach.source?.date || '');
                     const safeRecords = _osintEscape(String(breach.records || breach.count || '?'));
                     const source = breach.source || breach.Source || {};
-                    const safeSourceName = _osintEscape(source.name || source.source || 'Unknown Source');
+                    const safeSourceName = _osintEscape(source.name || source.source || '');
                     const safeEmail = _osintEscape(breach.email || breach.Email || '');
                     const safeUsername = _osintEscape(breach.username || breach.Username || '');
                     const safePassword = _osintEscape(breach.password || breach.Password || '');
+                    const breachMeta = [safeSourceName, safeDate, `${safeRecords} records`].filter(Boolean).join(' | ');
                     html += `<div class="rounded border border-rose-800/30 bg-rose-900/20 p-3 text-[11px] text-rose-200">
                                 <div class="font-semibold text-rose-100">${idx + 1}. ${safeName}</div>
-                                <div class="mt-1 text-rose-300">${safeSourceName} | ${safeDate} | ${safeRecords} records</div>
+                                <div class="mt-1 text-rose-300">${breachMeta}</div>
                                 ${safeEmail ? `<div class="mt-2">📧 ${safeEmail}</div>` : ''}
                                 ${safeUsername ? `<div class="mt-1">👤 ${safeUsername}</div>` : ''}
                                 ${safePassword ? `<div class="mt-1">🔑 ${safePassword}</div>` : ''}
