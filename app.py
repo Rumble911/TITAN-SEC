@@ -11865,7 +11865,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>`;
 
-            // Summary section with counters
+            // Summary section with profile cards, links and timeline
             const namesCount = Object.keys(accounts).filter(k => accounts[k]?.full_name).length;
             const usernamesCount = Object.keys(accounts).filter(k => accounts[k]?.username).length;
             const locationItems = Object.keys(accounts)
@@ -11882,7 +11882,78 @@ HTML_TEMPLATE = """
             const registrationsCount = Object.keys(accounts).length;
             const commentsCount = comments.length;
             const breachCountDisplay = breachCount || breaches.length;
-            
+
+            const profilePics = [];
+            const profileLinks = [];
+            Object.keys(accounts).forEach(platform => {
+                const acc = accounts[platform];
+                const pic = String(acc.avatar || acc.picture || acc.profile_picture || acc.image || acc.photo || acc.img || acc.profile_image_url || acc.avatar_url || '').trim();
+                const link = String(acc.profile_url || acc.url || acc.link || acc.website || acc.homepage || '').trim();
+                if (pic && profilePics.length < 4) {
+                    profilePics.push({ src: pic, alt: platform });
+                }
+                if (link) {
+                    profileLinks.push({ platform, url: link });
+                }
+            });
+
+            const timelineEvents = [];
+            if (lastSeen && emailProvider) {
+                timelineEvents.push({
+                    date: lastSeen,
+                    title: 'Last Seen Date',
+                    note: emailProvider
+                });
+            }
+            breaches.forEach((breach) => {
+                const source = breach.source || breach.Source || {};
+                const eventDate = breach.date || source.date || breach.leak_date || '';
+                const eventName = breach.name || breach.title || source.name || source.source || 'Data Breach';
+                if (eventDate || eventName) {
+                    timelineEvents.push({
+                        date: eventDate || 'Unknown Date',
+                        title: eventName,
+                        note: 'Data Breach'
+                    });
+                }
+            });
+
+            html += `
+                <div class="mb-4">
+                    <h3 class="text-xl font-bold text-slate-100">Summary</h3>
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-[3fr_1fr] gap-4">
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3">Profile Pictures</div>
+                        <div class="flex flex-wrap gap-3">${profilePics.length > 0 ? profilePics.map((pic) => `<img src="${_osintEscape(pic.src)}" alt="${_osintEscape(pic.alt)}" class="h-12 w-12 rounded-lg border border-slate-700/50 object-cover">`).join('') : '<span class="text-sm text-slate-500">No profile pictures available</span>'}</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3">Profile Links</div>
+                        <div class="space-y-2">${profileLinks.length > 0 ? profileLinks.map((item) => `<div class="text-sm text-slate-200"><a href="${_osintEscape(item.url)}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline">${_osintEscape(item.platform)}</a></div>`).join('') : '<div class="text-sm text-slate-500">No profile links found</div>'}</div>
+                    </div>
+                </div>
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-200">Activity Timeline</h3>
+                            <div class="text-xs text-slate-500">Latest activities and breach events</div>
+                        </div>
+                        <button type="button" class="rounded-full border border-slate-700/50 bg-slate-800/70 px-3 py-1 text-[11px] text-slate-200">View timeline</button>
+                    </div>
+                    <div class="space-y-2">${timelineEvents.length > 0 ? timelineEvents.map((event) => `<div class="rounded-lg border border-slate-700/50 bg-black/20 p-3 text-sm text-slate-200"><div class="font-semibold text-slate-100">${_osintEscape(event.date)}</div><div class="text-xs text-slate-400">${_osintEscape(event.title)}${event.note ? ` · ${_osintEscape(event.note)}` : ''}</div></div>`).join('') : '<div class="text-sm text-slate-500">No timeline events available</div>'}</div>
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-[3fr_1fr] gap-4 mt-4">
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <h3 class="text-sm font-bold text-slate-200 mb-3">Registrations</h3>
+                        <div class="flex flex-wrap gap-2">${Object.keys(accounts).length > 0 ? Object.keys(accounts).map((platform) => `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`).join('') : '<span class="text-sm text-slate-500">No registrations found</span>'}</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <h3 class="text-sm font-bold text-slate-200 mb-2">Additional Registrations (${stealerLogs.length})</h3>
+                        <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
+                        ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
+                    </div>
+                </div>`;
+
             html += `
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
@@ -11905,6 +11976,17 @@ HTML_TEMPLATE = """
                         <div class="text-2xl font-bold text-purple-400">${registrationsCount}</div>
                         <div class="text-xs text-gray-400 mt-1">Registrations</div>
                     </div>
+                </div>`;
+
+            html += `
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                    <h3 class="text-sm font-bold text-slate-300 mb-3">📱 Registrations</h3>
+                    <div class="flex flex-wrap gap-2">${Object.keys(accounts).length > 0 ? Object.keys(accounts).map((platform) => `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`).join('') : '<span class="text-sm text-slate-500">No registrations found</span>'}</div>
+                </div>
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
+                    <h3 class="text-sm font-bold text-slate-300 mb-2">Additional Registrations (${stealerLogs.length})</h3>
+                    <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
+                    ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
                 </div>`;
 
             // Names Found section
@@ -11978,29 +12060,42 @@ HTML_TEMPLATE = """
 
             // Data Breaches section
             if (breachCountDisplay > 0) {
+                const breachSectionId = `osintBreachDetails_${Math.random().toString(36).slice(2)}`;
+                const breachSourceList = Array.from(new Set(breaches.map((breach) => {
+                    const source = breach.source || breach.Source || {};
+                    return String(source.name || source.source || breach.name || breach.title || '').trim();
+                }).filter(Boolean)));
+                const breachSourceBadges = breachSourceList.map((src) => `<span class="rounded-full border border-slate-700/50 bg-slate-900/60 px-2 py-1 text-[11px] text-slate-300">${_osintEscape(src)}</span>`).join('');
+
                 html += `
                     <div class="rounded-lg border border-rose-900/40 bg-rose-950/15 p-4">
-                        <h3 class="text-sm font-bold text-rose-300 mb-3">🚨 Data Breaches (${breachCountDisplay})</h3>
-                        <div class="space-y-2">`;
+                        <div class="grid grid-cols-2 gap-4 text-[11px] text-slate-400 uppercase tracking-widest mb-3">
+                            <div>Amount</div>
+                            <div>Sources</div>
+                            <div class="text-2xl font-bold text-white">${breachCountDisplay}</div>
+                            <div class="text-2xl font-bold text-white">${breachSourceList.length}</div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-3">${breachSourceBadges}</div>
+                        <button type="button" class="rounded-md border border-rose-700/60 bg-rose-900/70 px-3 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-800/80" onclick="document.getElementById('${breachSectionId}').classList.toggle('hidden')">View data breaches</button>
+                    </div>
+                    <div id="${breachSectionId}" class="space-y-2 hidden">`;
                 breaches.forEach((breach, idx) => {
-                    const safeName = _osintEscape(breach.name || breach.title || `Breach ${idx + 1}`);
-                    const safeDate = _osintEscape(breach.date || breach.source?.date || '');
-                    const safeRecords = _osintEscape(String(breach.records || breach.count || '?'));
                     const source = breach.source || breach.Source || {};
-                    const safeSourceName = _osintEscape(source.name || source.source || '');
+                    const safeName = _osintEscape(breach.name || breach.title || source.name || source.source || `Breach ${idx + 1}`);
+                    const safeDate = _osintEscape(breach.date || breach.source?.date || breach.leak_date || '');
+                    const safeRecords = _osintEscape(String(breach.records || breach.count || '?'));
                     const safeEmail = _osintEscape(breach.email || breach.Email || '');
                     const safeUsername = _osintEscape(breach.username || breach.Username || '');
                     const safePassword = _osintEscape(breach.password || breach.Password || '');
-                    const breachMeta = [safeSourceName, safeDate, `${safeRecords} records`].filter(Boolean).join(' | ');
+                    const breachHeader = [safeName, safeDate, `${safeRecords} records`].filter(Boolean).join(' | ');
                     html += `<div class="rounded border border-rose-800/30 bg-rose-900/20 p-3 text-[11px] text-rose-200">
-                                <div class="font-semibold text-rose-100">${idx + 1}. ${safeName}</div>
-                                <div class="mt-1 text-rose-300">${breachMeta}</div>
+                                <div class="font-semibold text-rose-100">${idx + 1}. ${breachHeader}</div>
                                 ${safeEmail ? `<div class="mt-2">📧 ${safeEmail}</div>` : ''}
                                 ${safeUsername ? `<div class="mt-1">👤 ${safeUsername}</div>` : ''}
                                 ${safePassword ? `<div class="mt-1">🔑 ${safePassword}</div>` : ''}
                             </div>`;
                 });
-                html += '</div></div>';
+                html += '</div>';
             } else {
                 html += `
                     <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/15 p-4">
@@ -12047,19 +12142,11 @@ HTML_TEMPLATE = """
                 html += '</div></div>';
             }
 
-            // Registrations section - List all platforms
-            if (Object.keys(accounts).length > 0) {
-                html += `
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <h3 class="text-sm font-bold text-slate-300 mb-3">📱 Registrations</h3>
-                        <div class="flex flex-wrap gap-2">`;
-                
-                Object.keys(accounts).forEach(platform => {
-                    html += `<span class="text-xs bg-slate-800/50 border border-slate-700/50 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`;
-                });
-                
-                html += '</div></div>';
-            }
+            html += `
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
+                    <h3 class="text-sm font-bold text-slate-200 mb-2">المعلومات</h3>
+                    <p class="text-sm text-slate-400">Results include ${Object.keys(accounts).length} account(s), ${breachCountDisplay} breach record(s), and ${stealerLogs.length} infostealer log(s).</p>
+                </div>`;
 
             html += '</div>';
 
