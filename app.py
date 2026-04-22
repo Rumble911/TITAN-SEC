@@ -18531,9 +18531,14 @@ def osint_intelbase_email_route():
         'x-api-key': INTELBASE_API_KEY,
         'Content-Type': 'application/json'
     }
-    
+
+    proxy_url = os.environ.get('PROXIMO_URL')
+    proxies = {'http': proxy_url, 'https': proxy_url} if proxy_url else None
+    if proxy_url:
+        add_audit_log('OSINT IntelBase Email', f'email={email} using_proxy={proxy_url}')
+
     try:
-        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=10)
+        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=10, proxies=proxies)
         
         # تعامل مع أي حالة من الحالات بما فيها 401
         if response.status_code != 200:
