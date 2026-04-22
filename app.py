@@ -11829,8 +11829,18 @@ HTML_TEMPLATE = """
             }
             
             // معلومات البريد الأساسية
-            const firstSeen = meta.first_seen || 'Unknown';
-            const lastSeen = meta.last_seen || 'Unknown';
+            const _formatOsintDate = (value) => {
+                if (!value) return '';
+                const raw = String(value || '').trim();
+                const parsed = new Date(raw);
+                if (!Number.isNaN(parsed.getTime())) {
+                    return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                }
+                return raw;
+            };
+
+            const firstSeen = _formatOsintDate(meta.first_seen || 'Unknown');
+            const lastSeen = _formatOsintDate(meta.last_seen || 'Unknown');
             const canReceiveEmail = validator.deliverable !== false ? 'Yes' : 'No';
             const emailProvider = email.split('@')[1] || 'Unknown';
             
@@ -11908,10 +11918,11 @@ HTML_TEMPLATE = """
             breaches.forEach((breach) => {
                 const source = breach.source || breach.Source || {};
                 const eventDate = breach.date || source.date || breach.leak_date || '';
+                const safeDate = _formatOsintDate(eventDate || 'Unknown Date');
                 const eventName = breach.name || breach.title || source.name || source.source || 'Data Breach';
                 if (eventDate || eventName) {
                     timelineEvents.push({
-                        date: eventDate || 'Unknown Date',
+                        date: safeDate,
                         title: eventName,
                         note: 'Data Breach'
                     });
@@ -12104,12 +12115,26 @@ HTML_TEMPLATE = """
                     </div>`;
             }
 
+            const totalStealerResults = stealerLogs.length;
+            const stealerComboCount = stealerLogs.reduce((sum, item) => {
+                const count = Number(item.combos || item.combo_count || item.combos_count || item.combo || 0);
+                return sum + (Number.isFinite(count) && count > 0 ? count : 0);
+            }, 0) || totalStealerResults;
+
             // Infostealer Logs section
-            if (stealerLogs.length > 0) {
+            if (totalStealerResults > 0) {
                 html += `
                     <div class="rounded-lg border border-orange-900/40 bg-orange-950/15 p-4">
-                        <h3 class="text-sm font-bold text-orange-300 mb-2">⚠️ Infostealer Logs</h3>
-                        <p class="text-xs text-orange-300">Total Results: <strong>${stealerLogs.length}</strong></p>
+                        <div class="grid grid-cols-2 gap-4 text-[11px] uppercase tracking-widest text-slate-400 mb-3">
+                            <div>Total Results</div>
+                            <div>Combos</div>
+                            <div class="text-2xl font-bold text-white">${totalStealerResults}</div>
+                            <div class="text-2xl font-bold text-white">${stealerComboCount}</div>
+                        </div>
+                        <div class="rounded-xl border border-slate-700/50 bg-black/20 p-3 text-sm text-slate-300 mb-3">
+                            Infostealer log credentials are hidden on your current plan
+                        </div>
+                        <button type="button" class="rounded-md border border-slate-700/50 bg-slate-900/70 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800/80">View infostealer logs</button>
                     </div>`;
             }
 
@@ -12122,25 +12147,115 @@ HTML_TEMPLATE = """
                 
                 Object.keys(accounts).forEach(platform => {
                     const acc = accounts[platform];
-                    if (!acc.full_name && !acc.username) return;  // Skip if no relevant data
-                    
+                    if (!acc || Object.keys(acc).length === 0) return;
+
+                    const profileLink = String(acc.profile_url || acc.url || acc.link || acc.website || acc.homepage || '').trim();
+                    const statsUrl = String(acc.stats_url || acc.stats_link || profileLink).trim();
+                    const avatarUrl = String(acc.avatar || acc.picture || acc.profile_picture || acc.image || acc.photo || acc.img || acc.profile_image_url || acc.avatar_url || '').trim();
+                    const activeGoogleApps = Array.isArray(acc.active_google_apps)
+                        ? acc.active_google_apps
+                        : String(acc.active_google_apps || acc.google_apps || '').split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+                    const mapsActivity = String(acc.maps_activity || acc.maps || '').trim();
+                    const reviewsArray = Array.isArray(acc.reviews) ? acc.reviews : [];
+                    const reviewCount = reviewsArray.length || (Number.isFinite(Number(acc.review_count)) ? Number(acc.review_count) : 0);
+                    const ratingCount = Number.isFinite(Number(acc.rating_count)) ? Number(acc.rating_count) : 0;
+                    const googleIdValue = acc.has_google_id !== undefined ? (acc.has_google_id ? 'Yes' : 'No') : acc.google_id !== undefined ? (acc.google_id ? 'Yes' : 'No') : null;
+                    const facebookIdValue = acc.has_facebook_id !== undefined ? (acc.has_facebook_id ? 'Yes' : 'No') : acc.facebook_id !== undefined ? (acc.facebook_id ? 'Yes' : 'No') : null;
+
+                    const details = [];
+                    if (profileLink) details.push({ label: 'Profile URL', value: `<a href="${_osintEscape(profileLink)}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline">${_osintEscape(profileLink)}</a>` });
+                    if (acc.full_name) details.push({ label: 'Full Name', value: _osintEscape(acc.full_name) });
+                    if (acc.username) details.push({ label: 'Username', value: _osintEscape(acc.username) });
+                    if (acc.id) details.push({ label: 'ID', value: _osintEscape(String(acc.id)) });
+                    if (acc.user_id) details.push({ label: 'User ID', value: _osintEscape(String(acc.user_id)) });
+                    if (googleIdValue !== null) details.push({ label: 'Has Google ID', value: _osintEscape(googleIdValue) });
+                    if (facebookIdValue !== null) details.push({ label: 'Has Facebook ID', value: _osintEscape(facebookIdValue) });
+                    if (acc.enterprise_user !== undefined) details.push({ label: 'Enterprise User', value: _osintEscape(acc.enterprise_user ? 'Yes' : 'No') });
+                    if (acc.last_seen_date) details.push({ label: 'Last Seen Date', value: _osintEscape(_formatOsintDate(acc.last_seen_date)) });
+                    if (acc.last_login_date) details.push({ label: 'Last Login Date', value: _osintEscape(_formatOsintDate(acc.last_login_date)) });
+                    if (acc.creation_date) details.push({ label: 'Creation Date', value: _osintEscape(_formatOsintDate(acc.creation_date)) });
+                    if (acc.last_active) details.push({ label: 'Last Active', value: _osintEscape(_formatOsintDate(acc.last_active)) });
+                    if (acc.country) details.push({ label: 'Country', value: _osintEscape(acc.country) });
+                    if (acc.location) details.push({ label: 'Location', value: _osintEscape(acc.location) });
+
                     html += `
                         <div class="rounded-lg border border-indigo-900/40 bg-indigo-950/15 p-4">
-                            <h4 class="text-sm font-bold text-indigo-300 mb-3">${_osintEscape(platform)}</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-indigo-200">`;
-                    
-                    if (acc.full_name) html += `<div><strong>Full Name:</strong> ${_osintEscape(acc.full_name)}</div>`;
-                    if (acc.username) html += `<div><strong>Username:</strong> ${_osintEscape(acc.username)}</div>`;
-                    if (acc.country) html += `<div><strong>Country:</strong> ${_osintEscape(acc.country)}</div>`;
-                    if (acc.user_id) html += `<div><strong>User ID:</strong> ${_osintEscape(String(acc.user_id))}</div>`;
-                    if (acc.followers !== undefined) html += `<div><strong>Followers:</strong> ${acc.followers}</div>`;
-                    if (acc.bio) html += `<div class="md:col-span-2"><strong>Bio:</strong> ${_osintEscape(acc.bio)}</div>`;
-                    
-                    html += `</div></div>`;
+                            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                                <div class="min-w-0 w-full lg:max-w-[calc(100%-120px)]">
+                                    <h4 class="text-sm font-bold text-indigo-300 mb-3">${_osintEscape(platform)}</h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-indigo-200">`;
+
+                    details.forEach((item) => {
+                        html += `<div><strong>${_osintEscape(item.label)}:</strong><div class="mt-1 text-slate-100">${item.value}</div></div>`;
+                    });
+
+                    html += `</div>`;
+
+                    if (activeGoogleApps.length > 0) {
+                        html += `<div class="mt-4">
+                                    <div class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-2">Active Google Apps</div>
+                                    <div class="flex flex-wrap gap-2">${activeGoogleApps.map((app) => `<span class="text-[11px] bg-slate-800/60 border border-slate-700/50 rounded-full px-3 py-1 text-slate-300">${_osintEscape(app)}</span>`).join('')}</div>
+                                </div>`;
+                    }
+
+                    if (mapsActivity) {
+                        html += `<div class="mt-4">
+                                    <div class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-2">Maps Activity</div>
+                                    <div class="text-sm text-slate-200">${_osintEscape(mapsActivity)}</div>
+                                </div>`;
+                    }
+
+                    if (reviewCount || ratingCount) {
+                        html += `<div class="mt-4 border-t border-slate-700/50 pt-4 text-sm text-slate-200">
+                                    <div class="flex items-center justify-between gap-4">
+                                        <div>${reviewCount} Reviews</div>
+                                        <div>${ratingCount} Ratings</div>
+                                    </div>`;
+                        if (reviewCount > 0) {
+                            html += `<div class="text-xs text-slate-400 mt-1">Reviews · showing ${Math.min(reviewCount, 2)} of ${reviewCount}</div>`;
+                        }
+                        if (reviewCount > 0) {
+                            html += `<div class="mt-3"><button type="button" class="rounded-md border border-slate-700/50 bg-slate-900/70 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-800/80">View all (${reviewCount})</button></div>`;
+                        }
+                        html += `</div>`;
+                    }
+
+                    if (statsUrl) {
+                        html += `<div class="mt-4"><a href="${_osintEscape(statsUrl)}" target="_blank" rel="noopener" class="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200">View all stats</a></div>`;
+                    }
+
+                    html += `</div>`;
+
+                    if (avatarUrl) {
+                        html += `<div class="flex-shrink-0">
+                                    <img src="${_osintEscape(avatarUrl)}" alt="${_osintEscape(platform)}" class="h-20 w-20 rounded-xl border border-slate-700/50 object-cover">
+                                </div>`;
+                    }
+
+                    html += `</div>`;
+                    html += `</div>`;
                 });
                 
                 html += '</div></div>';
             }
+
+            if (Object.keys(accounts).length > 0) {
+                html += `
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <h3 class="text-sm font-bold text-slate-300 mb-3">📱 Registrations</h3>
+                        <div class="flex flex-wrap gap-2">`;
+                Object.keys(accounts).forEach(platform => {
+                    html += `<span class="text-xs bg-slate-800/50 border border-slate-700/50 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`;
+                });
+                html += '</div></div>';
+            }
+
+            html += `
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
+                    <h3 class="text-sm font-bold text-slate-200 mb-2">Additional Registrations (${stealerLogs.length})</h3>
+                    <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
+                    ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
+                </div>`;
 
             html += `
                 <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
