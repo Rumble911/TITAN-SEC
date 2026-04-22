@@ -11748,7 +11748,7 @@ HTML_TEMPLATE = """
             if (!emailInput || !resultBox) return;
 
             const email = String(emailInput.value || '').trim().toLowerCase();
-            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
                 titanAlert('أدخل بريد إلكتروني صالح.');
                 return;
             }
@@ -11796,16 +11796,45 @@ HTML_TEMPLATE = """
                     ? rawBreaches
                     : [];
             const breachCount = rawBreaches?.amount ?? breaches.length;
-            const breachSources = rawBreaches?.sources || [];
-            let stealerLogs = payload?.stealer_logs || rawResp?.stealer_logs || [];
-            let validator = payload?.validator || rawResp?.validator || {};
-            const commentsRaw = payload?.comments || rawResp?.comments || payload?.reviews || rawResp?.reviews || [];
-            let comments = Array.isArray(commentsRaw)
-                ? commentsRaw
-                : Array.isArray(commentsRaw?.results)
-                    ? commentsRaw.results
+            const breachSources = Array.isArray(rawBreaches?.sources) ? rawBreaches.sources : [];
+            const stealerRaw = payload?.stealer_logs || rawResp?.stealer_logs || rawResp?.infostealer_logs || payload?.infostealer_logs || [];
+            let stealerLogs = Array.isArray(stealerRaw)
+                ? stealerRaw
+                : Array.isArray(stealerRaw?.results)
+                    ? stealerRaw.results
                     : [];
-            
+            let validator = payload?.validator || rawResp?.validator || {};
+
+            const rawComments = payload?.comments || rawResp?.comments || payload?.reviews || rawResp?.reviews || [];
+            let comments = Array.isArray(rawComments)
+                ? rawComments
+                : Array.isArray(rawComments?.results)
+                    ? rawComments.results
+                    : [];
+
+            const timelineRaw = meta.timeline || rawResp?.timeline || rawResp?.activity_timeline || rawResp?.activityTimeline || rawResp?.activity?.timeline || payload?.timeline || payload?.activity_timeline || payload?.activity?.timeline || [];
+            let timelineItems = Array.isArray(timelineRaw)
+                ? timelineRaw
+                : typeof timelineRaw === 'object' && Array.isArray(timelineRaw?.results)
+                    ? timelineRaw.results
+                    : [];
+
+            const rawLocations = payload?.locations || rawResp?.locations || rawResp?.meta?.locations || rawResp?.location || rawResp?.location_details || payload?.location || [];
+            let rawLocationItems = Array.isArray(rawLocations)
+                ? rawLocations
+                : typeof rawLocations === 'object' && Array.isArray(rawLocations?.results)
+                    ? rawLocations.results
+                    : [];
+            const normalizedLocations = Array.isArray(rawLocationItems)
+                ? rawLocationItems.map(loc => {
+                    if (typeof loc === 'string') return loc;
+                    if (!loc || typeof loc !== 'object') return '';
+                    return [loc.full, loc.name, loc.title, loc.city, loc.region, loc.state, loc.country, loc.address]
+                        .filter(Boolean)
+                        .join(', ');
+                }).filter(Boolean)
+                : [];
+
             // حول identifier.accounts من array إلى dict إذا كانت array
             let accounts = {};
             const accountsData = identifier.accounts || [];
@@ -11871,39 +11900,57 @@ HTML_TEMPLATE = """
             const locationItems = Object.keys(accounts)
                 .map(k => {
                     const acc = accounts[k];
-                    if (acc.country || acc.location || acc.locations || acc.city || acc.state) {
-                        const locParts = [acc.location, acc.city, acc.state, acc.country].filter(Boolean);
-                        return { platform: k, location: locParts.join(', ') };
-                    }
-                    return null;
+                    const locParts = [
+                        acc.location,
+                        Array.isArray(acc.locations) ? acc.locations.join(', ') : acc.locations,
+                        acc.address,
+                        acc.city,
+                        acc.state,
+                        acc.region,
+                        acc.country,
+                        acc.domain
+                    ].filter(Boolean);
+                    return locParts.length ? { platform: k, location: locParts.join(', ') } : null;
                 })
                 .filter(Boolean);
-            const locationsCount = locationItems.length;
-            const registrationsCount = Object.keys(accounts).length;
+            const uniqueLocations = new Set([
+                ...locationItems.map(item => item.location),
+                ...normalizedLocations
+            ]);
+            const locationsCount = uniqueLocations.size;
+            const accountsCount = Object.keys(accounts).length;
             const commentsCount = comments.length;
+            const timelineCount = timelineItems.length;
             const breachCountDisplay = breachCount || breaches.length;
+            const riskScore = breachCountDisplay > 0 || stealerLogs.length > 0 ? 75 : 25;
             
             html += `
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-emerald-400">${namesCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Names Found</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-cyan-400">${usernamesCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Usernames</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-blue-400">${locationsCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Locations</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-pink-400">${commentsCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Comments</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-purple-400">${registrationsCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Registrations</div>
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                    <div class="result-kv-grid cols-3">
+                        <div class="result-kv-item">
+                            <div class="result-kv-label">Names Found</div>
+                            <div class="result-kv-value text-emerald-300">${namesCount}</div>
+                        </div>
+                        <div class="result-kv-item">
+                            <div class="result-kv-label">Usernames</div>
+                            <div class="result-kv-value text-cyan-300">${usernamesCount}</div>
+                        </div>
+                        <div class="result-kv-item">
+                            <div class="result-kv-label">Accounts</div>
+                            <div class="result-kv-value text-slate-100">${accountsCount}</div>
+                        </div>
+                        <div class="result-kv-item">
+                            <div class="result-kv-label">Locations</div>
+                            <div class="result-kv-value text-sky-300">${locationsCount}</div>
+                        </div>
+                        <div class="result-kv-item">
+                            <div class="result-kv-label">Timeline Events</div>
+                            <div class="result-kv-value text-amber-300">${timelineCount}</div>
+                        </div>
+                        <div class="result-kv-item">
+                            <div class="result-kv-label">Comments</div>
+                            <div class="result-kv-value text-pink-300">${commentsCount}</div>
+                        </div>
                     </div>
                 </div>`;
 
@@ -11947,13 +11994,25 @@ HTML_TEMPLATE = """
                 html += '</div></div>';
             }
 
-            if (locationItems.length > 0) {
+            if (normalizedLocations.length > 0 || locationItems.length > 0) {
                 html += `
                     <div class="rounded-lg border border-sky-900/40 bg-sky-950/15 p-4">
-                        <h3 class="text-sm font-bold text-sky-300 mb-3">📍 Locations</h3>
-                        <div class="space-y-2">`;
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-sky-300">📍 Locations</h3>
+                            <span class="text-xs text-sky-400">${uniqueLocations.size} unique</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">`;
                 locationItems.forEach(item => {
-                    html += `<div class="flex justify-between items-center text-sm text-sky-200"><span>${_osintEscape(item.platform)}</span><span class="text-xs text-sky-500">${_osintEscape(item.location)}</span></div>`;
+                    html += `<div class="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-sm text-sky-200">
+                                <div class="font-semibold text-sky-100">${_osintEscape(item.platform)}</div>
+                                <div class="mt-1">${_osintEscape(item.location)}</div>
+                            </div>`;
+                });
+                normalizedLocations.forEach(loc => {
+                    html += `<div class="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-sm text-sky-200">
+                                <div class="font-semibold text-sky-100">General Location</div>
+                                <div class="mt-1">${_osintEscape(loc)}</div>
+                            </div>`;
                 });
                 html += '</div></div>';
             }
@@ -11961,44 +12020,83 @@ HTML_TEMPLATE = """
             if (comments.length > 0) {
                 html += `
                     <div class="rounded-lg border border-violet-900/40 bg-violet-950/15 p-4">
-                        <h3 class="text-sm font-bold text-violet-300 mb-3">💬 Comments</h3>
-                        <div class="space-y-3">`;
-                comments.forEach((comment, idx) => {
-                    const safeAuthor = _osintEscape(comment.author || comment.reviewer || 'Unknown');
-                    const safeText = _osintEscape(comment.text || comment.comment || comment.review || 'No comment text');
-                    const safeDate = _osintEscape(comment.date || comment.created_at || comment.time || 'Unknown');
-                    html += `<div class="rounded border border-violet-800/30 bg-violet-900/20 p-3 text-sm text-violet-200">
-                                <div class="font-semibold text-violet-100">${idx + 1}. ${safeAuthor}</div>
-                                <div class="text-xs text-violet-400 mb-2">${safeDate}</div>
-                                <div>${safeText}</div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-violet-300">💬 Reviews / Comments</h3>
+                            <span class="text-xs text-violet-400">${comments.length} found</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">`;
+                comments.slice(0, 8).forEach(comment => {
+                    const source = _osintEscape(comment.source || comment.provider || comment.platform || comment.site || 'Review');
+                    const text = _osintEscape(comment.text || comment.message || comment.comment || comment.body || JSON.stringify(comment));
+                    const date = _osintEscape(comment.date || comment.created_at || comment.timestamp || 'Unknown date');
+                    html += `<div class="rounded-lg border border-violet-800/30 bg-violet-900/20 p-3 text-sm text-violet-200">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="font-semibold text-violet-100">${source}</div>
+                                    <div class="text-xs text-violet-400">${date}</div>
+                                </div>
+                                <div class="mt-2 leading-relaxed">${text}</div>
                             </div>`;
                 });
+                if (comments.length > 8) {
+                    html += `<div class="text-xs text-violet-400">+${comments.length - 8} more comments hidden</div>`;
+                }
+                html += '</div></div>';
+            }
+
+            if (timelineItems.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/15 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-emerald-300">🕒 Activity Timeline</h3>
+                            <span class="text-xs text-emerald-400">${timelineItems.length} events</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">`;
+                timelineItems.slice(0, 10).forEach((item, idx) => {
+                    const title = _osintEscape(item.name || item.title || item.event || item.action || item.label || 'Timeline event');
+                    const source = _osintEscape(item.source || item.provider || item.platform || 'Unknown');
+                    const date = _osintEscape(item.date || item.created_at || item.timestamp || item.time || 'Unknown');
+                    const description = _osintEscape(item.description || item.body || item.details || '');
+                    html += `<div class="rounded-lg border border-emerald-800/30 bg-emerald-900/20 p-3 text-sm text-emerald-200">
+                                <div class="font-semibold text-emerald-100">${idx + 1}. ${title}</div>
+                                <div class="flex flex-wrap items-center gap-2 text-xs text-emerald-400 mt-1">${date}<span>·</span>${source}</div>
+                                ${description ? `<div class="mt-2 text-[13px] text-emerald-200">${description}</div>` : ''}
+                            </div>`;
+                });
+                if (timelineItems.length > 10) {
+                    html += `<div class="text-xs text-emerald-400">+${timelineItems.length - 10} more timeline events hidden</div>`;
+                }
                 html += '</div></div>';
             }
 
             // Data Breaches section
-            if (breachCountDisplay > 0) {
+            if (breaches.length > 0) {
                 html += `
                     <div class="rounded-lg border border-rose-900/40 bg-rose-950/15 p-4">
-                        <h3 class="text-sm font-bold text-rose-300 mb-3">🚨 Data Breaches (${breachCountDisplay})</h3>
+                        <h3 class="text-sm font-bold text-rose-300 mb-3">🚨 Data Breaches (${breaches.length})</h3>
                         <div class="space-y-2">`;
                 breaches.forEach((breach, idx) => {
-                    const safeName = _osintEscape(breach.name || breach.title || 'Unknown');
-                    const safeDate = _osintEscape(breach.date || breach.source?.date || 'Unknown');
-                    const safeRecords = _osintEscape(String(breach.records || breach.count || '?'));
-                    const source = breach.source || breach.Source || {};
-                    const safeSourceName = _osintEscape(source.name || source.source || 'Unknown Source');
-                    const safeEmail = _osintEscape(breach.email || breach.Email || '');
-                    const safeUsername = _osintEscape(breach.username || breach.Username || '');
-                    const safePassword = _osintEscape(breach.password || breach.Password || '');
-                    html += `<div class="rounded border border-rose-800/30 bg-rose-900/20 p-3 text-[11px] text-rose-200">
+                    const safeName = _osintEscape(breach.name || breach.title || breach.domain || 'Unknown');
+                    const safeDate = _osintEscape(breach.date || breach.published_date || breach.leak_date || 'Unknown');
+                    const safeRecords = _osintEscape(String(breach.records || breach.count || breach.amount || '?'));
+                    const safeSource = _osintEscape(breach.source || breach.provider || breach.site || 'IntelBase');
+                    const details = _osintEscape(breach.compromised_data || breach.data || breach.category || 'No breach details available');
+                    const statusText = _osintEscape(breach.status || breach.state || 'Compromised');
+
+                    html += `<div class="rounded border border-rose-800/30 bg-rose-900/20 p-3 text-sm text-rose-200">
                                 <div class="font-semibold text-rose-100">${idx + 1}. ${safeName}</div>
-                                <div class="mt-1 text-rose-300">${safeSourceName} | ${safeDate} | ${safeRecords} records</div>
-                                ${safeEmail ? `<div class="mt-2">📧 ${safeEmail}</div>` : ''}
-                                ${safeUsername ? `<div class="mt-1">👤 ${safeUsername}</div>` : ''}
-                                ${safePassword ? `<div class="mt-1">🔑 ${safePassword}</div>` : ''}
+                                <div class="text-xs text-rose-400 mt-1">${safeDate} · ${safeSource} · ${statusText}</div>
+                                <div class="mt-2 text-[13px] text-rose-200">Records: ${safeRecords}</div>
+                                <div class="mt-1 text-[12px] text-rose-300">${details}</div>
                             </div>`;
                 });
+                if (breachSources.length > 0) {
+                    const sourceNames = breachSources.map(src => {
+                        if (typeof src === 'string') return src;
+                        if (src && typeof src === 'object') return src.name || src.title || src.provider || src.source || JSON.stringify(src);
+                        return '';
+                    }).filter(Boolean);
+                    html += `<div class="mt-3 text-xs text-rose-300">Sources: ${_osintEscape(sourceNames.join(', '))}</div>`;
+                }
                 html += '</div></div>';
             } else {
                 html += `
@@ -12012,9 +12110,25 @@ HTML_TEMPLATE = """
             if (stealerLogs.length > 0) {
                 html += `
                     <div class="rounded-lg border border-orange-900/40 bg-orange-950/15 p-4">
-                        <h3 class="text-sm font-bold text-orange-300 mb-2">⚠️ Infostealer Logs</h3>
-                        <p class="text-xs text-orange-300">Total Results: <strong>${stealerLogs.length}</strong></p>
-                    </div>`;
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-orange-300">⚠️ Infostealer Logs</h3>
+                            <span class="text-xs text-orange-300">${stealerLogs.length} entries</span>
+                        </div>
+                        <div class="space-y-2">`;
+                stealerLogs.slice(0, 8).forEach((entry, idx) => {
+                    const title = _osintEscape(entry.name || entry.title || entry.type || entry.source || `Log ${idx + 1}`);
+                    const date = _osintEscape(entry.date || entry.created_at || entry.timestamp || entry.time || 'Unknown');
+                    const details = _osintEscape(entry.details || entry.info || entry.description || JSON.stringify(entry));
+                    html += `<div class="rounded border border-orange-800/30 bg-orange-900/20 p-3 text-sm text-orange-200">
+                                <div class="font-semibold text-orange-100">${title}</div>
+                                <div class="text-xs text-orange-300 mt-1">${date}</div>
+                                <div class="mt-2 text-[13px] text-orange-200">${details}</div>
+                            </div>`;
+                });
+                if (stealerLogs.length > 8) {
+                    html += `<div class="text-xs text-orange-300">+${stealerLogs.length - 8} more logs hidden</div>`;
+                }
+                html += '</div></div>';
             }
 
             // Accounts Details section
@@ -12036,8 +12150,15 @@ HTML_TEMPLATE = """
                     if (acc.full_name) html += `<div><strong>Full Name:</strong> ${_osintEscape(acc.full_name)}</div>`;
                     if (acc.username) html += `<div><strong>Username:</strong> ${_osintEscape(acc.username)}</div>`;
                     if (acc.country) html += `<div><strong>Country:</strong> ${_osintEscape(acc.country)}</div>`;
+                    if (acc.location) html += `<div><strong>Location:</strong> ${_osintEscape(acc.location)}</div>`;
+                    if (acc.city || acc.state || acc.region) html += `<div><strong>Region:</strong> ${_osintEscape([acc.city, acc.state, acc.region].filter(Boolean).join(', '))}</div>`;
+                    if (Array.isArray(acc.locations)) html += `<div><strong>Locations:</strong> ${_osintEscape(acc.locations.join(', '))}</div>`;
                     if (acc.user_id) html += `<div><strong>User ID:</strong> ${_osintEscape(String(acc.user_id))}</div>`;
-                    if (acc.followers !== undefined) html += `<div><strong>Followers:</strong> ${acc.followers}</div>`;
+                    if (acc.domain) html += `<div><strong>Domain:</strong> ${_osintEscape(acc.domain)}</div>`;
+                    if (acc.platform) html += `<div><strong>Module:</strong> ${_osintEscape(acc.platform)}</div>`;
+                    if (acc.module_id) html += `<div><strong>Module ID:</strong> ${_osintEscape(String(acc.module_id))}</div>`;
+                    if (acc.followers !== undefined) html += `<div><strong>Followers:</strong> ${_osintEscape(String(acc.followers))}</div>`;
+                    if (acc.profile_url || acc.url || acc.link) html += `<div class="md:col-span-2"><strong>Profile:</strong> <a class="text-cyan-300 hover:text-cyan-100" href="${_osintEscape(acc.profile_url || acc.url || acc.link)}" target="_blank" rel="noopener noreferrer">${_osintEscape(acc.profile_url || acc.url || acc.link)}</a></div>`;
                     if (acc.bio) html += `<div class="md:col-span-2"><strong>Bio:</strong> ${_osintEscape(acc.bio)}</div>`;
                     
                     html += `</div></div>`;
@@ -12068,7 +12189,7 @@ HTML_TEMPLATE = """
                 html,
                 { 
                     badge: breachCountDisplay > 0 ? `⚠️ ${breachCountDisplay} Breaches` : '✓ Clean', 
-                    riskScore: breachCountDisplay > 0 ? 70 : 35 
+                    riskScore: riskScore 
                 }
             );
         }
@@ -18600,14 +18721,9 @@ def osint_intelbase_email_route():
         'x-api-key': INTELBASE_API_KEY,
         'Content-Type': 'application/json'
     }
-
-    proxy_url = os.environ.get('PROXIMO_URL')
-    proxies = {'http': proxy_url, 'https': proxy_url} if proxy_url else None
-    if proxy_url:
-        add_audit_log('OSINT IntelBase Email', f'email={email} using_proxy={proxy_url}')
-
+    
     try:
-        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=10, proxies=proxies)
+        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=10)
         
         # تعامل مع أي حالة من الحالات بما فيها 401
         if response.status_code != 200:
