@@ -11798,6 +11798,9 @@ HTML_TEMPLATE = """
             const breachCount = rawBreaches?.amount ?? breaches.length;
             const breachSources = rawBreaches?.sources || [];
             let stealerLogs = payload?.stealer_logs || rawResp?.stealer_logs || [];
+            if (!Array.isArray(stealerLogs)) {
+                stealerLogs = stealerLogs ? [stealerLogs] : [];
+            }
             let validator = payload?.validator || rawResp?.validator || {};
             const commentsRaw = payload?.comments || rawResp?.comments || payload?.reviews || rawResp?.reviews || [];
             let comments = Array.isArray(commentsRaw)
