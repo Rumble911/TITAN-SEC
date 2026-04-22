@@ -4799,28 +4799,6 @@ HTML_TEMPLATE = """
 
             <!-- ===== OSINT SECTION ===== -->
             <div id="osint-section" class="hidden space-y-8">
-                <!-- Username & Social Media Search -->
-                <div>
-                    <h2 class="text-xl font-bold text-indigo-400 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>🔍</span> بحث عن اليوزرنيم (Username Hunt)
-                    </h2>
-                    <p class="text-xs text-gray-400 mb-3">ابحث عن اسم مستخدم عبر آلاف المنصات الاجتماعية والويب لتحديد الحسابات المرتبطة بهدفك.</p>
-                    <div class="flex gap-2 mb-4">
-                        <textarea id="osintUsernameInput" placeholder="أدخل اسم مستخدم واحد أو أكثر (مثل: admin, user.name)&#10;اترك المحرر وأضغط Ctrl+Enter لتشغيل البحث" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-left min-h-20 resize-none" dir="ltr"></textarea>
-                        <div class="flex flex-col gap-2">
-                            <button onclick="osintRunSocialscan()" class="bg-indigo-900/40 hover:bg-indigo-800 px-6 py-3 rounded-xl font-bold border border-indigo-800/50 transition-all text-indigo-400 flex items-center justify-center min-w-[120px] h-10">
-                                بحث 🔎
-                            </button>
-                            <div class="flex items-center gap-2">
-                                <label class="text-xs text-gray-500">المهلة (ثانية):</label>
-                                <input type="number" id="osintTimeoutSeconds" value="15" min="6" max="35" class="w-16 p-2 rounded-lg bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-xs text-center">
-                            </div>
-                        </div>
-                    </div>
-                    <p id="osintRunHint" class="text-xs text-gray-500 mb-2"></p>
-                    <div id="osintResult" class="hidden"></div>
-                </div>
-
                 <!-- Email Intelligence & Breach Lookup -->
                 <div>
                     <h2 class="text-xl font-bold text-green-400 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
@@ -11589,158 +11567,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        function osintInitSection() {
-            const input = document.getElementById('osintUsernameInput');
-            if (!input || input.dataset.bound === '1') return;
-            input.dataset.bound = '1';
-            input.addEventListener('keydown', (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                    e.preventDefault();
-                    osintRunSocialscan();
-                }
-            });
-        }
-
-        function osintNormalizeUsernames(raw) {
-            const src = String(raw || '');
-            const parts = src.split(/\\r?\\n|,|;/g);
-            const seen = new Set();
-            const out = [];
-
-            parts.forEach((p) => {
-                const cleaned = String(p || '').trim().replace(/^@+/, '');
-                if (!cleaned) return;
-                if (!/^[a-zA-Z0-9._-]{2,64}$/.test(cleaned)) return;
-                const key = cleaned.toLowerCase();
-                if (seen.has(key)) return;
-                seen.add(key);
-                out.push(cleaned);
-            });
-
-            return out.slice(0, 8);
-        }
-
-        function osintRenderSocialscanResult(box, payload) {
-            const found = Array.isArray(payload?.found) ? payload.found : [];
-            const stats = payload?.by_username || {};
-            const requested = Array.isArray(payload?.requested_usernames) ? payload.requested_usernames.length : 0;
-            const checked = Number(payload?.checked_usernames || 0);
-            const elapsed = Number(payload?.elapsed_ms || 0);
-            const errors = Array.isArray(payload?.errors) ? payload.errors : [];
-            const platformScope = Array.isArray(payload?.platform_scope) ? payload.platform_scope : [];
-            const engineName = String(payload?.engine || 'social_hybrid');
-            const engines = Array.isArray(payload?.engines) ? payload.engines : [];
-            const enginesLabel = engines.length
-                ? engines.map((e) => _osintEscape(e?.name || '')).filter(Boolean).join(' + ')
-                : _osintEscape(engineName);
-
-            if (!found.length) {
-                const errHtml = errors.length
-                    ? `<div class="mt-2 text-[11px] text-amber-300">ملاحظات التشغيل: ${errors.map((e) => _osintEscape(e.query + ': ' + (e.error || 'unknown'))).join(' | ')}</div>`
-                    : '';
-                setResultMarkup(
-                    box,
-                    'OSINT Social Hunt',
-                    `<div class="text-sm text-gray-300">لم يتم العثور على حسابات مؤكدة.</div>
-                     <div class="text-xs text-gray-500 mt-1">Engine: ${enginesLabel} | Platforms: ${platformScope.length} | Requested: ${requested} | Checked: ${checked} | Time: ${elapsed}ms</div>${errHtml}`,
-                    { badge: 'No Hits', riskScore: 10 }
-                );
-                return;
-            }
-
-            const summaryCards = Object.keys(stats).sort().map((u) => {
-                return `<div class="rounded-lg border border-indigo-900/40 bg-indigo-950/15 px-2 py-1 text-[11px] text-indigo-200">@${_osintEscape(u)}: <span class="font-bold">${_osintEscape(stats[u])}</span></div>`;
-            }).join('');
-
-            const rows = found.map((row, idx) => {
-                const safeQuery = _osintEscape(row.query || 'unknown');
-                const safeSite = _osintEscape(row.site || 'site');
-                const safeUrl = _osintEscape(row.url || '#');
-                const safeStatus = _osintEscape(row.status || 'claimed');
-                const safeEngine = _osintEscape(row.engine || '');
-                return `
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center border border-slate-700/60 rounded-lg bg-black/20 px-3 py-2">
-                        <div class="md:col-span-1 text-[11px] text-gray-500 font-mono">${idx + 1}</div>
-                        <div class="md:col-span-2 text-xs text-indigo-300 font-mono" dir="ltr">@${safeQuery}</div>
-                        <div class="md:col-span-2 text-xs text-cyan-300 font-bold">${safeSite}</div>
-                        <div class="md:col-span-5 text-xs break-all" dir="ltr"><a href="${safeUrl}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline decoration-emerald-700/40">${safeUrl}</a></div>
-                        <div class="md:col-span-2 text-[11px] text-amber-300">${safeStatus}${safeEngine ? ` | ${safeEngine}` : ''}</div>
-                    </div>
-                `;
-            }).join('');
-
-            const errorsHtml = errors.length
-                ? `<div class="mt-2 text-[11px] text-amber-300">ملاحظات التشغيل: ${errors.map((e) => _osintEscape(e.query + ': ' + (e.error || 'unknown'))).join(' | ')}</div>`
-                : '';
-
-            setResultMarkup(
-                box,
-                'OSINT Social Hunt',
-                `<div class="text-[11px] text-gray-500 mb-2">Engine: ${enginesLabel} | Platforms: ${platformScope.length}</div>
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3 text-[11px]">
-                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Found Accounts: <span class="text-emerald-300 font-bold">${found.length}</span></div>
-                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Requested: <span class="text-cyan-300 font-bold">${requested}</span></div>
-                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Checked: <span class="text-indigo-300 font-bold">${checked}</span></div>
-                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Platforms: <span class="text-fuchsia-300 font-bold">${platformScope.length}</span></div>
-                    <div class="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">Time: <span class="text-violet-300 font-bold">${elapsed}ms</span></div>
-                </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">${summaryCards || ''}</div>
-                <div class="space-y-2">${rows}</div>
-                ${errorsHtml}`,
-                { badge: `${found.length} Hits`, riskScore: 20 }
-            );
-        }
-
-        async function osintRunSocialscan() {
-            const input = document.getElementById('osintUsernameInput');
-            const resultBox = document.getElementById('osintResult');
-            const hint = document.getElementById('osintRunHint');
-            const timeoutSeconds = Number(document.getElementById('osintTimeoutSeconds')?.value || 15);
-
-            if (!input || !resultBox) return;
-
-            const usernames = osintNormalizeUsernames(input.value);
-            if (!usernames.length) {
-                titanAlert('أدخل يوزرنيم صالح واحد على الأقل (حروف/أرقام و ._- فقط).');
-                return;
-            }
-
-            resultBox.classList.remove('hidden');
-            setResultLoading(resultBox, 'OSINT Social Hunt', 'جار تشغيل محركات SocialScan + Profile Probe + WhatsMyName على كل المنصات المتاحة...');
-            if (hint) hint.textContent = `Running on ${usernames.length} username(s)...`;
-            if (typeof soundManager !== 'undefined' && soundManager.terminalType) soundManager.terminalType();
-
-            try {
-                const res = await fetch('/api/osint/socialscan', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        queries: usernames,
-                        timeout_seconds: timeoutSeconds
-                    })
-                });
-
-                const data = await _parseJsonOrThrow(res, 'OSINT social username scan');
-                if (!res.ok || !data.success) {
-                    setResultError(resultBox, data.error || `HTTP ${res.status}`);
-                    if (hint) hint.textContent = 'حدث خطأ أثناء تشغيل محركات OSINT.';
-                    if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
-                    return;
-                }
-
-                osintRenderSocialscanResult(resultBox, data);
-                if (hint) hint.textContent = `Last run: ${new Date().toLocaleTimeString()} | Found: ${Number(data.total_found || 0)}`;
-                if (typeof soundManager !== 'undefined') {
-                    if (Number(data.total_found || 0) > 0 && soundManager.success) soundManager.success();
-                    else if (soundManager.terminalType) soundManager.terminalType();
-                }
-            } catch (e) {
-                setResultError(resultBox, e.message || 'فشل الاتصال بخادم OSINT.');
-                if (hint) hint.textContent = 'تعذر إكمال الفحص.';
-                if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
-            }
-        }
-
         async function osintLookupEmail() {
             const emailInput = document.getElementById('osintEmailInput');
             const resultBox = document.getElementById('osintEmailResult');
@@ -12118,29 +11944,6 @@ HTML_TEMPLATE = """
                     </div>`;
             }
 
-            const totalStealerResults = stealerLogs.length;
-            const stealerComboCount = stealerLogs.reduce((sum, item) => {
-                const count = Number(item.combos || item.combo_count || item.combos_count || item.combo || 0);
-                return sum + (Number.isFinite(count) && count > 0 ? count : 0);
-            }, 0) || totalStealerResults;
-
-            // Infostealer Logs section
-            if (totalStealerResults > 0) {
-                html += `
-                    <div class="rounded-lg border border-orange-900/40 bg-orange-950/15 p-4">
-                        <div class="grid grid-cols-2 gap-4 text-[11px] uppercase tracking-widest text-slate-400 mb-3">
-                            <div>Total Results</div>
-                            <div>Combos</div>
-                            <div class="text-2xl font-bold text-white">${totalStealerResults}</div>
-                            <div class="text-2xl font-bold text-white">${stealerComboCount}</div>
-                        </div>
-                        <div class="rounded-xl border border-slate-700/50 bg-black/20 p-3 text-sm text-slate-300 mb-3">
-                            Infostealer log credentials are hidden on your current plan
-                        </div>
-                        <button type="button" class="rounded-md border border-slate-700/50 bg-slate-900/70 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800/80">View infostealer logs</button>
-                    </div>`;
-            }
-
             // Accounts Details section
             if (Object.keys(accounts).length > 0) {
                 html += `
@@ -12255,15 +12058,8 @@ HTML_TEMPLATE = """
 
             html += `
                 <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
-                    <h3 class="text-sm font-bold text-slate-200 mb-2">Additional Registrations (${stealerLogs.length})</h3>
-                    <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
-                    ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
-                </div>`;
-
-            html += `
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
                     <h3 class="text-sm font-bold text-slate-200 mb-2">المعلومات</h3>
-                    <p class="text-sm text-slate-400">Results include ${Object.keys(accounts).length} account(s), ${breachCountDisplay} breach record(s), and ${stealerLogs.length} infostealer log(s).</p>
+                    <p class="text-sm text-slate-400">Results include ${Object.keys(accounts).length} account(s) and ${breachCountDisplay} breach record(s).</p>
                 </div>`;
 
             html += '</div>';
