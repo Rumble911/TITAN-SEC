@@ -11789,9 +11789,22 @@ HTML_TEMPLATE = """
             // إذا كان payload نفسه هو الـ raw response بدون raw_response key
             let meta = payload?.meta || rawResp?.meta || {};
             let identifier = payload?.identifier || rawResp?.identifier || {};
-            let breaches = payload?.data_breaches?.results || rawResp?.data_breaches?.results || [];
+            const rawBreaches = payload?.data_breaches || rawResp?.data_breaches || {};
+            let breaches = Array.isArray(rawBreaches?.results)
+                ? rawBreaches.results
+                : Array.isArray(rawBreaches)
+                    ? rawBreaches
+                    : [];
+            const breachCount = rawBreaches?.amount ?? breaches.length;
+            const breachSources = rawBreaches?.sources || [];
             let stealerLogs = payload?.stealer_logs || rawResp?.stealer_logs || [];
             let validator = payload?.validator || rawResp?.validator || {};
+            const commentsRaw = payload?.comments || rawResp?.comments || payload?.reviews || rawResp?.reviews || [];
+            let comments = Array.isArray(commentsRaw)
+                ? commentsRaw
+                : Array.isArray(commentsRaw?.results)
+                    ? commentsRaw.results
+                    : [];
             
             // حول identifier.accounts من array إلى dict إذا كانت array
             let accounts = {};
@@ -11855,11 +11868,23 @@ HTML_TEMPLATE = """
             // Summary section with counters
             const namesCount = Object.keys(accounts).filter(k => accounts[k]?.full_name).length;
             const usernamesCount = Object.keys(accounts).filter(k => accounts[k]?.username).length;
-            const locationsCount = Object.keys(accounts).filter(k => accounts[k]?.country || accounts[k]?.locations).length;
+            const locationItems = Object.keys(accounts)
+                .map(k => {
+                    const acc = accounts[k];
+                    if (acc.country || acc.location || acc.locations || acc.city || acc.state) {
+                        const locParts = [acc.location, acc.city, acc.state, acc.country].filter(Boolean);
+                        return { platform: k, location: locParts.join(', ') };
+                    }
+                    return null;
+                })
+                .filter(Boolean);
+            const locationsCount = locationItems.length;
             const registrationsCount = Object.keys(accounts).length;
+            const commentsCount = comments.length;
+            const breachCountDisplay = breachCount || breaches.length;
             
             html += `
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
                         <div class="text-2xl font-bold text-emerald-400">${namesCount}</div>
                         <div class="text-xs text-gray-400 mt-1">Names Found</div>
@@ -11871,6 +11896,10 @@ HTML_TEMPLATE = """
                     <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
                         <div class="text-2xl font-bold text-blue-400">${locationsCount}</div>
                         <div class="text-xs text-gray-400 mt-1">Locations</div>
+                    </div>
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-pink-400">${commentsCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Comments</div>
                     </div>
                     <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
                         <div class="text-2xl font-bold text-purple-400">${registrationsCount}</div>
@@ -11918,17 +11947,57 @@ HTML_TEMPLATE = """
                 html += '</div></div>';
             }
 
+            if (locationItems.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-sky-900/40 bg-sky-950/15 p-4">
+                        <h3 class="text-sm font-bold text-sky-300 mb-3">📍 Locations</h3>
+                        <div class="space-y-2">`;
+                locationItems.forEach(item => {
+                    html += `<div class="flex justify-between items-center text-sm text-sky-200"><span>${_osintEscape(item.platform)}</span><span class="text-xs text-sky-500">${_osintEscape(item.location)}</span></div>`;
+                });
+                html += '</div></div>';
+            }
+
+            if (comments.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-violet-900/40 bg-violet-950/15 p-4">
+                        <h3 class="text-sm font-bold text-violet-300 mb-3">💬 Comments</h3>
+                        <div class="space-y-3">`;
+                comments.forEach((comment, idx) => {
+                    const safeAuthor = _osintEscape(comment.author || comment.reviewer || 'Unknown');
+                    const safeText = _osintEscape(comment.text || comment.comment || comment.review || 'No comment text');
+                    const safeDate = _osintEscape(comment.date || comment.created_at || comment.time || 'Unknown');
+                    html += `<div class="rounded border border-violet-800/30 bg-violet-900/20 p-3 text-sm text-violet-200">
+                                <div class="font-semibold text-violet-100">${idx + 1}. ${safeAuthor}</div>
+                                <div class="text-xs text-violet-400 mb-2">${safeDate}</div>
+                                <div>${safeText}</div>
+                            </div>`;
+                });
+                html += '</div></div>';
+            }
+
             // Data Breaches section
-            if (breaches.length > 0) {
+            if (breachCountDisplay > 0) {
                 html += `
                     <div class="rounded-lg border border-rose-900/40 bg-rose-950/15 p-4">
-                        <h3 class="text-sm font-bold text-rose-300 mb-3">🚨 Data Breaches (${breaches.length})</h3>
+                        <h3 class="text-sm font-bold text-rose-300 mb-3">🚨 Data Breaches (${breachCountDisplay})</h3>
                         <div class="space-y-2">`;
                 breaches.forEach((breach, idx) => {
-                    const safeName = _osintEscape(breach.name || 'Unknown');
-                    const safeDate = _osintEscape(breach.date || 'Unknown');
-                    const safeRecords = _osintEscape(String(breach.records || '?'));
-                    html += `<div class="rounded border border-rose-800/30 bg-rose-900/20 p-2 text-[11px] text-rose-200"><strong>${idx + 1}. ${safeName}</strong> - ${safeDate} | ${safeRecords} records</div>`;
+                    const safeName = _osintEscape(breach.name || breach.title || 'Unknown');
+                    const safeDate = _osintEscape(breach.date || breach.source?.date || 'Unknown');
+                    const safeRecords = _osintEscape(String(breach.records || breach.count || '?'));
+                    const source = breach.source || breach.Source || {};
+                    const safeSourceName = _osintEscape(source.name || source.source || 'Unknown Source');
+                    const safeEmail = _osintEscape(breach.email || breach.Email || '');
+                    const safeUsername = _osintEscape(breach.username || breach.Username || '');
+                    const safePassword = _osintEscape(breach.password || breach.Password || '');
+                    html += `<div class="rounded border border-rose-800/30 bg-rose-900/20 p-3 text-[11px] text-rose-200">
+                                <div class="font-semibold text-rose-100">${idx + 1}. ${safeName}</div>
+                                <div class="mt-1 text-rose-300">${safeSourceName} | ${safeDate} | ${safeRecords} records</div>
+                                ${safeEmail ? `<div class="mt-2">📧 ${safeEmail}</div>` : ''}
+                                ${safeUsername ? `<div class="mt-1">👤 ${safeUsername}</div>` : ''}
+                                ${safePassword ? `<div class="mt-1">🔑 ${safePassword}</div>` : ''}
+                            </div>`;
                 });
                 html += '</div></div>';
             } else {
@@ -11998,8 +12067,8 @@ HTML_TEMPLATE = """
                 'IntelBase Email Intelligence - Full Report',
                 html,
                 { 
-                    badge: breaches.length > 0 ? `⚠️ ${breaches.length} Breaches` : '✓ Clean', 
-                    riskScore: breaches.length > 0 ? 70 : 35 
+                    badge: breachCountDisplay > 0 ? `⚠️ ${breachCountDisplay} Breaches` : '✓ Clean', 
+                    riskScore: breachCountDisplay > 0 ? 70 : 35 
                 }
             );
         }
