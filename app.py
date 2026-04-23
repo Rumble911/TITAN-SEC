@@ -44,6 +44,25 @@ from email.mime.text import MIMEText
 import urllib.request
 import json as _json
 import html
+import logging
+import sys
+import shutil
+import asyncio
+import warnings
+
+try:
+    import maigret as _maigret_pkg
+    from maigret.checking import maigret as _maigret_search
+    from maigret.report import generate_json_report as _maigret_generate_json_report
+    from maigret.sites import MaigretDatabase as _MaigretDatabase
+except Exception:
+    _maigret_pkg = None
+    _maigret_search = None
+    _maigret_generate_json_report = None
+    _MaigretDatabase = None
+
+_MAIGRET_DB_CACHE = None
+_MAIGRET_DB_LOCK = threading.Lock()
 
 try:
     from reportlab.pdfgen import canvas  # type: ignore
@@ -4812,6 +4831,34 @@ HTML_TEMPLATE = """
                         </button>
                     </div>
                     <div id="osintEmailResult" class="hidden"></div>
+                </div>
+
+                <div>
+                    <h2 class="text-xl font-bold text-indigo-400 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
+                        <span>🔎</span> بحث اسم مستخدم OSINT (Maigret)
+                    </h2>
+                    <p class="text-xs text-gray-400 mb-3">استخدم Maigret للبحث عن اسم المستخدم في مئات الخدمات والمواقع المختلفة.</p>
+                    <div class="flex flex-col gap-2 mb-4 sm:flex-row">
+                        <input type="text" id="osintMaigretUsernameInput" placeholder="أدخل اسم مستخدم مثل github" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-left" dir="ltr">
+                        <button onclick="osintLookupMaigret()" class="bg-indigo-900/40 hover:bg-indigo-800 px-6 py-3 rounded-xl font-bold border border-indigo-800/50 transition-all text-indigo-300 flex items-center justify-center min-w-[140px]">
+                            بحث Maigret
+                        </button>
+                    </div>
+                    <div id="osintMaigretResult" class="hidden"></div>
+                </div>
+
+                <div>
+                    <h2 class="text-xl font-bold text-amber-400 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
+                        <span>✉️</span> فحص البريد بـ Holehe
+                    </h2>
+                    <p class="text-xs text-gray-400 mb-3">تحقق من وجود البريد الإلكتروني على خدمات متعددة باستخدام Holehe.</p>
+                    <div class="flex flex-col gap-2 mb-4 sm:flex-row">
+                        <input type="email" id="osintHoleheEmailInput" placeholder="أدخل بريد إلكتروني..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-amber-500 outline-none font-mono text-left" dir="ltr">
+                        <button onclick="osintLookupHolehe()" class="bg-amber-900/40 hover:bg-amber-800 px-6 py-3 rounded-xl font-bold border border-amber-800/50 transition-all text-amber-300 flex items-center justify-center min-w-[140px]">
+                            بحث Holehe
+                        </button>
+                    </div>
+                    <div id="osintHoleheResult" class="hidden"></div>
                 </div>
             </div>
 
@@ -11606,6 +11653,182 @@ HTML_TEMPLATE = """
                 setResultError(resultBox, e.message || 'فشل الاتصال بخادم IntelBase.');
                 if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
             }
+        }
+
+        async function osintLookupMaigret() {
+            const usernameInput = document.getElementById('osintMaigretUsernameInput');
+            const resultBox = document.getElementById('osintMaigretResult');
+            if (!usernameInput || !resultBox) return;
+
+            const username = String(usernameInput.value || '').trim();
+            if (!username || !/^[A-Za-z0-9._-]{2,64}$/.test(username)) {
+                titanAlert('أدخل اسم مستخدم صالح (حروف وأرقام ونقط وشرطات فقط).');
+                return;
+            }
+
+            resultBox.classList.remove('hidden');
+            setResultLoading(resultBox, 'Maigret OSINT', 'جارٍ البحث عبر Maigret في مواقع متعددة...');
+            if (typeof soundManager !== 'undefined' && soundManager.terminalType) soundManager.terminalType();
+
+            try {
+                const res = await fetch('/api/osint/maigret', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, timeout_seconds: 25 })
+                });
+
+                const data = await _parseJsonOrThrow(res, 'Maigret OSINT');
+                if (!res.ok || !data.success) {
+                    setResultError(resultBox, data.error || `HTTP ${res.status}`);
+                    if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
+                    return;
+                }
+
+                osintRenderMaigretResult(resultBox, data, username);
+                if (typeof soundManager !== 'undefined' && soundManager.success) soundManager.success();
+            } catch (e) {
+                setResultError(resultBox, e.message || 'فشل الاتصال بخادم Maigret.');
+                if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
+            }
+        }
+
+        function osintRenderMaigretResult(box, data, username) {
+            const results = data.results || {};
+            const foundCount = data.found || 0;
+            const checkedCount = data.checked_sites || Object.keys(results).length;
+            const sites = Object.entries(results);
+
+            let html = `
+                <div class="grid gap-4 mb-4">
+                    <div class="rounded-xl border border-slate-700/50 bg-slate-900/70 p-4">
+                        <div class="flex flex-wrap gap-3 items-center justify-between">
+                            <div>
+                                <div class="text-xs text-gray-400 uppercase tracking-[0.18em] font-bold mb-2">Maigret Username OSINT</div>
+                                <div class="text-sm text-slate-200">${_osintEscape(username)}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-gray-400">Checked</div>
+                                <div class="text-lg font-bold text-indigo-300">${_osintEscape(String(checkedCount))}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-gray-400">Found</div>
+                                <div class="text-lg font-bold text-emerald-300">${_osintEscape(String(foundCount))}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            if (!sites.length) {
+                html += '<div class="result-list-item text-gray-300">لم يتم العثور على أي حسابات مثبتة عبر Maigret.</div>';
+            } else {
+                html += '<div class="grid gap-3">';
+                sites.forEach(([siteName, info]) => {
+                    const status = info.status?.status || 'Unknown';
+                    const url = info.url_user || info.status?.url || info.url_main || '';
+                    html += `
+                        <div class="rounded-2xl border border-slate-700/50 bg-slate-900/70 p-4">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <div class="text-sm font-semibold text-slate-100">${_osintEscape(siteName)}</div>
+                                <span class="text-[11px] rounded-full px-2 py-1 border border-slate-700/50 bg-slate-800 text-cyan-300">${_osintEscape(status)}</span>
+                            </div>
+                            ${url ? `<a href="${_osintEscape(url)}" target="_blank" rel="noopener" class="text-slate-300 hover:text-emerald-300 break-all">${_osintEscape(url)}</a>` : '<div class="text-sm text-gray-500">رابط غير متوفر</div>'}
+                        </div>`;
+                });
+                html += '</div>';
+            }
+
+            setResultMarkup(box, `Maigret OSINT - ${username}`, html, { badge: `${foundCount} Found` });
+        }
+
+        async function osintLookupHolehe() {
+            const emailInput = document.getElementById('osintHoleheEmailInput');
+            const resultBox = document.getElementById('osintHoleheResult');
+            if (!emailInput || !resultBox) return;
+
+            const email = String(emailInput.value || '').trim().toLowerCase();
+            if (!email || !/^[^\\s@]+@[^\\s@]+\.[^\\s@]+$/.test(email)) {
+                titanAlert('أدخل بريد إلكتروني صالح.');
+                return;
+            }
+
+            resultBox.classList.remove('hidden');
+            setResultLoading(resultBox, 'Holehe Email Scan', 'جارٍ فحص البريد الإلكتروني عبر Holehe...');
+            if (typeof soundManager !== 'undefined' && soundManager.terminalType) soundManager.terminalType();
+
+            try {
+                const res = await fetch('/api/osint/holehe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email, timeout_seconds: 15 })
+                });
+
+                const data = await _parseJsonOrThrow(res, 'Holehe Email Scan');
+                if (!res.ok || !data.success) {
+                    setResultError(resultBox, data.error || `HTTP ${res.status}`);
+                    if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
+                    return;
+                }
+
+                osintRenderHoleheResult(resultBox, data, email);
+                if (typeof soundManager !== 'undefined' && soundManager.success) soundManager.success();
+            } catch (e) {
+                setResultError(resultBox, e.message || 'فشل الاتصال بخادم Holehe.');
+                if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
+            }
+        }
+
+        function osintRenderHoleheResult(box, data, email) {
+            const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+            const sites = Array.isArray(data.sites) ? data.sites : [];
+            const foundCount = data.found || sites.filter((item) => item.status === 'used').length;
+            const checkedCount = data.checked_sites || sites.length;
+
+            let html = `
+                <div class="grid gap-4 mb-4">
+                    <div class="rounded-xl border border-slate-700/50 bg-slate-900/70 p-4">
+                        <div class="flex flex-wrap gap-3 items-center justify-between">
+                            <div>
+                                <div class="text-xs text-gray-400 uppercase tracking-[0.18em] font-bold mb-2">Holehe Email Scan</div>
+                                <div class="text-sm text-slate-200">${_osintEscape(email)}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-gray-400">Checked</div>
+                                <div class="text-lg font-bold text-amber-300">${_osintEscape(String(checkedCount))}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-gray-400">Found</div>
+                                <div class="text-lg font-bold text-emerald-300">${_osintEscape(String(foundCount))}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            if (accounts.length) {
+                html += `
+                    <div class="rounded-2xl border border-slate-700/50 bg-slate-900/70 p-4 mb-4">
+                        <div class="text-sm font-semibold text-slate-100 mb-3">Accounts &amp; recovered identifiers</div>
+                        <div class="space-y-2">${accounts.map((line) => `<div class="text-sm text-slate-300 break-all">${_osintEscape(line)}</div>`).join('')}</div>
+                    </div>`;
+            }
+
+            if (!sites.length) {
+                html += '<div class="result-list-item text-gray-300">لم يتم العثور على نتائج Holehe أو لم تكن هناك استجابة صالحة.</div>';
+            } else {
+                html += '<div class="grid gap-3">';
+                sites.forEach((item) => {
+                    const statusText = item.status === 'used' ? 'Used' : (item.status === 'rate_limited' ? 'Rate Limited' : 'Not Used');
+                    html += `
+                        <div class="rounded-2xl border border-slate-700/50 bg-slate-900/70 p-4">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <div class="text-sm font-semibold text-slate-100">${_osintEscape(item.site)}</div>
+                                <span class="text-[11px] rounded-full px-2 py-1 border border-slate-700/50 bg-slate-800 text-amber-300">${_osintEscape(statusText)}</span>
+                            </div>
+                        </div>`;
+                });
+                html += '</div>';
+            }
+
+            setResultMarkup(box, `Holehe Scan - ${email}`, html, { badge: `${foundCount} Found` });
         }
 
         function osintRenderFullEmailResult(box, payload, email) {
@@ -18683,6 +18906,178 @@ def osint_intelbase_email_route():
             'error': error_msg,
             'email': email
         }), 500
+
+
+def _load_maigret_db():
+    global _MAIGRET_DB_CACHE
+    if _MAIGRET_DB_CACHE is not None:
+        return _MAIGRET_DB_CACHE
+    if _MaigretDatabase is None or _maigret_pkg is None:
+        return None
+    with _MAIGRET_DB_LOCK:
+        if _MAIGRET_DB_CACHE is not None:
+            return _MAIGRET_DB_CACHE
+        data_path = os.path.join(os.path.dirname(_maigret_pkg.__file__), 'resources', 'data.json')
+        if not os.path.exists(data_path):
+            return None
+        try:
+            db = _MaigretDatabase().load_from_path(data_path)
+            _MAIGRET_DB_CACHE = db
+            return db
+        except Exception:
+            return None
+
+
+def _run_maigret_username_search(username: str, timeout_seconds: int = 20) -> dict:
+    if _maigret_search is None:
+        return {'success': False, 'error': 'Maigret package غير مثبتة على النظام.'}
+
+    db = _load_maigret_db()
+    if db is None:
+        return {'success': False, 'error': 'تعذر تحميل بيانات Maigret. تأكد من تثبيت الحزمة ووجود الموارد.'}
+
+    sites_dict = db.ranked_sites_dict(top=500, disabled=True, id_type='username')
+    logger = logging.getLogger('titan_maigret')
+    logger.setLevel(logging.CRITICAL)
+
+    try:
+        raw_results = asyncio.run(_maigret_search(
+            username,
+            sites_dict,
+            logger,
+            query_notify=None,
+            timeout=timeout_seconds,
+            max_connections=30,
+            no_progressbar=True,
+            id_type='username',
+        ))
+    except Exception as e:
+        return {'success': False, 'error': f'خطأ تشغيل Maigret: {str(e)}'}
+
+    processed_report = {}
+    try:
+        buf = io.StringIO()
+        _maigret_generate_json_report(username, raw_results, buf, 'simple')
+        buf.seek(0)
+        processed_report = json.loads(buf.read() or '{}')
+    except Exception:
+        processed_report = {}
+
+    return {
+        'success': True,
+        'username': username,
+        'checked_sites': len(raw_results),
+        'found': len(processed_report),
+        'results': processed_report,
+    }
+
+
+_ANSI_ESCAPE_RE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
+
+
+def _find_holehe_executable() -> str | None:
+    candidate = os.path.join(sys.exec_prefix, 'Scripts', 'holehe.exe')
+    if os.path.exists(candidate):
+        return candidate
+    candidate = shutil.which('holehe.exe') or shutil.which('holehe')
+    return candidate if candidate and os.path.exists(candidate) else None
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_ESCAPE_RE.sub('', text or '')
+
+
+def _run_holehe_email_check(email: str, timeout_seconds: int = 10) -> dict:
+    holehe_exe = _find_holehe_executable()
+    if not holehe_exe:
+        return {'success': False, 'error': 'تعذر العثور على holehe على النظام. تأكد من تثبيت holehe.'}
+
+    try:
+        proc = subprocess.run(
+            [holehe_exe, '--no-color', '--timeout', str(timeout_seconds), email],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=timeout_seconds + 5,
+        )
+    except subprocess.TimeoutExpired as e:
+        return {'success': False, 'error': f'انتهت مهلة holehe بعد {timeout_seconds} ثانية.'}
+    except Exception as e:
+        return {'success': False, 'error': f'فشل تشغيل holehe: {str(e)}'}
+
+    output = _strip_ansi(proc.stdout or '')
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    accounts = []
+    sites = []
+    summary = []
+
+    for line in lines:
+        if line.startswith('['):
+            m = re.match(r'^\[([+\-x])\]\s+(.+)$', line)
+            if m:
+                symbol, payload = m.groups()
+                status = 'used' if symbol == '+' else ('not_used' if symbol == '-' else 'rate_limited')
+                sites.append({'site': payload.strip(), 'symbol': symbol, 'status': status})
+                continue
+        if ':' in line and not line.startswith('****************'):
+            accounts.append(line)
+            continue
+        if 'websites checked' in line.lower() or line.lower().startswith('email') or 'too many errors' in line.lower():
+            summary.append(line)
+
+    return {
+        'success': True,
+        'email': email,
+        'accounts': accounts,
+        'sites': sites,
+        'summary': summary,
+        'checked_sites': len([item for item in sites if item.get('site')]),
+        'found': len([item for item in sites if item.get('status') == 'used']),
+        'raw_output': output,
+    }
+
+
+@app.route('/api/osint/maigret', methods=['POST'])
+def osint_maigret_route():
+    data = request.get_json(silent=True) or {}
+    username = str(data.get('username', '')).strip()
+    if not username or not re.fullmatch(r'[A-Za-z0-9._-]{2,64}', username):
+        return jsonify({ 'success': False, 'error': 'أدخل اسم مستخدم صالح (حروف وأرقام ونقط وشرطات فقط).'}), 400
+
+    try:
+        timeout_seconds = int(data.get('timeout_seconds', 20) or 20)
+    except Exception:
+        timeout_seconds = 20
+    timeout_seconds = max(10, min(45, timeout_seconds))
+
+    result = _run_maigret_username_search(username, timeout_seconds)
+    if not result.get('success'):
+        return jsonify(result), 500
+
+    add_audit_log('OSINT Maigret', f'username={username} checked={result.get("checked_sites",0)} found={result.get("found",0)}')
+    return jsonify(result)
+
+
+@app.route('/api/osint/holehe', methods=['POST'])
+def osint_holehe_route():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get('email', '')).strip().lower()
+    if not email or '@' not in email:
+        return jsonify({ 'success': False, 'error': 'يجب تمرير بريد إلكتروني صالح.'}), 400
+
+    try:
+        timeout_seconds = int(data.get('timeout_seconds', 10) or 10)
+    except Exception:
+        timeout_seconds = 10
+    timeout_seconds = max(8, min(30, timeout_seconds))
+
+    result = _run_holehe_email_check(email, timeout_seconds)
+    if not result.get('success'):
+        return jsonify(result), 500
+
+    add_audit_log('OSINT Holehe', f'email={email} checked={result.get("checked_sites",0)} found={result.get("found",0)}')
+    return jsonify(result)
 
 
 def _ir_priority_rank(priority: str) -> int:
