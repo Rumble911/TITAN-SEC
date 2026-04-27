@@ -46,13 +46,6 @@ import json as _json
 import html
 
 try:
-    from bs4 import BeautifulSoup  # type: ignore
-    _HAS_BEAUTIFULSOUP = True
-except Exception:
-    _HAS_BEAUTIFULSOUP = False
-    BeautifulSoup = None  # type: ignore
-
-try:
     from reportlab.pdfgen import canvas  # type: ignore
     from reportlab.lib.pagesizes import A4  # type: ignore
     from reportlab.pdfbase import pdfmetrics  # type: ignore
@@ -2798,321 +2791,17 @@ def check_phone_intelligence(phone: str) -> dict:
 
 # --- فحص الروابط المشبوهة عبر IPQualityScore API ---
 def check_url_intelligence(target_url: str) -> dict:
-    """فحص URL من خلال IPQualityScore API - نسخة محسنة"""
+    API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
+    url_clean = urllib.parse.quote(target_url.strip(), safe='')
+    url = f'https://www.ipqualityscore.com/api/json/url/{API_KEY}/{url_clean}'
+    params = {'fast': 'true', 'strictness': 0}
+        
     try:
-        url_clean = urllib.parse.quote(target_url.strip(), safe='')
-        url = f'https://www.ipqualityscore.com/api/json/url/{url_clean}'
-        params = {
-            'api_key': '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4',
-            'fast': 'true',
-            'strictness': 1
-        }
         response = requests.get(url, params=params, timeout=10)
         data = response.json()
-        
-        # تحسين البيانات المرجعة
-        return {
-            'success': data.get('success', False),
-            'threat_level': data.get('threat_level', 'unknown'),
-            'phishing_score': data.get('phishing_score', 0),
-            'malware_score': data.get('malware_score', 0),
-            'is_phishing': data.get('phishing', False),
-            'is_malware': data.get('malware', False),
-            'is_suspicious': data.get('suspicious', False),
-            'domain_rank': data.get('domain_rank', 0),
-            'category': data.get('category', 'unknown'),
-            'message': data.get('message', ''),
-            'full_response': data,  # البيانات الكاملة للمرجع
-        }
+        return data
     except Exception as e:
-        return {
-            "success": False, 
-            "message": f"فشل فحص URL: {str(e)}", 
-            "error": str(e),
-            "threat_level": "unknown"
-        }
-
-
-# ============================================
-# ⭐ نظام كشف التصيد المتقدم (Advanced Phishing Detection)
-# ============================================
-
-def fetch_page_content(url: str, timeout: int = 15) -> tuple:
-    """جلب محتوى الصفحة مع معالجة الأخطاء"""
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'ar-SA,ar;q=0.9,en-US;q=0.8',
-        }
-        
-        response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True, verify=False)
-        response.raise_for_status()
-        
-        metadata = {
-            'status_code': response.status_code,
-            'content_type': response.headers.get('content-type', ''),
-            'content_length': len(response.content),
-            'final_url': response.url,
-            'redirects': len(response.history),
-        }
-        
-        return True, response.text, metadata
-    except requests.exceptions.Timeout:
-        return False, '', {'error': 'موقع بطيء جداً - قد يكون مريب'}
-    except Exception as e:
-        return False, '', {'error': str(e)}
-
-
-def extract_phishing_indicators(html_content: str, page_url: str) -> dict:
-    """استخراج مؤشرات التصيد من محتوى الصفحة - تحليل متقدم"""
-    
-    if not _HAS_BEAUTIFULSOUP or not html_content:
-        return {'error': 'BeautifulSoup غير متوفرة أو محتوى فارغ', 'risk_score': 0}
-    
-    try:
-        soup = BeautifulSoup(html_content, 'html.parser')
-        indicators = {
-            'forms': [],
-            'suspicious_links': [],
-            'input_fields': [],
-            'scripts': [],
-            'iframes': [],
-            'images': [],
-            'warnings': [],
-            'risk_score': 0,
-        }
-        
-        # فحص النماذ
-        forms = soup.find_all('form')
-        for form in forms:
-            form_action = form.get('action', '')
-            form_method = form.get('method', 'get').lower()
-            
-            if form_action and not _is_same_domain(page_url, form_action):
-                indicators['warnings'].append(f'⚠️ نموذج يرسل البيانات إلى موقع آخر: {form_action}')
-                indicators['risk_score'] += 3
-            
-            inputs = form.find_all('input')
-            for inp in inputs:
-                inp_type = inp.get('type', '').lower()
-                inp_name = inp.get('name', '').lower()
-                
-                if inp_type == 'password':
-                    indicators['input_fields'].append('🔑 حقل كلمة مرور')
-                    indicators['risk_score'] += 1
-                elif inp_type in ['email', 'text'] and any(x in inp_name for x in ['user', 'email', 'login']):
-                    indicators['input_fields'].append('👤 حقل بيانات مستخدم')
-                    indicators['risk_score'] += 1
-            
-            indicators['forms'].append({
-                'action': form_action,
-                'method': form_method,
-                'input_count': len(inputs),
-            })
-        
-        # فحص الروابط المريبة
-        links = soup.find_all('a')
-        for link in links[:50]:  # أول 50 رابط فقط
-            href = link.get('href', '')
-            link_text = link.get_text(strip=True)[:50]
-            
-            if href and link_text and not _is_same_domain(page_url, href):
-                if not href.startswith('#') and not href.startswith('javascript'):
-                    indicators['suspicious_links'].append({
-                        'text': link_text,
-                        'href': href,
-                        'mismatch': href != link_text,
-                    })
-                    if href != link_text:
-                        indicators['risk_score'] += 2
-        
-        # فحص الـ iframes
-        iframes = soup.find_all('iframe')
-        for iframe in iframes:
-            src = iframe.get('src', '')
-            if src and not _is_same_domain(page_url, src):
-                indicators['iframes'].append(src)
-                indicators['warnings'].append(f'⚠️ iframe من موقع آخر: {src}')
-                indicators['risk_score'] += 2
-        
-        # فحص الـ scripts
-        scripts = soup.find_all('script')
-        suspicious_script_count = sum(1 for s in scripts if s.get('src') and not _is_same_domain(page_url, s.get('src', '')))
-        
-        if suspicious_script_count > 3:
-            indicators['warnings'].append(f'⚠️ {suspicious_script_count} scripts من مواقع أخرى - مريب جداً')
-            indicators['risk_score'] += 4
-        
-        indicators['scripts'] = suspicious_script_count
-        
-        # فحص النصوص المريبة
-        body = soup.find('body')
-        if body:
-            text = body.get_text().lower()
-            phishing_keywords = [
-                'تحديث', 'تأكيد', 'فوري', 'عاجل', 'تنبيه',
-                'أعد تعيين', 'كلمة سر', 'تحقق', 'متحقق',
-                'حسابك', 'حسابك في خطر', 'اضغط هنا',
-                'الآن', 'تم تعليق', 'مقفول', 'محظور',
-            ]
-            
-            found_keywords = [kw for kw in phishing_keywords if kw in text]
-            if found_keywords:
-                indicators['warnings'].append(f'⚠️ كلمات مريبة: {", ".join(found_keywords[:3])}')
-                indicators['risk_score'] += len(found_keywords)
-        
-        indicators['risk_score'] = min(10, indicators['risk_score'])
-        
-        return indicators
-        
-    except Exception as e:
-        return {'error': f'خطأ في تحليل HTML: {str(e)}', 'risk_score': 0}
-
-
-def _is_same_domain(url1: str, url2: str) -> bool:
-    """التحقق من أن URL1 و URL2 من نفس الدومين"""
-    try:
-        parsed1 = urllib.parse.urlparse(url1)
-        parsed2 = urllib.parse.urlparse(url2)
-        
-        domain1 = parsed1.netloc.replace('www.', '')
-        domain2 = parsed2.netloc.replace('www.', '')
-        
-        return domain1 == domain2
-    except:
-        return False
-
-
-def ai_analyze_page_content(page_url: str, html_content: str, indicators: dict) -> dict:
-    """تحليل AI متقدم لمحتوى الصفحة"""
-    
-    if not html_content:
-        return {'error': 'لا يوجد محتوى لتحليله'}
-    
-    try:
-        if _HAS_BEAUTIFULSOUP:
-            soup = BeautifulSoup(html_content, 'html.parser')
-            for script in soup(['script', 'style']):
-                script.decompose()
-            text = soup.get_text(separator=' ', strip=True)[:1500]
-        else:
-            text = html_content[:1500]
-        
-        prompt = f"""
-أنت محلل أمان متخصص في كشف محاولات التصيد (Phishing). 
-حلل الصفحة التالية بإيجاز:
-
-الرابط: {page_url}
-المؤشرات المكتشفة: {json.dumps(indicators, ensure_ascii=False)[:500]}
-
-محتوى الصفحة (أول 1500 حرف):
-{text[:1500]}
-
-قدم تحليل موجز:
-1. درجة الخطورة (منخفضة/متوسطة/عالية/جداً عالية)
-2. أهم المؤشرات الخطرة
-3. التوصيات الأمنية
-
-الإجابة بالعربية فقط ومختصرة.
-"""
-        
-        analysis = _call_do_ai(prompt, system_prompt="أنت خبير أمان سيبراني متخصص في كشف التصيد.", model=DO_AI_MODEL)
-        
-        return {
-            'analysis': analysis,
-            'timestamp': datetime.datetime.now().isoformat(),
-        }
-        
-    except Exception as e:
-        return {'error': f'خطأ في التحليل: {str(e)}'}
-
-
-def comprehensive_phishing_check(target_url: str, detailed: bool = True) -> dict:
-    """فحص شامل لكشف روابط التصيد مع تحليل AI"""
-    
-    start_time = time.time()
-    result = {
-        'url': target_url,
-        'timestamp': datetime.datetime.now().isoformat(),
-        'stages': {},
-        'overall_risk_level': 'unknown',
-        'overall_score': 0,
-        'recommendations': [],
-    }
-    
-    # المرحلة 1: فحص URL الأساسي
-    url_check = check_url_intelligence(target_url)
-    result['stages']['url_check'] = url_check
-    
-    if not url_check.get('success', False):
-        result['overall_risk_level'] = 'unknown'
-        result['recommendations'].append('⚠️ لم تتمكن من فحص الموقع')
-        return result
-    
-    # المرحلة 2: جلب المحتوى
-    success, html_content, metadata = fetch_page_content(target_url)
-    result['stages']['page_fetch'] = {'success': success, 'metadata': metadata}
-    
-    if not success:
-        result['overall_risk_level'] = url_check.get('threat_level', 'unknown')
-        return result
-    
-    # المرحلة 3: استخراج المؤشرات
-    indicators = extract_phishing_indicators(html_content, target_url)
-    result['stages']['indicators'] = indicators
-    
-    # المرحلة 4: تحليل AI
-    if detailed and DO_AI_ENDPOINT:
-        ai_analysis = ai_analyze_page_content(target_url, html_content, indicators)
-        result['stages']['ai_analysis'] = ai_analysis
-    
-    # حساب النتيجة النهائية
-    _calculate_final_phishing_score(result, url_check, indicators)
-    
-    result['duration_seconds'] = round(time.time() - start_time, 2)
-    
-    return result
-
-
-def _calculate_final_phishing_score(result: dict, url_check: dict, indicators: dict) -> None:
-    """حساب النتيجة النهائية والدرجة"""
-    
-    score = 0
-    
-    phishing_score = url_check.get('phishing_score', 0)
-    malware_score = url_check.get('malware_score', 0)
-    
-    score += phishing_score * 0.5
-    score += malware_score * 0.3
-    
-    if 'risk_score' in indicators:
-        score += indicators['risk_score'] * 2
-    
-    score = min(100, score)
-    
-    if score >= 80:
-        risk_level = '🔴 جداً عالية (CRITICAL)'
-    elif score >= 60:
-        risk_level = '🟠 عالية (HIGH)'
-    elif score >= 40:
-        risk_level = '🟡 متوسطة (MEDIUM)'
-    elif score >= 20:
-        risk_level = '🟢 منخفضة (LOW)'
-    else:
-        risk_level = '✅ آمن جداً (SAFE)'
-    
-    result['overall_score'] = round(score, 2)
-    result['overall_risk_level'] = risk_level
-    
-    if url_check.get('is_phishing'):
-        result['recommendations'].append('⚠️ تم الكشف عن مؤشرات تصيد')
-    
-    if url_check.get('is_malware'):
-        result['recommendations'].append('❌ تم الكشف عن برمجيات خبيثة')
-    
-    if indicators.get('warnings'):
-        result['recommendations'].extend(indicators['warnings'])
+        return {"success": False, "message": str(e), "error": str(e)}
 
 # --- فحص تسريب الإيميل وكلمة السر معاً عبر IPQualityScore API ---
 def check_leaked_emailpass(email: str, password: str) -> dict:
@@ -3468,7 +3157,6 @@ def scan_malware_url(url: str) -> dict:
         return {"success": False, "message": "فشل الاتصال بالخدمة", "error": str(e)}
 
 def scan_malware_file(file_path: str) -> dict:
-    """فحص ملف من البرمجيات الخبيثة - نسخة محسنة"""
     API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
     try:
         with open(file_path, "rb") as f:
@@ -3477,255 +3165,7 @@ def scan_malware_file(file_path: str) -> dict:
     except Exception as e:
         return {"success": False, "message": "فشل رفع الملف", "error": str(e)}
 
-
-# ============================================
-# ⭐ نظام كشف البرمجيات الخبيثة المتقدم (Advanced Malware Detection)
-# ============================================
-
-import hashlib
-import mimetypes
-
-def calculate_file_hashes(file_path: str) -> dict:
-    """حساب البصمات الرقمية للملف (MD5, SHA1, SHA256)"""
-    try:
-        hashes = {'md5': '', 'sha1': '', 'sha256': '', 'file_size': 0}
-        
-        if not os.path.exists(file_path):
-            return {'error': 'الملف غير موجود', **hashes}
-        
-        file_size = os.path.getsize(file_path)
-        hashes['file_size'] = file_size
-        
-        md5_hash = hashlib.md5()
-        sha1_hash = hashlib.sha1()
-        sha256_hash = hashlib.sha256()
-        
-        with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b''):
-                md5_hash.update(chunk)
-                sha1_hash.update(chunk)
-                sha256_hash.update(chunk)
-        
-        hashes['md5'] = md5_hash.hexdigest()
-        hashes['sha1'] = sha1_hash.hexdigest()
-        hashes['sha256'] = sha256_hash.hexdigest()
-        
-        return hashes
-    except Exception as e:
-        return {'error': str(e)}
-
-
-def extract_file_properties(file_path: str) -> dict:
-    """استخراج خصائص الملف والمؤشرات المريبة"""
-    try:
-        if not os.path.exists(file_path):
-            return {'error': 'الملف غير موجود'}
-        
-        file_name = os.path.basename(file_path)
-        file_size = os.path.getsize(file_path)
-        file_ext = os.path.splitext(file_name)[1].lower()
-        
-        properties = {
-            'file_name': file_name,
-            'file_size': file_size,
-            'file_extension': file_ext,
-            'mime_type': mimetypes.guess_type(file_path)[0] or 'unknown',
-            'is_hidden': file_name.startswith('.'),
-            'is_system': 'system32' in file_path.lower() or 'windows' in file_path.lower(),
-            'is_executable': file_ext in ['.exe', '.dll', '.scr', '.com', '.bat', '.cmd', '.ps1', '.vbs', '.js'],
-            'is_script': file_ext in ['.py', '.js', '.vbs', '.ps1', '.sh', '.bat'],
-            'is_compressed': file_ext in ['.zip', '.rar', '.7z', '.iso'],
-            'suspicious_indicators': [],
-            'risk_score': 0,
-        }
-        
-        # مؤشرات مريبة
-        if file_size == 0:
-            properties['suspicious_indicators'].append('⚠️ ملف فارغ - قد يكون مريباً')
-            properties['risk_score'] += 2
-        elif file_size > 100 * 1024 * 1024:
-            properties['suspicious_indicators'].append(f'⚠️ حجم كبير جداً: {file_size / 1024 / 1024:.1f} MB')
-            properties['risk_score'] += 1
-        
-        # أسماء مريبة
-        suspicious_names = ['virus', 'malware', 'exploit', 'ransomware', 'trojan', 'backdoor']
-        if any(name in file_name.lower() for name in suspicious_names):
-            properties['suspicious_indicators'].append('⚠️ اسم الملف يحتوي على كلمات مريبة')
-            properties['risk_score'] += 4
-        
-        if properties['is_hidden']:
-            properties['suspicious_indicators'].append('⚠️ ملف مخفي - قد يكون برمجية خبيثة')
-            properties['risk_score'] += 2
-        
-        if properties['is_executable'] and ('temp' in file_path.lower() or 'appdata' in file_path.lower()):
-            properties['suspicious_indicators'].append('⚠️ ملف قابل للتنفيذ في مجلد مريب')
-            properties['risk_score'] += 3
-        
-        properties['risk_score'] = min(10, properties['risk_score'])
-        
-        return properties
-    except Exception as e:
-        return {'error': f'خطأ في تحليل خصائص الملف: {str(e)}'}
-
-
-def analyze_file_behavior(file_path: str, file_props: dict) -> dict:
-    """تحليل السلوك المحتمل للملف"""
-    try:
-        behavior_analysis = {
-            'potential_behaviors': [],
-            'threat_categories': [],
-            'execution_risk': 'low',
-            'persistence_risk': 'low',
-        }
-        
-        if file_props.get('is_executable'):
-            behavior_analysis['potential_behaviors'].append('قد يحاول التنفيذ والحصول على امتيازات')
-            behavior_analysis['execution_risk'] = 'high'
-            behavior_analysis['threat_categories'].append('Trojan')
-        
-        if file_props.get('is_script'):
-            behavior_analysis['potential_behaviors'].append('قد يحاول تنفيذ أوامر نظام')
-            behavior_analysis['execution_risk'] = 'high'
-            behavior_analysis['threat_categories'].append('Script Malware')
-        
-        if file_props.get('is_compressed'):
-            behavior_analysis['potential_behaviors'].append('قد تحتوي على برمجيات مخفية')
-            behavior_analysis['threat_categories'].append('Packed Malware')
-        
-        if file_props.get('is_hidden'):
-            behavior_analysis['potential_behaviors'].append('سلوك مريب: محاولة الاختفاء')
-            behavior_analysis['persistence_risk'] = 'high'
-            behavior_analysis['threat_categories'].append('Rootkit')
-        
-        file_size = file_props.get('file_size', 0)
-        if 0 < file_size < 1024:
-            behavior_analysis['potential_behaviors'].append('حجم صغير جداً - قد يكون wrapper أو loader')
-            behavior_analysis['threat_categories'].append('Loader')
-        
-        return behavior_analysis
-    except Exception as e:
-        return {'error': str(e)}
-
-
-def ai_analyze_malware(file_path: str, file_props: dict, ipqs_result: dict, behavior: dict) -> dict:
-    """تحليل AI متقدم لخطر البرمجية الخبيثة"""
-    try:
-        file_name = os.path.basename(file_path)
-        
-        prompt = f"""
-أنت محلل أمان متخصص في كشف البرمجيات الخبيثة.
-
-الملف: {file_name}
-الامتداد: {file_props.get('file_extension', 'unknown')}
-الحجم: {file_props.get('file_size', 0)} بايت
-المؤشرات: {', '.join(file_props.get('suspicious_indicators', [])[:2]) if file_props.get('suspicious_indicators') else 'لا توجد'}
-
-درجة الفيروسات: {ipqs_result.get('malware_score', 0)}/100
-السلوك: {', '.join(behavior.get('threat_categories', []))}
-
-قدم تحليل موجز يتضمن:
-1. درجة الخطورة (منخفضة/متوسطة/عالية/جداً عالية)
-2. نوع البرمجية المحتمل
-3. الإجراءات المقترحة
-
-الإجابة بالعربية فقط ومختصرة.
-"""
-        
-        analysis = _call_do_ai(prompt, system_prompt="أنت خبير أمان سيبراني متخصص في البرمجيات الخبيثة.", model=DO_AI_MODEL)
-        
-        return {
-            'analysis': analysis,
-            'timestamp': datetime.datetime.now().isoformat(),
-        }
-    except Exception as e:
-        return {'error': f'خطأ في التحليل: {str(e)}'}
-
-
-def comprehensive_malware_check(file_path: str, detailed: bool = True) -> dict:
-    """فحص شامل للبرمجيات الخبيثة مع تحليل AI"""
-    
-    start_time = time.time()
-    result = {
-        'file_path': file_path,
-        'file_name': os.path.basename(file_path),
-        'timestamp': datetime.datetime.now().isoformat(),
-        'stages': {},
-        'overall_risk_level': 'unknown',
-        'overall_score': 0,
-        'recommendations': [],
-    }
-    
-    # المرحلة 1: استخراج الخصائص
-    file_props = extract_file_properties(file_path)
-    result['stages']['file_properties'] = file_props
-    
-    if 'error' in file_props:
-        result['overall_risk_level'] = 'unknown'
-        result['recommendations'].append('❌ لا يمكن الوصول للملف')
-        return result
-    
-    # المرحلة 2: فحص IPQualityScore
-    ipqs_result = scan_malware_file(file_path)
-    result['stages']['ipqs_scan'] = ipqs_result
-    
-    # المرحلة 3: تحليل السلوك
-    behavior = analyze_file_behavior(file_path, file_props)
-    result['stages']['behavior_analysis'] = behavior
-    
-    # المرحلة 4: تحليل AI
-    if detailed and DO_AI_ENDPOINT:
-        ai_analysis = ai_analyze_malware(file_path, file_props, ipqs_result, behavior)
-        result['stages']['ai_analysis'] = ai_analysis
-    
-    # حساب النتيجة النهائية
-    _calculate_final_malware_score(result, file_props, ipqs_result, behavior)
-    
-    result['duration_seconds'] = round(time.time() - start_time, 2)
-    
-    return result
-
-
-def _calculate_final_malware_score(result: dict, file_props: dict, ipqs_result: dict, behavior: dict) -> None:
-    """حساب النتيجة النهائية والدرجة"""
-    
-    score = 0
-    
-    malware_score = ipqs_result.get('malware_score', 0)
-    score += malware_score * 0.5
-    
-    file_risk = file_props.get('risk_score', 0)
-    score += file_risk * 3
-    
-    behavior_risk = len(behavior.get('threat_categories', [])) * 8
-    score += behavior_risk
-    
-    score = min(100, score)
-    
-    if score >= 80:
-        risk_level = '🔴 جداً عالية (CRITICAL)'
-    elif score >= 60:
-        risk_level = '🟠 عالية (HIGH)'
-    elif score >= 40:
-        risk_level = '🟡 متوسطة (MEDIUM)'
-    elif score >= 20:
-        risk_level = '🟢 منخفضة (LOW)'
-    else:
-        risk_level = '✅ آمن جداً (SAFE)'
-    
-    result['overall_score'] = round(score, 2)
-    result['overall_risk_level'] = risk_level
-    
-    if ipqs_result.get('is_malware'):
-        result['recommendations'].append('❌ تم الكشف عن برمجية خبيثة')
-    
-    if file_props.get('suspicious_indicators'):
-        result['recommendations'].extend(file_props['suspicious_indicators'][:3])
-    
-    if behavior.get('threat_categories'):
-        result['recommendations'].append(f"⚠️ نوع التهديد المحتمل: {', '.join(behavior['threat_categories'])}")
-
-
-
+def create_social_defense_scenario(scenario_type: str) -> dict:
     scenarios = {
         'phishing_email': {
             'title': 'Credential Reset Trap',
@@ -12235,31 +11675,35 @@ HTML_TEMPLATE = """
             
             let html = `<div class="space-y-6">`;
             
-            // Header with basic info
+            // Header with Email Lookup title and search bar
             html += `
                 <div class="rounded-lg border border-slate-700/50 bg-gradient-to-r from-slate-900/80 to-slate-800/60 p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="mb-4">
+                        <h2 class="text-2xl font-bold text-slate-100">Email Lookup</h2>
+                    </div>
+                    <div class="rounded-lg bg-black/40 border border-slate-700/50 p-4 mb-4">
+                        <p class="text-base font-mono text-emerald-300">${_osintEscape(email)}</p>
+                    </div>
+                    <div class="grid grid-cols-5 gap-3 text-sm">
                         <div>
-                            <h3 class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">Email Address</h3>
-                            <p class="text-lg font-mono text-emerald-300">${_osintEscape(email)}</p>
+                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">EMAIL</div>
+                            <p class="text-slate-200 text-xs">${_osintEscape(email)}</p>
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <h4 class="text-xs text-gray-500 font-bold mb-1">First Seen</h4>
-                                <p class="text-sm text-cyan-300">${_osintEscape(firstSeen)}</p>
-                            </div>
-                            <div>
-                                <h4 class="text-xs text-gray-500 font-bold mb-1">Last Seen</h4>
-                                <p class="text-sm text-cyan-300">${_osintEscape(lastSeen)}</p>
-                            </div>
-                            <div>
-                                <h4 class="text-xs text-gray-500 font-bold mb-1">Can Receive Email</h4>
-                                <p class="text-sm ${canReceiveEmail === 'Yes' ? 'text-emerald-300' : 'text-rose-300'}">${canReceiveEmail}</p>
-                            </div>
-                            <div>
-                                <h4 class="text-xs text-gray-500 font-bold mb-1">Email Provider</h4>
-                                <p class="text-sm text-indigo-300">${_osintEscape(emailProvider)}</p>
-                            </div>
+                        <div>
+                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">FIRST SEEN</div>
+                            <p class="text-slate-200 text-xs">${_osintEscape(firstSeen)}</p>
+                        </div>
+                        <div>
+                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">LAST SEEN</div>
+                            <p class="text-slate-200 text-xs">${_osintEscape(lastSeen)}</p>
+                        </div>
+                        <div>
+                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">CAN RECEIVE EMAIL</div>
+                            <p class="text-slate-200 text-xs">${canReceiveEmail}</p>
+                        </div>
+                        <div>
+                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">EMAIL PROVIDER</div>
+                            <p class="text-slate-200 text-xs">${_osintEscape(emailProvider)}</p>
                         </div>
                     </div>
                 </div>`;
@@ -12321,75 +11765,15 @@ HTML_TEMPLATE = """
             html += `
                 <div class="mb-4">
                     <h3 class="text-xl font-bold text-slate-100">Summary</h3>
-                </div>
-                <div class="grid grid-cols-1 xl:grid-cols-[3fr_1fr] gap-4">
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3">Profile Pictures</div>
-                        <div class="flex flex-wrap gap-3">${profilePics.length > 0 ? profilePics.map((pic) => `<img src="${_osintEscape(pic.src)}" alt="${_osintEscape(pic.alt)}" class="h-12 w-12 rounded-lg border border-slate-700/50 object-cover">`).join('') : '<span class="text-sm text-slate-500">No profile pictures available</span>'}</div>
-                    </div>
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3">Profile Links</div>
-                        <div class="space-y-2">${profileLinks.length > 0 ? profileLinks.map((item) => `<div class="text-sm text-slate-200"><a href="${_osintEscape(item.url)}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline">${_osintEscape(item.platform)}</a></div>`).join('') : '<div class="text-sm text-slate-500">No profile links found</div>'}</div>
-                    </div>
-                </div>
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-200">Activity Timeline</h3>
-                            <div class="text-xs text-slate-500">Latest activities and breach events</div>
-                        </div>
-                        <button type="button" class="rounded-full border border-slate-700/50 bg-slate-800/70 px-3 py-1 text-[11px] text-slate-200">View timeline</button>
-                    </div>
-                    <div class="space-y-2">${timelineEvents.length > 0 ? timelineEvents.map((event) => `<div class="rounded-lg border border-slate-700/50 bg-black/20 p-3 text-sm text-slate-200"><div class="font-semibold text-slate-100">${_osintEscape(event.date)}</div><div class="text-xs text-slate-400">${_osintEscape(event.title)}${event.note ? ` · ${_osintEscape(event.note)}` : ''}</div></div>`).join('') : '<div class="text-sm text-slate-500">No timeline events available</div>'}</div>
-                </div>
-                <div class="grid grid-cols-1 xl:grid-cols-[3fr_1fr] gap-4 mt-4">
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <h3 class="text-sm font-bold text-slate-200 mb-3">Registrations</h3>
-                        <div class="flex flex-wrap gap-2">${Object.keys(accounts).length > 0 ? Object.keys(accounts).map((platform) => `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`).join('') : '<span class="text-sm text-slate-500">No registrations found</span>'}</div>
-                    </div>
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <h3 class="text-sm font-bold text-slate-200 mb-2">Additional Registrations (${stealerLogs.length})</h3>
-                        <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
-                        ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
-                    </div>
                 </div>`;
 
+            // Summary section with profile cards organized in a 2x2 grid
             html += `
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-emerald-400">${namesCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Names Found</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-cyan-400">${usernamesCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Usernames</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-blue-400">${locationsCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Locations</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-pink-400">${commentsCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Comments</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-purple-400">${registrationsCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Registrations</div>
-                    </div>
-                </div>`;
-
-            html += `
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                    <h3 class="text-sm font-bold text-slate-300 mb-3">📱 Registrations</h3>
-                    <div class="flex flex-wrap gap-2">${Object.keys(accounts).length > 0 ? Object.keys(accounts).map((platform) => `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`).join('') : '<span class="text-sm text-slate-500">No registrations found</span>'}</div>
-                </div>
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
-                    <h3 class="text-sm font-bold text-slate-300 mb-2">Additional Registrations (${stealerLogs.length})</h3>
-                    <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
-                    ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
-                </div>`;
-
-            // Names Found section
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Names Found -->
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">👤 Names Found</div>
+                        <div class="space-y-2">`;
             const names = [];
             Object.keys(accounts).forEach(platform => {
                 const acc = accounts[platform];
@@ -12397,19 +11781,21 @@ HTML_TEMPLATE = """
                     names.push({ name: acc.full_name, platform });
                 }
             });
-            
             if (names.length > 0) {
-                html += `
-                    <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/15 p-4">
-                        <h3 class="text-sm font-bold text-emerald-300 mb-3">👤 Names Found</h3>
-                        <div class="space-y-2">`;
                 names.forEach(item => {
-                    html += `<div class="flex justify-between items-center text-sm text-emerald-200"><span>${_osintEscape(item.name)}</span><span class="text-xs text-emerald-500">${_osintEscape(item.platform)}</span></div>`;
+                    html += `<div class="text-sm text-slate-200"><span>${_osintEscape(item.name)}</span><span class="text-xs text-slate-500 ml-2">${_osintEscape(item.platform)}</span></div>`;
                 });
-                html += '</div></div>';
+            } else {
+                html += `<div class="text-sm text-slate-500">No names found</div>`;
             }
+            html += `
+                        </div>
+                    </div>
 
-            // Usernames section
+                    <!-- Usernames -->
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">👥 Usernames</div>
+                        <div class="space-y-2">`;
             const usernames = [];
             Object.keys(accounts).forEach(platform => {
                 const acc = accounts[platform];
@@ -12417,49 +11803,104 @@ HTML_TEMPLATE = """
                     usernames.push({ username: acc.username, platform });
                 }
             });
-            
             if (usernames.length > 0) {
-                html += `
-                    <div class="rounded-lg border border-cyan-900/40 bg-cyan-950/15 p-4">
-                        <h3 class="text-sm font-bold text-cyan-300 mb-3">👥 Usernames</h3>
-                        <div class="space-y-2">`;
                 usernames.forEach(item => {
-                    html += `<div class="flex justify-between items-center text-sm text-cyan-200"><span class="font-mono">${_osintEscape(item.username)}</span><span class="text-xs text-cyan-500">${_osintEscape(item.platform)}</span></div>`;
+                    html += `<div class="text-sm text-slate-200"><span class="font-mono">${_osintEscape(item.username)}</span><span class="text-xs text-slate-500 ml-2">${_osintEscape(item.platform)}</span></div>`;
                 });
-                html += '</div></div>';
+            } else {
+                html += `<div class="text-sm text-slate-500">No usernames found</div>`;
             }
+            html += `
+                        </div>
+                    </div>
 
-            if (locationItems.length > 0) {
-                html += `
-                    <div class="rounded-lg border border-sky-900/40 bg-sky-950/15 p-4">
-                        <h3 class="text-sm font-bold text-sky-300 mb-3">📍 Locations</h3>
+                    <!-- Phone Numbers -->
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">📱 Phone Numbers</div>
                         <div class="space-y-2">`;
+            const phoneNumbers = [];
+            Object.keys(accounts).forEach(platform => {
+                const acc = accounts[platform];
+                if (acc.phone || acc.phone_number || acc.mobile) {
+                    phoneNumbers.push({ phone: acc.phone || acc.phone_number || acc.mobile, platform });
+                }
+            });
+            if (phoneNumbers.length > 0) {
+                phoneNumbers.forEach(item => {
+                    html += `<div class="text-sm text-slate-200"><span class="font-mono">${_osintEscape(item.phone)}</span></div>`;
+                });
+            } else {
+                html += `<div class="text-sm text-slate-500">No phone numbers found</div>`;
+            }
+            html += `
+                        </div>
+                    </div>
+
+                    <!-- Locations -->
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">📍 Locations</div>
+                        <div class="space-y-2">`;
+            if (locationItems.length > 0) {
                 locationItems.forEach(item => {
-                    html += `<div class="flex justify-between items-center text-sm text-sky-200"><span>${_osintEscape(item.platform)}</span><span class="text-xs text-sky-500">${_osintEscape(item.location)}</span></div>`;
+                    html += `<div class="text-sm text-slate-200"><span class="text-xs text-slate-500">${_osintEscape(item.platform)}</span><div>${_osintEscape(item.location)}</div></div>`;
                 });
-                html += '</div></div>';
+            } else {
+                html += `<div class="text-sm text-slate-500">No locations found</div>`;
             }
+            html += `
+                        </div>
+                    </div>
+                </div>`;
 
-            if (comments.length > 0) {
-                html += `
-                    <div class="rounded-lg border border-violet-900/40 bg-violet-950/15 p-4">
-                        <h3 class="text-sm font-bold text-violet-300 mb-3">💬 Comments</h3>
-                        <div class="space-y-3">`;
-                comments.forEach((comment, idx) => {
-                    const safeAuthor = _osintEscape(comment.author || comment.reviewer || 'Unknown');
-                    const safeText = _osintEscape(comment.text || comment.comment || comment.review || 'No comment text');
-                    const safeDate = _osintEscape(comment.date || comment.created_at || comment.time || 'Unknown');
-                    html += `<div class="rounded border border-violet-800/30 bg-violet-900/20 p-3 text-sm text-violet-200">
-                                <div class="font-semibold text-violet-100">${idx + 1}. ${safeAuthor}</div>
-                                <div class="text-xs text-violet-400 mb-2">${safeDate}</div>
-                                <div>${safeText}</div>
-                            </div>`;
+            // Profile Pictures and Links
+            html += `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Profile Pictures -->
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">Profile Pictures</div>
+                        <div class="flex flex-wrap gap-3">${profilePics.length > 0 ? profilePics.map((pic) => `<img src="${_osintEscape(pic.src)}" alt="${_osintEscape(pic.alt)}" class="h-16 w-16 rounded-lg border border-slate-700/50 object-cover">`).join('') : '<span class="text-sm text-slate-500">No profile pictures available</span>'}</div>
+                    </div>
+                    <!-- Profile Links -->
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">Profile Links</div>
+                        <div class="space-y-2">${profileLinks.length > 0 ? profileLinks.map((item) => `<div class="text-sm text-slate-200"><a href="${_osintEscape(item.url)}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline">${_osintEscape(item.platform)}</a></div>`).join('') : '<div class="text-sm text-slate-500">No profile links found</div>'}</div>
+                    </div>
+                </div>`;
+
+            // Activity Timeline
+            html += `
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                    <h3 class="text-sm font-bold text-slate-200 mb-3">Activity Timeline</h3>
+                    <div class="space-y-2">
+                        ${timelineEvents.length > 0 ? timelineEvents.map((event) => `
+                            <div class="rounded-lg border border-slate-700/50 bg-black/20 p-3 text-sm text-slate-200">
+                                <div class="font-semibold text-slate-100">${_osintEscape(event.date)} · ${_osintEscape(event.title)}</div>
+                                ${event.note ? `<div class="text-xs text-slate-500 mt-1">${_osintEscape(event.note)}</div>` : ''}
+                            </div>
+                        `).join('') : '<div class="text-sm text-slate-500">No timeline events available</div>'}
+                    </div>
+                </div>`;
+
+            // Registrations section
+            html += `
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                    <h3 class="text-sm font-bold text-slate-300 mb-3">Registrations</h3>
+                    <div class="flex flex-wrap gap-2">`;
+            if (Object.keys(accounts).length > 0) {
+                Object.keys(accounts).forEach(platform => {
+                    html += `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`;
                 });
-                html += '</div></div>';
+            } else {
+                html += `<span class="text-sm text-slate-500">No registrations found</span>`;
             }
-
-            // Data Breaches section
-            if (breachCountDisplay > 0) {
+            html += `
+                    </div>
+                </div>
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                    <h3 class="text-sm font-bold text-slate-300 mb-2">Additional Registrations (${stealerLogs.length})</h3>
+                    <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
+                    ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
+                </div>`;
                 const breachSectionId = `osintBreachDetails_${Math.random().toString(36).slice(2)}`;
                 const breachSourceList = Array.from(new Set(breaches.map((breach) => {
                     const source = breach.source || breach.Source || {};
@@ -17008,53 +16449,11 @@ def scan_phone_route():
 
 @app.route('/api/scan/url', methods=['POST'])
 def scan_url_route():
-    """فحص URL شامل مع تحليل AI"""
     data = request.json or {}
     url = data.get('url', '')
-    detailed = data.get('detailed', True)
-    
-    if not url:
-        return jsonify({"success": False, "message": "الرجاء توفير URL"}), 400
-    
-    try:
-        # استخدام الفحص الشامل الجديد
-        result = comprehensive_phishing_check(url, detailed=detailed)
-        add_audit_log("فحص تصيد متقدم", f"تم فحص: {url[:50]}")
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"خطأ في الفحص: {str(e)}",
-            "error": str(e)
-        }), 500
-
-@app.route('/api/scan/phishing-advanced', methods=['POST'])
-def scan_phishing_advanced_route():
-    """
-    فحص التصيد الشامل المتقدم
-    يتضمن:
-    - فحص URL الأساسي
-    - جلب محتوى الصفحة
-    - استخراج مؤشرات التصيد
-    - تحليل AI للمحتوى
-    """
-    data = request.json or {}
-    url = data.get('url', '')
-    detailed = data.get('detailed', True)
-    
-    if not url:
-        return jsonify({"success": False, "message": "الرجاء توفير URL"}), 400
-    
-    try:
-        result = comprehensive_phishing_check(url, detailed=detailed)
-        add_audit_log("فحص التصيد المتقدم", f"تم الفحص الشامل: {url[:50]}")
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"خطأ في الفحص: {str(e)}",
-            "error": str(e)
-        }), 500
+    res = check_url_intelligence(url)
+    add_audit_log("فحص رابط مشبوه (IPQualityScore)", f"تم فحص الموثوقية: {url[:30]}...")
+    return jsonify(res)
 
 @app.route('/api/scan/malware_url', methods=['POST'])
 def scan_malware_url_route():
@@ -17084,44 +16483,6 @@ def scan_malware_file_route():
             os.remove(temp_path)
             
     return jsonify(res)
-
-@app.route('/api/scan/malware-advanced', methods=['POST'])
-def scan_malware_advanced_route():
-    """
-    فحص البرمجيات الخبيثة الشامل المتقدم
-    يتضمن:
-    - فحص IPQualityScore
-    - تحليل خصائص الملف
-    - تحليل السلوك المحتمل
-    - تحليل AI للملف
-    """
-    if 'file' not in request.files:
-        return jsonify({"success": False, "message": "لم يتم تقديم أي ملف"}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"success": False, "message": "لم يتم اختيار ملف"}), 400
-    
-    filename = file.filename or 'uploaded.bin'
-    temp_path = os.path.join(tempfile.gettempdir(), secure_filename(filename))
-    
-    try:
-        file.save(temp_path)
-        detailed = request.form.get('detailed', 'true').lower() == 'true'
-        
-        result = comprehensive_malware_check(temp_path, detailed=detailed)
-        add_audit_log("فحص البرمجيات الخبيثة المتقدم", f"الملف: {filename}")
-        
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"خطأ في الفحص: {str(e)}",
-            "error": str(e)
-        }), 500
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
 
 @app.route('/api/scan/emailpass_leak', methods=['POST'])
 def scan_emailpass_leak_route():
