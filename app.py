@@ -11675,35 +11675,31 @@ HTML_TEMPLATE = """
             
             let html = `<div class="space-y-6">`;
             
-            // Header with Email Lookup title and search bar
+            // Header with basic info
             html += `
                 <div class="rounded-lg border border-slate-700/50 bg-gradient-to-r from-slate-900/80 to-slate-800/60 p-6">
-                    <div class="mb-4">
-                        <h2 class="text-2xl font-bold text-slate-100">Email Lookup</h2>
-                    </div>
-                    <div class="rounded-lg bg-black/40 border border-slate-700/50 p-4 mb-4">
-                        <p class="text-base font-mono text-emerald-300">${_osintEscape(email)}</p>
-                    </div>
-                    <div class="grid grid-cols-5 gap-3 text-sm">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">EMAIL</div>
-                            <p class="text-slate-200 text-xs">${_osintEscape(email)}</p>
+                            <h3 class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">Email Address</h3>
+                            <p class="text-lg font-mono text-emerald-300">${_osintEscape(email)}</p>
                         </div>
-                        <div>
-                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">FIRST SEEN</div>
-                            <p class="text-slate-200 text-xs">${_osintEscape(firstSeen)}</p>
-                        </div>
-                        <div>
-                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">LAST SEEN</div>
-                            <p class="text-slate-200 text-xs">${_osintEscape(lastSeen)}</p>
-                        </div>
-                        <div>
-                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">CAN RECEIVE EMAIL</div>
-                            <p class="text-slate-200 text-xs">${canReceiveEmail}</p>
-                        </div>
-                        <div>
-                            <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">EMAIL PROVIDER</div>
-                            <p class="text-slate-200 text-xs">${_osintEscape(emailProvider)}</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <h4 class="text-xs text-gray-500 font-bold mb-1">First Seen</h4>
+                                <p class="text-sm text-cyan-300">${_osintEscape(firstSeen)}</p>
+                            </div>
+                            <div>
+                                <h4 class="text-xs text-gray-500 font-bold mb-1">Last Seen</h4>
+                                <p class="text-sm text-cyan-300">${_osintEscape(lastSeen)}</p>
+                            </div>
+                            <div>
+                                <h4 class="text-xs text-gray-500 font-bold mb-1">Can Receive Email</h4>
+                                <p class="text-sm ${canReceiveEmail === 'Yes' ? 'text-emerald-300' : 'text-rose-300'}">${canReceiveEmail}</p>
+                            </div>
+                            <div>
+                                <h4 class="text-xs text-gray-500 font-bold mb-1">Email Provider</h4>
+                                <p class="text-sm text-indigo-300">${_osintEscape(emailProvider)}</p>
+                            </div>
                         </div>
                     </div>
                 </div>`;
@@ -11765,15 +11761,75 @@ HTML_TEMPLATE = """
             html += `
                 <div class="mb-4">
                     <h3 class="text-xl font-bold text-slate-100">Summary</h3>
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-[3fr_1fr] gap-4">
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3">Profile Pictures</div>
+                        <div class="flex flex-wrap gap-3">${profilePics.length > 0 ? profilePics.map((pic) => `<img src="${_osintEscape(pic.src)}" alt="${_osintEscape(pic.alt)}" class="h-12 w-12 rounded-lg border border-slate-700/50 object-cover">`).join('') : '<span class="text-sm text-slate-500">No profile pictures available</span>'}</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3">Profile Links</div>
+                        <div class="space-y-2">${profileLinks.length > 0 ? profileLinks.map((item) => `<div class="text-sm text-slate-200"><a href="${_osintEscape(item.url)}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline">${_osintEscape(item.platform)}</a></div>`).join('') : '<div class="text-sm text-slate-500">No profile links found</div>'}</div>
+                    </div>
+                </div>
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-200">Activity Timeline</h3>
+                            <div class="text-xs text-slate-500">Latest activities and breach events</div>
+                        </div>
+                        <button type="button" class="rounded-full border border-slate-700/50 bg-slate-800/70 px-3 py-1 text-[11px] text-slate-200">View timeline</button>
+                    </div>
+                    <div class="space-y-2">${timelineEvents.length > 0 ? timelineEvents.map((event) => `<div class="rounded-lg border border-slate-700/50 bg-black/20 p-3 text-sm text-slate-200"><div class="font-semibold text-slate-100">${_osintEscape(event.date)}</div><div class="text-xs text-slate-400">${_osintEscape(event.title)}${event.note ? ` · ${_osintEscape(event.note)}` : ''}</div></div>`).join('') : '<div class="text-sm text-slate-500">No timeline events available</div>'}</div>
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-[3fr_1fr] gap-4 mt-4">
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <h3 class="text-sm font-bold text-slate-200 mb-3">Registrations</h3>
+                        <div class="flex flex-wrap gap-2">${Object.keys(accounts).length > 0 ? Object.keys(accounts).map((platform) => `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`).join('') : '<span class="text-sm text-slate-500">No registrations found</span>'}</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                        <h3 class="text-sm font-bold text-slate-200 mb-2">Additional Registrations (${stealerLogs.length})</h3>
+                        <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
+                        ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
+                    </div>
                 </div>`;
 
-            // Summary section with profile cards organized in a 2x2 grid
             html += `
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <!-- Names Found -->
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">👤 Names Found</div>
-                        <div class="space-y-2">`;
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-emerald-400">${namesCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Names Found</div>
+                    </div>
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-cyan-400">${usernamesCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Usernames</div>
+                    </div>
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-blue-400">${locationsCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Locations</div>
+                    </div>
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-pink-400">${commentsCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Comments</div>
+                    </div>
+                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
+                        <div class="text-2xl font-bold text-purple-400">${registrationsCount}</div>
+                        <div class="text-xs text-gray-400 mt-1">Registrations</div>
+                    </div>
+                </div>`;
+
+            html += `
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                    <h3 class="text-sm font-bold text-slate-300 mb-3">📱 Registrations</h3>
+                    <div class="flex flex-wrap gap-2">${Object.keys(accounts).length > 0 ? Object.keys(accounts).map((platform) => `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`).join('') : '<span class="text-sm text-slate-500">No registrations found</span>'}</div>
+                </div>
+                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
+                    <h3 class="text-sm font-bold text-slate-300 mb-2">Additional Registrations (${stealerLogs.length})</h3>
+                    <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
+                    ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
+                </div>`;
+
+            // Names Found section
             const names = [];
             Object.keys(accounts).forEach(platform => {
                 const acc = accounts[platform];
@@ -11781,21 +11837,19 @@ HTML_TEMPLATE = """
                     names.push({ name: acc.full_name, platform });
                 }
             });
+            
             if (names.length > 0) {
-                names.forEach(item => {
-                    html += `<div class="text-sm text-slate-200"><span>${_osintEscape(item.name)}</span><span class="text-xs text-slate-500 ml-2">${_osintEscape(item.platform)}</span></div>`;
-                });
-            } else {
-                html += `<div class="text-sm text-slate-500">No names found</div>`;
-            }
-            html += `
-                        </div>
-                    </div>
-
-                    <!-- Usernames -->
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">👥 Usernames</div>
+                html += `
+                    <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/15 p-4">
+                        <h3 class="text-sm font-bold text-emerald-300 mb-3">👤 Names Found</h3>
                         <div class="space-y-2">`;
+                names.forEach(item => {
+                    html += `<div class="flex justify-between items-center text-sm text-emerald-200"><span>${_osintEscape(item.name)}</span><span class="text-xs text-emerald-500">${_osintEscape(item.platform)}</span></div>`;
+                });
+                html += '</div></div>';
+            }
+
+            // Usernames section
             const usernames = [];
             Object.keys(accounts).forEach(platform => {
                 const acc = accounts[platform];
@@ -11803,104 +11857,49 @@ HTML_TEMPLATE = """
                     usernames.push({ username: acc.username, platform });
                 }
             });
+            
             if (usernames.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-cyan-900/40 bg-cyan-950/15 p-4">
+                        <h3 class="text-sm font-bold text-cyan-300 mb-3">👥 Usernames</h3>
+                        <div class="space-y-2">`;
                 usernames.forEach(item => {
-                    html += `<div class="text-sm text-slate-200"><span class="font-mono">${_osintEscape(item.username)}</span><span class="text-xs text-slate-500 ml-2">${_osintEscape(item.platform)}</span></div>`;
+                    html += `<div class="flex justify-between items-center text-sm text-cyan-200"><span class="font-mono">${_osintEscape(item.username)}</span><span class="text-xs text-cyan-500">${_osintEscape(item.platform)}</span></div>`;
                 });
-            } else {
-                html += `<div class="text-sm text-slate-500">No usernames found</div>`;
+                html += '</div></div>';
             }
-            html += `
-                        </div>
-                    </div>
 
-                    <!-- Phone Numbers -->
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">📱 Phone Numbers</div>
-                        <div class="space-y-2">`;
-            const phoneNumbers = [];
-            Object.keys(accounts).forEach(platform => {
-                const acc = accounts[platform];
-                if (acc.phone || acc.phone_number || acc.mobile) {
-                    phoneNumbers.push({ phone: acc.phone || acc.phone_number || acc.mobile, platform });
-                }
-            });
-            if (phoneNumbers.length > 0) {
-                phoneNumbers.forEach(item => {
-                    html += `<div class="text-sm text-slate-200"><span class="font-mono">${_osintEscape(item.phone)}</span></div>`;
-                });
-            } else {
-                html += `<div class="text-sm text-slate-500">No phone numbers found</div>`;
-            }
-            html += `
-                        </div>
-                    </div>
-
-                    <!-- Locations -->
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">📍 Locations</div>
-                        <div class="space-y-2">`;
             if (locationItems.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-sky-900/40 bg-sky-950/15 p-4">
+                        <h3 class="text-sm font-bold text-sky-300 mb-3">📍 Locations</h3>
+                        <div class="space-y-2">`;
                 locationItems.forEach(item => {
-                    html += `<div class="text-sm text-slate-200"><span class="text-xs text-slate-500">${_osintEscape(item.platform)}</span><div>${_osintEscape(item.location)}</div></div>`;
+                    html += `<div class="flex justify-between items-center text-sm text-sky-200"><span>${_osintEscape(item.platform)}</span><span class="text-xs text-sky-500">${_osintEscape(item.location)}</span></div>`;
                 });
-            } else {
-                html += `<div class="text-sm text-slate-500">No locations found</div>`;
+                html += '</div></div>';
             }
-            html += `
-                        </div>
-                    </div>
-                </div>`;
 
-            // Profile Pictures and Links
-            html += `
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <!-- Profile Pictures -->
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">Profile Pictures</div>
-                        <div class="flex flex-wrap gap-3">${profilePics.length > 0 ? profilePics.map((pic) => `<img src="${_osintEscape(pic.src)}" alt="${_osintEscape(pic.alt)}" class="h-16 w-16 rounded-lg border border-slate-700/50 object-cover">`).join('') : '<span class="text-sm text-slate-500">No profile pictures available</span>'}</div>
-                    </div>
-                    <!-- Profile Links -->
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">Profile Links</div>
-                        <div class="space-y-2">${profileLinks.length > 0 ? profileLinks.map((item) => `<div class="text-sm text-slate-200"><a href="${_osintEscape(item.url)}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline">${_osintEscape(item.platform)}</a></div>`).join('') : '<div class="text-sm text-slate-500">No profile links found</div>'}</div>
-                    </div>
-                </div>`;
-
-            // Activity Timeline
-            html += `
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                    <h3 class="text-sm font-bold text-slate-200 mb-3">Activity Timeline</h3>
-                    <div class="space-y-2">
-                        ${timelineEvents.length > 0 ? timelineEvents.map((event) => `
-                            <div class="rounded-lg border border-slate-700/50 bg-black/20 p-3 text-sm text-slate-200">
-                                <div class="font-semibold text-slate-100">${_osintEscape(event.date)} · ${_osintEscape(event.title)}</div>
-                                ${event.note ? `<div class="text-xs text-slate-500 mt-1">${_osintEscape(event.note)}</div>` : ''}
-                            </div>
-                        `).join('') : '<div class="text-sm text-slate-500">No timeline events available</div>'}
-                    </div>
-                </div>`;
-
-            // Registrations section
-            html += `
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                    <h3 class="text-sm font-bold text-slate-300 mb-3">Registrations</h3>
-                    <div class="flex flex-wrap gap-2">`;
-            if (Object.keys(accounts).length > 0) {
-                Object.keys(accounts).forEach(platform => {
-                    html += `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`;
+            if (comments.length > 0) {
+                html += `
+                    <div class="rounded-lg border border-violet-900/40 bg-violet-950/15 p-4">
+                        <h3 class="text-sm font-bold text-violet-300 mb-3">💬 Comments</h3>
+                        <div class="space-y-3">`;
+                comments.forEach((comment, idx) => {
+                    const safeAuthor = _osintEscape(comment.author || comment.reviewer || 'Unknown');
+                    const safeText = _osintEscape(comment.text || comment.comment || comment.review || 'No comment text');
+                    const safeDate = _osintEscape(comment.date || comment.created_at || comment.time || 'Unknown');
+                    html += `<div class="rounded border border-violet-800/30 bg-violet-900/20 p-3 text-sm text-violet-200">
+                                <div class="font-semibold text-violet-100">${idx + 1}. ${safeAuthor}</div>
+                                <div class="text-xs text-violet-400 mb-2">${safeDate}</div>
+                                <div>${safeText}</div>
+                            </div>`;
                 });
-            } else {
-                html += `<span class="text-sm text-slate-500">No registrations found</span>`;
+                html += '</div></div>';
             }
-            html += `
-                    </div>
-                </div>
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                    <h3 class="text-sm font-bold text-slate-300 mb-2">Additional Registrations (${stealerLogs.length})</h3>
-                    <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
-                    ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
-                </div>`;
+
+            // Data Breaches section
+            if (breachCountDisplay > 0) {
                 const breachSectionId = `osintBreachDetails_${Math.random().toString(36).slice(2)}`;
                 const breachSourceList = Array.from(new Set(breaches.map((breach) => {
                     const source = breach.source || breach.Source || {};
