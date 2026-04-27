@@ -46,6 +46,13 @@ import json as _json
 import html
 
 try:
+    from bs4 import BeautifulSoup  # type: ignore
+    _HAS_BEAUTIFULSOUP = True
+except Exception:
+    _HAS_BEAUTIFULSOUP = False
+    BeautifulSoup = None  # type: ignore
+
+try:
     from reportlab.pdfgen import canvas  # type: ignore
     from reportlab.lib.pagesizes import A4  # type: ignore
     from reportlab.pdfbase import pdfmetrics  # type: ignore
@@ -2791,17 +2798,321 @@ def check_phone_intelligence(phone: str) -> dict:
 
 # --- فحص الروابط المشبوهة عبر IPQualityScore API ---
 def check_url_intelligence(target_url: str) -> dict:
-    API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
-    url_clean = urllib.parse.quote(target_url.strip(), safe='')
-    url = f'https://www.ipqualityscore.com/api/json/url/{API_KEY}/{url_clean}'
-    params = {'fast': 'true', 'strictness': 0}
-        
+    """فحص URL من خلال IPQualityScore API - نسخة محسنة"""
     try:
+        url_clean = urllib.parse.quote(target_url.strip(), safe='')
+        url = f'https://www.ipqualityscore.com/api/json/url/{url_clean}'
+        params = {
+            'api_key': '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4',
+            'fast': 'true',
+            'strictness': 1
+        }
         response = requests.get(url, params=params, timeout=10)
         data = response.json()
-        return data
+        
+        # تحسين البيانات المرجعة
+        return {
+            'success': data.get('success', False),
+            'threat_level': data.get('threat_level', 'unknown'),
+            'phishing_score': data.get('phishing_score', 0),
+            'malware_score': data.get('malware_score', 0),
+            'is_phishing': data.get('phishing', False),
+            'is_malware': data.get('malware', False),
+            'is_suspicious': data.get('suspicious', False),
+            'domain_rank': data.get('domain_rank', 0),
+            'category': data.get('category', 'unknown'),
+            'message': data.get('message', ''),
+            'full_response': data,  # البيانات الكاملة للمرجع
+        }
     except Exception as e:
-        return {"success": False, "message": str(e), "error": str(e)}
+        return {
+            "success": False, 
+            "message": f"فشل فحص URL: {str(e)}", 
+            "error": str(e),
+            "threat_level": "unknown"
+        }
+
+
+# ============================================
+# ⭐ نظام كشف التصيد المتقدم (Advanced Phishing Detection)
+# ============================================
+
+def fetch_page_content(url: str, timeout: int = 15) -> tuple:
+    """جلب محتوى الصفحة مع معالجة الأخطاء"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ar-SA,ar;q=0.9,en-US;q=0.8',
+        }
+        
+        response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True, verify=False)
+        response.raise_for_status()
+        
+        metadata = {
+            'status_code': response.status_code,
+            'content_type': response.headers.get('content-type', ''),
+            'content_length': len(response.content),
+            'final_url': response.url,
+            'redirects': len(response.history),
+        }
+        
+        return True, response.text, metadata
+    except requests.exceptions.Timeout:
+        return False, '', {'error': 'موقع بطيء جداً - قد يكون مريب'}
+    except Exception as e:
+        return False, '', {'error': str(e)}
+
+
+def extract_phishing_indicators(html_content: str, page_url: str) -> dict:
+    """استخراج مؤشرات التصيد من محتوى الصفحة - تحليل متقدم"""
+    
+    if not _HAS_BEAUTIFULSOUP or not html_content:
+        return {'error': 'BeautifulSoup غير متوفرة أو محتوى فارغ', 'risk_score': 0}
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        indicators = {
+            'forms': [],
+            'suspicious_links': [],
+            'input_fields': [],
+            'scripts': [],
+            'iframes': [],
+            'images': [],
+            'warnings': [],
+            'risk_score': 0,
+        }
+        
+        # فحص النماذ
+        forms = soup.find_all('form')
+        for form in forms:
+            form_action = form.get('action', '')
+            form_method = form.get('method', 'get').lower()
+            
+            if form_action and not _is_same_domain(page_url, form_action):
+                indicators['warnings'].append(f'⚠️ نموذج يرسل البيانات إلى موقع آخر: {form_action}')
+                indicators['risk_score'] += 3
+            
+            inputs = form.find_all('input')
+            for inp in inputs:
+                inp_type = inp.get('type', '').lower()
+                inp_name = inp.get('name', '').lower()
+                
+                if inp_type == 'password':
+                    indicators['input_fields'].append('🔑 حقل كلمة مرور')
+                    indicators['risk_score'] += 1
+                elif inp_type in ['email', 'text'] and any(x in inp_name for x in ['user', 'email', 'login']):
+                    indicators['input_fields'].append('👤 حقل بيانات مستخدم')
+                    indicators['risk_score'] += 1
+            
+            indicators['forms'].append({
+                'action': form_action,
+                'method': form_method,
+                'input_count': len(inputs),
+            })
+        
+        # فحص الروابط المريبة
+        links = soup.find_all('a')
+        for link in links[:50]:  # أول 50 رابط فقط
+            href = link.get('href', '')
+            link_text = link.get_text(strip=True)[:50]
+            
+            if href and link_text and not _is_same_domain(page_url, href):
+                if not href.startswith('#') and not href.startswith('javascript'):
+                    indicators['suspicious_links'].append({
+                        'text': link_text,
+                        'href': href,
+                        'mismatch': href != link_text,
+                    })
+                    if href != link_text:
+                        indicators['risk_score'] += 2
+        
+        # فحص الـ iframes
+        iframes = soup.find_all('iframe')
+        for iframe in iframes:
+            src = iframe.get('src', '')
+            if src and not _is_same_domain(page_url, src):
+                indicators['iframes'].append(src)
+                indicators['warnings'].append(f'⚠️ iframe من موقع آخر: {src}')
+                indicators['risk_score'] += 2
+        
+        # فحص الـ scripts
+        scripts = soup.find_all('script')
+        suspicious_script_count = sum(1 for s in scripts if s.get('src') and not _is_same_domain(page_url, s.get('src', '')))
+        
+        if suspicious_script_count > 3:
+            indicators['warnings'].append(f'⚠️ {suspicious_script_count} scripts من مواقع أخرى - مريب جداً')
+            indicators['risk_score'] += 4
+        
+        indicators['scripts'] = suspicious_script_count
+        
+        # فحص النصوص المريبة
+        body = soup.find('body')
+        if body:
+            text = body.get_text().lower()
+            phishing_keywords = [
+                'تحديث', 'تأكيد', 'فوري', 'عاجل', 'تنبيه',
+                'أعد تعيين', 'كلمة سر', 'تحقق', 'متحقق',
+                'حسابك', 'حسابك في خطر', 'اضغط هنا',
+                'الآن', 'تم تعليق', 'مقفول', 'محظور',
+            ]
+            
+            found_keywords = [kw for kw in phishing_keywords if kw in text]
+            if found_keywords:
+                indicators['warnings'].append(f'⚠️ كلمات مريبة: {", ".join(found_keywords[:3])}')
+                indicators['risk_score'] += len(found_keywords)
+        
+        indicators['risk_score'] = min(10, indicators['risk_score'])
+        
+        return indicators
+        
+    except Exception as e:
+        return {'error': f'خطأ في تحليل HTML: {str(e)}', 'risk_score': 0}
+
+
+def _is_same_domain(url1: str, url2: str) -> bool:
+    """التحقق من أن URL1 و URL2 من نفس الدومين"""
+    try:
+        parsed1 = urllib.parse.urlparse(url1)
+        parsed2 = urllib.parse.urlparse(url2)
+        
+        domain1 = parsed1.netloc.replace('www.', '')
+        domain2 = parsed2.netloc.replace('www.', '')
+        
+        return domain1 == domain2
+    except:
+        return False
+
+
+def ai_analyze_page_content(page_url: str, html_content: str, indicators: dict) -> dict:
+    """تحليل AI متقدم لمحتوى الصفحة"""
+    
+    if not html_content:
+        return {'error': 'لا يوجد محتوى لتحليله'}
+    
+    try:
+        if _HAS_BEAUTIFULSOUP:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            for script in soup(['script', 'style']):
+                script.decompose()
+            text = soup.get_text(separator=' ', strip=True)[:1500]
+        else:
+            text = html_content[:1500]
+        
+        prompt = f"""
+أنت محلل أمان متخصص في كشف محاولات التصيد (Phishing). 
+حلل الصفحة التالية بإيجاز:
+
+الرابط: {page_url}
+المؤشرات المكتشفة: {json.dumps(indicators, ensure_ascii=False)[:500]}
+
+محتوى الصفحة (أول 1500 حرف):
+{text[:1500]}
+
+قدم تحليل موجز:
+1. درجة الخطورة (منخفضة/متوسطة/عالية/جداً عالية)
+2. أهم المؤشرات الخطرة
+3. التوصيات الأمنية
+
+الإجابة بالعربية فقط ومختصرة.
+"""
+        
+        analysis = _call_do_ai(prompt, system_prompt="أنت خبير أمان سيبراني متخصص في كشف التصيد.", model=DO_AI_MODEL)
+        
+        return {
+            'analysis': analysis,
+            'timestamp': datetime.datetime.now().isoformat(),
+        }
+        
+    except Exception as e:
+        return {'error': f'خطأ في التحليل: {str(e)}'}
+
+
+def comprehensive_phishing_check(target_url: str, detailed: bool = True) -> dict:
+    """فحص شامل لكشف روابط التصيد مع تحليل AI"""
+    
+    start_time = time.time()
+    result = {
+        'url': target_url,
+        'timestamp': datetime.datetime.now().isoformat(),
+        'stages': {},
+        'overall_risk_level': 'unknown',
+        'overall_score': 0,
+        'recommendations': [],
+    }
+    
+    # المرحلة 1: فحص URL الأساسي
+    url_check = check_url_intelligence(target_url)
+    result['stages']['url_check'] = url_check
+    
+    if not url_check.get('success', False):
+        result['overall_risk_level'] = 'unknown'
+        result['recommendations'].append('⚠️ لم تتمكن من فحص الموقع')
+        return result
+    
+    # المرحلة 2: جلب المحتوى
+    success, html_content, metadata = fetch_page_content(target_url)
+    result['stages']['page_fetch'] = {'success': success, 'metadata': metadata}
+    
+    if not success:
+        result['overall_risk_level'] = url_check.get('threat_level', 'unknown')
+        return result
+    
+    # المرحلة 3: استخراج المؤشرات
+    indicators = extract_phishing_indicators(html_content, target_url)
+    result['stages']['indicators'] = indicators
+    
+    # المرحلة 4: تحليل AI
+    if detailed and DO_AI_ENDPOINT:
+        ai_analysis = ai_analyze_page_content(target_url, html_content, indicators)
+        result['stages']['ai_analysis'] = ai_analysis
+    
+    # حساب النتيجة النهائية
+    _calculate_final_phishing_score(result, url_check, indicators)
+    
+    result['duration_seconds'] = round(time.time() - start_time, 2)
+    
+    return result
+
+
+def _calculate_final_phishing_score(result: dict, url_check: dict, indicators: dict) -> None:
+    """حساب النتيجة النهائية والدرجة"""
+    
+    score = 0
+    
+    phishing_score = url_check.get('phishing_score', 0)
+    malware_score = url_check.get('malware_score', 0)
+    
+    score += phishing_score * 0.5
+    score += malware_score * 0.3
+    
+    if 'risk_score' in indicators:
+        score += indicators['risk_score'] * 2
+    
+    score = min(100, score)
+    
+    if score >= 80:
+        risk_level = '🔴 جداً عالية (CRITICAL)'
+    elif score >= 60:
+        risk_level = '🟠 عالية (HIGH)'
+    elif score >= 40:
+        risk_level = '🟡 متوسطة (MEDIUM)'
+    elif score >= 20:
+        risk_level = '🟢 منخفضة (LOW)'
+    else:
+        risk_level = '✅ آمن جداً (SAFE)'
+    
+    result['overall_score'] = round(score, 2)
+    result['overall_risk_level'] = risk_level
+    
+    if url_check.get('is_phishing'):
+        result['recommendations'].append('⚠️ تم الكشف عن مؤشرات تصيد')
+    
+    if url_check.get('is_malware'):
+        result['recommendations'].append('❌ تم الكشف عن برمجيات خبيثة')
+    
+    if indicators.get('warnings'):
+        result['recommendations'].extend(indicators['warnings'])
 
 # --- فحص تسريب الإيميل وكلمة السر معاً عبر IPQualityScore API ---
 def check_leaked_emailpass(email: str, password: str) -> dict:
@@ -3157,6 +3468,7 @@ def scan_malware_url(url: str) -> dict:
         return {"success": False, "message": "فشل الاتصال بالخدمة", "error": str(e)}
 
 def scan_malware_file(file_path: str) -> dict:
+    """فحص ملف من البرمجيات الخبيثة - نسخة محسنة"""
     API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
     try:
         with open(file_path, "rb") as f:
@@ -3165,7 +3477,255 @@ def scan_malware_file(file_path: str) -> dict:
     except Exception as e:
         return {"success": False, "message": "فشل رفع الملف", "error": str(e)}
 
-def create_social_defense_scenario(scenario_type: str) -> dict:
+
+# ============================================
+# ⭐ نظام كشف البرمجيات الخبيثة المتقدم (Advanced Malware Detection)
+# ============================================
+
+import hashlib
+import mimetypes
+
+def calculate_file_hashes(file_path: str) -> dict:
+    """حساب البصمات الرقمية للملف (MD5, SHA1, SHA256)"""
+    try:
+        hashes = {'md5': '', 'sha1': '', 'sha256': '', 'file_size': 0}
+        
+        if not os.path.exists(file_path):
+            return {'error': 'الملف غير موجود', **hashes}
+        
+        file_size = os.path.getsize(file_path)
+        hashes['file_size'] = file_size
+        
+        md5_hash = hashlib.md5()
+        sha1_hash = hashlib.sha1()
+        sha256_hash = hashlib.sha256()
+        
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b''):
+                md5_hash.update(chunk)
+                sha1_hash.update(chunk)
+                sha256_hash.update(chunk)
+        
+        hashes['md5'] = md5_hash.hexdigest()
+        hashes['sha1'] = sha1_hash.hexdigest()
+        hashes['sha256'] = sha256_hash.hexdigest()
+        
+        return hashes
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def extract_file_properties(file_path: str) -> dict:
+    """استخراج خصائص الملف والمؤشرات المريبة"""
+    try:
+        if not os.path.exists(file_path):
+            return {'error': 'الملف غير موجود'}
+        
+        file_name = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path)
+        file_ext = os.path.splitext(file_name)[1].lower()
+        
+        properties = {
+            'file_name': file_name,
+            'file_size': file_size,
+            'file_extension': file_ext,
+            'mime_type': mimetypes.guess_type(file_path)[0] or 'unknown',
+            'is_hidden': file_name.startswith('.'),
+            'is_system': 'system32' in file_path.lower() or 'windows' in file_path.lower(),
+            'is_executable': file_ext in ['.exe', '.dll', '.scr', '.com', '.bat', '.cmd', '.ps1', '.vbs', '.js'],
+            'is_script': file_ext in ['.py', '.js', '.vbs', '.ps1', '.sh', '.bat'],
+            'is_compressed': file_ext in ['.zip', '.rar', '.7z', '.iso'],
+            'suspicious_indicators': [],
+            'risk_score': 0,
+        }
+        
+        # مؤشرات مريبة
+        if file_size == 0:
+            properties['suspicious_indicators'].append('⚠️ ملف فارغ - قد يكون مريباً')
+            properties['risk_score'] += 2
+        elif file_size > 100 * 1024 * 1024:
+            properties['suspicious_indicators'].append(f'⚠️ حجم كبير جداً: {file_size / 1024 / 1024:.1f} MB')
+            properties['risk_score'] += 1
+        
+        # أسماء مريبة
+        suspicious_names = ['virus', 'malware', 'exploit', 'ransomware', 'trojan', 'backdoor']
+        if any(name in file_name.lower() for name in suspicious_names):
+            properties['suspicious_indicators'].append('⚠️ اسم الملف يحتوي على كلمات مريبة')
+            properties['risk_score'] += 4
+        
+        if properties['is_hidden']:
+            properties['suspicious_indicators'].append('⚠️ ملف مخفي - قد يكون برمجية خبيثة')
+            properties['risk_score'] += 2
+        
+        if properties['is_executable'] and ('temp' in file_path.lower() or 'appdata' in file_path.lower()):
+            properties['suspicious_indicators'].append('⚠️ ملف قابل للتنفيذ في مجلد مريب')
+            properties['risk_score'] += 3
+        
+        properties['risk_score'] = min(10, properties['risk_score'])
+        
+        return properties
+    except Exception as e:
+        return {'error': f'خطأ في تحليل خصائص الملف: {str(e)}'}
+
+
+def analyze_file_behavior(file_path: str, file_props: dict) -> dict:
+    """تحليل السلوك المحتمل للملف"""
+    try:
+        behavior_analysis = {
+            'potential_behaviors': [],
+            'threat_categories': [],
+            'execution_risk': 'low',
+            'persistence_risk': 'low',
+        }
+        
+        if file_props.get('is_executable'):
+            behavior_analysis['potential_behaviors'].append('قد يحاول التنفيذ والحصول على امتيازات')
+            behavior_analysis['execution_risk'] = 'high'
+            behavior_analysis['threat_categories'].append('Trojan')
+        
+        if file_props.get('is_script'):
+            behavior_analysis['potential_behaviors'].append('قد يحاول تنفيذ أوامر نظام')
+            behavior_analysis['execution_risk'] = 'high'
+            behavior_analysis['threat_categories'].append('Script Malware')
+        
+        if file_props.get('is_compressed'):
+            behavior_analysis['potential_behaviors'].append('قد تحتوي على برمجيات مخفية')
+            behavior_analysis['threat_categories'].append('Packed Malware')
+        
+        if file_props.get('is_hidden'):
+            behavior_analysis['potential_behaviors'].append('سلوك مريب: محاولة الاختفاء')
+            behavior_analysis['persistence_risk'] = 'high'
+            behavior_analysis['threat_categories'].append('Rootkit')
+        
+        file_size = file_props.get('file_size', 0)
+        if 0 < file_size < 1024:
+            behavior_analysis['potential_behaviors'].append('حجم صغير جداً - قد يكون wrapper أو loader')
+            behavior_analysis['threat_categories'].append('Loader')
+        
+        return behavior_analysis
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def ai_analyze_malware(file_path: str, file_props: dict, ipqs_result: dict, behavior: dict) -> dict:
+    """تحليل AI متقدم لخطر البرمجية الخبيثة"""
+    try:
+        file_name = os.path.basename(file_path)
+        
+        prompt = f"""
+أنت محلل أمان متخصص في كشف البرمجيات الخبيثة.
+
+الملف: {file_name}
+الامتداد: {file_props.get('file_extension', 'unknown')}
+الحجم: {file_props.get('file_size', 0)} بايت
+المؤشرات: {', '.join(file_props.get('suspicious_indicators', [])[:2]) if file_props.get('suspicious_indicators') else 'لا توجد'}
+
+درجة الفيروسات: {ipqs_result.get('malware_score', 0)}/100
+السلوك: {', '.join(behavior.get('threat_categories', []))}
+
+قدم تحليل موجز يتضمن:
+1. درجة الخطورة (منخفضة/متوسطة/عالية/جداً عالية)
+2. نوع البرمجية المحتمل
+3. الإجراءات المقترحة
+
+الإجابة بالعربية فقط ومختصرة.
+"""
+        
+        analysis = _call_do_ai(prompt, system_prompt="أنت خبير أمان سيبراني متخصص في البرمجيات الخبيثة.", model=DO_AI_MODEL)
+        
+        return {
+            'analysis': analysis,
+            'timestamp': datetime.datetime.now().isoformat(),
+        }
+    except Exception as e:
+        return {'error': f'خطأ في التحليل: {str(e)}'}
+
+
+def comprehensive_malware_check(file_path: str, detailed: bool = True) -> dict:
+    """فحص شامل للبرمجيات الخبيثة مع تحليل AI"""
+    
+    start_time = time.time()
+    result = {
+        'file_path': file_path,
+        'file_name': os.path.basename(file_path),
+        'timestamp': datetime.datetime.now().isoformat(),
+        'stages': {},
+        'overall_risk_level': 'unknown',
+        'overall_score': 0,
+        'recommendations': [],
+    }
+    
+    # المرحلة 1: استخراج الخصائص
+    file_props = extract_file_properties(file_path)
+    result['stages']['file_properties'] = file_props
+    
+    if 'error' in file_props:
+        result['overall_risk_level'] = 'unknown'
+        result['recommendations'].append('❌ لا يمكن الوصول للملف')
+        return result
+    
+    # المرحلة 2: فحص IPQualityScore
+    ipqs_result = scan_malware_file(file_path)
+    result['stages']['ipqs_scan'] = ipqs_result
+    
+    # المرحلة 3: تحليل السلوك
+    behavior = analyze_file_behavior(file_path, file_props)
+    result['stages']['behavior_analysis'] = behavior
+    
+    # المرحلة 4: تحليل AI
+    if detailed and DO_AI_ENDPOINT:
+        ai_analysis = ai_analyze_malware(file_path, file_props, ipqs_result, behavior)
+        result['stages']['ai_analysis'] = ai_analysis
+    
+    # حساب النتيجة النهائية
+    _calculate_final_malware_score(result, file_props, ipqs_result, behavior)
+    
+    result['duration_seconds'] = round(time.time() - start_time, 2)
+    
+    return result
+
+
+def _calculate_final_malware_score(result: dict, file_props: dict, ipqs_result: dict, behavior: dict) -> None:
+    """حساب النتيجة النهائية والدرجة"""
+    
+    score = 0
+    
+    malware_score = ipqs_result.get('malware_score', 0)
+    score += malware_score * 0.5
+    
+    file_risk = file_props.get('risk_score', 0)
+    score += file_risk * 3
+    
+    behavior_risk = len(behavior.get('threat_categories', [])) * 8
+    score += behavior_risk
+    
+    score = min(100, score)
+    
+    if score >= 80:
+        risk_level = '🔴 جداً عالية (CRITICAL)'
+    elif score >= 60:
+        risk_level = '🟠 عالية (HIGH)'
+    elif score >= 40:
+        risk_level = '🟡 متوسطة (MEDIUM)'
+    elif score >= 20:
+        risk_level = '🟢 منخفضة (LOW)'
+    else:
+        risk_level = '✅ آمن جداً (SAFE)'
+    
+    result['overall_score'] = round(score, 2)
+    result['overall_risk_level'] = risk_level
+    
+    if ipqs_result.get('is_malware'):
+        result['recommendations'].append('❌ تم الكشف عن برمجية خبيثة')
+    
+    if file_props.get('suspicious_indicators'):
+        result['recommendations'].extend(file_props['suspicious_indicators'][:3])
+    
+    if behavior.get('threat_categories'):
+        result['recommendations'].append(f"⚠️ نوع التهديد المحتمل: {', '.join(behavior['threat_categories'])}")
+
+
+
     scenarios = {
         'phishing_email': {
             'title': 'Credential Reset Trap',
@@ -16448,11 +17008,53 @@ def scan_phone_route():
 
 @app.route('/api/scan/url', methods=['POST'])
 def scan_url_route():
+    """فحص URL شامل مع تحليل AI"""
     data = request.json or {}
     url = data.get('url', '')
-    res = check_url_intelligence(url)
-    add_audit_log("فحص رابط مشبوه (IPQualityScore)", f"تم فحص الموثوقية: {url[:30]}...")
-    return jsonify(res)
+    detailed = data.get('detailed', True)
+    
+    if not url:
+        return jsonify({"success": False, "message": "الرجاء توفير URL"}), 400
+    
+    try:
+        # استخدام الفحص الشامل الجديد
+        result = comprehensive_phishing_check(url, detailed=detailed)
+        add_audit_log("فحص تصيد متقدم", f"تم فحص: {url[:50]}")
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"خطأ في الفحص: {str(e)}",
+            "error": str(e)
+        }), 500
+
+@app.route('/api/scan/phishing-advanced', methods=['POST'])
+def scan_phishing_advanced_route():
+    """
+    فحص التصيد الشامل المتقدم
+    يتضمن:
+    - فحص URL الأساسي
+    - جلب محتوى الصفحة
+    - استخراج مؤشرات التصيد
+    - تحليل AI للمحتوى
+    """
+    data = request.json or {}
+    url = data.get('url', '')
+    detailed = data.get('detailed', True)
+    
+    if not url:
+        return jsonify({"success": False, "message": "الرجاء توفير URL"}), 400
+    
+    try:
+        result = comprehensive_phishing_check(url, detailed=detailed)
+        add_audit_log("فحص التصيد المتقدم", f"تم الفحص الشامل: {url[:50]}")
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"خطأ في الفحص: {str(e)}",
+            "error": str(e)
+        }), 500
 
 @app.route('/api/scan/malware_url', methods=['POST'])
 def scan_malware_url_route():
@@ -16482,6 +17084,44 @@ def scan_malware_file_route():
             os.remove(temp_path)
             
     return jsonify(res)
+
+@app.route('/api/scan/malware-advanced', methods=['POST'])
+def scan_malware_advanced_route():
+    """
+    فحص البرمجيات الخبيثة الشامل المتقدم
+    يتضمن:
+    - فحص IPQualityScore
+    - تحليل خصائص الملف
+    - تحليل السلوك المحتمل
+    - تحليل AI للملف
+    """
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "لم يتم تقديم أي ملف"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"success": False, "message": "لم يتم اختيار ملف"}), 400
+    
+    filename = file.filename or 'uploaded.bin'
+    temp_path = os.path.join(tempfile.gettempdir(), secure_filename(filename))
+    
+    try:
+        file.save(temp_path)
+        detailed = request.form.get('detailed', 'true').lower() == 'true'
+        
+        result = comprehensive_malware_check(temp_path, detailed=detailed)
+        add_audit_log("فحص البرمجيات الخبيثة المتقدم", f"الملف: {filename}")
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"خطأ في الفحص: {str(e)}",
+            "error": str(e)
+        }), 500
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 @app.route('/api/scan/emailpass_leak', methods=['POST'])
 def scan_emailpass_leak_route():
