@@ -18,3 +18,8 @@ python-bidi
 psycopg2
 maigret
 holehe
+beautifulsoup4>=4.12.0
+selenium>=4.10.0
+lxml>=4.9.0
+mimetypes-extensions>=0.1.0
+urllib3>=2.0.0
