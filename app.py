@@ -1288,6 +1288,9 @@ def _do_ai_chat_completion(
     api_key = (DO_AI_KEY or '').strip()
     if api_key:
         headers['Authorization'] = f'Bearer {api_key}'
+    else:
+        raise ValueError('DO_AI_KEY is not set')
+
     payload = {
         "temperature": 0.2,
         "top_p": 0.9,
@@ -1303,7 +1306,28 @@ def _do_ai_chat_completion(
         json=payload,
         timeout=timeout_seconds,
     )
-    res.raise_for_status()
+
+    if not res.ok:
+        detail = ''
+        try:
+            data = res.json()
+            if isinstance(data, dict):
+                detail = str(
+                    data.get('error')
+                    or data.get('message')
+                    or data.get('detail')
+                    or data
+                )
+            else:
+                detail = str(data)
+        except Exception:
+            detail = (res.text or '').strip()
+
+        detail = detail or 'no response body'
+        raise RuntimeError(
+            f'DO AI request failed ({res.status_code}) at {DO_AI_ENDPOINT}/api/v1/chat/completions: {detail}'
+        )
+
     data = res.json()
     choice = (data.get('choices') or [{}])[0]
     msg = choice.get('message') or {}
