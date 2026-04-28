@@ -92,7 +92,7 @@ SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 
 # --- DigitalOcean AI Agent Config ---
-DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://v7ivnpxzgpdsgq4akznvptbb.agents.do-ai.run').rstrip('/')
+DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://kgn4yhkeojimeryc5pbjx2ju.agents.do-ai.run').rstrip('/')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 DO_AI_MODEL = os.environ.get('DO_AI_MODEL', 'tor1')
 
