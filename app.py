@@ -11665,470 +11665,218 @@ HTML_TEMPLATE = """
         }
 
         function osintRenderFullEmailResult(box, payload, email) {
-            // استخرج البيانات من raw_response إذا كانت موجودة
             const rawResp = payload?.raw_response || payload || {};
-            
-            // إذا كان payload نفسه هو الـ raw response بدون raw_response key
             let meta = payload?.meta || rawResp?.meta || {};
             let identifier = payload?.identifier || rawResp?.identifier || {};
             const rawBreaches = payload?.data_breaches || rawResp?.data_breaches || {};
-            let breaches = Array.isArray(rawBreaches?.results)
-                ? rawBreaches.results
-                : Array.isArray(rawBreaches)
-                    ? rawBreaches
-                    : [];
+            let breaches = Array.isArray(rawBreaches?.results) ? rawBreaches.results : Array.isArray(rawBreaches) ? rawBreaches : [];
             const breachCount = rawBreaches?.amount ?? breaches.length;
-            const breachSources = rawBreaches?.sources || [];
             let stealerLogs = payload?.stealer_logs || rawResp?.stealer_logs || [];
-            if (!Array.isArray(stealerLogs)) {
-                stealerLogs = stealerLogs ? [stealerLogs] : [];
-            }
+            if (!Array.isArray(stealerLogs)) stealerLogs = stealerLogs ? [stealerLogs] : [];
             let validator = payload?.validator || rawResp?.validator || {};
-            const commentsRaw = payload?.comments || rawResp?.comments || payload?.reviews || rawResp?.reviews || [];
-            let comments = Array.isArray(commentsRaw)
-                ? commentsRaw
-                : Array.isArray(commentsRaw?.results)
-                    ? commentsRaw.results
-                    : [];
-            
-            // حول identifier.accounts من array إلى dict إذا كانت array
+
             let accounts = {};
             const accountsData = identifier.accounts || [];
-            
             if (Array.isArray(accountsData)) {
-                // تحويل array من الحسابات إلى dict مع اسم المنصة كـ key
                 accountsData.forEach(account => {
                     if (account && account.module && account.data) {
                         const platform = account.module.name_formatted || account.module.name || 'Unknown';
-                        accounts[platform] = {
-                            ...account.data,
-                            platform: platform,
-                            domain: account.module.domain,
-                            module_id: account.module.id
-                        };
+                        accounts[platform] = { ...account.data, platform, domain: account.module.domain, module_id: account.module.id };
                     }
                 });
             } else if (typeof accountsData === 'object') {
-                // إذا كانت بالفعل dict
                 accounts = accountsData;
             }
-            
-            // معلومات البريد الأساسية
-            const _formatOsintDate = (value) => {
-                if (!value) return '';
-                const raw = String(value || '').trim();
-                const parsed = new Date(raw);
-                if (!Number.isNaN(parsed.getTime())) {
-                    return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                }
-                return raw;
+
+            const _fmtDate = (v) => {
+                if (!v) return '';
+                const d = new Date(String(v).trim());
+                return !isNaN(d.getTime()) ? d.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : String(v).trim();
             };
 
-            const firstSeen = _formatOsintDate(meta.first_seen || 'Unknown');
-            const lastSeen = _formatOsintDate(meta.last_seen || 'Unknown');
-            const canReceiveEmail = validator.deliverable !== false ? 'Yes' : 'No';
-            const emailProvider = email.split('@')[1] || 'Unknown';
-            
-            let html = `<div class="space-y-6">`;
-            
-            // Header with basic info
-            html += `
-                <div class="rounded-lg border border-slate-700/50 bg-gradient-to-r from-slate-900/80 to-slate-800/60 p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h3 class="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">Email Address</h3>
-                            <p class="text-lg font-mono text-emerald-300">${_osintEscape(email)}</p>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <h4 class="text-xs text-gray-500 font-bold mb-1">First Seen</h4>
-                                <p class="text-sm text-cyan-300">${_osintEscape(firstSeen)}</p>
-                            </div>
-                            <div>
-                                <h4 class="text-xs text-gray-500 font-bold mb-1">Last Seen</h4>
-                                <p class="text-sm text-cyan-300">${_osintEscape(lastSeen)}</p>
-                            </div>
-                            <div>
-                                <h4 class="text-xs text-gray-500 font-bold mb-1">Can Receive Email</h4>
-                                <p class="text-sm ${canReceiveEmail === 'Yes' ? 'text-emerald-300' : 'text-rose-300'}">${canReceiveEmail}</p>
-                            </div>
-                            <div>
-                                <h4 class="text-xs text-gray-500 font-bold mb-1">Email Provider</h4>
-                                <p class="text-sm text-indigo-300">${_osintEscape(emailProvider)}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
+            const firstSeen = _fmtDate(meta.first_seen) || 'Unknown';
+            const lastSeen = _fmtDate(meta.last_seen) || 'Unknown';
+            const esc = _osintEscape;
+            const acctKeys = Object.keys(accounts);
 
-            // Summary section with profile cards, links and timeline
-            const namesCount = Object.keys(accounts).filter(k => accounts[k]?.full_name).length;
-            const usernamesCount = Object.keys(accounts).filter(k => accounts[k]?.username).length;
-            const locationItems = Object.keys(accounts)
-                .map(k => {
-                    const acc = accounts[k];
-                    if (acc.country || acc.location || acc.locations || acc.city || acc.state) {
-                        const locParts = [acc.location, acc.city, acc.state, acc.country].filter(Boolean);
-                        return { platform: k, location: locParts.join(', ') };
-                    }
-                    return null;
-                })
-                .filter(Boolean);
-            const locationsCount = locationItems.length;
-            const registrationsCount = Object.keys(accounts).length;
-            const commentsCount = comments.length;
-            const breachCountDisplay = breachCount || breaches.length;
+            // --- Breach sources ---
+            const breachSources = [...new Set(breaches.map(b => {
+                const s = b.source || b.Source || {};
+                return String(s.name || s.source || b.name || b.title || '').trim();
+            }).filter(Boolean))];
 
-            const profilePics = [];
-            const profileLinks = [];
-            Object.keys(accounts).forEach(platform => {
-                const acc = accounts[platform];
-                const pic = String(acc.avatar || acc.picture || acc.profile_picture || acc.image || acc.photo || acc.img || acc.profile_image_url || acc.avatar_url || '').trim();
-                const link = String(acc.profile_url || acc.url || acc.link || acc.website || acc.homepage || '').trim();
-                if (pic && profilePics.length < 4) {
-                    profilePics.push({ src: pic, alt: platform });
-                }
-                if (link) {
-                    profileLinks.push({ platform, url: link });
-                }
+            // --- Timeline events ---
+            const timeline = [];
+            if (meta.first_seen) timeline.push({date: _fmtDate(meta.first_seen), title: 'First seen', note: ''});
+            if (meta.last_seen) timeline.push({date: _fmtDate(meta.last_seen), title: 'Last seen', note: ''});
+            breaches.forEach(b => {
+                const s = b.source || b.Source || {};
+                const d = b.date || s.date || b.leak_date || '';
+                const n = b.name || b.title || s.name || s.source || 'Data Breach';
+                if (d || n) timeline.push({date: _fmtDate(d || 'Unknown'), title: n, note: 'Data Breach'});
             });
 
-            const timelineEvents = [];
-            if (lastSeen && emailProvider) {
-                timelineEvents.push({
-                    date: lastSeen,
-                    title: 'Last Seen Date',
-                    note: emailProvider
-                });
-            }
-            breaches.forEach((breach) => {
-                const source = breach.source || breach.Source || {};
-                const eventDate = breach.date || source.date || breach.leak_date || '';
-                const safeDate = _formatOsintDate(eventDate || 'Unknown Date');
-                const eventName = breach.name || breach.title || source.name || source.source || 'Data Breach';
-                if (eventDate || eventName) {
-                    timelineEvents.push({
-                        date: safeDate,
-                        title: eventName,
-                        note: 'Data Breach'
-                    });
-                }
-            });
+            // --- Build HTML in IntelBase style ---
+            let h = `<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;padding:0;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">`;
 
-            html += `
-                <div class="mb-4">
-                    <h3 class="text-xl font-bold text-slate-100">Summary</h3>
+            // == Email Header ==
+            h += `<div style="padding:32px 28px 24px;border-bottom:1px solid #1a1a1a;">
+                <div style="color:#6b7280;font-size:13px;margin-bottom:4px;">Email</div>
+                <div style="color:#fff;font-size:20px;font-weight:700;word-break:break-all;">${esc(email)}</div>
+                <div style="display:flex;gap:48px;margin-top:20px;">
+                    <div><div style="color:#6b7280;font-size:13px;margin-bottom:4px;">First seen</div><div style="color:#fff;font-size:16px;font-weight:600;">${esc(firstSeen)}</div></div>
+                    <div><div style="color:#6b7280;font-size:13px;margin-bottom:4px;">Last seen</div><div style="color:#fff;font-size:16px;font-weight:600;">${esc(lastSeen)}</div></div>
                 </div>
-                <div class="grid grid-cols-1 xl:grid-cols-[3fr_1fr] gap-4">
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3">Profile Pictures</div>
-                        <div class="flex flex-wrap gap-3">${profilePics.length > 0 ? profilePics.map((pic) => `<img src="${_osintEscape(pic.src)}" alt="${_osintEscape(pic.alt)}" class="h-12 w-12 rounded-lg border border-slate-700/50 object-cover">`).join('') : '<span class="text-sm text-slate-500">No profile pictures available</span>'}</div>
+            </div>`;
+
+            // == Data Breaches ==
+            const bId = 'ib_breach_' + Math.random().toString(36).slice(2);
+            h += `<div style="padding:24px 28px;border-bottom:1px solid #1a1a1a;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <span style="color:#fff;font-size:16px;font-weight:700;">Data Breaches</span>
+                        <span style="color:#9ca3af;font-size:14px;">${breachCount} breaches · ${breachSources.length} sources</span>
                     </div>
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3">Profile Links</div>
-                        <div class="space-y-2">${profileLinks.length > 0 ? profileLinks.map((item) => `<div class="text-sm text-slate-200"><a href="${_osintEscape(item.url)}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline">${_osintEscape(item.platform)}</a></div>`).join('') : '<div class="text-sm text-slate-500">No profile links found</div>'}</div>
-                    </div>
+                    <button onclick="document.getElementById('${bId}').classList.toggle('hidden')" style="background:transparent;border:1px solid #333;color:#e5e7eb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;">View data breaches</button>
                 </div>
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-200">Activity Timeline</h3>
-                            <div class="text-xs text-slate-500">Latest activities and breach events</div>
+                <div id="${bId}" class="hidden" style="margin-top:16px;">`;
+
+            if (breaches.length > 0) {
+                breaches.forEach((b, i) => {
+                    const s = b.source || b.Source || {};
+                    const nm = esc(b.name || b.title || s.name || s.source || 'Breach ' + (i+1));
+                    const dt = esc(b.date || s.date || b.leak_date || '');
+                    const em = esc(b.email || b.Email || '');
+                    const un = esc(b.username || b.Username || '');
+                    const pw = esc(b.password || b.Password || '');
+                    const ph = esc(b.phone || b.Phone || '');
+                    const hn = esc(b.hash || b.hashed_password || '');
+                    const rc = esc(String(b.records || b.count || ''));
+                    h += `<div style="background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:16px;margin-bottom:8px;">
+                        <div style="color:#fff;font-size:14px;font-weight:600;margin-bottom:8px;">${nm}</div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;font-size:13px;">
+                            ${dt ? `<div><span style="color:#6b7280;">Date:</span> <span style="color:#d1d5db;">${dt}</span></div>` : ''}
+                            ${em ? `<div><span style="color:#6b7280;">Email:</span> <span style="color:#d1d5db;">${em}</span></div>` : ''}
+                            ${un ? `<div><span style="color:#6b7280;">Username:</span> <span style="color:#d1d5db;">${un}</span></div>` : ''}
+                            ${pw ? `<div><span style="color:#6b7280;">Password:</span> <span style="color:#ef4444;font-family:monospace;">${pw}</span></div>` : ''}
+                            ${ph ? `<div><span style="color:#6b7280;">Phone:</span> <span style="color:#d1d5db;">${ph}</span></div>` : ''}
+                            ${hn ? `<div><span style="color:#6b7280;">Hash:</span> <span style="color:#d1d5db;font-family:monospace;font-size:11px;">${hn}</span></div>` : ''}
+                            ${rc ? `<div><span style="color:#6b7280;">Records:</span> <span style="color:#d1d5db;">${rc}</span></div>` : ''}
                         </div>
-                        <button type="button" class="rounded-full border border-slate-700/50 bg-slate-800/70 px-3 py-1 text-[11px] text-slate-200">View timeline</button>
-                    </div>
-                    <div class="space-y-2">${timelineEvents.length > 0 ? timelineEvents.map((event) => `<div class="rounded-lg border border-slate-700/50 bg-black/20 p-3 text-sm text-slate-200"><div class="font-semibold text-slate-100">${_osintEscape(event.date)}</div><div class="text-xs text-slate-400">${_osintEscape(event.title)}${event.note ? ` · ${_osintEscape(event.note)}` : ''}</div></div>`).join('') : '<div class="text-sm text-slate-500">No timeline events available</div>'}</div>
-                </div>
-                <div class="grid grid-cols-1 xl:grid-cols-[3fr_1fr] gap-4 mt-4">
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <h3 class="text-sm font-bold text-slate-200 mb-3">Registrations</h3>
-                        <div class="flex flex-wrap gap-2">${Object.keys(accounts).length > 0 ? Object.keys(accounts).map((platform) => `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`).join('') : '<span class="text-sm text-slate-500">No registrations found</span>'}</div>
-                    </div>
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <h3 class="text-sm font-bold text-slate-200 mb-2">Additional Registrations (${stealerLogs.length})</h3>
-                        <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
-                        ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
-                    </div>
-                </div>`;
-
-            html += `
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-emerald-400">${namesCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Names Found</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-cyan-400">${usernamesCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Usernames</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-blue-400">${locationsCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Locations</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-pink-400">${commentsCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Comments</div>
-                    </div>
-                    <div class="rounded border border-slate-700/50 bg-slate-900/30 p-4 text-center">
-                        <div class="text-2xl font-bold text-purple-400">${registrationsCount}</div>
-                        <div class="text-xs text-gray-400 mt-1">Registrations</div>
-                    </div>
-                </div>`;
-
-            html += `
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                    <h3 class="text-sm font-bold text-slate-300 mb-3">📱 Registrations</h3>
-                    <div class="flex flex-wrap gap-2">${Object.keys(accounts).length > 0 ? Object.keys(accounts).map((platform) => `<span class="text-xs border border-slate-700/50 bg-slate-900/60 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`).join('') : '<span class="text-sm text-slate-500">No registrations found</span>'}</div>
-                </div>
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
-                    <h3 class="text-sm font-bold text-slate-300 mb-2">Additional Registrations (${stealerLogs.length})</h3>
-                    <div class="text-xs text-slate-500">Sourced from infostealer logs — not verified in real time</div>
-                    ${stealerLogs.length > 0 ? `<div class="mt-3 text-sm text-slate-200">${_osintEscape(stealerLogs[0].source || stealerLogs[0].platform || 'Infostealer')}</div>` : ''}
-                </div>`;
-
-            // Names Found section
-            const names = [];
-            Object.keys(accounts).forEach(platform => {
-                const acc = accounts[platform];
-                if (acc.full_name) {
-                    names.push({ name: acc.full_name, platform });
-                }
-            });
-            
-            if (names.length > 0) {
-                html += `
-                    <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/15 p-4">
-                        <h3 class="text-sm font-bold text-emerald-300 mb-3">👤 Names Found</h3>
-                        <div class="space-y-2">`;
-                names.forEach(item => {
-                    html += `<div class="flex justify-between items-center text-sm text-emerald-200"><span>${_osintEscape(item.name)}</span><span class="text-xs text-emerald-500">${_osintEscape(item.platform)}</span></div>`;
-                });
-                html += '</div></div>';
-            }
-
-            // Usernames section
-            const usernames = [];
-            Object.keys(accounts).forEach(platform => {
-                const acc = accounts[platform];
-                if (acc.username) {
-                    usernames.push({ username: acc.username, platform });
-                }
-            });
-            
-            if (usernames.length > 0) {
-                html += `
-                    <div class="rounded-lg border border-cyan-900/40 bg-cyan-950/15 p-4">
-                        <h3 class="text-sm font-bold text-cyan-300 mb-3">👥 Usernames</h3>
-                        <div class="space-y-2">`;
-                usernames.forEach(item => {
-                    html += `<div class="flex justify-between items-center text-sm text-cyan-200"><span class="font-mono">${_osintEscape(item.username)}</span><span class="text-xs text-cyan-500">${_osintEscape(item.platform)}</span></div>`;
-                });
-                html += '</div></div>';
-            }
-
-            if (locationItems.length > 0) {
-                html += `
-                    <div class="rounded-lg border border-sky-900/40 bg-sky-950/15 p-4">
-                        <h3 class="text-sm font-bold text-sky-300 mb-3">📍 Locations</h3>
-                        <div class="space-y-2">`;
-                locationItems.forEach(item => {
-                    html += `<div class="flex justify-between items-center text-sm text-sky-200"><span>${_osintEscape(item.platform)}</span><span class="text-xs text-sky-500">${_osintEscape(item.location)}</span></div>`;
-                });
-                html += '</div></div>';
-            }
-
-            if (comments.length > 0) {
-                html += `
-                    <div class="rounded-lg border border-violet-900/40 bg-violet-950/15 p-4">
-                        <h3 class="text-sm font-bold text-violet-300 mb-3">💬 Comments</h3>
-                        <div class="space-y-3">`;
-                comments.forEach((comment, idx) => {
-                    const safeAuthor = _osintEscape(comment.author || comment.reviewer || 'Unknown');
-                    const safeText = _osintEscape(comment.text || comment.comment || comment.review || 'No comment text');
-                    const safeDate = _osintEscape(comment.date || comment.created_at || comment.time || 'Unknown');
-                    html += `<div class="rounded border border-violet-800/30 bg-violet-900/20 p-3 text-sm text-violet-200">
-                                <div class="font-semibold text-violet-100">${idx + 1}. ${safeAuthor}</div>
-                                <div class="text-xs text-violet-400 mb-2">${safeDate}</div>
-                                <div>${safeText}</div>
-                            </div>`;
-                });
-                html += '</div></div>';
-            }
-
-            // Data Breaches section
-            if (breachCountDisplay > 0) {
-                const breachSectionId = `osintBreachDetails_${Math.random().toString(36).slice(2)}`;
-                const breachSourceList = Array.from(new Set(breaches.map((breach) => {
-                    const source = breach.source || breach.Source || {};
-                    return String(source.name || source.source || breach.name || breach.title || '').trim();
-                }).filter(Boolean)));
-                const breachSourceBadges = breachSourceList.map((src) => `<span class="rounded-full border border-slate-700/50 bg-slate-900/60 px-2 py-1 text-[11px] text-slate-300">${_osintEscape(src)}</span>`).join('');
-
-                html += `
-                    <div class="rounded-lg border border-rose-900/40 bg-rose-950/15 p-4">
-                        <div class="grid grid-cols-2 gap-4 text-[11px] text-slate-400 uppercase tracking-widest mb-3">
-                            <div>Amount</div>
-                            <div>Sources</div>
-                            <div class="text-2xl font-bold text-white">${breachCountDisplay}</div>
-                            <div class="text-2xl font-bold text-white">${breachSourceList.length}</div>
-                        </div>
-                        <div class="flex flex-wrap gap-2 mb-3">${breachSourceBadges}</div>
-                        <button type="button" class="rounded-md border border-rose-700/60 bg-rose-900/70 px-3 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-800/80" onclick="document.getElementById('${breachSectionId}').classList.toggle('hidden')">View data breaches</button>
-                    </div>
-                    <div id="${breachSectionId}" class="space-y-2 hidden">`;
-                breaches.forEach((breach, idx) => {
-                    const source = breach.source || breach.Source || {};
-                    const safeName = _osintEscape(breach.name || breach.title || source.name || source.source || `Breach ${idx + 1}`);
-                    const safeDate = _osintEscape(breach.date || breach.source?.date || breach.leak_date || '');
-                    const safeRecords = _osintEscape(String(breach.records || breach.count || '?'));
-                    const safeEmail = _osintEscape(breach.email || breach.Email || '');
-                    const safeUsername = _osintEscape(breach.username || breach.Username || '');
-                    const safePassword = _osintEscape(breach.password || breach.Password || '');
-                    const breachHeader = [safeName, safeDate, `${safeRecords} records`].filter(Boolean).join(' | ');
-                    html += `<div class="rounded border border-rose-800/30 bg-rose-900/20 p-3 text-[11px] text-rose-200">
-                                <div class="font-semibold text-rose-100">${idx + 1}. ${breachHeader}</div>
-                                ${safeEmail ? `<div class="mt-2">📧 ${safeEmail}</div>` : ''}
-                                ${safeUsername ? `<div class="mt-1">👤 ${safeUsername}</div>` : ''}
-                                ${safePassword ? `<div class="mt-1">🔑 ${safePassword}</div>` : ''}
-                            </div>`;
-                });
-                html += '</div>';
-            } else {
-                html += `
-                    <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/15 p-4">
-                        <h3 class="text-sm font-bold text-emerald-300 mb-2">✓ Data Breaches</h3>
-                        <p class="text-sm text-emerald-200">No data breaches found for this email address.</p>
                     </div>`;
-            }
-
-            // Accounts Details section
-            if (Object.keys(accounts).length > 0) {
-                html += `
-                    <div>
-                        <h3 class="text-lg font-bold text-indigo-300 mb-4">📋 Accounts</h3>
-                        <div class="space-y-4">`;
-                
-                Object.keys(accounts).forEach(platform => {
-                    const acc = accounts[platform];
-                    if (!acc || Object.keys(acc).length === 0) return;
-
-                    const profileLink = String(acc.profile_url || acc.url || acc.link || acc.website || acc.homepage || '').trim();
-                    const statsUrl = String(acc.stats_url || acc.stats_link || profileLink).trim();
-                    const avatarUrl = String(acc.avatar || acc.picture || acc.profile_picture || acc.image || acc.photo || acc.img || acc.profile_image_url || acc.avatar_url || '').trim();
-                    const activeGoogleApps = Array.isArray(acc.active_google_apps)
-                        ? acc.active_google_apps
-                        : String(acc.active_google_apps || acc.google_apps || '').split(/[,;\\n]+/).map((x) => x.trim()).filter(Boolean);
-                    const mapsActivity = String(acc.maps_activity || acc.maps || '').trim();
-                    const reviewsArray = Array.isArray(acc.reviews) ? acc.reviews : [];
-                    const reviewCount = reviewsArray.length || (Number.isFinite(Number(acc.review_count)) ? Number(acc.review_count) : 0);
-                    const ratingCount = Number.isFinite(Number(acc.rating_count)) ? Number(acc.rating_count) : 0;
-                    const googleIdValue = acc.has_google_id !== undefined ? (acc.has_google_id ? 'Yes' : 'No') : acc.google_id !== undefined ? (acc.google_id ? 'Yes' : 'No') : null;
-                    const facebookIdValue = acc.has_facebook_id !== undefined ? (acc.has_facebook_id ? 'Yes' : 'No') : acc.facebook_id !== undefined ? (acc.facebook_id ? 'Yes' : 'No') : null;
-
-                    const details = [];
-                    if (profileLink) details.push({ label: 'Profile URL', value: `<a href="${_osintEscape(profileLink)}" target="_blank" rel="noopener" class="text-emerald-300 hover:text-emerald-200 underline">${_osintEscape(profileLink)}</a>` });
-                    if (acc.full_name) details.push({ label: 'Full Name', value: _osintEscape(acc.full_name) });
-                    if (acc.username) details.push({ label: 'Username', value: _osintEscape(acc.username) });
-                    if (acc.id) details.push({ label: 'ID', value: _osintEscape(String(acc.id)) });
-                    if (acc.user_id) details.push({ label: 'User ID', value: _osintEscape(String(acc.user_id)) });
-                    if (googleIdValue !== null) details.push({ label: 'Has Google ID', value: _osintEscape(googleIdValue) });
-                    if (facebookIdValue !== null) details.push({ label: 'Has Facebook ID', value: _osintEscape(facebookIdValue) });
-                    if (acc.enterprise_user !== undefined) details.push({ label: 'Enterprise User', value: _osintEscape(acc.enterprise_user ? 'Yes' : 'No') });
-                    if (acc.last_seen_date) details.push({ label: 'Last Seen Date', value: _osintEscape(_formatOsintDate(acc.last_seen_date)) });
-                    if (acc.last_login_date) details.push({ label: 'Last Login Date', value: _osintEscape(_formatOsintDate(acc.last_login_date)) });
-                    if (acc.creation_date) details.push({ label: 'Creation Date', value: _osintEscape(_formatOsintDate(acc.creation_date)) });
-                    if (acc.last_active) details.push({ label: 'Last Active', value: _osintEscape(_formatOsintDate(acc.last_active)) });
-                    if (acc.country) details.push({ label: 'Country', value: _osintEscape(acc.country) });
-                    if (acc.location) details.push({ label: 'Location', value: _osintEscape(acc.location) });
-
-                    html += `
-                        <div class="rounded-lg border border-indigo-900/40 bg-indigo-950/15 p-4">
-                            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                                <div class="min-w-0 w-full lg:max-w-[calc(100%-120px)]">
-                                    <h4 class="text-sm font-bold text-indigo-300 mb-3">${_osintEscape(platform)}</h4>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-indigo-200">`;
-
-                    details.forEach((item) => {
-                        html += `<div><strong>${_osintEscape(item.label)}:</strong><div class="mt-1 text-slate-100">${item.value}</div></div>`;
-                    });
-
-                    html += `</div>`;
-
-                    if (activeGoogleApps.length > 0) {
-                        html += `<div class="mt-4">
-                                    <div class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-2">Active Google Apps</div>
-                                    <div class="flex flex-wrap gap-2">${activeGoogleApps.map((app) => `<span class="text-[11px] bg-slate-800/60 border border-slate-700/50 rounded-full px-3 py-1 text-slate-300">${_osintEscape(app)}</span>`).join('')}</div>
-                                </div>`;
-                    }
-
-                    if (mapsActivity) {
-                        html += `<div class="mt-4">
-                                    <div class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-2">Maps Activity</div>
-                                    <div class="text-sm text-slate-200">${_osintEscape(mapsActivity)}</div>
-                                </div>`;
-                    }
-
-                    if (reviewCount || ratingCount) {
-                        html += `<div class="mt-4 border-t border-slate-700/50 pt-4 text-sm text-slate-200">
-                                    <div class="flex items-center justify-between gap-4">
-                                        <div>${reviewCount} Reviews</div>
-                                        <div>${ratingCount} Ratings</div>
-                                    </div>`;
-                        if (reviewCount > 0) {
-                            html += `<div class="text-xs text-slate-400 mt-1">Reviews · showing ${Math.min(reviewCount, 2)} of ${reviewCount}</div>`;
-                        }
-                        if (reviewCount > 0) {
-                            html += `<div class="mt-3"><button type="button" class="rounded-md border border-slate-700/50 bg-slate-900/70 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-800/80">View all (${reviewCount})</button></div>`;
-                        }
-                        html += `</div>`;
-                    }
-
-                    if (statsUrl) {
-                        html += `<div class="mt-4"><a href="${_osintEscape(statsUrl)}" target="_blank" rel="noopener" class="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200">View all stats</a></div>`;
-                    }
-
-                    html += `</div>`;
-
-                    if (avatarUrl) {
-                        html += `<div class="flex-shrink-0">
-                                    <img src="${_osintEscape(avatarUrl)}" alt="${_osintEscape(platform)}" class="h-20 w-20 rounded-xl border border-slate-700/50 object-cover">
-                                </div>`;
-                    }
-
-                    html += `</div>`;
-                    html += `</div>`;
                 });
-                
-                html += '</div></div>';
+            } else {
+                h += `<div style="color:#6b7280;font-size:13px;">No breach data found.</div>`;
             }
+            h += `</div></div>`;
 
-            if (Object.keys(accounts).length > 0) {
-                html += `
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-                        <h3 class="text-sm font-bold text-slate-300 mb-3">📱 Registrations</h3>
-                        <div class="flex flex-wrap gap-2">`;
-                Object.keys(accounts).forEach(platform => {
-                    html += `<span class="text-xs bg-slate-800/50 border border-slate-700/50 rounded-full px-3 py-1 text-slate-300">${_osintEscape(platform)}</span>`;
-                });
-                html += '</div></div>';
-            }
-
-            html += `
-                <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4 mt-4">
-                    <h3 class="text-sm font-bold text-slate-200 mb-2">المعلومات</h3>
-                    <p class="text-sm text-slate-400">Results include ${Object.keys(accounts).length} account(s) and ${breachCountDisplay} breach record(s).</p>
+            // == Infostealer Logs ==
+            const slId = 'ib_stealer_' + Math.random().toString(36).slice(2);
+            h += `<div style="padding:24px 28px;border-bottom:1px solid #1a1a1a;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <span style="color:#fff;font-size:16px;font-weight:700;">Infostealer Logs</span>
+                        <span style="color:#9ca3af;font-size:14px;">${stealerLogs.length} results</span>
+                        ${stealerLogs.length > 0 ? `<span style="color:#ef4444;font-size:12px;border:1px solid #ef4444;border-radius:999px;padding:2px 10px;">⚠ Infostealer detected</span>` : ''}
+                    </div>
+                    ${stealerLogs.length > 0 ? `<button onclick="document.getElementById('${slId}').classList.toggle('hidden')" style="background:transparent;border:1px solid #333;color:#e5e7eb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;">View infostealer logs</button>` : ''}
+                </div>
+                ${stealerLogs.length > 0 ? `<div style="color:#9ca3af;font-size:13px;margin-top:6px;">May include cookies, sessions, and autofill data</div>` : ''}
+                <div id="${slId}" class="hidden" style="margin-top:16px;">`;
+            stealerLogs.forEach((log, i) => {
+                const src = esc(log.source || log.platform || log.computer_name || 'Stealer Log ' + (i+1));
+                const dt = esc(log.date || log.created_at || '');
+                const os = esc(log.operating_system || log.os || '');
+                h += `<div style="background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:14px;margin-bottom:8px;font-size:13px;">
+                    <div style="color:#fff;font-weight:600;">${src}</div>
+                    <div style="color:#6b7280;margin-top:4px;">${[dt, os].filter(Boolean).join(' · ')}</div>
                 </div>`;
+            });
+            h += `</div></div>`;
 
-            html += '</div>';
+            // == Timeline ==
+            const tlId = 'ib_timeline_' + Math.random().toString(36).slice(2);
+            h += `<div style="padding:24px 28px;border-bottom:1px solid #1a1a1a;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="color:#fff;font-size:16px;font-weight:700;">Timeline</span>
+                    <button onclick="document.getElementById('${tlId}').classList.toggle('hidden')" style="background:transparent;border:1px solid #333;color:#e5e7eb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;">View timeline</button>
+                </div>
+                <div id="${tlId}" class="hidden" style="margin-top:16px;">`;
+            if (timeline.length > 0) {
+                timeline.forEach(ev => {
+                    h += `<div style="display:flex;gap:16px;align-items:baseline;padding:10px 0;border-bottom:1px solid #1a1a1a;font-size:13px;">
+                        <span style="color:#fff;font-weight:600;min-width:120px;">${esc(ev.date)}</span>
+                        <span style="color:#d1d5db;">${esc(ev.title)}</span>
+                        ${ev.note ? `<span style="color:#6b7280;font-size:12px;">${esc(ev.note)}</span>` : ''}
+                    </div>`;
+                });
+            } else {
+                h += `<div style="color:#6b7280;font-size:13px;">No timeline events.</div>`;
+            }
+            h += `</div></div>`;
 
-            setResultMarkup(
-                box,
-                'IntelBase Email Intelligence - Full Report',
-                html,
-                { 
-                    badge: breachCountDisplay > 0 ? `⚠️ ${breachCountDisplay} Breaches` : '✓ Clean', 
-                    riskScore: breachCountDisplay > 0 ? 70 : 35 
-                }
-            );
+            // == Registrations ==
+            const regId = 'ib_reg_' + Math.random().toString(36).slice(2);
+            h += `<div style="padding:24px 28px;border-bottom:1px solid #1a1a1a;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <span style="color:#fff;font-size:16px;font-weight:700;">Registrations</span>
+                        <span style="color:#9ca3af;font-size:14px;">${acctKeys.length} accounts</span>
+                    </div>
+                    <button onclick="document.getElementById('${regId}').classList.toggle('hidden')" style="background:transparent;border:1px solid #333;color:#e5e7eb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;">View registrations</button>
+                </div>
+                <div id="${regId}" class="hidden" style="margin-top:16px;">`;
+            acctKeys.forEach(platform => {
+                const acc = accounts[platform];
+                const link = String(acc.profile_url || acc.url || acc.link || '').trim();
+                h += `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#111;border:1px solid #1e1e1e;border-radius:8px;margin-bottom:6px;">
+                    <span style="color:#e5e7eb;font-size:14px;font-weight:500;">${esc(platform)}</span>
+                    <span style="color:#22c55e;font-size:13px;">✓ Registered</span>
+                </div>`;
+            });
+            h += `</div></div>`;
+
+            // == Account Details ==
+            if (acctKeys.length > 0) {
+                const adId = 'ib_accts_' + Math.random().toString(36).slice(2);
+                h += `<div style="padding:24px 28px;border-bottom:1px solid #1a1a1a;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <span style="color:#fff;font-size:16px;font-weight:700;">Account Details</span>
+                        <button onclick="document.getElementById('${adId}').classList.toggle('hidden')" style="background:transparent;border:1px solid #333;color:#e5e7eb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;">View details</button>
+                    </div>
+                    <div id="${adId}" class="hidden" style="margin-top:16px;">`;
+
+                acctKeys.forEach(platform => {
+                    const acc = accounts[platform];
+                    const avatar = String(acc.avatar || acc.picture || acc.profile_picture || acc.image || acc.profile_image_url || acc.avatar_url || '').trim();
+                    const link = String(acc.profile_url || acc.url || acc.link || '').trim();
+                    const fields = [];
+                    if (acc.full_name) fields.push(['Full Name', acc.full_name]);
+                    if (acc.username) fields.push(['Username', acc.username]);
+                    if (acc.id || acc.user_id) fields.push(['ID', String(acc.id || acc.user_id)]);
+                    if (acc.country) fields.push(['Country', acc.country]);
+                    if (acc.location) fields.push(['Location', acc.location]);
+                    if (acc.creation_date) fields.push(['Created', _fmtDate(acc.creation_date)]);
+                    if (acc.last_seen_date) fields.push(['Last Seen', _fmtDate(acc.last_seen_date)]);
+                    if (link) fields.push(['Profile', `<a href="${esc(link)}" target="_blank" rel="noopener" style="color:#22c55e;text-decoration:underline;">${esc(link)}</a>`]);
+
+                    h += `<div style="background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:20px;margin-bottom:10px;">
+                        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+                            ${avatar ? `<img src="${esc(avatar)}" style="width:48px;height:48px;border-radius:10px;object-fit:cover;border:1px solid #333;" onerror="this.style.display='none'">` : ''}
+                            <div style="color:#fff;font-size:15px;font-weight:700;">${esc(platform)}</div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">`;
+                    fields.forEach(([lbl, val]) => {
+                        h += `<div><div style="color:#6b7280;font-size:12px;margin-bottom:2px;">${esc(lbl)}</div><div style="color:#e5e7eb;font-size:14px;word-break:break-all;">${val}</div></div>`;
+                    });
+                    h += `</div></div>`;
+                });
+                h += `</div></div>`;
+            }
+
+            h += `</div>`;
+
+            setResultMarkup(box, '', h, { badge: breachCount > 0 ? `⚠️ ${breachCount} Breaches` : '✓ Clean', riskScore: breachCount > 0 ? 70 : 35 });
         }
 
 
