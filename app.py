@@ -4860,7 +4860,6 @@ HTML_TEMPLATE = """
                     <h2 class="text-xl font-bold text-green-400 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
                         <span>📧</span> استخبارات الإيميل (Email Intelligence)
                     </h2>
-                    <p class="text-xs text-gray-400 mb-3">استخدم IntelBase API للتحقق من بيانات الإيميل، تسريبات البيانات، والعروض المدفوعة بالبريد الإلكتروني.</p>
                     <div class="flex gap-2 mb-4">
                         <input type="email" id="osintEmailInput" placeholder="أدخل بريد إلكتروني..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-green-500 outline-none font-mono text-left" dir="ltr">
                         <button onclick="osintLookupEmail()" class="bg-green-900/40 hover:bg-green-800 px-6 py-3 rounded-xl font-bold border border-green-800/50 transition-all text-green-400 flex items-center justify-center min-w-[140px]">
@@ -5003,7 +5002,6 @@ HTML_TEMPLATE = """
                 <h2 class="text-xl font-bold text-pink-400 border-b border-slate-700 pb-2 flex items-center gap-2">
                     <span>🔥</span> قنوات الدردشة والرسائل الأمنة
                 </h2>
-                <p class="text-xs text-gray-400">دمج كامل بين رسائل لمرة واحدة وغرفة دردشة مشفرة ذات تدمير فوري للرسائل.</p>
 
                 <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50 border-r-4 border-r-orange-500 relative overflow-hidden group">
                     <div class="absolute inset-0 bg-gradient-to-l from-orange-500/5 to-transparent pointer-events-none"></div>
@@ -5037,7 +5035,6 @@ HTML_TEMPLATE = """
                     <h2 class="text-xl font-bold text-pink-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
                         <span>🔥</span> غرفة الـ Burn Chat (P2P مشفر)
                     </h2>
-                    <p class="text-xs text-gray-400 mb-3">اتصال مشفر آمن لا يحفظ السجلات. الرسالة تُدمّر حرفياً من ذاكرة الخادم في اللحظة التي تُقرأ فيها.</p>
 
                     <div class="bg-gray-900/80 rounded-xl border border-slate-700 p-4">
                         <div class="flex gap-2 mb-4 bg-black p-3 rounded-lg border border-slate-800 flex-col md:flex-row">
@@ -18665,7 +18662,7 @@ def osint_intelbase_email_route():
         add_audit_log('OSINT IntelBase Email', f'email={email} using_proxy={proxy_url}')
 
     try:
-        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=10, proxies=proxies)
+        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=30, proxies=proxies)
         
         # تعامل مع أي حالة من الحالات بما فيها 401
         if response.status_code != 200:
