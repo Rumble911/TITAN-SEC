@@ -3052,54 +3052,57 @@ def deep_scan_link_logic(target_url):
 
 HYBRID_ANALYSIS_API_KEY = "2ntt0jf88d1e4219e7n08rklfa591f06jjemnrl8a5452665phwilurg3362a7ef"
 HYBRID_ANALYSIS_BASE_URL = "https://www.hybrid-analysis.com/api/v2"
-HYBRID_ANALYSIS_ALT_URL = "https://api.hybrid-analysis.com/api/v2"
 
 def ha_upload_file(file_path, filename):
-    """محاولة رفع الملف عبر عدة مسارات لتجاوز قيود الـ API"""
+    """محاولة رفع الملف مع تنظيف الاسم واستخدام معاملات متوافقة"""
+    # تنظيف اسم الملف لضمان قبوله من الـ API (تغيير الامتداد غير المعروف إلى .bin إذا لزم الأمر)
+    safe_filename = filename
+    if '.' not in filename or len(filename.split('.')[-1]) > 5:
+        safe_filename = "sample_file.bin"
+    elif filename.lower().endswith('.7j100'): # معالجة الحالة الخاصة في لقطة الشاشة
+        safe_filename = "sample_data.txt"
+
     headers = {
         "api-key": HYBRID_ANALYSIS_API_KEY,
+        "X-Api-Key": HYBRID_ANALYSIS_API_KEY, # محاولة كلا الشكلين
         "User-Agent": "Falcon Sandbox",
         "accept": "application/json"
     }
     
-    # تحديد البيئة
-    ext = filename.split('.')[-1].lower() if '.' in filename else ''
-    env_id = 160 # Windows 10 64-bit
-    if ext == 'apk': env_id = 300
+    # تحديد البيئة (كـ String)
+    env_id_str = "160"
+    ext = safe_filename.split('.')[-1].lower()
+    if ext == 'apk': env_id_str = "300"
     
     attempts = [
-        # المحاولة 1: القياسي (Full Submit)
-        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/submit/file", "data": {"environment_id": env_id}, "name": "Standard Submit"},
-        # المحاولة 2: المسار البديل (API Host)
-        {"url": f"{HYBRID_ANALYSIS_ALT_URL}/submit/file", "data": {"environment_id": env_id}, "name": "Alt Host Submit"},
-        # المحاولة 3: الفحص السريع بمعرف id
-        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/quick-scan/file", "data": {"id": env_id}, "name": "Quick Scan (id)"},
-        # المحاولة 4: الفحص السريع بدون معرفات (تلقائي)
-        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/quick-scan/file", "data": {}, "name": "Quick Scan (Auto)"}
+        # المحاولة 1: Quick Scan (الأكثر قبولاً للحسابات المجانية)
+        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/quick-scan/file", "params": {"environment_id": env_id_str}},
+        # المحاولة 2: Quick Scan باستخدام مفتاح id (لمعالجة خطأ field: id)
+        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/quick-scan/file", "params": {"id": env_id_str}},
+        # المحاولة 3: Submit التقليدي
+        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/submit/file", "params": {"environment_id": env_id_str}},
     ]
     
-    last_error = ""
-    for attempt in attempts:
+    last_resp_text = ""
+    for att in attempts:
         try:
             with open(file_path, 'rb') as f:
-                files = {'file': (filename, f)}
-                # إضافة allow_community_access لزيادة احتمالية قبول الطلب في الحسابات المجانية
-                data = attempt["data"]
+                files = {'file': (safe_filename, f)}
+                data = att["params"]
                 data["allow_community_access"] = "true"
                 
-                resp = requests.post(attempt["url"], headers=headers, files=files, data=data, timeout=300)
+                # استخدام data لرفع كـ multipart/form-data
+                resp = requests.post(att["url"], headers=headers, files=files, data=data, timeout=300)
                 
                 if resp.status_code in [200, 201, 202]:
                     return resp.json()
                 
-                last_error = f"{attempt['name']}: {resp.status_code} - {resp.text}"
-                print(f"[HA ATTEMPT FAILED] {last_error}")
-                
+                last_resp_text = f"URL: {att['url']} | Status: {resp.status_code} | Msg: {resp.text}"
+                print(f"[HA DEBUG] Failed attempt: {last_resp_text}")
         except Exception as e:
-            last_error = f"{attempt['name']} Exception: {str(e)}"
-            print(f"[HA ATTEMPT ERROR] {last_error}")
+            last_resp_text = f"Exception: {str(e)}"
             
-    return {"error": f"جميع محاولات الرفع فشلت. تفاصيل آخر خطأ: {last_error}"}
+    return {"error": f"فشلت جميع المحاولات. آخر رد من الـ API: {last_resp_text}"}
 
 def ha_get_analysis_summary(sha256_or_jobid):
     """استرجاع نتائج التحليل كاملة"""
