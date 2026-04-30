@@ -44,6 +44,8 @@ from email.mime.text import MIMEText
 import urllib.request
 import json as _json
 import html
+import whois
+from bs4 import BeautifulSoup
 
 try:
     from reportlab.pdfgen import canvas  # type: ignore
@@ -71,7 +73,7 @@ except Exception:
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # حد أقصى للملفات 16 ميجابايت
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # حد أقصى للملفات 100 ميجابايت
 app.secret_key = os.environ.get('SECRET_KEY', 'TITAN_ULTRA_SECRET_KEY_2025')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -2845,6 +2847,311 @@ def check_phone_intelligence(phone: str) -> dict:
     except Exception as e:
         return {"success": False, "message": str(e), "error": str(e)}
 
+# --- وحدة التحليل العميق للروابط (Deep Link Analysis Module) ---
+
+def trace_redirects(start_url):
+    """تتبع التوجيه (Recursive Redirect Tracing)"""
+    chain = []
+    current_url = start_url
+    try:
+        # استخدام requests لتتبع التوجيهات يدوياً للتحكم في كل خطوة
+        for _ in range(12):  # حد أقصى 12 توجيه
+            chain.append(current_url)
+            # headers لمحاكاة متصفح حقيقي
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+            resp = requests.get(current_url, allow_redirects=False, timeout=6, headers=headers)
+            
+            if 300 <= resp.status_code < 400 and 'Location' in resp.headers:
+                next_url = resp.headers['Location']
+                # استخدام urljoin لمعالجة الروابط النسبية بشكل صحيح
+                next_url = urllib.parse.urljoin(current_url, next_url)
+                current_url = next_url
+            else:
+                break
+    except Exception as e:
+        if not chain:
+             chain.append(start_url)
+        chain.append(f"Redirect Error: {str(e)}")
+    return chain
+
+def is_trusted_domain(url):
+    """التحقق مما إذا كان الدومين من المواقع الموثوقة عالمياً"""
+    trusted_list = [
+        'google.com', 'github.com', 'microsoft.com', 'apple.com', 'amazon.com',
+        'facebook.com', 'instagram.com', 'twitter.com', 'linkedin.com', 'netflix.com',
+        'youtube.com', 'gmail.com', 'outlook.com', 'cloudflare.com', 'adobe.com',
+        'dropbox.com', 'slack.com', 'zoom.us', 'spotify.com', 'openai.com', 'bing.com'
+    ]
+    try:
+        domain = urllib.parse.urlparse(url).netloc.lower()
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        # التحقق من أن الدومين هو الدومين الموثوق نفسه أو ساب-دومين له
+        for trusted in trusted_list:
+            if domain == trusted or domain.endswith('.' + trusted):
+                return True
+        return False
+    except:
+        return False
+
+def check_tunneling_service(url):
+    """كشف خدمات الـ Tunneling"""
+    tunneling_domains = [
+        'ngrok.io', 'trycloudflare.com', 'localhost.run', 'lvh.me', 
+        'localtunnel.me', 'ngrok-free.app', 'serveo.net', 'pagekite.me',
+        'forwarding.run', 'mooo.com', 'tunnel.py'
+    ]
+    domain = urllib.parse.urlparse(url).netloc.lower()
+    for t_domain in tunneling_domains:
+        if t_domain in domain:
+            return True, t_domain
+    return False, None
+
+def scrape_phishing_indicators(url):
+    """تحليل المحتوى (Content Scraper) للبحث عن أنماط التصيد"""
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        resp = requests.get(url, timeout=10, headers=headers)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        findings = []
+        score_inc = 0
+        
+        # 1. البحث عن حقول كلمة السر
+        pw_fields = soup.find_all('input', {'type': 'password'})
+        if pw_fields:
+            findings.append(f"تم اكتشاف {len(pw_fields)} حقل لطلب كلمات السر (Password Fields)")
+            score_inc += 45
+            
+        # 2. البحث عن كلمات مشبوهة في النصوص والعناوين
+        phish_keywords = ['login', 'signin', 'verify', 'account', 'banking', 'secure', 'update', 'password', 'تسجيل الدخول', 'تحقق', 'بنك']
+        page_text = soup.get_text().lower()
+        found_keys = [k for k in phish_keywords if k in page_text]
+        if found_keys:
+            findings.append(f"كلمات مشبوهة مكتشفة: {', '.join(found_keys[:5])}")
+            score_inc += 15
+            
+        # 3. التحقق من وجود نماذج (Forms) ترسل البيانات لجهات خارجية
+        forms = soup.find_all('form')
+        for f in forms:
+            action = f.get('action', '')
+            if action.startswith('http') and urllib.parse.urlparse(action).netloc != urllib.parse.urlparse(url).netloc:
+                findings.append("نموذج إرسال بيانات يوجه لموقع خارجي (External Form Action)")
+                score_inc += 25
+                break
+
+        return {
+            "findings": findings,
+            "risk_score_inc": score_inc,
+            "title": soup.title.string if soup.title else "No Title"
+        }
+    except Exception as e:
+        return {"findings": [f"Scrape Error: {str(e)}"], "risk_score_inc": 0, "title": "N/A"}
+
+def analyze_domain_age(url):
+    """تحليل عمر الدومين (Domain Age Analysis)"""
+    try:
+        domain = urllib.parse.urlparse(url).netloc
+        if ':' in domain:
+            domain = domain.split(':')[0]
+            
+        # محاولة WHOIS
+        w = whois.whois(domain)
+        creation_date = w.creation_date
+        if isinstance(creation_date, list):
+            creation_date = creation_date[0]
+            
+        if creation_date:
+            age_days = (datetime.datetime.now() - creation_date).days
+            return {"age_days": age_days, "creation_date": creation_date.strftime('%Y-%m-%d')}
+        return {"age_days": None, "creation_date": "N/A"}
+    except Exception:
+        return {"age_days": None, "creation_date": "N/A"}
+
+def deep_scan_link_logic(target_url):
+    """المنطق الأساسي للتحليل العميق وحساب النقاط"""
+    # 1. تتبع التوجيهات
+    redirect_chain = trace_redirects(target_url)
+    final_url = redirect_chain[-1]
+    # التأكد من أن الرابط النهائي صالح قبل الفحص (في حال وجود خطأ في التتبع)
+    valid_final_url = final_url
+    if final_url.startswith("Redirect Error:"):
+        # إذا فشل التتبع، نستخدم آخر رابط صالح في السلسلة
+        valid_final_url = next((u for u in reversed(redirect_chain) if not u.startswith("Redirect Error:")), target_url)
+
+    # 2. كشف الـ Tunneling
+    is_tunnel, service_name = check_tunneling_service(valid_final_url)
+    
+    # 3. تحليل المحتوى
+    content = scrape_phishing_indicators(valid_final_url)
+    
+    # 4. تحليل عمر الدومين
+    domain_info = analyze_domain_age(valid_final_url)
+    
+    # 5. حساب النتيجة النهائية
+    final_score = 0
+    reasons = []
+    
+    # 5.1 التحقق من الدومينات الموثوقة (Whitelisting)
+    if is_trusted_domain(valid_final_url):
+        return {
+            "success": True,
+            "url": target_url,
+            "final_url": final_url,
+            "redirect_chain": redirect_chain,
+            "risk_score": 0,
+            "status": "CLEAN",
+            "reasons": ["دومين موثوق عالمياً (Whitelisted Domain)"],
+            "domain_info": domain_info,
+            "content_title": content.get('title', 'N/A')
+        }
+    
+    if is_tunnel:
+        final_score += 65
+        reasons.append(f"خدمة Tunneling مكتشفة: {service_name}")
+        
+    final_score += content.get('risk_score_inc', 0)
+    reasons.extend(content.get('findings', []))
+    
+    age = domain_info.get('age_days')
+    if age is not None:
+        if age < 30:
+            final_score += 55
+            reasons.append(f"دومين حديث جداً ({age} يوم)")
+        elif age < 180:
+            final_score += 25
+            reasons.append(f"دومين جديد ({age} يوم)")
+    else:
+        final_score += 10
+        reasons.append("تعذر التحقق من عمر الدومين (ربما محمي)")
+
+    if len(redirect_chain) > 3:
+        final_score += 15
+        reasons.append(f"سلسلة توجيهات طويلة ({len(redirect_chain)} قفزات)")
+
+    # تسوية النتيجة بين 0 و 100
+    final_score = min(100, final_score)
+    
+    status = "CLEAN"
+    if final_score >= 75: status = "DANGEROUS"
+    elif final_score >= 40: status = "SUSPICIOUS"
+
+    return {
+        "success": True,
+        "url": target_url,
+        "final_url": final_url,
+        "redirect_chain": redirect_chain,
+        "risk_score": final_score,
+        "status": status,
+        "reasons": reasons,
+        "domain_info": domain_info,
+        "content_title": content.get('title', 'N/A')
+    }
+
+# --- وحدة فحص البرمجيات الخبيثة والـ Sandbox (Hybrid Analysis Module) ---
+
+HYBRID_ANALYSIS_API_KEY = "2ntt0jf88d1e4219e7n08rklfa591f06jjemnrl8a5452665phwilurg3362a7ef"
+HYBRID_ANALYSIS_BASE_URL = "https://www.hybrid-analysis.com/api/v2"
+HYBRID_ANALYSIS_ALT_URL = "https://api.hybrid-analysis.com/api/v2"
+
+def ha_upload_file(file_path, filename):
+    """محاولة رفع الملف عبر عدة مسارات لتجاوز قيود الـ API"""
+    headers = {
+        "api-key": HYBRID_ANALYSIS_API_KEY,
+        "User-Agent": "Falcon Sandbox",
+        "accept": "application/json"
+    }
+    
+    # تحديد البيئة
+    ext = filename.split('.')[-1].lower() if '.' in filename else ''
+    env_id = 160 # Windows 10 64-bit
+    if ext == 'apk': env_id = 300
+    
+    attempts = [
+        # المحاولة 1: القياسي (Full Submit)
+        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/submit/file", "data": {"environment_id": env_id}, "name": "Standard Submit"},
+        # المحاولة 2: المسار البديل (API Host)
+        {"url": f"{HYBRID_ANALYSIS_ALT_URL}/submit/file", "data": {"environment_id": env_id}, "name": "Alt Host Submit"},
+        # المحاولة 3: الفحص السريع بمعرف id
+        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/quick-scan/file", "data": {"id": env_id}, "name": "Quick Scan (id)"},
+        # المحاولة 4: الفحص السريع بدون معرفات (تلقائي)
+        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/quick-scan/file", "data": {}, "name": "Quick Scan (Auto)"}
+    ]
+    
+    last_error = ""
+    for attempt in attempts:
+        try:
+            with open(file_path, 'rb') as f:
+                files = {'file': (filename, f)}
+                # إضافة allow_community_access لزيادة احتمالية قبول الطلب في الحسابات المجانية
+                data = attempt["data"]
+                data["allow_community_access"] = "true"
+                
+                resp = requests.post(attempt["url"], headers=headers, files=files, data=data, timeout=300)
+                
+                if resp.status_code in [200, 201, 202]:
+                    return resp.json()
+                
+                last_error = f"{attempt['name']}: {resp.status_code} - {resp.text}"
+                print(f"[HA ATTEMPT FAILED] {last_error}")
+                
+        except Exception as e:
+            last_error = f"{attempt['name']} Exception: {str(e)}"
+            print(f"[HA ATTEMPT ERROR] {last_error}")
+            
+    return {"error": f"جميع محاولات الرفع فشلت. تفاصيل آخر خطأ: {last_error}"}
+
+def ha_get_analysis_summary(sha256_or_jobid):
+    """استرجاع نتائج التحليل كاملة"""
+    url = f"{HYBRID_ANALYSIS_BASE_URL}/report/{sha256_or_jobid}/summary"
+    headers = {
+        "api-key": HYBRID_ANALYSIS_API_KEY,
+        "User-Agent": "Falcon Sandbox"
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=20)
+        if resp.status_code == 200:
+            data = resp.json()
+            # استخراج المعلومات المطلوبة بدقة
+            result = {
+                "success": True,
+                "threat_score": data.get("threat_score", 0),
+                "verdict": data.get("verdict", "unknown"),
+                "mitre_attacks": [],
+                "network_traffic": [],
+                "extracted_payloads": [],
+                "job_id": data.get("job_id"),
+                "environment": data.get("environment_description")
+            }
+            
+            # MITRE ATT&CK
+            for attack in data.get("mitre_attcks", []):
+                result["mitre_attacks"].append({
+                    "tactic": attack.get("tactic"),
+                    "technique": attack.get("technique"),
+                    "attck_id": attack.get("attck_id")
+                })
+                
+            # Network Traffic (Hosts/IPs)
+            for host in data.get("hosts", []):
+                result["network_traffic"].append(host)
+                
+            # Extracted/Dropped Files (Potential Payloads)
+            for dropped in data.get("extracted_files", []):
+                result["extracted_payloads"].append({
+                    "name": dropped.get("name"),
+                    "sha256": dropped.get("sha256"),
+                    "threat_level": dropped.get("threat_level_desc")
+                })
+                
+            return result
+        elif resp.status_code == 404:
+            return {"success": False, "status": "IN_PROGRESS", "message": "التحليل لا يزال جارياً..."}
+        else:
+            return {"error": f"API Error {resp.status_code}"}
+    except Exception as e:
+        return {"error": str(e)}
+
 # --- فحص الروابط المشبوهة عبر IPQualityScore API ---
 def check_url_intelligence(target_url: str) -> dict:
     API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
@@ -4934,51 +5241,40 @@ HTML_TEMPLATE = """
                     <p class="text-xs text-gray-400 mb-3">فحص دقيق للروابط والمواقع لاكتشاف صفحات التصيد (Phishing) والبرمجيات الخبيثة وتصنيف الخطورة.</p>
                     <div class="flex gap-2 mb-4">
                         <input type="url" id="urlInput" placeholder="أدخل الرابط لفحصه (مثل https://example.com)..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-left" dir="ltr">
-                        <button onclick="checkUrl()" class="bg-blue-900/40 hover:bg-blue-800 px-6 py-3 rounded-xl font-bold border border-blue-800/50 transition-all text-blue-400 flex items-center justify-center min-w-[140px]">
-                            فحص الرابط
+                        <button onclick="checkUrlCombined()" class="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl font-bold border border-blue-400/30 transition-all text-white flex items-center justify-center min-w-[160px] shadow-lg shadow-blue-900/20">
+                            بدء الفحص الشامل 🔍
                         </button>
                     </div>
                     <div id="urlResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm"></div>
                 </div>
 
-                <!-- Malware URL & File Scanner -->
+                <!-- Malware File Sandbox Scanner -->
                 <div>
                     <h2 class="text-xl font-bold text-rose-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>🦠</span> فحص البرمجيات الخبيثة (Malware Scanner)
+                        <span>🦠</span> فحص البرمجيات الخبيثة والملفات (Malware Sandbox)
                     </h2>
-                    <p class="text-xs text-gray-400 mb-3">ابحث عن الفيروسات والبرمجيات الخبيثة المخفية في الروابط أو الملفات.</p>
+                    <p class="text-xs text-gray-400 mb-3 text-right">تحليل سلوكي متقدم للملفات المشبوهة والـ Payloads باستخدام بيئة Sandbox معزولة عبر Hybrid Analysis.</p>
                     
-                    <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50 space-y-4">
-                        <!-- URL Scan -->
+                    <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50 space-y-6">
+                        <!-- File Upload Sandbox -->
                         <div>
-                            <label class="block text-xs text-gray-400 mb-2 font-bold">فحص رابط خبيث:</label>
-                            <div class="flex gap-2">
-                                <input type="url" id="malwareUrlInput" placeholder="أدخل الرابط لفحصه..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-rose-500 outline-none font-mono text-left" dir="ltr">
-                                <button onclick="checkMalwareUrl()" class="bg-rose-900/40 hover:bg-rose-800 px-6 py-3 rounded-xl font-bold border border-rose-800/50 transition-all text-rose-400 flex items-center justify-center min-w-[140px]">
-                                    فحص الرابط
+                            <label class="block text-xs text-gray-400 mb-2 font-bold text-right">رفع ملف للتحليل العميق (Sandbox):</label>
+                            <div class="flex flex-col md:flex-row gap-3">
+                                <div class="flex-1 relative group">
+                                    <input type="file" id="malwareFileInput" class="hidden" onchange="updateFileNameDisplay()">
+                                    <label for="malwareFileInput" class="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-700 cursor-pointer hover:border-rose-500 transition-all group-hover:bg-slate-800">
+                                        <span id="fileNameDisplay" class="text-gray-500 text-sm italic">اختر ملفاً لمسحه (.exe, .py, .apk, .sh, .docx)...</span>
+                                        <span class="bg-slate-800 px-3 py-1 rounded text-[10px] font-bold text-gray-400 border border-white/5 uppercase">استعراض</span>
+                                    </label>
+                                </div>
+                                <button onclick="scanMalwareFile()" class="bg-rose-600 hover:bg-rose-500 px-6 py-3 rounded-xl font-bold border border-rose-400/30 transition-all text-white flex items-center justify-center min-w-[160px] shadow-lg shadow-rose-900/20">
+                                    بدء الفحص السلوكي 🚀
                                 </button>
                             </div>
                         </div>
                         
-                        <!-- Divider -->
-                        <div class="flex items-center gap-3">
-                            <hr class="flex-1 border-slate-700">
-                            <span class="text-xs text-gray-500 font-bold uppercase">أو</span>
-                            <hr class="flex-1 border-slate-700">
-                        </div>
-                        
-                        <!-- File Scan -->
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-2 font-bold">فحص ملف مشبوه:</label>
-                            <div class="flex gap-2">
-                                <input type="file" id="malwareFileInput" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-rose-900/40 file:text-rose-400 hover:file:bg-rose-800/60 border border-slate-700 p-2 rounded-xl">
-                                <button onclick="checkMalwareFile()" class="bg-rose-900/40 hover:bg-rose-800 px-6 py-2 rounded-xl font-bold border border-rose-800/50 transition-all text-rose-400 flex items-center justify-center min-w-[140px]">
-                                    رفع وفحص الملف
-                                </button>
-                            </div>
-                        </div>
+                        <div id="malwareFileResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm min-h-[100px]"></div>
                     </div>
-                    <div id="malwareResult" class="hidden mt-4 p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm"></div>
                 </div>
 
                 <!-- Phone Validator & Intelligence -->
@@ -11577,46 +11873,123 @@ HTML_TEMPLATE = """
             }
         }
 
-        async function checkUrl() {
-            const url = document.getElementById('urlInput').value;
+        async function checkUrlCombined() {
+            const urlInput = document.getElementById('urlInput');
+            const url = (urlInput.value || '').trim();
             if(!url || (!url.startsWith('http://') && !url.startsWith('https://'))) return titanAlert("الرجاء إدخال رابط صحيح يبدأ بـ http:// أو https://");
+            
             const resBox = document.getElementById('urlResult');
             resBox.classList.remove('hidden');
-            setResultLoading(resBox, 'URL Intelligence', 'جاري فحص الرابط عبر IPQualityScore...');
-             soundManager.terminalType();
+            setResultLoading(resBox, 'الفحص الشامل للرابط', 'جاري تحليل الرابط عبر خوارزميات TITAN والاستخبارات المفتوحة...');
+            if (typeof soundManager !== 'undefined' && soundManager.terminalType) soundManager.terminalType();
             
             try {
-                const res = await fetch('/api/scan/url', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({url})
-                });
-                const data = await res.json();
-                
-                if (data.error) {
-                    setResultError(resBox, data.error);
+                // تنفيذ الفحصين بالتوازي لتوفير الوقت
+                const [quickRes, deepRes] = await Promise.all([
+                    fetch('/api/scan/url', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url}) }).then(r => r.json().catch(()=>({error:true}))),
+                    fetch('/api/security/deep-scan-link', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url}) }).then(r => r.json().catch(()=>({error:true})))
+                ]);
+
+                if ((quickRes.error || !quickRes.success) && (deepRes.error || !deepRes.success)) {
+                    setResultError(resBox, "فشل الفحص الشامل: تعذر الاتصال بخوادم التحليل.");
                     return;
                 }
+
+                // حساب متوسط الخطورة أو النتيجة الأعلى
+                const quickScore = Number(quickRes.risk_score || 0);
+                const deepScore = Number(deepRes.risk_score || 0);
+                const finalRiskScore = Math.max(quickScore, deepScore);
+                const tone = _resultToneByScore(finalRiskScore);
                 
-                if (data.success) {
-                    const scoreTone = _resultToneByScore(data.risk_score);
-                    setResultInfo(resBox, 'URL Intelligence', [
-                        { label: 'URL', value: url, tone: 'info', dir: 'ltr' },
-                        { label: 'Risk Score', value: data.risk_score || 0, tone: scoreTone },
-                        { label: 'Phishing', value: data.phishing ? 'YES (تصيد)' : 'NO', tone: data.phishing ? 'danger' : 'safe' },
-                        { label: 'Malware', value: data.malware ? 'YES (خبيث)' : 'NO', tone: data.malware ? 'danger' : 'safe' },
-                        { label: 'Suspicious', value: data.suspicious ? 'YES (مشبوه)' : 'NO', tone: data.suspicious ? 'warn' : 'safe' },
-                        { label: 'Parking', value: data.parking ? 'YES' : 'NO', tone: 'info' },
-                        { label: 'Domain', value: data.domain || 'N/A', tone: 'info', dir: 'ltr' },
-                        { label: 'Category / Server', value: `${data.category || 'N/A'} / ${data.server || 'N/A'}`, tone: 'info' }
-                    ], { badge: scoreTone === 'danger' ? 'High Risk' : (scoreTone === 'warn' ? 'Medium Risk' : 'Low Risk'), cols: 2, riskScore: Number(data.risk_score || 0) });
-                    if(data.risk_score > 70 || data.phishing || data.malware || data.suspicious) soundManager.alarm(); else soundManager.success();
+                // تحديد ما إذا كان الموقع تصيد (Phishing) بناءً على النتيجة النهائية
+                const isPhishing = quickRes.phishing || (finalRiskScore >= 70);
+
+                // تجهيز سلسلة التوجيه
+                let chainHtml = (deepRes.redirect_chain || [url]).map((link, idx) => `
+                    <div class="flex gap-2 items-start py-1 border-b border-white/5 last:border-0">
+                        <span class="text-indigo-500 font-bold min-w-[20px]">${idx + 1}.</span>
+                        <span class="font-mono text-[10px] break-all opacity-80" dir="ltr">${link}</span>
+                    </div>
+                `).join('');
+
+                // تجميع الملاحظات من الجهتين
+                let allReasons = [...(deepRes.reasons || [])];
+                if (quickRes.phishing) allReasons.push("تم تأكيد التصيد عبر قاعدة بيانات IPQualityScore");
+                if (quickRes.malware) allReasons.push("تم رصد برمجيات خبيثة عبر IPQualityScore");
+                if (isPhishing && !quickRes.phishing) allReasons.push("مؤشرات تصيد قوية تم رصدها عبر التحليل العميق لـ TITAN");
+                
+                let reasonsHtml = allReasons.map(r => `
+                    <div class="flex items-center gap-2 text-xs py-1">
+                        <span class="text-red-500">●</span>
+                        <span>${r}</span>
+                    </div>
+                `).join('');
+
+                const finalHtml = `
+                    <div class="space-y-4 p-2">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-black/20 p-3 rounded-lg border border-white/5 shadow-inner">
+                                <div class="text-[10px] text-gray-500 uppercase font-bold mb-1">الوجهة النهائية (Final URL)</div>
+                                <div class="font-mono text-xs break-all text-blue-400" dir="ltr">${deepRes.final_url || url}</div>
+                            </div>
+                            <div class="bg-black/20 p-3 rounded-lg border border-white/5 shadow-inner">
+                                <div class="text-[10px] text-gray-500 uppercase font-bold mb-1">عنوان الصفحة / السيرفر</div>
+                                <div class="text-xs text-white">${deepRes.content_title || quickRes.server || 'N/A'}</div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <div class="bg-slate-800/40 p-2 rounded border border-white/5 text-center">
+                                <div class="text-[9px] text-gray-400">النتيجة الإجمالية</div>
+                                <div class="text-sm font-bold text-${tone === 'danger' ? 'red' : (tone === 'warn' ? 'yellow' : 'green')}-500">${finalRiskScore}%</div>
+                            </div>
+                            <div class="bg-slate-800/40 p-2 rounded border border-white/5 text-center">
+                                <div class="text-[9px] text-gray-400">التصيد (Phishing)</div>
+                                <div class="text-sm font-bold ${isPhishing ? 'text-red-500' : 'text-green-500'}">${isPhishing ? 'YES (مؤكد)' : 'NO'}</div>
+                            </div>
+                            <div class="bg-slate-800/40 p-2 rounded border border-white/5 text-center">
+                                <div class="text-[9px] text-gray-400">عمر الدومين</div>
+                                <div class="text-sm font-bold text-blue-400">${deepRes.domain_info?.age_days || '?'} يوم</div>
+                            </div>
+                            <div class="bg-slate-800/40 p-2 rounded border border-white/5 text-center">
+                                <div class="text-[9px] text-gray-400">خدمة Tunneling</div>
+                                <div class="text-sm font-bold ${deepRes.reasons?.some(r=>r.includes('Tunneling')) ? 'text-red-500' : 'text-green-500'}">${deepRes.reasons?.some(r=>r.includes('Tunneling')) ? 'YES' : 'NO'}</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-black/20 p-3 rounded-lg border border-white/5">
+                            <div class="text-[10px] text-gray-500 uppercase font-bold mb-2">سلسلة التتبع (Redirect Chain)</div>
+                            <div class="max-h-[120px] overflow-y-auto custom-scrollbar">
+                                ${chainHtml}
+                            </div>
+                        </div>
+
+                        ${reasonsHtml ? `
+                        <div class="bg-red-900/10 p-3 rounded-lg border border-red-900/30">
+                            <div class="text-[10px] text-red-500 uppercase font-bold mb-2">ملاحظات الفحص والتحليل</div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                                ${reasonsHtml}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                setResultMarkup(resBox, 'تقرير الفحص الشامل (Unified Analysis)', finalHtml, { 
+                    badge: finalRiskScore >= 70 ? 'High Risk' : (finalRiskScore >= 40 ? 'Suspicious' : 'Safe'), 
+                    riskScore: finalRiskScore 
+                });
+                
+                if(finalRiskScore >= 40) {
+                    if (typeof soundManager !== 'undefined' && soundManager.alarm) soundManager.alarm();
                 } else {
-                    setResultError(resBox, `خطأ من الخدمة: ${data.message}`);
-                     soundManager.error();
+                    if (typeof soundManager !== 'undefined' && soundManager.success) soundManager.success();
                 }
+
             } catch (e) {
-                setResultError(resBox, 'فشل الاتصال بخادم الفحص.');
-                 soundManager.error();
+                console.error(e);
+                setResultError(resBox, 'فشل الاتصال بخوادم الفحص الشامل.');
+                if (typeof soundManager !== 'undefined' && soundManager.error) soundManager.error();
             }
         }
 
@@ -13680,52 +14053,155 @@ HTML_TEMPLATE = """
              }
         }
 
-        async function checkMalwareUrl() {
-            const url = document.getElementById('malwareUrlInput').value;
-            if(!url || (!url.startsWith('http://') && !url.startsWith('https://'))) return titanAlert("الرجاء إدخال رابط صحيح يبدأ بـ http:// أو https://");
-            const resBox = document.getElementById('malwareResult');
-            resBox.classList.remove('hidden');
-            setResultLoading(resBox, 'Malware Scan', 'جاري فحص الرابط للبرمجيات الخبيثة عبر IPQualityScore...');
-            soundManager.terminalType();
-            
-            try {
-                const res = await fetch('/api/scan/malware_url', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({url})
-                });
-                const data = await res.json();
-                renderMalwareResult(data, url, true);
-            } catch (e) {
-                 setResultError(resBox, 'فشل الاتصال بخادم الفحص.');
-                 soundManager.error();
+        function updateFileNameDisplay() {
+            const fileInput = document.getElementById('malwareFileInput');
+            const display = document.getElementById('fileNameDisplay');
+            if (fileInput && fileInput.files.length > 0) {
+                display.innerText = fileInput.files[0].name;
+                display.classList.remove('text-gray-500', 'italic');
+                display.classList.add('text-white', 'font-bold');
             }
         }
 
-        async function checkMalwareFile() {
-             const fileInput = document.getElementById('malwareFileInput');
-             if(!fileInput.files.length) return titanAlert("الرجاء اختيار ملف للفحص");
-             
-             const file = fileInput.files[0];
-             // Limit check (e.g. 15MB) since IPQualityScore free typically limits file size
-             if (file.size > 15 * 1024 * 1024) return titanAlert("حجم الملف كبير جداً. الحد الأقصى 15 ميجابايت.");
-             
-            const resBox = document.getElementById('malwareResult');
-            resBox.classList.remove('hidden');
-            setResultLoading(resBox, 'Malware Scan', 'جاري رفع وفحص الملف للبرمجيات الخبيثة...');
-            soundManager.terminalType();
+        async function scanMalwareFile() {
+            const fileInput = document.getElementById('malwareFileInput');
+            if (!fileInput || fileInput.files.length === 0) return titanAlert("الرجاء اختيار ملف أولاً");
             
+            const file = fileInput.files[0];
+            const resBox = document.getElementById('malwareFileResult');
+            resBox.classList.remove('hidden');
+            setResultLoading(resBox, 'تحليل الـ Sandbox', 'جاري رفع الملف لبيئة TITAN Sandbox... الرجاء الانتظار.');
+            if (typeof soundManager !== 'undefined' && soundManager.terminalType) soundManager.terminalType();
+
             const formData = new FormData();
             formData.append('file', file);
-            
-             try {
-                const res = await fetch('/api/scan/malware_file', {
-                    method: 'POST', body: formData
+
+            try {
+                // 1. الرفع الأولي
+                const uploadRes = await fetch('/api/malware/sandbox/upload', {
+                    method: 'POST',
+                    body: formData
                 });
-                const data = await res.json();
-                renderMalwareResult(data, file.name, false);
+                const uploadData = await uploadRes.json();
+
+                if (!uploadData.success) {
+                    setResultError(resBox, uploadData.error || "فشل الرفع");
+                    return;
+                }
+
+                const jobId = uploadData.job_id;
+                const sha256 = uploadData.sha256;
+                
+                // 2. التكرار (Polling) كل 10 ثوانٍ
+                setResultLoading(resBox, 'تحليل الـ Sandbox', 'تم الرفع بنجاح. جاري التحليل السلوكي في الـ Sandbox... قد يستغرق ذلك 2-5 دقائق.');
+                
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(`/api/malware/sandbox/status/${sha256 || jobId}`);
+                        const statusData = await statusRes.json();
+
+                        if (statusData.success) {
+                            clearInterval(pollInterval);
+                            renderSandboxReport(statusData, file.name);
+                        } else if (statusData.error) {
+                            clearInterval(pollInterval);
+                            setResultError(resBox, "خطأ أثناء جلب النتائج: " + statusData.error);
+                        }
+                        // إذا كان IN_PROGRESS نستمر في الانتظار
+                    } catch (e) {
+                        console.error("Polling error:", e);
+                    }
+                }, 10000);
+
             } catch (e) {
-                 setResultError(resBox, 'فشل رفع الملف أو الاتصال بالخادم.');
-                 soundManager.error();
+                setResultError(resBox, "حدث خطأ غير متوقع: " + e.message);
+            }
+        }
+
+        function renderSandboxReport(data, filename) {
+            const resBox = document.getElementById('malwareFileResult');
+            const scoreTone = data.threat_score >= 75 ? 'danger' : (data.threat_score >= 40 ? 'warn' : 'safe');
+            
+            // تجهيز تكتيكات MITRE
+            let mitreHtml = (data.mitre_attacks || []).map(m => `
+                <div class="bg-black/20 p-2 rounded border border-white/5 mb-2 text-right">
+                    <div class="text-[10px] text-rose-500 font-bold">${m.attck_id || 'ID'}</div>
+                    <div class="text-xs text-white">${m.tactic || 'N/A'} - ${m.technique || 'N/A'}</div>
+                </div>
+            `).join('') || '<div class="text-gray-500 italic text-xs text-right">لا يوجد تكتيكات مكتشفة</div>';
+
+            // تجهيز حركة الشبكة
+            let networkHtml = (data.network_traffic || []).map(n => `
+                <div class="text-xs font-mono text-blue-400 py-1 border-b border-white/5 last:border-0">${n}</div>
+            `).join('') || '<div class="text-gray-500 italic text-xs">لا توجد اتصالات مشبوهة</div>';
+
+            // تجهيز الـ Payloads المستخرجة
+            let payloadHtml = (data.extracted_payloads || []).map(p => `
+                <div class="flex justify-between items-center py-1 border-b border-white/5">
+                    <span class="text-xs text-gray-300 truncate max-w-[200px]">${p.name}</span>
+                    <span class="text-[9px] px-2 py-0.5 rounded ${p.threat_level?.includes('Malicious') ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}">${p.threat_level || 'Clean'}</span>
+                </div>
+            `).join('') || '<div class="text-gray-500 italic text-xs">لم يتم استخراج حمولات إضافية</div>';
+
+            const finalHtml = `
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="bg-slate-800/60 p-3 rounded-lg border border-white/5 text-center">
+                            <div class="text-[9px] text-gray-400">Verdict (الحكم)</div>
+                            <div class="text-sm font-bold uppercase ${data.verdict === 'malicious' ? 'text-red-500' : 'text-green-500'}">${data.verdict}</div>
+                        </div>
+                        <div class="bg-slate-800/60 p-3 rounded-lg border border-white/5 text-center">
+                            <div class="text-[9px] text-gray-400">Threat Score</div>
+                            <div class="text-sm font-bold text-${scoreTone === 'danger' ? 'red' : (scoreTone === 'warn' ? 'yellow' : 'green')}-500">${data.threat_score}%</div>
+                        </div>
+                        <div class="bg-slate-800/60 p-3 rounded-lg border border-white/5 text-center">
+                            <div class="text-[9px] text-gray-400">Environment</div>
+                            <div class="text-[10px] text-blue-400">${data.environment || 'Windows 10'}</div>
+                        </div>
+                        <div class="bg-slate-800/60 p-3 rounded-lg border border-white/5 text-center">
+                            <div class="text-[9px] text-gray-400">Job ID</div>
+                            <div class="text-[10px] font-mono text-gray-500">${data.job_id?.substring(0,8)}...</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-black/20 p-3 rounded-xl border border-white/10">
+                            <div class="text-[10px] text-gray-500 font-bold uppercase mb-3 flex items-center gap-2 justify-end">
+                                MITRE ATT&CK Mapping <span class="text-rose-500">🛡️</span>
+                            </div>
+                            <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                ${mitreHtml}
+                            </div>
+                        </div>
+                        <div class="bg-black/20 p-3 rounded-xl border border-white/10">
+                            <div class="text-[10px] text-gray-500 font-bold uppercase mb-3 flex items-center gap-2 justify-end">
+                                Network Traffic (C2) <span class="text-blue-500">🌐</span>
+                            </div>
+                            <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                ${networkHtml}
+                            </div>
+                        </div>
+                        <div class="bg-black/20 p-3 rounded-xl border border-white/10">
+                            <div class="text-[10px] text-gray-500 font-bold uppercase mb-3 flex items-center gap-2 justify-end">
+                                Extracted Payloads <span class="text-purple-500">📦</span>
+                            </div>
+                            <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                ${payloadHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            setResultMarkup(resBox, `تقرير Sandbox: ${filename}`, finalHtml, { 
+                badge: data.verdict?.toUpperCase(), 
+                riskScore: data.threat_score 
+            });
+
+            if (data.threat_score >= 40) {
+                if (typeof soundManager !== 'undefined' && soundManager.alarm) soundManager.alarm();
+            } else {
+                if (typeof soundManager !== 'undefined' && soundManager.success) soundManager.success();
             }
         }
 
@@ -16340,6 +16816,60 @@ def scan_url_route():
     res = check_url_intelligence(url)
     add_audit_log("فحص رابط مشبوه (IPQualityScore)", f"تم فحص الموثوقية: {url[:30]}...")
     return jsonify(res)
+
+@app.route('/api/malware/sandbox/upload', methods=['POST'])
+def malware_sandbox_upload_route():
+    if 'file' not in request.files:
+        return jsonify({"error": "لم يتم اختيار ملف"}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "اسم الملف فارغ"}), 400
+        
+    try:
+        # استخدام tempfile لحفظ الملف مؤقتاً للرفع
+        tmp_fd, tmp_path = tempfile.mkstemp()
+        try:
+            with os.fdopen(tmp_fd, 'wb') as tmp:
+                file.save(tmp)
+            
+            res = ha_upload_file(tmp_path, file.filename)
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+        
+        if "error" in res:
+            return jsonify(res), 500
+            
+        return jsonify({
+            "success": True,
+            "job_id": res.get("job_id"),
+            "sha256": res.get("sha256"),
+            "message": "تم رفع الملف بنجاح، جاري بدء التحليل في الـ Sandbox..."
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/malware/sandbox/status/<id>', methods=['GET'])
+def malware_sandbox_status_route(id):
+    res = ha_get_analysis_summary(id)
+    return jsonify(res)
+
+@app.route('/api/security/deep-scan-link', methods=['POST'])
+def deep_scan_link_route():
+    if 'user_id' not in session:
+        return jsonify({"error": "غير مصرح"}), 401
+    data = request.json or {}
+    url = data.get('url', '')
+    if not url:
+        return jsonify({"success": False, "message": "الرابط مطلوب"}), 400
+    
+    try:
+        res = deep_scan_link_logic(url)
+        add_audit_log("التحليل العميق للروابط 🕵️", f"فحص الرابط: {url[:40]}...")
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/api/scan/malware_url', methods=['POST'])
 def scan_malware_url_route():
