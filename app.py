@@ -12160,6 +12160,53 @@ HTML_TEMPLATE = """
                     </div>
                 </div>`;
 
+            // --- 3.0 Narrative Summary ---
+            html += `
+            <div class="bg-indigo-600/5 border border-white/5 rounded-2xl p-6 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl pointer-events-none"></div>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>
+                    <h3 class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Intelligence Summary</h3>
+                </div>
+                <p class="text-sm text-slate-300 leading-relaxed max-w-3xl">
+                    The target email has been identified in <span class="text-white font-black">${breachCount} data breaches</span> across various sources. 
+                    Active digital footprints were discovered on <span class="text-white font-black">${matchedAccounts.length} major platforms</span> 
+                    ${matchedAccounts.length > 0 ? `(including ${matchedAccounts.slice(0, 3).map(p => _osintEscape(p)).join(', ')})` : ''}. 
+                    Account delivery status is currently marked as <span class="${validator.deliverable !== false ? 'text-emerald-400' : 'text-rose-400'} font-bold">${validator.deliverable !== false ? 'VALID' : 'INVALID'}</span>.
+                </p>
+            </div>`;
+
+            // --- 3.1 Intelligence Summary (Widgets) ---
+            const allNames = [...new Set(matchedAccounts.map(p => accounts[p].full_name).filter(Boolean))];
+            const allUsernames = [...new Set(matchedAccounts.map(p => accounts[p].username || accounts[p].id || accounts[p].user_id).filter(Boolean))];
+            const allPics = matchedAccounts.map(p => getBestImage(accounts[p])).filter(Boolean);
+            const allLinks = matchedAccounts.map(p => accounts[p].url || accounts[p].link || accounts[p].profile_url || accounts[p].profile_link).filter(Boolean);
+            const allLocations = [...new Set(matchedAccounts.map(p => accounts[p].location || accounts[p].country || accounts[p].city).filter(Boolean))];
+
+            html += `
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div class="bg-[#0f0f0f] border border-white/5 rounded-2xl p-5 text-center hover:bg-white/5 transition-all group border-b-2 border-b-indigo-500/20">
+                    <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1 group-hover:text-indigo-400">Names Found</div>
+                    <div class="text-2xl font-black text-white">${allNames.length}</div>
+                </div>
+                <div class="bg-[#0f0f0f] border border-white/5 rounded-2xl p-5 text-center hover:bg-white/5 transition-all group border-b-2 border-b-emerald-500/20">
+                    <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1 group-hover:text-emerald-400">Usernames</div>
+                    <div class="text-2xl font-black text-white">${allUsernames.length}</div>
+                </div>
+                <div class="bg-[#0f0f0f] border border-white/5 rounded-2xl p-5 text-center hover:bg-white/5 transition-all group border-b-2 border-b-rose-500/20">
+                    <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1 group-hover:text-rose-400">Profile Pics</div>
+                    <div class="text-2xl font-black text-white">${allPics.length}</div>
+                </div>
+                <div class="bg-[#0f0f0f] border border-white/5 rounded-2xl p-5 text-center hover:bg-white/5 transition-all group border-b-2 border-b-amber-500/20">
+                    <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1 group-hover:text-amber-400">Profile Links</div>
+                    <div class="text-2xl font-black text-white">${allLinks.length}</div>
+                </div>
+                <div class="bg-[#0f0f0f] border border-white/5 rounded-2xl p-5 text-center hover:bg-white/5 transition-all group border-b-2 border-b-cyan-500/20">
+                    <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1 group-hover:text-cyan-400">Locations</div>
+                    <div class="text-2xl font-black text-white">${allLocations.length}</div>
+                </div>
+            </div>`;
+
             // --- 4. Verified Platforms Registry ---
             if (matchedAccounts.length > 0) {
                 html += `
@@ -12183,7 +12230,10 @@ HTML_TEMPLATE = """
 
             // --- 4.1 Data Breaches Summary (Professional Style) ---
             if (breachCount > 0) {
-                const uniqueSources = [...new Set(breaches.map(b => b.source).filter(Boolean))];
+                const uniqueSources = [...new Set(breaches.map(b => {
+                    const s = b.source;
+                    return typeof s === 'object' ? (s.name || s.title || 'Unknown Source') : s;
+                }).filter(Boolean))];
                 html += `
                 <div class="bg-[#0c0c0c] border border-white/5 rounded-2xl p-8 relative overflow-hidden">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-rose-600/10 blur-3xl pointer-events-none"></div>
@@ -15104,7 +15154,7 @@ HTML_TEMPLATE = """
                             ${breaches.map(b => `
                                 <tr style="border-bottom:1px solid #1a1a1a; transition:all;">
                                     <td style="padding:16px; white-space:nowrap;">
-                                        <div style="font-weight:900; color:white;">${_osintEscape(b.source)}</div>
+                                        <div style="font-weight:900; color:white;">${_osintEscape(typeof b.source === 'object' ? (b.source.name || b.source.title || 'Source Object') : b.source)}</div>
                                         <div style="font-size:10px; color:#555; font-weight:bold; margin-top:2px;">${fmtDate(b.date || b.breach_date)}</div>
                                     </td>
                                     <td style="padding:16px; color:#94a3b8;">${_osintEscape(b.full_name || b.name || '-')}</td>
@@ -19105,7 +19155,7 @@ def osint_intelbase_email_route():
         add_audit_log('OSINT IntelBase Email', f'email={email} using_proxy={proxy_url}')
 
     try:
-        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=30, proxies=proxies)
+        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=25, proxies=proxies)
         
         # تعامل مع أي حالة من الحالات بما فيها 401
         if response.status_code != 200:
