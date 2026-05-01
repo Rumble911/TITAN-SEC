@@ -5253,7 +5253,7 @@ HTML_TEMPLATE = """
                     <h2 class="text-xl font-bold text-rose-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
                         <span>🦠</span> فحص البرمجيات الخبيثة والملفات (Malware Sandbox)
                     </h2>
-                    <p class="text-xs text-gray-400 mb-3 text-right">تحليل سلوكي متقدم للملفات المشبوهة والـ Payloads باستخدام بيئة Sandbox معزولة عبر Hybrid Analysis.</p>
+                    <p class="text-xs text-gray-400 mb-3 text-right">تحليل سلوكي متقدم للملفات المشبوهة والـ Payloads باستخدام بيئة TITAN Sandbox المعزولة عبر VirusTotal Hybrid Intelligence.</p>
                     
                     <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50 space-y-6">
                         <!-- File Upload Sandbox -->
@@ -12134,198 +12134,177 @@ HTML_TEMPLATE = """
 
             const getTheme = (p) => platformThemes[p] || { color: '#6366f1', grad: 'rgba(99,102,241,0.2)', text: '#818cf8' };
 
-            let html = `<div class="space-y-12 animate-fadeIn" dir="ltr" style="font-family:'Outfit', sans-serif; color: #cbd5e1;">`;
+            let html = `<div class="space-y-10 animate-fadeIn" dir="ltr" style="font-family:'Inter', 'Segoe UI', sans-serif; color: #e2e8f0;">`;
 
-            // --- 3. Header ---
+            // --- 3. Professional Header ---
             html += `
-                <div class="relative p-0.5 rounded-3xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-2xl">
-                    <div class="bg-[#050505] rounded-[23px] p-8 flex flex-wrap items-center justify-between gap-8">
-                        <div class="flex items-center gap-6">
-                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-3xl shadow-lg shadow-indigo-500/40">🎯</div>
-                            <div>
-                                <span class="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-1 block">Primary Target</span>
-                                <span class="text-2xl font-black text-white tracking-tight">${_osintEscape(email)}</span>
-                            </div>
+                <div class="bg-[#111] border border-white/5 rounded-2xl p-6 flex flex-wrap items-center justify-between gap-6 shadow-xl">
+                    <div class="flex items-center gap-5">
+                        <div class="w-14 h-14 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-2xl shadow-inner">🎯</div>
+                        <div>
+                            <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-0.5 block">Search Target</span>
+                            <span class="text-xl font-bold text-white tracking-tight">${_osintEscape(email)}</span>
                         </div>
-                        <div class="flex gap-10">
-                            <div class="text-right">
-                                <span class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">First Discovery</span>
-                                <span class="text-xs font-bold text-slate-200">${_fmt(meta.first_seen)}</span>
-                            </div>
-                            <div class="text-right">
-                                <span class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Status</span>
-                                <span class="px-3 py-1 rounded-full text-[9px] font-black ${validator.deliverable !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}">
-                                    ${validator.deliverable !== false ? 'ACTIVE' : 'INACTIVE'}
-                                </span>
-                            </div>
+                    </div>
+                    <div class="flex gap-8">
+                        <div class="text-right">
+                            <span class="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1">Found Platforms</span>
+                            <span class="text-sm font-bold text-white">${matchedAccounts.length} Platforms</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1">Account Status</span>
+                            <span class="px-2.5 py-0.5 rounded text-[9px] font-bold ${validator.deliverable !== false ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}">
+                                ${validator.deliverable !== false ? 'VALID' : 'INVALID'}
+                            </span>
                         </div>
                     </div>
                 </div>`;
 
-            // --- 4. Summary Dashboard ---
-            html += `
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 hover:border-indigo-500/30 transition-all">
-                            <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Names Found
-                            </h4>
-                            <div class="flex flex-wrap gap-2">
-                                ${Object.keys(accounts).some(p => accounts[p].full_name) ? Object.keys(accounts).map(p => accounts[p].full_name ? `<span class="bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-200">${_osintEscape(accounts[p].full_name)} <span class="text-slate-600 ml-1 font-normal">${_osintEscape(p)}</span></span>` : '').join('') : '<span class="text-xs text-slate-600 italic">No names captured</span>'}
-                            </div>
+            // --- 4. Verified Platforms Registry ---
+            if (matchedAccounts.length > 0) {
+                html += `
+                <div class="bg-[#0c0c0c] border border-white/5 rounded-2xl p-6">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                        <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Verified Accounts Matrix</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-4">
+                        ${matchedAccounts.map(p => {
+                            const acc = accounts[p];
+                            return `
+                            <div class="group relative flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-2 rounded-lg transition-all hover:bg-white/10 hover:border-white/20 cursor-default">
+                                <img src="https://www.google.com/s2/favicons?domain=${acc.domain || p.toLowerCase() + '.com'}&sz=32" class="w-4 h-4 object-contain">
+                                <span class="text-[10px] font-bold text-slate-300">${_osintEscape(p)}</span>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+            }
+
+            // --- 4.1 Data Breaches Summary (Professional Style) ---
+            if (breachCount > 0) {
+                const uniqueSources = [...new Set(breaches.map(b => b.source).filter(Boolean))];
+                html += `
+                <div class="bg-[#0c0c0c] border border-white/5 rounded-2xl p-8 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-rose-600/10 blur-3xl pointer-events-none"></div>
+                    <h3 class="text-xl font-bold text-white mb-8 tracking-tight">Data Breaches</h3>
+                    
+                    <div class="flex gap-16 mb-8">
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Amount</div>
+                            <div class="text-4xl font-black text-white">${breachCount}</div>
                         </div>
-                        <div class="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 hover:border-purple-500/30 transition-all">
-                            <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Usernames
-                            </h4>
-                            <div class="flex flex-wrap gap-2">
-                                ${Object.keys(accounts).some(p => accounts[p].username) ? Object.keys(accounts).map(p => accounts[p].username ? `<span class="bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-200">${_osintEscape(accounts[p].username)} <span class="text-slate-600 ml-1 font-normal">${_osintEscape(p)}</span></span>` : '').join('') : '<span class="text-xs text-slate-600 italic">No handles captured</span>'}
-                            </div>
-                        </div>
-                        <div class="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:col-span-2 hover:border-emerald-500/30 transition-all">
-                            <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Locations
-                            </h4>
-                            <div class="flex flex-wrap gap-3">
-                                ${Object.keys(accounts).some(p => accounts[p].location || accounts[p].country) ? Object.keys(accounts).map(p => (accounts[p].location || accounts[p].country) ? `<span class="bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-200 flex items-center gap-2">📍 ${_osintEscape(accounts[p].location || accounts[p].country)} <span class="text-slate-600 font-normal">${_osintEscape(p)}</span></span>` : '').join('') : '<span class="text-xs text-slate-600 italic">No locations found</span>'}
-                            </div>
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Sources</div>
+                            <div class="text-4xl font-black text-white">${uniqueSources.length}</div>
                         </div>
                     </div>
                     
-                    <div class="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 hover:border-pink-500/30 transition-all">
-                        <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full bg-pink-500"></span> Visual Evidence
-                        </h4>
-                        <div class="grid grid-cols-3 gap-3">
-                            ${Object.keys(accounts).map(p => {
-                                const pic = getBestImage(accounts[p]);
-                                return pic ? `<img src="${pic}" class="w-full aspect-square rounded-xl border border-white/10 object-cover shadow-lg hover:scale-110 transition-transform" title="${_osintEscape(p)}">` : '';
-                            }).join('') || '<div class="col-span-3 text-center py-10 text-xs text-slate-700 italic">No imagery found</div>'}
-                        </div>
+                    <div class="flex flex-wrap gap-2 mb-8">
+                        ${uniqueSources.map(s => `<span class="bg-white/5 border border-white/10 px-3 py-1 rounded-full text-[10px] font-bold text-slate-400">${_osintEscape(s)}</span>`).join('')}
                     </div>
+                    
+                    <button onclick="showBreachModal('${encodeURIComponent(JSON.stringify(breaches))}')" class="bg-[#1a1a1a] hover:bg-[#222] border border-white/10 px-6 py-3 rounded-xl text-sm font-bold text-white transition-all shadow-lg active:scale-95">
+                        View data breaches
+                    </button>
                 </div>`;
-
-            // --- 5. Registrations Registry (Main) ---
-            html += `
-                <div class="space-y-8">
-                    <div class="bg-[#0a0a0a] border border-white/5 rounded-[40px] p-10">
-                        <div class="flex items-center gap-4 mb-8">
-                            <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Verified Registrations</h3>
-                            <div class="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
-                            <span class="text-[10px] font-black text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">${matchedAccounts.length} PLATFORMS</span>
-                        </div>
-                        <div class="flex flex-wrap justify-center gap-6">
-                            ${matchedAccounts.map(p => {
-                                const theme = getTheme(p);
-                                const acc = accounts[p];
-                                return `
-                                <div class="group relative flex flex-col items-center gap-2">
-                                    <div class="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center p-2.5 transition-all duration-300 group-hover:scale-110 group-hover:bg-white/10" style="border-color: ${theme.color}33">
-                                        <img src="https://www.google.com/s2/favicons?domain=${acc.domain || p.toLowerCase() + '.com'}&sz=64" class="w-full h-full object-contain filter group-hover:drop-shadow-[0_0_8px_${theme.color}]">
-                                    </div>
-                                    <span class="text-[7px] font-black text-slate-600 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">${_osintEscape(p)}</span>
-                                </div>`;
-                            }).join('')}
-                        </div>
-                    </div>`;
-
-            // --- 5.1 Additional Registrations (Stealer Logs) ---
-            if (extraAccounts.length > 0) {
-                html += `
-                    <div class="bg-[#0a0a0a] border border-white/5 rounded-[40px] p-10">
-                        <div class="flex items-center gap-4 mb-2">
-                            <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Additional Registrations</h3>
-                            <div class="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
-                            <span class="text-[10px] font-black text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20">${extraAccounts.length} LOGS</span>
-                        </div>
-                        <p class="text-[9px] text-slate-600 mb-8 uppercase font-bold tracking-widest">Sourced from infostealer logs — not verified in real time</p>
-                        <div class="flex flex-wrap justify-center gap-6">
-                            ${extraAccounts.map(p => {
-                                const acc = additionalAccounts[p];
-                                return `
-                                <div class="group relative flex flex-col items-center gap-2">
-                                    <div class="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center p-2 transition-all group-hover:bg-white/10 opacity-70 group-hover:opacity-100">
-                                        <img src="https://www.google.com/s2/favicons?domain=${acc.domain || p.toLowerCase() + '.com'}&sz=64" class="w-full h-full object-contain filter grayscale group-hover:grayscale-0">
-                                    </div>
-                                    <span class="text-[6px] font-black text-slate-600 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">${_osintEscape(p)}</span>
-                                </div>`;
-                            }).join('')}
-                        </div>
-                    </div>`;
             }
-            html += `</div>`;
 
-            // --- 6. Account Details (Only for rich data) ---
-            const richAccounts = matchedAccounts.filter(p => accounts[p].full_name || accounts[p].username || accounts[p].bio || getBestImage(accounts[p]));
-            
-            if(richAccounts.length > 0) {
-                html += `<div class="space-y-10 mt-12">`;
-                richAccounts.forEach(platform => {
+            // --- 5. Account Detail Cards (Platform Style) ---
+            if (matchedAccounts.length > 0) {
+                html += `<div class="grid grid-cols-1 gap-6">`;
+                matchedAccounts.forEach(platform => {
                     const acc = accounts[platform];
                     const theme = getTheme(platform);
                     const pic = getBestImage(acc);
 
+                    // Platform specific formatting
+                    const formatValue = (v) => {
+                        if (v === true || v === 'true') return '<span class="text-emerald-500 font-bold">Yes</span>';
+                        if (v === false || v === 'false') return '<span class="text-rose-400 font-bold">No</span>';
+                        if (typeof v === 'string' && (v.startsWith('http') || v.includes('.com/'))) {
+                            return `<a href="${v}" target="_blank" class="text-indigo-400 hover:underline break-all">${_osintEscape(v)}</a>`;
+                        }
+                        return _osintEscape(v);
+                    };
+
+                    const renderField = (label, value) => {
+                        if (!value && value !== false) return '';
+                        return `
+                            <div class="space-y-1">
+                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-tight">${label}</div>
+                                <div class="text-sm font-semibold text-gray-200">${formatValue(value)}</div>
+                            </div>
+                        `;
+                    };
+
                     html += `
-                        <div class="relative overflow-hidden bg-[#070707] border border-white/5 rounded-[40px] p-10 group hover:border-white/10 transition-all">
-                            <div class="absolute top-0 right-0 w-64 h-64 blur-[100px] pointer-events-none opacity-20" style="background: ${theme.color}"></div>
-                            
-                            <div class="relative flex flex-col lg:flex-row gap-12">
-                                <div class="flex-1">
-                                    <div class="flex items-center gap-4 mb-10">
-                                        <div class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center p-2">
-                                            <img src="https://www.google.com/s2/favicons?domain=${acc.domain || platform.toLowerCase() + '.com'}&sz=64" class="w-8 h-8">
+                        <div class="bg-[#121212] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all shadow-lg group">
+                            <div class="p-6">
+                                <div class="flex justify-between items-start mb-8">
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-10 h-10 rounded-lg bg-black flex items-center justify-center p-2 border border-white/10">
+                                            <img src="https://www.google.com/s2/favicons?domain=${acc.domain || platform.toLowerCase() + '.com'}&sz=64" class="w-full h-full">
                                         </div>
                                         <div>
-                                            <h4 class="text-2xl font-black text-white tracking-tighter">${_osintEscape(platform)}</h4>
-                                            <span class="text-[10px] font-bold uppercase tracking-widest" style="color: ${theme.color}">${acc.domain || 'Verified Platform'}</span>
+                                            <h4 class="text-xl font-bold text-white tracking-tight">${_osintEscape(platform)}</h4>
+                                            <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">${_osintEscape(acc.domain || platform.toLowerCase() + '.com')}</div>
                                         </div>
                                     </div>
                                     
-                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                                        ${acc.full_name ? `<div><div class="text-[9px] font-black text-slate-500 uppercase mb-3">Identity</div><div class="text-sm font-bold text-slate-200">${_osintEscape(acc.full_name)}</div></div>` : ''}
-                                        ${acc.username ? `<div><div class="text-[9px] font-black text-slate-500 uppercase mb-3">Username</div><div class="text-sm font-bold" style="color: ${theme.color}">${_osintEscape(acc.username)}</div></div>` : ''}
-                                        ${acc.connections ? `<div><div class="text-[9px] font-black text-slate-500 uppercase mb-3">Connections</div><div class="text-sm font-bold text-slate-200">${acc.connections}</div></div>` : ''}
-                                        ${acc.location || acc.country ? `<div><div class="text-[9px] font-black text-slate-500 uppercase mb-3">Location</div><div class="text-sm font-bold text-slate-200">${_osintEscape(acc.location || acc.country)}</div></div>` : ''}
-                                        ${acc.creation_date ? `<div><div class="text-[9px] font-black text-slate-500 uppercase mb-3">Since</div><div class="text-sm font-bold text-slate-200">${_fmt(acc.creation_date)}</div></div>` : ''}
-                                        ${acc.bio ? `<div class="md:col-span-2 lg:col-span-3"><div class="text-[9px] font-black text-slate-500 uppercase mb-3">Biography</div><div class="text-sm leading-relaxed text-slate-400 font-medium bg-white/5 p-6 rounded-3xl border border-white/5 italic">${_osintEscape(acc.bio)}</div></div>` : ''}
+                                    <div class="relative">
+                                        ${pic ? 
+                                            `<img src="${pic}" class="w-20 h-20 rounded-lg object-cover border border-white/10 shadow-lg group-hover:scale-105 transition-transform">` : 
+                                            `<div class="w-20 h-20 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-2xl opacity-30">👤</div>`
+                                        }
                                     </div>
-                                    
-                                    ${acc.skills ? `
-                                        <div class="mt-12">
-                                            <div class="text-[9px] font-black text-slate-500 uppercase mb-6 flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Skills</div>
-                                            <div class="flex flex-wrap gap-2">
-                                                ${acc.skills.slice(0, 15).map(s => `<span class="bg-[#151515] border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black text-slate-300">${_osintEscape(s)}</span>`).join('')}
-                                            </div>
-                                        </div>` : ''}
                                 </div>
                                 
-                                <div class="flex-shrink-0">
-                                    <div class="relative p-2 rounded-[35px] bg-gradient-to-br from-white/10 to-transparent">
-                                        ${pic ? `<img src="${pic}" class="w-44 h-44 rounded-[30px] object-cover shadow-2xl border-4 border-[#070707]">` : `<div class="w-44 h-44 rounded-[30px] bg-white/5 border border-white/10 flex items-center justify-center text-5xl italic opacity-50">👤</div>`}
-                                        <div class="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-xl">SECURE ID</div>
-                                    </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-6">
+                                    ${renderField('Full Name', acc.full_name)}
+                                    ${renderField('Username', acc.username)}
+                                    ${renderField('User ID', acc.user_id || acc.id)}
+                                    ${renderField('Location', acc.location || acc.country)}
+                                    ${renderField('Bio', acc.bio)}
+                                    ${renderField('Created At', acc.creation_date ? _fmt(acc.creation_date) : null)}
+                                    ${renderField('Last Active', acc.last_active ? _fmt(acc.last_active) : null)}
+                                    
+                                    <!-- Dynamic Extra Fields -->
+                                    ${Object.keys(acc).map(key => {
+                                        const skip = ['platform','domain','is_match','source_type','avatar','avatar_url','picture','photo','photo_url','image','thumbnail','profile_pic','full_name','username','user_id','id','location','country','bio','creation_date','last_active','skills','connections'];
+                                        if (skip.includes(key.toLowerCase()) || typeof acc[key] === 'object') return '';
+                                        // Format key to label (e.g. has_google_id -> Has Google Id)
+                                        const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                                        return renderField(label, acc[key]);
+                                    }).join('')}
                                 </div>
+                                
+                                ${acc.skills && Array.isArray(acc.skills) ? `
+                                    <div class="mt-8 pt-6 border-t border-white/5">
+                                        <div class="text-[9px] font-bold text-gray-500 uppercase mb-3 tracking-widest">Platform Tags / Skills</div>
+                                        <div class="flex flex-wrap gap-2">
+                                            ${acc.skills.slice(0, 12).map(s => `<span class="bg-indigo-500/10 border border-indigo-500/20 px-2 py-1 rounded text-[10px] font-bold text-indigo-300">${_osintEscape(s)}</span>`).join('')}
+                                        </div>
+                                    </div>` : ''}
                             </div>
                         </div>`;
                 });
                 html += `</div>`;
             } else {
                 html += `
-                    <div class="bg-[#0a0a0a] border border-white/5 rounded-[40px] p-20 text-center">
-                        <div class="text-4xl mb-4 opacity-20">🔎</div>
-                        <h4 class="text-sm font-black text-slate-500 uppercase tracking-[0.3em]">Direct Accounts Not Detected</h4>
-                        <p class="text-[10px] text-slate-700 mt-2">The system is performing secondary deep scans for hidden links.</p>
+                    <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-20 text-center">
+                        <div class="text-5xl mb-6 opacity-20">🔎</div>
+                        <h4 class="text-sm font-bold text-slate-500 uppercase tracking-widest">No Registered Accounts Detected</h4>
+                        <p class="text-[10px] text-slate-700 mt-2">The intelligence engines did not find public profiles associated with this email.</p>
                     </div>`;
             }
 
             html += `
-                <div class="pt-20 border-t border-white/5 text-center pb-10">
-                    <div class="inline-flex items-center gap-4 bg-white/5 px-6 py-3 rounded-full border border-white/10">
-                        <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">Titan Intelligence Network · Operational Ready</p>
-                    </div>
+                <div class="pt-16 border-t border-white/5 text-center pb-6">
+                    <p class="text-[9px] font-bold text-slate-600 uppercase tracking-[0.3em]">Titan OSINT Platform · Intelligence Node Ready</p>
                 </div>
             </div>`;
+
 
             setResultMarkup(box, 'TITAN Intelligence Report', html, { 
                 badge: breachCount > 0 ? `ALERT: ${breachCount} SOURCES` : 'STATUS: CLEAR', 
@@ -14063,6 +14042,14 @@ HTML_TEMPLATE = """
             }
         }
 
+        async function getFileSHA256(file) {
+            const buffer = await file.arrayBuffer();
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashHex;
+        }
+
         async function scanMalwareFile() {
             const fileInput = document.getElementById('malwareFileInput');
             if (!fileInput || fileInput.files.length === 0) return titanAlert("الرجاء اختيار ملف أولاً");
@@ -14070,14 +14057,25 @@ HTML_TEMPLATE = """
             const file = fileInput.files[0];
             const resBox = document.getElementById('malwareFileResult');
             resBox.classList.remove('hidden');
-            setResultLoading(resBox, 'تحليل الـ Sandbox', 'جاري رفع الملف لبيئة TITAN Sandbox... الرجاء الانتظار.');
+            setResultLoading(resBox, 'تحليل الـ Sandbox', 'جاري فحص بصمة الملف (Hash)...');
             if (typeof soundManager !== 'undefined' && soundManager.terminalType) soundManager.terminalType();
 
-            const formData = new FormData();
-            formData.append('file', file);
-
             try {
-                // 1. الرفع الأولي
+                // 1. حساب الهاش محلياً والتحقق من وجود نتائج سابقة لتوفير الوقت والرفع
+                const fileHash = await getFileSHA256(file);
+                const checkRes = await fetch(`/api/malware/sandbox/status/${fileHash}`);
+                const checkData = await checkRes.json();
+
+                if (checkData.success && checkData.status !== "IN_PROGRESS" && checkData.status !== "NOT_FOUND") {
+                    renderSandboxReport(checkData, file.name);
+                    return;
+                }
+
+                // 2. إذا لم تتوفر نتائج، نقوم بالرفع
+                setResultLoading(resBox, 'تحليل الـ Sandbox', 'جاري رفع الملف لبيئة TITAN Sandbox... الرجاء الانتظار.');
+                const formData = new FormData();
+                formData.append('file', file);
+
                 const uploadRes = await fetch('/api/malware/sandbox/upload', {
                     method: 'POST',
                     body: formData
@@ -14089,10 +14087,16 @@ HTML_TEMPLATE = """
                     return;
                 }
 
+                // التحقق مرة أخرى في حال قام الباكيند بالتحليل الفوري (للاحتياط)
+                if (uploadData.already_known) {
+                    renderSandboxReport(uploadData.data, file.name);
+                    return;
+                }
+
                 const jobId = uploadData.job_id;
-                const sha256 = uploadData.sha256;
+                const sha256 = uploadData.sha256 || fileHash;
                 
-                // 2. التكرار (Polling) كل 10 ثوانٍ
+                // 3. التكرار (Polling) كل 15 ثانية (لتجنب تجاوز حدود VT Free Tier)
                 setResultLoading(resBox, 'تحليل الـ Sandbox', 'تم الرفع بنجاح. جاري التحليل السلوكي في الـ Sandbox... قد يستغرق ذلك 2-5 دقائق.');
                 
                 const pollInterval = setInterval(async () => {
@@ -14107,11 +14111,10 @@ HTML_TEMPLATE = """
                             clearInterval(pollInterval);
                             setResultError(resBox, "خطأ أثناء جلب النتائج: " + statusData.error);
                         }
-                        // إذا كان IN_PROGRESS نستمر في الانتظار
                     } catch (e) {
                         console.error("Polling error:", e);
                     }
-                }, 10000);
+                }, 15000);
 
             } catch (e) {
                 setResultError(resBox, "حدث خطأ غير متوقع: " + e.message);
@@ -15039,6 +15042,84 @@ HTML_TEMPLATE = """
                 </button>`;
             document.body.appendChild(toast);
             setTimeout(() => toast?.remove(), 4000);
+        }
+
+        function titanShowModal(title, content) {
+            const existing = document.getElementById('titan-modal-overlay');
+            if(existing) existing.remove();
+
+            const overlay = document.createElement('div');
+            overlay.id = 'titan-modal-overlay';
+            overlay.style.cssText = `
+                position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px);
+                z-index:100000; display:flex; items-center; justify-content:center; padding:20px;
+                animation: fadeIn 0.3s ease;
+            `;
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background:#0a0a0a; border:1px solid #333; width:100%; max-width:1100px;
+                max-height:90vh; border-radius:16px; display:flex; flex-direction:column;
+                box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); overflow:hidden;
+            `;
+
+            modal.innerHTML = `
+                <div style="padding:20px 24px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="color:white; font-size:18px; font-weight:700;">${title}</h3>
+                    <button onclick="document.getElementById('titan-modal-overlay').remove()" style="background:none; border:none; color:#666; cursor:pointer; font-size:24px;">&times;</button>
+                </div>
+                <div style="flex:1; overflow-y:auto; padding:24px; font-family:'Inter', sans-serif;">
+                    ${content}
+                </div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        }
+
+        function showBreachModal(breachesJson) {
+            const breaches = JSON.parse(decodeURIComponent(breachesJson));
+            const fmtDate = (v) => {
+                if (!v) return '';
+                const d = new Date(v);
+                return isNaN(d.getTime()) ? v : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            };
+
+            let tableHtml = `
+                <div style="font-size:12px; color:#888; margin-bottom:15px; font-weight:bold;">Showing 1-${breaches.length} of ${breaches.length} data breaches</div>
+                <div style="overflow-x:auto; border:1px solid #222; border-radius:12px; background:#0d0d0d;">
+                    <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
+                        <thead>
+                            <tr style="background:#151515; color:#666; text-transform:uppercase; font-size:9px; font-weight:900; letter-spacing:1.5px;">
+                                <th style="padding:16px; border-bottom:1px solid #222;">Source</th>
+                                <th style="padding:16px; border-bottom:1px solid #222;">Name</th>
+                                <th style="padding:16px; border-bottom:1px solid #222;">Username</th>
+                                <th style="padding:16px; border-bottom:1px solid #222;">Password</th>
+                                <th style="padding:16px; border-bottom:1px solid #222;">IP Address</th>
+                                <th style="padding:16px; border-bottom:1px solid #222;">Phone Number</th>
+                                <th style="padding:16px; border-bottom:1px solid #222;">Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody style="color:#e2e8f0; font-family:'Inter', sans-serif;">
+                            ${breaches.map(b => `
+                                <tr style="border-bottom:1px solid #1a1a1a; transition:all;">
+                                    <td style="padding:16px; white-space:nowrap;">
+                                        <div style="font-weight:900; color:white;">${_osintEscape(b.source)}</div>
+                                        <div style="font-size:10px; color:#555; font-weight:bold; margin-top:2px;">${fmtDate(b.date || b.breach_date)}</div>
+                                    </td>
+                                    <td style="padding:16px; color:#94a3b8;">${_osintEscape(b.full_name || b.name || '-')}</td>
+                                    <td style="padding:16px; color:#94a3b8;">${_osintEscape(b.username || '-')}</td>
+                                    <td style="padding:16px; color:white; font-weight:700; font-family:monospace;">${_osintEscape(b.password || '-')}</td>
+                                    <td style="padding:16px; color:#64748b;">${_osintEscape(b.ip_address || b.ip || '-')}</td>
+                                    <td style="padding:16px; color:#64748b;">${_osintEscape(b.phone_number || b.phone || '-')}</td>
+                                    <td style="padding:16px; color:#475569; font-size:10px; font-family:monospace;">${_osintEscape(b.hash || '-')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            titanShowModal('Data Breaches', tableHtml);
         }
 
         function titanConfirm(msg) {
@@ -16810,6 +16891,26 @@ def malware_sandbox_upload_route():
             with os.fdopen(tmp_fd, 'wb') as tmp:
                 file.save(tmp)
             
+            # حساب الـ Hash للملف أولاً للتحقق مما إذا كان معروفاً مسبقاً لدى VirusTotal
+            # هذا يسرع النتيجة جداً للملفات الشائعة
+            sha256_hash = hashlib.sha256()
+            with open(tmp_path, "rb") as f:
+                for byte_block in iter(lambda: f.read(4096), b""):
+                    sha256_hash.update(byte_block)
+            file_hash = sha256_hash.hexdigest()
+            
+            # محاولة جلب نتيجة سابقة بناءً على الـ Hash
+            existing_res = vt_get_analysis_summary(file_hash)
+            if existing_res.get("success") and existing_res.get("status") != "IN_PROGRESS":
+                return jsonify({
+                    "success": True,
+                    "already_known": True,
+                    "data": existing_res,
+                    "sha256": file_hash,
+                    "message": "تم العثور على تحليل سابق لهذا الملف، النتيجة فورية!"
+                })
+                
+            # إذا لم يكن معروفاً، نقوم برفعه
             res = vt_upload_file(tmp_path, file.filename)
         finally:
             if os.path.exists(tmp_path):
@@ -16820,7 +16921,9 @@ def malware_sandbox_upload_route():
             
         return jsonify({
             "success": True,
+            "already_known": False,
             "job_id": res.get("id"),
+            "sha256": file_hash,
             "message": "تم رفع الملف إلى VirusTotal بنجاح، جاري بدء التحليل..."
         })
     except Exception as e:
