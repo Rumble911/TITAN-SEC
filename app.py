@@ -3048,110 +3048,107 @@ def deep_scan_link_logic(target_url):
         "content_title": content.get('title', 'N/A')
     }
 
-# --- وحدة فحص البرمجيات الخبيثة والـ Sandbox (Hybrid Analysis Module) ---
+# --- وحدة فحص البرمجيات الخبيثة (VirusTotal Module) ---
 
-HYBRID_ANALYSIS_API_KEY = "2ntt0jf88d1e4219e7n08rklfa591f06jjemnrl8a5452665phwilurg3362a7ef"
-HYBRID_ANALYSIS_BASE_URL = "https://www.hybrid-analysis.com/api/v2"
+VIRUSTOTAL_API_KEY = "002feba20afd6ce80637644100e812d1c017bd861b8534107bf68108ca2dd308"
+VIRUSTOTAL_BASE_URL = "https://www.virustotal.com/api/v3"
 
-def ha_upload_file(file_path, filename):
-    """محاولة رفع الملف مع تنظيف الاسم واستخدام معاملات متوافقة"""
-    # تنظيف اسم الملف لضمان قبوله من الـ API (تغيير الامتداد غير المعروف إلى .bin إذا لزم الأمر)
-    safe_filename = filename
-    if '.' not in filename or len(filename.split('.')[-1]) > 5:
-        safe_filename = "sample_file.bin"
-    elif filename.lower().endswith('.7j100'): # معالجة الحالة الخاصة في لقطة الشاشة
-        safe_filename = "sample_data.txt"
+def vt_upload_file(file_path, filename):
+    """رفع ملف إلى VirusTotal للتحليل"""
+    url = f"{VIRUSTOTAL_BASE_URL}/files"
+    headers = {"x-apikey": VIRUSTOTAL_API_KEY}
+    try:
+        with open(file_path, 'rb') as f:
+            files = {'file': (filename, f)}
+            resp = requests.post(url, headers=headers, files=files, timeout=300)
+            if resp.status_code == 200:
+                data = resp.json()
+                # VT returns an analysis ID in data['data']['id']
+                return {
+                    "success": True,
+                    "id": data.get("data", {}).get("id"),
+                    "type": "analysis"
+                }
+            return {"error": f"VirusTotal Error {resp.status_code}: {resp.text}"}
+    except Exception as e:
+        return {"error": str(e)}
 
-    headers = {
-        "api-key": HYBRID_ANALYSIS_API_KEY,
-        "X-Api-Key": HYBRID_ANALYSIS_API_KEY, # محاولة كلا الشكلين
-        "User-Agent": "Falcon Sandbox",
-        "accept": "application/json"
-    }
+def vt_get_analysis_summary(id_or_hash):
+    """استرجاع نتائج التحليل من VirusTotal"""
+    # تحسين التعرف على نوع المعرف: Hashes (32, 40, 64 hex) vs Analysis IDs (long base64)
+    is_hash = len(id_or_hash) in [32, 40, 64] and all(c in '0123456789abcdefABCDEF' for c in id_or_hash)
+    is_analysis_id = not is_hash
     
-    # تحديد البيئة (كـ String)
-    env_id_str = "160"
-    ext = safe_filename.split('.')[-1].lower()
-    if ext == 'apk': env_id_str = "300"
+    endpoint = "analyses" if is_analysis_id else "files"
+    url = f"{VIRUSTOTAL_BASE_URL}/{endpoint}/{id_or_hash}"
+    headers = {"x-apikey": VIRUSTOTAL_API_KEY}
     
-    attempts = [
-        # المحاولة 1: Quick Scan (الأكثر قبولاً للحسابات المجانية)
-        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/quick-scan/file", "params": {"environment_id": env_id_str}},
-        # المحاولة 2: Quick Scan باستخدام مفتاح id (لمعالجة خطأ field: id)
-        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/quick-scan/file", "params": {"id": env_id_str}},
-        # المحاولة 3: Submit التقليدي
-        {"url": f"{HYBRID_ANALYSIS_BASE_URL}/submit/file", "params": {"environment_id": env_id_str}},
-    ]
-    
-    last_resp_text = ""
-    for att in attempts:
-        try:
-            with open(file_path, 'rb') as f:
-                files = {'file': (safe_filename, f)}
-                data = att["params"]
-                data["allow_community_access"] = "true"
-                
-                # استخدام data لرفع كـ multipart/form-data
-                resp = requests.post(att["url"], headers=headers, files=files, data=data, timeout=300)
-                
-                if resp.status_code in [200, 201, 202]:
-                    return resp.json()
-                
-                last_resp_text = f"URL: {att['url']} | Status: {resp.status_code} | Msg: {resp.text}"
-                print(f"[HA DEBUG] Failed attempt: {last_resp_text}")
-        except Exception as e:
-            last_resp_text = f"Exception: {str(e)}"
-            
-    return {"error": f"فشلت جميع المحاولات. آخر رد من الـ API: {last_resp_text}"}
-
-def ha_get_analysis_summary(sha256_or_jobid):
-    """استرجاع نتائج التحليل كاملة"""
-    url = f"{HYBRID_ANALYSIS_BASE_URL}/report/{sha256_or_jobid}/summary"
-    headers = {
-        "api-key": HYBRID_ANALYSIS_API_KEY,
-        "User-Agent": "Falcon Sandbox"
-    }
     try:
         resp = requests.get(url, headers=headers, timeout=20)
+        
+        # إذا فشل كـ Analysis ID، قد يكون Hash مخزن بشكل مختلف، نجرب الـ files
+        if resp.status_code == 404 and is_analysis_id:
+            url = f"{VIRUSTOTAL_BASE_URL}/files/{id_or_hash}"
+            resp = requests.get(url, headers=headers, timeout=20)
+            if resp.status_code == 200:
+                is_analysis_id = False
+
         if resp.status_code == 200:
-            data = resp.json()
-            # استخراج المعلومات المطلوبة بدقة
-            result = {
-                "success": True,
-                "threat_score": data.get("threat_score", 0),
-                "verdict": data.get("verdict", "unknown"),
-                "mitre_attacks": [],
-                "network_traffic": [],
-                "extracted_payloads": [],
-                "job_id": data.get("job_id"),
-                "environment": data.get("environment_description")
-            }
+            data = resp.json().get("data", {})
+            attributes = data.get("attributes", {})
             
-            # MITRE ATT&CK
-            for attack in data.get("mitre_attcks", []):
-                result["mitre_attacks"].append({
-                    "tactic": attack.get("tactic"),
-                    "technique": attack.get("technique"),
-                    "attck_id": attack.get("attck_id")
-                })
+            if is_analysis_id:
+                status = attributes.get("status")
+                if status != "completed":
+                    return {"success": False, "status": "IN_PROGRESS", "message": "التحليل لا يزال جارياً في VirusTotal..."}
                 
-            # Network Traffic (Hosts/IPs)
-            for host in data.get("hosts", []):
-                result["network_traffic"].append(host)
+                stats_raw = attributes.get("results", {})
+                malicious = 0
+                total = 0
+                stats_mapped = {}
+                for engine_name, engine_data in stats_raw.items():
+                    total += 1
+                    category = engine_data.get("category", "unknown")
+                    result = engine_data.get("result", "clean")
+                    if category == "malicious":
+                        malicious += 1
+                    stats_mapped[engine_name] = {"category": category, "result": result}
                 
-            # Extracted/Dropped Files (Potential Payloads)
-            for dropped in data.get("extracted_files", []):
-                result["extracted_payloads"].append({
-                    "name": dropped.get("name"),
-                    "sha256": dropped.get("sha256"),
-                    "threat_level": dropped.get("threat_level_desc")
-                })
+                score = int((malicious / total * 100)) if total > 0 else 0
+                return {
+                    "success": True,
+                    "status": "COMPLETED",
+                    "threat_score": score,
+                    "verdict": "malicious" if malicious > 0 else "clean",
+                    "stats": stats_mapped
+                }
+            else:
+                # معالجة بيانات الملف (File)
+                stats = attributes.get("last_analysis_stats", {})
+                results_raw = attributes.get("last_analysis_results", {})
                 
-            return result
+                malicious = stats.get("malicious", 0)
+                total = sum(stats.values()) if stats else 0
+                score = int((malicious / total * 100)) if total > 0 else 0
+                
+                stats_mapped = {}
+                for e_name, e_data in list(results_raw.items())[:50]: # حد أقصى 50 محرك
+                    stats_mapped[e_name] = {
+                        "category": e_data.get("category"),
+                        "result": e_data.get("result")
+                    }
+
+                return {
+                    "success": True,
+                    "threat_score": score,
+                    "verdict": "malicious" if malicious > 0 else "clean",
+                    "stats": stats_mapped,
+                    "sha256": attributes.get("sha256")
+                }
         elif resp.status_code == 404:
-            return {"success": False, "status": "IN_PROGRESS", "message": "التحليل لا يزال جارياً..."}
+            return {"success": False, "status": "NOT_FOUND", "message": "المعلومات غير متوفرة بعد أو الملف غير معروف."}
         else:
-            return {"error": f"API Error {resp.status_code}"}
+            return {"error": f"VirusTotal API Error {resp.status_code}: {resp.text}"}
     except Exception as e:
         return {"error": str(e)}
 
@@ -14123,85 +14120,63 @@ HTML_TEMPLATE = """
 
         function renderSandboxReport(data, filename) {
             const resBox = document.getElementById('malwareFileResult');
-            const scoreTone = data.threat_score >= 75 ? 'danger' : (data.threat_score >= 40 ? 'warn' : 'safe');
+            const scoreTone = data.threat_score >= 50 ? 'danger' : (data.threat_score >= 10 ? 'warn' : 'safe');
             
-            // تجهيز تكتيكات MITRE
-            let mitreHtml = (data.mitre_attacks || []).map(m => `
-                <div class="bg-black/20 p-2 rounded border border-white/5 mb-2 text-right">
-                    <div class="text-[10px] text-rose-500 font-bold">${m.attck_id || 'ID'}</div>
-                    <div class="text-xs text-white">${m.tactic || 'N/A'} - ${m.technique || 'N/A'}</div>
-                </div>
-            `).join('') || '<div class="text-gray-500 italic text-xs text-right">لا يوجد تكتيكات مكتشفة</div>';
-
-            // تجهيز حركة الشبكة
-            let networkHtml = (data.network_traffic || []).map(n => `
-                <div class="text-xs font-mono text-blue-400 py-1 border-b border-white/5 last:border-0">${n}</div>
-            `).join('') || '<div class="text-gray-500 italic text-xs">لا توجد اتصالات مشبوهة</div>';
-
-            // تجهيز الـ Payloads المستخرجة
-            let payloadHtml = (data.extracted_payloads || []).map(p => `
-                <div class="flex justify-between items-center py-1 border-b border-white/5">
-                    <span class="text-xs text-gray-300 truncate max-w-[200px]">${p.name}</span>
-                    <span class="text-[9px] px-2 py-0.5 rounded ${p.threat_level?.includes('Malicious') ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}">${p.threat_level || 'Clean'}</span>
-                </div>
-            `).join('') || '<div class="text-gray-500 italic text-xs">لم يتم استخراج حمولات إضافية</div>';
+            // VirusTotal Engines results mapping
+            let enginesHtml = '';
+            if (data.stats) {
+                const engines = Object.entries(data.stats).slice(0, 20); // Show first 20 engines
+                enginesHtml = engines.map(([name, res]) => `
+                    <div class="flex justify-between items-center py-1 border-b border-white/5">
+                        <span class="text-[10px] text-gray-400 font-mono">${name}</span>
+                        <span class="text-[9px] px-2 py-0.5 rounded ${res.category === 'malicious' || res.category === 'suspicious' ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}">
+                            ${res.result || res.category || 'Clean'}
+                        </span>
+                    </div>
+                `).join('');
+            }
 
             const finalHtml = `
                 <div class="space-y-4">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div class="bg-slate-800/60 p-3 rounded-lg border border-white/5 text-center">
-                            <div class="text-[9px] text-gray-400">Verdict (الحكم)</div>
+                            <div class="text-[9px] text-gray-400 font-bold">Verdict (الحكم)</div>
                             <div class="text-sm font-bold uppercase ${data.verdict === 'malicious' ? 'text-red-500' : 'text-green-500'}">${data.verdict}</div>
                         </div>
                         <div class="bg-slate-800/60 p-3 rounded-lg border border-white/5 text-center">
-                            <div class="text-[9px] text-gray-400">Threat Score</div>
+                            <div class="text-[9px] text-gray-400 font-bold">Detection Score</div>
                             <div class="text-sm font-bold text-${scoreTone === 'danger' ? 'red' : (scoreTone === 'warn' ? 'yellow' : 'green')}-500">${data.threat_score}%</div>
                         </div>
                         <div class="bg-slate-800/60 p-3 rounded-lg border border-white/5 text-center">
-                            <div class="text-[9px] text-gray-400">Environment</div>
-                            <div class="text-[10px] text-blue-400">${data.environment || 'Windows 10'}</div>
+                            <div class="text-[9px] text-gray-400 font-bold">Analysis Cloud</div>
+                            <div class="text-[10px] text-blue-400">TITAN VirusTotal</div>
                         </div>
                         <div class="bg-slate-800/60 p-3 rounded-lg border border-white/5 text-center">
-                            <div class="text-[9px] text-gray-400">Job ID</div>
-                            <div class="text-[10px] font-mono text-gray-500">${data.job_id?.substring(0,8)}...</div>
+                            <div class="text-[9px] text-gray-400 font-bold">Status</div>
+                            <div class="text-[10px] font-mono text-emerald-500">COMPLETED</div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="bg-black/20 p-3 rounded-xl border border-white/10">
-                            <div class="text-[10px] text-gray-500 font-bold uppercase mb-3 flex items-center gap-2 justify-end">
-                                MITRE ATT&CK Mapping <span class="text-rose-500">🛡️</span>
-                            </div>
-                            <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
-                                ${mitreHtml}
-                            </div>
+                    <div class="bg-black/40 p-4 rounded-xl border border-white/10 shadow-inner">
+                        <div class="text-[10px] text-gray-500 font-bold uppercase mb-3 flex items-center gap-2 justify-end">
+                            Antivirus Engines Analysis (Latest Scan) <span class="text-rose-500">🔍</span>
                         </div>
-                        <div class="bg-black/20 p-3 rounded-xl border border-white/10">
-                            <div class="text-[10px] text-gray-500 font-bold uppercase mb-3 flex items-center gap-2 justify-end">
-                                Network Traffic (C2) <span class="text-blue-500">🌐</span>
-                            </div>
-                            <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
-                                ${networkHtml}
-                            </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-1">
+                            ${enginesHtml || '<div class="text-gray-500 italic text-xs">لا توجد تفاصيل محركات متاحة</div>'}
                         </div>
-                        <div class="bg-black/20 p-3 rounded-xl border border-white/10">
-                            <div class="text-[10px] text-gray-500 font-bold uppercase mb-3 flex items-center gap-2 justify-end">
-                                Extracted Payloads <span class="text-purple-500">📦</span>
-                            </div>
-                            <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
-                                ${payloadHtml}
-                            </div>
-                        </div>
+                        ${Object.keys(data.stats || {}).length > 20 ? `<div class="text-[9px] text-center text-gray-600 mt-3 italic">... تم عرض أول 20 محرك فقط من أصل ${Object.keys(data.stats).length} لمحركات VirusTotal</div>` : ''}
+                    </div>
+
+                    <div class="text-right mt-2 flex justify-between items-center px-1">
+                        <span class="text-[9px] text-gray-600 font-mono">Source: VirusTotal API v3</span>
+                        <span class="text-[10px] text-gray-500 italic">File: ${filename}</span>
                     </div>
                 </div>
             `;
+            
+            resBox.innerHTML = finalHtml;
 
-            setResultMarkup(resBox, `تقرير Sandbox: ${filename}`, finalHtml, { 
-                badge: data.verdict?.toUpperCase(), 
-                riskScore: data.threat_score 
-            });
-
-            if (data.threat_score >= 40) {
+            if (data.threat_score >= 20 || data.verdict === 'malicious') {
                 if (typeof soundManager !== 'undefined' && soundManager.alarm) soundManager.alarm();
             } else {
                 if (typeof soundManager !== 'undefined' && soundManager.success) soundManager.success();
@@ -16830,13 +16805,12 @@ def malware_sandbox_upload_route():
         return jsonify({"error": "اسم الملف فارغ"}), 400
         
     try:
-        # استخدام tempfile لحفظ الملف مؤقتاً للرفع
         tmp_fd, tmp_path = tempfile.mkstemp()
         try:
             with os.fdopen(tmp_fd, 'wb') as tmp:
                 file.save(tmp)
             
-            res = ha_upload_file(tmp_path, file.filename)
+            res = vt_upload_file(tmp_path, file.filename)
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
@@ -16846,16 +16820,15 @@ def malware_sandbox_upload_route():
             
         return jsonify({
             "success": True,
-            "job_id": res.get("job_id"),
-            "sha256": res.get("sha256"),
-            "message": "تم رفع الملف بنجاح، جاري بدء التحليل في الـ Sandbox..."
+            "job_id": res.get("id"),
+            "message": "تم رفع الملف إلى VirusTotal بنجاح، جاري بدء التحليل..."
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/malware/sandbox/status/<id>', methods=['GET'])
 def malware_sandbox_status_route(id):
-    res = ha_get_analysis_summary(id)
+    res = vt_get_analysis_summary(id)
     return jsonify(res)
 
 @app.route('/api/security/deep-scan-link', methods=['POST'])
