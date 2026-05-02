@@ -5343,11 +5343,9 @@ HTML_TEMPLATE = """
 
                         <div class="mb-4 p-3 rounded-lg border border-amber-700/50 bg-amber-950/40">
                             <label class="text-xs font-bold text-amber-300 mb-2 block">عدد الأشخاص في الغرفة</label>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                <button type="button" id="btn-people-2" onclick="setBurnChatPeopleCount('2')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">2</button>
-                                <button type="button" id="btn-people-3" onclick="setBurnChatPeopleCount('3')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">3</button>
-                                <button type="button" id="btn-people-4" onclick="setBurnChatPeopleCount('4')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">4</button>
-                                <button type="button" id="btn-people-5" onclick="setBurnChatPeopleCount('5')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">5</button>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button" id="btn-people-2" onclick="setBurnChatPeopleCount('2')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">شخصين (2)</button>
+                                <button type="button" id="btn-people-3" onclick="setBurnChatPeopleCount('3')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">3 أشخاص</button>
                             </div>
                             <input type="hidden" id="burnChatPeopleCount" value="">
                         </div>
@@ -14549,13 +14547,28 @@ HTML_TEMPLATE = """
             });
         }
 
-        function joinBurnChat() {
+        async function joinBurnChat() {
             const roomId = document.getElementById('burnChatId').value.trim();
             const user = document.getElementById('burnChatUser').value.trim() || 'Anonymous';
             const peopleCount = document.getElementById('burnChatPeopleCount').value.trim();
             
             if(!roomId) return titanAlert("الرجاء إدخال رقم الغرفة للاتصال المشفر!");
-            if(!peopleCount) return titanAlert("حدد عدد الأشخاص أولاً: 2 أو 3 أو 4 أو 5");
+            if(!peopleCount) return titanAlert("حدد عدد الأشخاص أولاً: 2 أو 3");
+            
+            // Call server to validate/join room with capacity enforcement
+            try {
+                const res = await fetch('/api/chat/join', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({room_id: roomId, sender: user, limit: parseInt(peopleCount)})
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    return titanAlert(data.error || "تعذر الانضمام: الغرفة ممتلئة!", "error");
+                }
+            } catch (e) {
+                return titanAlert("فشل الاتصال بالخادم للتحقق من الغرفة", "error");
+            }
             
             currentRoomId = roomId;
             currentUser = user;
@@ -21108,8 +21121,36 @@ def toggle_fim():
 
 # 3. Secure Comms: P2P Burn Chat
 # In-memory only storage. Structure: { "room_id": [ {"sender": "A", "msg": "hello", "timestamp": ...} ] }
-BURN_CHAT_ROOMS = {}
+BURN_CHAT_ROOMS = {} # room_id -> {"messages": [], "participants": [], "limit": 3}
 BURN_CHAT_DESTROYED: dict[str, dict[str, str]] = {}
+
+@app.route('/api/chat/join', methods=['POST'])
+def chat_join():
+    data = request.json or {}
+    room_id = (data.get('room_id') or '').strip()
+    sender = (data.get('sender') or 'Anonymous').strip()
+    limit = int(data.get('limit', 3))
+    
+    if not room_id:
+        return jsonify({"error": "room_id مطلوب"}), 400
+    if room_id in BURN_CHAT_DESTROYED:
+        return jsonify({"error": "تم تدمير هذه الغرفة"}), 410
+
+    if room_id not in BURN_CHAT_ROOMS:
+        BURN_CHAT_ROOMS[room_id] = {
+            "messages": [],
+            "participants": [sender],
+            "limit": limit
+        }
+        return jsonify({"success": True, "created": True})
+    
+    room = BURN_CHAT_ROOMS[room_id]
+    if sender not in room["participants"]:
+        if len(room["participants"]) >= room["limit"]:
+            return jsonify({"error": f"الغرفة ممتلئة! الحد الأقصى هو {room['limit']} أشخاص فقط لهذه الجلسة."}), 403
+        room["participants"].append(sender)
+    
+    return jsonify({"success": True})
 
 @app.route('/api/chat/send', methods=['POST'])
 def chat_send():
@@ -21124,9 +21165,17 @@ def chat_send():
         return jsonify({"error": "تم تدمير هذه الغرفة"}), 410
         
     if room_id not in BURN_CHAT_ROOMS:
-        BURN_CHAT_ROOMS[room_id] = []
-        
-    BURN_CHAT_ROOMS[room_id].append({"sender": sender, "msg": msg})
+        # Fallback creation if join somehow missed
+        BURN_CHAT_ROOMS[room_id] = {"messages": [], "participants": [sender], "limit": 3}
+    
+    room = BURN_CHAT_ROOMS[room_id]
+    # Re-verify participant
+    if sender not in room["participants"]:
+        if len(room["participants"]) >= room["limit"]:
+             return jsonify({"error": "الغرفة ممتلئة"}), 403
+        room["participants"].append(sender)
+
+    room["messages"].append({"sender": sender, "msg": msg})
     return jsonify({"success": True})
 
 @app.route('/api/chat/receive', methods=['GET'])
@@ -21141,7 +21190,8 @@ def chat_receive():
     if not room_id or room_id not in BURN_CHAT_ROOMS:
         return jsonify({"messages": []})
         
-    messages = BURN_CHAT_ROOMS[room_id]
+    room = BURN_CHAT_ROOMS[room_id]
+    messages = room["messages"]
     to_deliver = []
     remaining = []
     
@@ -21152,7 +21202,7 @@ def chat_receive():
         else:
             remaining.append(m)
             
-    BURN_CHAT_ROOMS[room_id] = remaining
+    room["messages"] = remaining
     
     if to_deliver:
         add_audit_log("Burn Chat 🔥", f"تم قراءة وتدمير {len(to_deliver)} رسالة سرية في الغرفة [{room_id}]")
