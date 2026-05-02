@@ -19169,7 +19169,7 @@ def osint_intelbase_email_route():
     
     payload = {
         'email': email,
-        'timeout_ms': 30000, # زيادة المهلة الداخلية في خادم IntelBase إلى 30 ثانية
+        'timeout_ms': 20000, # تقليل المهلة الداخلية لتجنب تجاوز حد Heroku (30 ثانية)
         'include_data_breaches': include_breaches,
         'exclude_modules': []
     }
@@ -19193,16 +19193,17 @@ def osint_intelbase_email_route():
         add_audit_log('OSINT IntelBase Email', f'email={email} using_proxy={proxy_url}')
 
     try:
-        # محاولة طلب البيانات مع زيادة المهلة وإضافة محاولات إعادة في حال حدوث Timeout
-        max_retries = 2
+        # محاولة طلب البيانات مع تقليل المهلة لتكون تحت 30 ثانية (حد Heroku)
+        max_retries = 1 # تقليل عدد المحاولات لتجنب التراكم الزمني
         response = None
         for attempt in range(max_retries + 1):
             try:
-                response = requests.post(intelbase_url, json=payload, headers=headers, timeout=60, proxies=proxies)
+                # نستخدم 25 ثانية كحد أقصى للاتصال الكلي
+                response = requests.post(intelbase_url, json=payload, headers=headers, timeout=25, proxies=proxies)
                 break # نجح الطلب، اخرج من الحلقة
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
                 if attempt < max_retries:
-                    time.sleep(2) # انتظر قليلاً قبل الإعادة
+                    time.sleep(1) # انتظر ثانية واحدة فقط
                     continue
                 raise e # إذا فشلت كل المحاولات، ارفع الاستثناء
         
