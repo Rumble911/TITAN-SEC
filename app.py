@@ -19193,30 +19193,34 @@ def osint_intelbase_email_route():
         add_audit_log('OSINT IntelBase Email', f'email={email} using_proxy={proxy_url}')
 
     try:
-        # محاولة طلب البيانات مع تقليل المهلة لتكون تحت 30 ثانية (حد Heroku)
-        max_retries = 1 # تقليل عدد المحاولات لتجنب التراكم الزمني
-        response = None
-        for attempt in range(max_retries + 1):
-            try:
-                # نستخدم 25 ثانية كحد أقصى للاتصال الكلي
-                response = requests.post(intelbase_url, json=payload, headers=headers, timeout=25, proxies=proxies)
-                break # نجح الطلب، اخرج من الحلقة
-            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
-                if attempt < max_retries:
-                    time.sleep(1) # انتظر ثانية واحدة فقط
-                    continue
-                raise e # إذا فشلت كل المحاولات، ارفع الاستثناء
+        # محاولة طلب البيانات مع ضمان عدم تجاوز الوقت الإجمالي لـ 28 ثانية (حد Heroku)
+        # نلغي محاولات الإعادة المتعددة لتوفير الوقت لطلب واحد قوي
+        try:
+            # نستخدم مهلة 27 ثانية كحد أقصى مطلق
+            response = requests.post(intelbase_url, json=payload, headers=headers, timeout=27, proxies=proxies)
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            # في حال انتهاء المهلة، نرجع استجابة JSON واضحة فوراً
+            add_audit_log('OSINT IntelBase Email Timeout', f'email={email} error={str(e)}')
+            return jsonify({
+                'success': False,
+                'error': 'انتهت مهلة الاتصال بـ IntelBase (الخادم استغرق وقتاً طويلاً). حاول مرة أخرى لاحقاً.',
+                'email': email
+            }), 200 # نستخدم 200 لضمان وصول الرسالة للمتصفح كـ JSON
         
-        # تعامل مع أي حالة من الحالات بما فيها 401
+        # تعامل مع أي حالة من الحالات بما فيها 401 أو 503 من الطرف الآخر
         if response and response.status_code != 200:
             body = response.text or ''
+            # تنظيف الجسم من أي كود HTML إذا وجد لتجنب مشاكل العرض
+            if '<!DOCTYPE' in body or '<html>' in body.lower():
+                body = "استجابة غير صالحة من المزود (HTML Error)"
+            
             error_msg = f'خطأ من IntelBase API: {response.status_code} - {body[:200]}'
-            add_audit_log('OSINT IntelBase Email Error', f'email={email} status={response.status_code} body={body[:200]}')
+            add_audit_log('OSINT IntelBase Email Error', f'email={email} status={response.status_code} body={body[:100]}')
             return jsonify({
                 'success': False,
                 'error': error_msg,
                 'email': email
-            }), response.status_code
+            }), 200 # نستخدم 200 لتجنب تدخل Heroku Error Pages
         
         result = response.json()
         
@@ -19272,13 +19276,13 @@ def osint_intelbase_email_route():
         return jsonify(processed_result)
         
     except requests.exceptions.RequestException as e:
-        error_msg = f'خطأ في الاتصال بـ IntelBase API (قد يكون بسبب ضغط أو انتهاء المهلة): {str(e)}'
-        add_audit_log('OSINT IntelBase Email Error', f'email={email} error={str(e)}')
+        error_msg = f'خطأ غير متوقع في الاتصال بـ IntelBase: {str(e)}'
+        add_audit_log('OSINT IntelBase Email Exception', f'email={email} error={str(e)}')
         return jsonify({
             'success': False,
             'error': error_msg,
             'email': email
-        }), 500
+        }), 200 # نستخدم 200 لضمان معالجة الخطأ كـ JSON في الواجهة الأمامية
 
 
 def _ir_priority_rank(priority: str) -> int:
