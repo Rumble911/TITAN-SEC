@@ -12137,24 +12137,31 @@ HTML_TEMPLATE = """
             let html = `<div class="space-y-10 animate-fadeIn" dir="ltr" style="font-family:'Inter', 'Segoe UI', sans-serif; color: #e2e8f0;">`;
 
             // --- 3. Professional Header ---
+            // --- 3. Professional Header ---
             html += `
-                <div class="bg-[#111] border border-white/5 rounded-2xl p-6 flex flex-wrap items-center justify-between gap-6 shadow-xl">
-                    <div class="flex items-center gap-5">
-                        <div class="w-14 h-14 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-2xl shadow-inner">🎯</div>
+                <div class="bg-[#111] border border-white/5 rounded-2xl p-8 flex flex-wrap items-center justify-between gap-8 shadow-xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-3xl pointer-events-none"></div>
+                    <div class="flex items-center gap-6 relative">
+                        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center text-3xl shadow-lg shadow-indigo-500/20">🎯</div>
                         <div>
-                            <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-0.5 block">Search Target</span>
-                            <span class="text-xl font-bold text-white tracking-tight">${_osintEscape(email)}</span>
+                            <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.2em] mb-1 block">Target Identification</span>
+                            <h2 class="text-2xl font-black text-white tracking-tight">${_osintEscape(email)}</h2>
                         </div>
                     </div>
-                    <div class="flex gap-8">
-                        <div class="text-right">
-                            <span class="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1">Found Platforms</span>
-                            <span class="text-sm font-bold text-white">${matchedAccounts.length} Platforms</span>
+                    
+                    <div class="flex flex-wrap gap-10 relative">
+                        <div class="space-y-1">
+                            <span class="block text-[9px] font-bold text-slate-500 uppercase tracking-widest">First Seen</span>
+                            <span class="text-xs font-bold text-slate-200">${_fmt(meta.first_seen)}</span>
                         </div>
-                        <div class="text-right">
-                            <span class="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1">Account Status</span>
-                            <span class="px-2.5 py-0.5 rounded text-[9px] font-bold ${validator.deliverable !== false ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}">
-                                ${validator.deliverable !== false ? 'VALID' : 'INVALID'}
+                        <div class="space-y-1">
+                            <span class="block text-[9px] font-bold text-slate-500 uppercase tracking-widest">Last Seen</span>
+                            <span class="text-xs font-bold text-slate-200">${_fmt(meta.last_seen)}</span>
+                        </div>
+                        <div class="space-y-1">
+                            <span class="block text-[9px] font-bold text-slate-500 uppercase tracking-widest">Security Status</span>
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black ${validator.deliverable !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}">
+                                ${validator.deliverable !== false ? 'ENCRYPTED / SAFE' : 'EXPOSED / RISKY'}
                             </span>
                         </div>
                     </div>
@@ -12177,8 +12184,8 @@ HTML_TEMPLATE = """
             </div>`;
 
             // --- 3.1 Intelligence Summary (Widgets) ---
-            const allNames = [...new Set(matchedAccounts.map(p => accounts[p].full_name).filter(Boolean))];
-            const allUsernames = [...new Set(matchedAccounts.map(p => accounts[p].username || accounts[p].id || accounts[p].user_id).filter(Boolean))];
+            const allNames = [...new Set(matchedAccounts.map(p => accounts[p].full_name || accounts[p].name || accounts[p].display_name).filter(Boolean))];
+            const allUsernames = [...new Set(matchedAccounts.map(p => accounts[p].username || accounts[p].id || accounts[p].user_id || accounts[p].screen_name).filter(Boolean))];
             const allPics = matchedAccounts.map(p => getBestImage(accounts[p])).filter(Boolean);
             const allLinks = matchedAccounts.map(p => accounts[p].url || accounts[p].link || accounts[p].profile_url || accounts[p].profile_link).filter(Boolean);
             const allLocations = [...new Set(matchedAccounts.map(p => accounts[p].location || accounts[p].country || accounts[p].city).filter(Boolean))];
@@ -12206,6 +12213,37 @@ HTML_TEMPLATE = """
                     <div class="text-2xl font-black text-white">${allLocations.length}</div>
                 </div>
             </div>`;
+
+            // --- 3.2 Breach Timeline ---
+            if (breaches.length > 0) {
+                const sortedBreaches = [...breaches].sort((a, b) => new Date(b.date || b.breach_date) - new Date(a.date || a.breach_date));
+                html += `
+                <div class="bg-[#0a0a0a] border border-white/5 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500/0 via-rose-500/50 to-rose-500/0"></div>
+                    <div class="flex items-center gap-3 mb-10">
+                        <div class="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div>
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-[0.2em]">Exfiltration Timeline</h3>
+                    </div>
+                    <div class="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-rose-500/80 before:via-slate-800 before:to-transparent">
+                        ${sortedBreaches.slice(0, 6).map(b => `
+                            <div class="relative flex items-center justify-between gap-8 group">
+                                <div class="flex items-center gap-6">
+                                    <div class="absolute left-0 w-10 h-10 rounded-full bg-[#0a0a0a] border-2 border-rose-500/40 flex items-center justify-center text-[10px] font-black text-rose-500 group-hover:scale-110 group-hover:border-rose-500 transition-all z-10 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
+                                        ${new Date(b.date || b.breach_date).getFullYear() || '??'}
+                                    </div>
+                                    <div class="ml-16">
+                                        <div class="text-base font-bold text-white group-hover:text-rose-400 transition-colors">${_osintEscape(typeof b.source === 'object' ? (b.source.name || b.source.title) : b.source)}</div>
+                                        <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">${_fmt(b.date || b.breach_date)}</div>
+                                    </div>
+                                </div>
+                                <div class="hidden md:block">
+                                    <div class="px-4 py-1.5 rounded-lg bg-rose-500/5 border border-rose-500/10 text-[9px] font-black text-rose-500 uppercase tracking-widest group-hover:bg-rose-500/10 transition-all">Exposure Detected</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+            }
 
             // --- 4. Verified Platforms Registry ---
             if (matchedAccounts.length > 0) {
@@ -12311,8 +12349,8 @@ HTML_TEMPLATE = """
                                 </div>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-6">
-                                    ${renderField('Full Name', acc.full_name)}
-                                    ${renderField('Username', acc.username)}
+                                    ${renderField('Full Name', acc.full_name || acc.name || acc.display_name)}
+                                    ${renderField('Username', acc.username || acc.id || acc.user_id || acc.screen_name)}
                                     ${renderField('User ID', acc.user_id || acc.id)}
                                     ${renderField('Location', acc.location || acc.country)}
                                     ${renderField('Bio', acc.bio)}
@@ -12321,7 +12359,7 @@ HTML_TEMPLATE = """
                                     
                                     <!-- Dynamic Extra Fields -->
                                     ${Object.keys(acc).map(key => {
-                                        const skip = ['platform','domain','is_match','source_type','avatar','avatar_url','picture','photo','photo_url','image','thumbnail','profile_pic','full_name','username','user_id','id','location','country','bio','creation_date','last_active','skills','connections'];
+                                        const skip = ['platform','domain','is_match','source_type','avatar','avatar_url','picture','photo','photo_url','image','thumbnail','profile_pic','full_name','username','user_id','id','location','country','bio','creation_date','last_active','skills','connections','name','display_name','screen_name'];
                                         if (skip.includes(key.toLowerCase()) || typeof acc[key] === 'object') return '';
                                         // Format key to label (e.g. has_google_id -> Has Google Id)
                                         const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -19131,7 +19169,7 @@ def osint_intelbase_email_route():
     
     payload = {
         'email': email,
-        'timeout_ms': 5000,
+        'timeout_ms': 30000, # زيادة المهلة الداخلية في خادم IntelBase إلى 30 ثانية
         'include_data_breaches': include_breaches,
         'exclude_modules': []
     }
@@ -19155,10 +19193,21 @@ def osint_intelbase_email_route():
         add_audit_log('OSINT IntelBase Email', f'email={email} using_proxy={proxy_url}')
 
     try:
-        response = requests.post(intelbase_url, json=payload, headers=headers, timeout=25, proxies=proxies)
+        # محاولة طلب البيانات مع زيادة المهلة وإضافة محاولات إعادة في حال حدوث Timeout
+        max_retries = 2
+        response = None
+        for attempt in range(max_retries + 1):
+            try:
+                response = requests.post(intelbase_url, json=payload, headers=headers, timeout=60, proxies=proxies)
+                break # نجح الطلب، اخرج من الحلقة
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                if attempt < max_retries:
+                    time.sleep(2) # انتظر قليلاً قبل الإعادة
+                    continue
+                raise e # إذا فشلت كل المحاولات، ارفع الاستثناء
         
         # تعامل مع أي حالة من الحالات بما فيها 401
-        if response.status_code != 200:
+        if response and response.status_code != 200:
             body = response.text or ''
             error_msg = f'خطأ من IntelBase API: {response.status_code} - {body[:200]}'
             add_audit_log('OSINT IntelBase Email Error', f'email={email} status={response.status_code} body={body[:200]}')
@@ -19222,7 +19271,7 @@ def osint_intelbase_email_route():
         return jsonify(processed_result)
         
     except requests.exceptions.RequestException as e:
-        error_msg = f'خطأ في الاتصال بـ IntelBase API: {str(e)}'
+        error_msg = f'خطأ في الاتصال بـ IntelBase API (قد يكون بسبب ضغط أو انتهاء المهلة): {str(e)}'
         add_audit_log('OSINT IntelBase Email Error', f'email={email} error={str(e)}')
         return jsonify({
             'success': False,
