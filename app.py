@@ -5154,7 +5154,7 @@ HTML_TEMPLATE = """
                     </h2>
                     <div class="flex gap-2 mb-4">
                         <input type="email" id="osintEmailInput" placeholder="أدخل بريد إلكتروني..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-green-500 outline-none font-mono text-left" dir="ltr">
-                        <button onclick="osintLookupEmail()" class="bg-green-900/40 hover:bg-green-800 px-6 py-3 rounded-xl font-bold border border-green-800/50 transition-all text-green-400 flex items-center justify-center min-w-[140px]">
+                        <button onclick="osintLookupEmail().catch(e => console.error('OSINT Error:', e))" class="bg-green-900/40 hover:bg-green-800 px-6 py-3 rounded-xl font-bold border border-green-800/50 transition-all text-green-400 flex items-center justify-center min-w-[140px]">
                             بحث البريد 📬
                         </button>
                     </div>
@@ -11998,16 +11998,20 @@ HTML_TEMPLATE = """
                         // Map twitter to X for modern look
                         const displayName = platform.toLowerCase() === 'twitter' ? 'X' : platform;
                         
+                        // Merge data from multiple sources
+                        const accountData = {
+                            ...(obj.data || {}),
+                            ...(obj || {}),
+                            platform: displayName,
+                            domain: domain,
+                            is_match: true,
+                            source_type: isStealer ? 'stealer' : 'direct'
+                        };
+                        
                         if (!targetMap[displayName]) {
-                            targetMap[displayName] = { 
-                                ...(obj.data || obj), 
-                                platform: displayName, 
-                                domain: domain,
-                                is_match: true,
-                                source_type: isStealer ? 'stealer' : 'direct'
-                            };
-                        } else if (obj.data) {
-                            targetMap[displayName] = { ...targetMap[displayName], ...obj.data };
+                            targetMap[displayName] = accountData;
+                        } else {
+                            targetMap[displayName] = { ...targetMap[displayName], ...accountData };
                         }
                     }
                 }
@@ -12033,6 +12037,26 @@ HTML_TEMPLATE = """
             // Start the deep scan on the entire payload and its raw sub-objects
             deepScan(payload);
             if (payload.raw_response) deepScan(payload.raw_response);
+            
+            // Additional scan for identifier.accounts if it's a direct object structure
+            if (payload.identifier && typeof payload.identifier === 'object') {
+                const accounts_list = payload.identifier.accounts || {};
+                if (typeof accounts_list === 'object') {
+                    for (const [platform, accData] of Object.entries(accounts_list)) {
+                        if (typeof accData === 'object' && accData !== null) {
+                            if (!accounts[platform]) {
+                                accounts[platform] = {
+                                    ...accData,
+                                    platform: platform,
+                                    is_match: true
+                                };
+                            } else {
+                                accounts[platform] = { ...accounts[platform], ...accData };
+                            }
+                        }
+                    }
+                }
+            }
 
             const matchedAccounts = Object.keys(accounts);
             const extraAccounts = Object.keys(additionalAccounts).filter(p => !accounts[p]);
@@ -12040,11 +12064,39 @@ HTML_TEMPLATE = """
             // --- 2. Robust Image Finder ---
             const getBestImage = (acc) => {
                 if (!acc) return null;
-                return acc.avatar || acc.avatar_url || acc.picture || acc.photo || acc.photo_url || acc.image || acc.thumbnail || acc.profile_pic || null;
+                // Primary image sources
+                const image = acc.avatar || acc.avatar_url || acc.picture || acc.photo || acc.photo_url || acc.image || acc.thumbnail || acc.profile_pic;
+                if (image) return image;
+                
+                // Secondary fallback: look for image in nested objects
+                for (const key in acc) {
+                    if (String(key).toLowerCase().includes('image') || String(key).toLowerCase().includes('avatar') || String(key).toLowerCase().includes('photo') || String(key).toLowerCase().includes('pic')) {
+                        if (typeof acc[key] === 'string' && (acc[key].startsWith('http') || acc[key].includes('/'))) {
+                            return acc[key];
+                        }
+                    }
+                }
+                return null;
+            };
+            
+            // --- 2.1 Robust Data Extractors ---
+            const getFullName = (acc) => {
+                if (!acc) return null;
+                return acc.full_name || acc.name || acc.display_name || acc.first_name || null;
+            };
+            
+            const getUsername = (acc) => {
+                if (!acc) return null;
+                return acc.username || acc.id || acc.user_id || acc.screen_name || acc.login || null;
+            };
+            
+            const getLocation = (acc) => {
+                if (!acc) return null;
+                return acc.location || acc.country || acc.city || acc.address || null;
             };
 
             const _fmt = (v) => {
-                if (!v) return 'Unknown';
+                if (!v) return 'غير متوفر';
                 const d = new Date(v);
                 return isNaN(d.getTime()) ? v : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             };
@@ -12110,11 +12162,11 @@ HTML_TEMPLATE = """
             </div>`;
 
             // --- 3.1 Intelligence Summary (Widgets) ---
-            const allNames = [...new Set(matchedAccounts.map(p => accounts[p].full_name || accounts[p].name || accounts[p].display_name).filter(Boolean))];
-            const allUsernames = [...new Set(matchedAccounts.map(p => accounts[p].username || accounts[p].id || accounts[p].user_id || accounts[p].screen_name).filter(Boolean))];
+            const allNames = [...new Set(matchedAccounts.map(p => getFullName(accounts[p])).filter(Boolean))];
+            const allUsernames = [...new Set(matchedAccounts.map(p => getUsername(accounts[p])).filter(Boolean))];
             const allPics = matchedAccounts.map(p => getBestImage(accounts[p])).filter(Boolean);
             const allLinks = matchedAccounts.map(p => accounts[p].url || accounts[p].link || accounts[p].profile_url || accounts[p].profile_link).filter(Boolean);
-            const allLocations = [...new Set(matchedAccounts.map(p => accounts[p].location || accounts[p].country || accounts[p].city).filter(Boolean))];
+            const allLocations = [...new Set(matchedAccounts.map(p => getLocation(accounts[p])).filter(Boolean))];
 
             html += `
             <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -12140,6 +12192,52 @@ HTML_TEMPLATE = """
                 </div>
             </div>`;
 
+            const identityArtifacts = matchedAccounts.map(platform => {
+                const acc = accounts[platform];
+                return {
+                    platform,
+                    fullName: getFullName(acc),
+                    username: getUsername(acc),
+                    image: getBestImage(acc),
+                    link: acc.url || acc.link || acc.profile_url || acc.profile_link || null,
+                };
+            }).filter(item => item.fullName || item.username || item.image || item.link);
+
+            if (allNames.length || allUsernames.length || allPics.length) {
+                html += `
+                <div class="bg-[#0c0c0c] border border-white/5 rounded-2xl p-8 relative overflow-hidden">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]"></div>
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-[0.2em]">Discovered Identity Artifacts</h3>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="bg-white/5 border border-white/10 rounded-2xl p-5">
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Names</div>
+                            <div class="flex flex-wrap gap-2">
+                                ${allNames.length ? allNames.map(name => `<span class="px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-sm font-semibold">${_osintEscape(name)}</span>`).join('') : '<span class="text-sm text-slate-500">No names extracted.</span>'}
+                            </div>
+                        </div>
+                        <div class="bg-white/5 border border-white/10 rounded-2xl p-5">
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Usernames</div>
+                            <div class="flex flex-wrap gap-2">
+                                ${allUsernames.length ? allUsernames.map(username => `<span class="px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm font-semibold font-mono">${_osintEscape(username)}</span>`).join('') : '<span class="text-sm text-slate-500">No usernames extracted.</span>'}
+                            </div>
+                        </div>
+                        <div class="bg-white/5 border border-white/10 rounded-2xl p-5">
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Profile Pics</div>
+                            <div class="grid grid-cols-3 gap-3">
+                                ${identityArtifacts.length ? identityArtifacts.filter(item => item.image).slice(0, 9).map(item => `
+                                    <a href="${item.link || item.image}" target="_blank" class="group block relative">
+                                        <img src="${item.image}" alt="${_osintEscape(item.platform)}" class="w-full aspect-square rounded-xl object-cover border border-white/10 group-hover:border-cyan-400/40 transition-all">
+                                        <span class="absolute left-2 bottom-2 right-2 text-[9px] font-bold text-white bg-black/60 backdrop-blur px-2 py-1 rounded-md truncate">${_osintEscape(item.platform)}</span>
+                                    </a>
+                                `).join('') : '<span class="text-sm text-slate-500 col-span-3">No profile pictures extracted.</span>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
             // --- 3.2 Breach Timeline ---
             if (breaches.length > 0) {
                 const sortedBreaches = [...breaches].sort((a, b) => new Date(b.date || b.breach_date) - new Date(a.date || a.breach_date));
@@ -12152,20 +12250,28 @@ HTML_TEMPLATE = """
                     </div>
                     <div class="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-rose-500/80 before:via-slate-800 before:to-transparent">
                         ${sortedBreaches.slice(0, 6).map(b => `
+                            ${(() => {
+                                const sourceDate = (b && typeof b.source === 'object' && b.source) ? (b.source.date || b.source.breach_date || null) : null;
+                                const rawDate = b.date || b.breach_date || sourceDate || b.created_at || b.published_at || b.discovered_at || null;
+                                const yearValue = rawDate ? new Date(rawDate).getFullYear() : null;
+                                const dateLabel = rawDate ? _fmt(rawDate) : '';
+                                const sourceName = _osintEscape(typeof b.source === 'object' ? (b.source.name || b.source.title || 'Unknown Source') : b.source);
+                                return `
                             <div class="relative flex items-center justify-between gap-8 group">
                                 <div class="flex items-center gap-6">
                                     <div class="absolute left-0 w-10 h-10 rounded-full bg-[#0a0a0a] border-2 border-rose-500/40 flex items-center justify-center text-[10px] font-black text-rose-500 group-hover:scale-110 group-hover:border-rose-500 transition-all z-10 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
-                                        ${new Date(b.date || b.breach_date).getFullYear() || '??'}
+                                        ${yearValue || '—'}
                                     </div>
                                     <div class="ml-16">
-                                        <div class="text-base font-bold text-white group-hover:text-rose-400 transition-colors">${_osintEscape(typeof b.source === 'object' ? (b.source.name || b.source.title) : b.source)}</div>
-                                        <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">${_fmt(b.date || b.breach_date)}</div>
+                                        <div class="text-base font-bold text-white group-hover:text-rose-400 transition-colors">${sourceName}</div>
+                                        ${dateLabel ? `<div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">${dateLabel}</div>` : ''}
                                     </div>
                                 </div>
                                 <div class="hidden md:block">
                                     <div class="px-4 py-1.5 rounded-lg bg-rose-500/5 border border-rose-500/10 text-[9px] font-black text-rose-500 uppercase tracking-widest group-hover:bg-rose-500/10 transition-all">Exposure Detected</div>
                                 </div>
                             </div>
+                        `;})()}
                         `).join('')}
                     </div>
                 </div>`;
@@ -12231,6 +12337,9 @@ HTML_TEMPLATE = """
                     const acc = accounts[platform];
                     const theme = getTheme(platform);
                     const pic = getBestImage(acc);
+                    const fullName = getFullName(acc);
+                    const username = getUsername(acc);
+                    const location = getLocation(acc);
 
                     // Platform specific formatting
                     const formatValue = (v) => {
@@ -12275,17 +12384,17 @@ HTML_TEMPLATE = """
                                 </div>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-6">
-                                    ${renderField('Full Name', acc.full_name || acc.name || acc.display_name)}
-                                    ${renderField('Username', acc.username || acc.id || acc.user_id || acc.screen_name)}
+                                    ${renderField('Full Name', fullName)}
+                                    ${renderField('Username', username)}
                                     ${renderField('User ID', acc.user_id || acc.id)}
-                                    ${renderField('Location', acc.location || acc.country)}
+                                    ${renderField('Location', location)}
                                     ${renderField('Bio', acc.bio)}
                                     ${renderField('Created At', acc.creation_date ? _fmt(acc.creation_date) : null)}
                                     ${renderField('Last Active', acc.last_active ? _fmt(acc.last_active) : null)}
                                     
                                     <!-- Dynamic Extra Fields -->
                                     ${Object.keys(acc).map(key => {
-                                        const skip = ['platform','domain','is_match','source_type','avatar','avatar_url','picture','photo','photo_url','image','thumbnail','profile_pic','full_name','username','user_id','id','location','country','bio','creation_date','last_active','skills','connections','name','display_name','screen_name'];
+                                        const skip = ['platform','domain','is_match','source_type','avatar','avatar_url','picture','photo','photo_url','image','thumbnail','profile_pic','full_name','username','user_id','id','location','country','bio','creation_date','last_active','skills','connections','name','display_name','screen_name','first_name','address','city','login'];
                                         if (skip.includes(key.toLowerCase()) || typeof acc[key] === 'object') return '';
                                         // Format key to label (e.g. has_google_id -> Has Google Id)
                                         const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
