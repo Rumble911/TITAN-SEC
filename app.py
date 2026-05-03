@@ -2832,21 +2832,6 @@ def check_email_intelligence(email: str) -> dict:
     except Exception as e:
         return {"success": False, "message": str(e), "error": str(e)}
 
-# --- فحص رقم الهاتف عبر IPQualityScore API ---
-def check_phone_intelligence(phone: str) -> dict:
-    API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
-    # تنظيف وتجهيز رقم الهاتف
-    phone_clean = urllib.parse.quote(phone.strip())
-    url = f'https://www.ipqualityscore.com/api/json/phone/{API_KEY}/{phone_clean}'
-    params = {}
-        
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
-        return data
-    except Exception as e:
-        return {"success": False, "message": str(e), "error": str(e)}
-
 # --- وحدة التحليل العميق للروابط (Deep Link Analysis Module) ---
 
 def trace_redirects(start_url):
@@ -5275,21 +5260,6 @@ HTML_TEMPLATE = """
                         
                         <div id="malwareFileResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm min-h-[100px]"></div>
                     </div>
-                </div>
-
-                <!-- Phone Validator & Intelligence -->
-                <div>
-                    <h2 class="text-xl font-bold text-yellow-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>📱</span> فحص الهاتف (Phone Intelligence)
-                    </h2>
-                    <p class="text-xs text-gray-400 mb-3">تحليل رقم الهاتف لاكتشاف نوع الخط ومزود الخدمة ودرجة الاحتيال المرتبطة به.</p>
-                    <div class="flex flex-col md:flex-row gap-2 mb-4">
-                        <input type="tel" id="phoneInput" placeholder="أدخل رقم الهاتف مع الترميز (مثل +962778...)" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-yellow-500 outline-none font-mono text-left" dir="ltr">
-                        <button onclick="checkPhone()" class="bg-yellow-900/40 hover:bg-yellow-800 px-6 py-3 rounded-xl font-bold border border-yellow-800/50 transition-all text-yellow-400 flex items-center justify-center w-full md:w-auto min-w-[140px]">
-                            فحص الرقم
-                        </button>
-                    </div>
-                    <div id="phoneResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm"></div>
                 </div>
 
             </div>
@@ -11829,48 +11799,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        async function checkPhone() {
-            const phone = document.getElementById('phoneInput').value;
-            if(!phone) return titanAlert("الرجاء إدخال رقم الهاتف");
-            const resBox = document.getElementById('phoneResult');
-            resBox.classList.remove('hidden');
-            setResultLoading(resBox, 'Phone Intelligence', 'جاري فحص الرقم عبر IPQualityScore...');
-            soundManager.terminalType();
-            
-            try {
-                const res = await fetch('/api/scan/phone', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({phone})
-                });
-                const data = await res.json();
-                
-                if (data.error) {
-                    setResultError(resBox, data.error);
-                    return;
-                }
-                
-                if (data.success) {
-                    const scoreTone = _resultToneByScore(data.fraud_score);
-                    setResultInfo(resBox, 'Phone Intelligence', [
-                        { label: 'Phone', value: data.formatted || phone, tone: 'info', dir: 'ltr' },
-                        { label: 'Fraud Score', value: data.fraud_score ?? 0, tone: scoreTone },
-                        { label: 'Valid', value: data.valid ? 'YES' : 'NO', tone: data.valid ? 'safe' : 'danger' },
-                        { label: 'Active', value: data.active ? 'YES' : 'Unknown', tone: data.active ? 'safe' : 'warn' },
-                        { label: 'Line Type', value: data.line_type || 'N/A', tone: 'info' },
-                        { label: 'Recent Abuse', value: data.recent_abuse ? 'YES' : 'NO', tone: data.recent_abuse ? 'danger' : 'safe' },
-                        { label: 'Carrier', value: data.carrier || 'N/A', tone: 'info' }
-                    ], { badge: scoreTone === 'danger' ? 'High Risk' : (scoreTone === 'warn' ? 'Medium Risk' : 'Low Risk'), cols: 2, riskScore: Number(data.fraud_score || 0) });
-                    if(data.fraud_score > 70 || data.recent_abuse || !data.valid) soundManager.alarm(); else soundManager.success();
-                } else {
-                    setResultError(resBox, `${data.message} (ملاحظة: إذا تكرر الخطأ فغالبًا الرصيد المجاني في IPQualityScore انتهى لليوم)`);
-                    soundManager.error();
-                }
-            } catch (e) {
-                setResultError(resBox, 'فشل الاتصال بخادم الفحص.');
-                soundManager.error();
-            }
-        }
-
         async function checkUrlCombined() {
             const urlInput = document.getElementById('urlInput');
             const url = (urlInput.value || '').trim();
@@ -16960,14 +16888,6 @@ def ip_check():
             
     info = get_ip_intelligence_data(ip)
     return jsonify(info)
-
-@app.route('/api/scan/phone', methods=['POST'])
-def scan_phone_route():
-    data = request.json or {}
-    phone = data.get('phone', '')
-    res = check_phone_intelligence(phone)
-    add_audit_log("فحص رقم هاتف (IPQualityScore)", f"تم فحص الرقم: {phone}")
-    return jsonify(res)
 
 @app.route('/api/scan/url', methods=['POST'])
 def scan_url_route():
