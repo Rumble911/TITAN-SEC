@@ -2636,6 +2636,116 @@ def encrypt_text_with_method(plain_text: str, password: str, method: str, option
     return f"TITANv2::{algo}::{out_fmt}::{encoded}"
 
 
+def scrape_phishing_indicators(url):
+    """تحليل المحتوى (Content Scraper) للبحث عن أنماط التصيد وتتبع الروابط الداخلية"""
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        
+        main_analysis = _analyze_single_page(url, headers)
+        if main_analysis.get('error'):
+            return main_analysis
+
+        findings = main_analysis.get('findings', [])
+        score_inc = main_analysis.get('risk_score_inc', 0)
+        
+        # تتبع الروابط الداخلية (بحد أقصى 3 روابط لضمان السرعة)
+        internal_links = main_analysis.get('internal_links', [])[:3]
+        for link in internal_links:
+            # تجنب تكرار الفحص لنفس الرابط
+            if link == url: continue
+            
+            sub_analysis = _analyze_single_page(link, headers)
+            if not sub_analysis.get('error'):
+                # دمج النتائج مع وزن أقل للروابط الداخلية
+                for find in sub_analysis.get('findings', []):
+                    if find not in findings:
+                        findings.append(f"مكتشف في صفحة داخلية: {find}")
+                
+                # إضافة نسبة من خطورة الصفحات الداخلية
+                score_inc += int(sub_analysis.get('risk_score_inc', 0) * 0.4)
+
+        return {
+            "findings": findings,
+            "risk_score_inc": min(100, score_inc),
+            "title": main_analysis.get('title', 'N/A')
+        }
+    except Exception as e:
+        return {"findings": [f"Deep Scrape Error: {str(e)}"], "risk_score_inc": 0, "title": "N/A"}
+
+def _analyze_single_page(url, headers):
+    """تحليل صفحة واحدة بحثاً عن مؤشرات التصيد"""
+    try:
+        resp = requests.get(url, timeout=10, headers=headers, allow_redirects=True)
+        # التحقق من أن المحتوى نصي
+        if 'text/html' not in resp.headers.get('Content-Type', ''):
+            return {"error": True, "message": "المحتوى ليس HTML"}
+            
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        findings = []
+        score_inc = 0
+        
+        # 1. البحث عن حقول كلمة السر والهوية
+        pw_fields = soup.find_all('input', {'type': 'password'})
+        email_fields = soup.find_all('input', {'type': ['email', 'text']}, id=re.compile(r'user|login|email', re.I))
+        
+        if pw_fields:
+            findings.append(f"تم اكتشاف {len(pw_fields)} حقل لطلب كلمات السر (Password Fields)")
+            score_inc += 45
+        if email_fields:
+            score_inc += 10
+            
+        # 2. البحث عن كلمات مشبوهة
+        phish_keywords = [
+            'login', 'signin', 'verify', 'account', 'banking', 'secure', 'update', 'password', 
+            'confirm', 'billing', 'service', 'security', 'official', 'support',
+            'تسجيل الدخول', 'تحقق', 'بنك', 'حسابي', 'تأكيد', 'تحديث', 'كلمة السر'
+        ]
+        page_text = (soup.title.string if soup.title else "") + " " + soup.get_text()
+        page_text = page_text.lower()
+        
+        found_keys = [k for k in phish_keywords if k in page_text]
+        if found_keys:
+            findings.append(f"كلمات مشبوهة مكتشفة: {', '.join(list(set(found_keys))[:5])}")
+            score_inc += 15
+            
+        # 3. التحقق من النماذج (Forms)
+        forms = soup.find_all('form')
+        for f in forms:
+            action = f.get('action', '').strip()
+            if not action: continue
+            
+            parsed_url = urllib.parse.urlparse(url)
+            parsed_action = urllib.parse.urlparse(action)
+            
+            # إذا كان النموذج يرسل البيانات لموقع مختلف تماماً
+            if parsed_action.netloc and parsed_action.netloc != parsed_url.netloc:
+                # استثناء المواقع الموثوقة المعروفة (مثل جوجل أو فيسبوك للـ Auth)
+                trusted = ['google.com', 'facebook.com', 'microsoft.com', 'apple.com']
+                if not any(t in parsed_action.netloc for t in trusted):
+                    findings.append(f"نموذج يرسل بيانات لموقع خارجي غير معروف: {parsed_action.netloc}")
+                    score_inc += 40
+                    break
+        
+        # 4. جمع الروابط الداخلية للمتابعة
+        internal_links = []
+        base_domain = urllib.parse.urlparse(url).netloc
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            full_url = urllib.parse.urljoin(url, href)
+            if urllib.parse.urlparse(full_url).netloc == base_domain:
+                if full_url not in internal_links and full_url != url:
+                    internal_links.append(full_url)
+
+        return {
+            "findings": findings,
+            "risk_score_inc": score_inc,
+            "title": soup.title.string.strip() if soup.title and soup.title.string else "No Title",
+            "internal_links": internal_links
+        }
+    except Exception as e:
+        return {"error": True, "findings": [f"Scrape Error: {str(e)}"], "risk_score_inc": 0}
+
+
 def decrypt_text_with_method(cipher_text: str, password: str, method: str = 'auto') -> str:
     text = (cipher_text or '').strip()
     selected = (method or 'auto').lower()
@@ -2949,24 +3059,80 @@ def scrape_phishing_indicators(url):
         return {"findings": [f"Scrape Error: {str(e)}"], "risk_score_inc": 0, "title": "N/A"}
 
 def analyze_domain_age(url):
-    """تحليل عمر الدومين (Domain Age Analysis)"""
+    """تحليل عمر الدومين (Domain Age Analysis) بدقة عالية"""
     try:
-        domain = urllib.parse.urlparse(url).netloc
-        if ':' in domain:
-            domain = domain.split(':')[0]
+        # 1. استخراج الدومين وتنظيفه
+        parsed = urllib.parse.urlparse(url)
+        netloc = parsed.netloc or parsed.path
+        domain = netloc.split(':')[0].lower()
+        
+        if not domain:
+            return {"age_days": None, "creation_date": "N/A"}
+
+        # تجاهل الـ localhost والـ IPs
+        if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', domain) or domain == 'localhost':
+            return {"age_days": 0, "creation_date": "IP Address / Local"}
+
+        # 2. محاولة استخراج الدومين الأساسي (مثل google.com بدلاً من www.google.com)
+        parts = domain.split('.')
+        if len(parts) > 2:
+            # معالجة حالات مثل .com.jo أو .co.uk (تبسيط)
+            if parts[-2] in ['com', 'org', 'net', 'edu', 'gov', 'co', 'me', 'info', 'biz', 'xyz', 'io', 'ly', 'tv', 'site', 'online', 'store', 'tech']:
+                base_domain = ".".join(parts[-3:])
+            else:
+                base_domain = ".".join(parts[-2:])
+        else:
+            base_domain = domain
+
+        # 3. محاولة WHOIS
+        w = whois.whois(base_domain)
+        
+        # قائمة بالحقول المحتملة لتاريخ الإنشاء
+        date_fields = ['creation_date', 'created', 'registration', 'updated_date']
+        found_date = None
+        
+        for field in date_fields:
+            val = w.get(field)
+            if not val: continue
             
-        # محاولة WHOIS
-        w = whois.whois(domain)
-        creation_date = w.creation_date
-        if isinstance(creation_date, list):
-            creation_date = creation_date[0]
+            # إذا كانت قائمة، نأخذ أول تاريخ صالح
+            if isinstance(val, list):
+                valid_dates = [d for d in val if d]
+                if valid_dates:
+                    val = valid_dates[0]
+                else:
+                    continue
             
-        if creation_date:
-            age_days = (datetime.datetime.now() - creation_date).days
-            return {"age_days": age_days, "creation_date": creation_date.strftime('%Y-%m-%d')}
-        return {"age_days": None, "creation_date": "N/A"}
-    except Exception:
-        return {"age_days": None, "creation_date": "N/A"}
+            # محاولة تحويل النص إلى datetime إذا لزم الأمر
+            if isinstance(val, str):
+                try:
+                    # محاولات شائعة لتنسيق التاريخ
+                    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%Y/%m/%d', '%b %d %Y'):
+                        try:
+                            val = datetime.datetime.strptime(val.split()[0], fmt)
+                            break
+                        except: continue
+                except: pass
+                
+            if isinstance(val, datetime.datetime):
+                found_date = val
+                break
+
+        if found_date:
+            age_days = (datetime.datetime.now() - found_date).days
+            return {
+                "age_days": max(0, age_days),
+                "creation_date": found_date.strftime('%Y-%m-%d'),
+                "registrar": w.get('registrar', 'N/A'),
+                "base_domain": base_domain
+            }
+            
+        return {"age_days": None, "creation_date": "N/A", "registrar": "N/A"}
+    except Exception as e:
+        # تسجيل الخطأ داخلياً للفحص
+        print(f"WHOIS Error for {url}: {str(e)}")
+        return {"age_days": None, "creation_date": "N/A", "registrar": "N/A"}
+
 
 def deep_scan_link_logic(target_url):
     """المنطق الأساسي للتحليل العميق وحساب النقاط"""
@@ -4588,10 +4754,8 @@ HTML_TEMPLATE = """
                 <div class="tab-group">
                     <div class="tab-group-title px-1"><span>🧭</span> التحليل والاستقصاء</div>
                     <div class="tab-grid">
-                    <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
                     <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
                     <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
-                    <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
                 </div>
                 </div>
 
@@ -5187,113 +5351,6 @@ HTML_TEMPLATE = """
                     </div>
                     
                     <div id="ipResult" class="hidden p-6 bg-slate-900/90 rounded-xl border border-slate-700 shadow-[0_0_25px_rgba(0,0,0,0.6)] relative overflow-hidden">
-                        <div class="flex flex-col md:flex-row gap-8 relative z-10 items-center justify-between min-h-[160px]">
-                            <!-- قسم البيانات -->
-                            <div id="ipDataBox" class="flex-1 w-full order-2 md:order-1 transition-all"></div>
-                            
-                            <!-- الرادار -->
-                            <div id="radarContainer" class="hidden md:flex flex-col items-center justify-center border-r border-slate-700/50 pr-8 pl-4 order-1 md:order-2">
-                                <div class="radar-box">
-                                    <div class="radar-cross"></div>
-                                    <div class="radar-target"></div>
-                                </div>
-                                <p class="text-center text-green-400 text-[10px] mt-4 font-mono uppercase tracking-[0.2em] animate-pulse">Target Acquired</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Email Validator & Leak Scanner -->
-                <div>
-                    <h2 class="text-xl font-bold text-red-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>📧</span> فحص الإيميل (Email Intelligence)
-                    </h2>
-                    <p class="text-xs text-gray-400 mb-3">فحص البريد الإلكتروني للتأكد من صلاحيته، هل هو بريد وهمي (Disposable)، واحتمالية كونه احتيالياً (Fraud Score).</p>
-                    <div class="flex gap-2 mb-4">
-                        <input type="email" id="phishUrlInput" placeholder="أدخل البريد الإلكتروني لفحصه..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-red-500 outline-none font-mono text-left" dir="ltr">
-                        <button onclick="checkPhishing()" class="bg-red-900/40 hover:bg-red-800 px-6 py-3 rounded-xl font-bold border border-red-800/50 transition-all text-red-400 flex items-center justify-center min-w-[140px]">
-                            فحص الإيميل
-                        </button>
-                    </div>
-                    <div id="phishResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm mb-6"></div>
-                    
-                    <h3 class="font-bold text-orange-500 mb-3 text-sm flex items-center gap-2">
-                        <span>🕵️</span> فحص تسريبات الإيميل وكلمة السر (Data Leaks)
-                    </h3>
-                    <p class="text-xs text-gray-400 mb-3">تحقق مما إذا كان بريدك الإلكتروني وكلمة السر المحددة قد تم تسريبها معاً في اختراقات سابقة للبيانات.</p>
-                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            <input type="email" id="leakEmailInput" placeholder="البريد الإلكتروني..." class="p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-orange-500 outline-none text-sm font-mono text-left" dir="ltr">
-                            <input type="password" id="leakPassInput" placeholder="كلمة السر للتحقق من تسريبها مع الإيميل..." class="p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-orange-500 outline-none text-sm font-mono text-left" dir="ltr">
-                        </div>
-                        <button onclick="checkEmailPassLeak()" class="w-full bg-orange-900/40 hover:bg-orange-800 px-6 py-3 rounded-xl font-bold border border-orange-800/50 transition-all text-orange-400 flex items-center justify-center">
-                            فحص التسريبات
-                        </button>
-                        <div id="leakEmailPassResult" class="hidden mt-4 p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm"></div>
-                    </div>
-                </div>
-
-                <!-- URL Scanner & Phishing Detection -->
-                <div>
-                    <h2 class="text-xl font-bold text-blue-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>🌐</span> فحص الروابط المشبوهة (URL/Phishing Scanner)
-                    </h2>
-                    <p class="text-xs text-gray-400 mb-3">فحص دقيق للروابط والمواقع لاكتشاف صفحات التصيد (Phishing) والبرمجيات الخبيثة وتصنيف الخطورة.</p>
-                    <div class="flex gap-2 mb-4">
-                        <input type="url" id="urlInput" placeholder="أدخل الرابط لفحصه (مثل https://example.com)..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-left" dir="ltr">
-                        <button onclick="checkUrlCombined()" class="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl font-bold border border-blue-400/30 transition-all text-white flex items-center justify-center min-w-[160px] shadow-lg shadow-blue-900/20">
-                            بدء الفحص الشامل 🔍
-                        </button>
-                    </div>
-                    <div id="urlResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm"></div>
-                </div>
-
-                <!-- Malware File Sandbox Scanner -->
-                <div>
-                    <h2 class="text-xl font-bold text-rose-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>🦠</span> فحص البرمجيات الخبيثة والملفات (Malware Sandbox)
-                    </h2>
-                    <p class="text-xs text-gray-400 mb-3 text-right">تحليل سلوكي متقدم للملفات المشبوهة والـ Payloads باستخدام بيئة TITAN Sandbox المعزولة عبر VirusTotal Hybrid Intelligence.</p>
-                    
-                    <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50 space-y-6">
-                        <!-- File Upload Sandbox -->
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-2 font-bold text-right">رفع ملف للتحليل العميق (Sandbox):</label>
-                            <div class="flex flex-col md:flex-row gap-3">
-                                <div class="flex-1 relative group">
-                                    <input type="file" id="malwareFileInput" class="hidden" onchange="updateFileNameDisplay()">
-                                    <label for="malwareFileInput" class="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-700 cursor-pointer hover:border-rose-500 transition-all group-hover:bg-slate-800">
-                                        <span id="fileNameDisplay" class="text-gray-500 text-sm italic">اختر ملفاً لمسحه (.exe, .py, .apk, .sh, .docx)...</span>
-                                        <span class="bg-slate-800 px-3 py-1 rounded text-[10px] font-bold text-gray-400 border border-white/5 uppercase">استعراض</span>
-                                    </label>
-                                </div>
-                                <button onclick="scanMalwareFile()" class="bg-rose-600 hover:bg-rose-500 px-6 py-3 rounded-xl font-bold border border-rose-400/30 transition-all text-white flex items-center justify-center min-w-[160px] shadow-lg shadow-rose-900/20">
-                                    بدء الفحص السلوكي 🚀
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div id="malwareFileResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm min-h-[100px]"></div>
-                    </div>
-                </div>
-
-                <!-- Phone Validator & Intelligence -->
-                <div>
-                    <h2 class="text-xl font-bold text-yellow-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
-                        <span>📱</span> فحص الهاتف (Phone Intelligence)
-                    </h2>
-                    <p class="text-xs text-gray-400 mb-3">تحليل رقم الهاتف لاكتشاف نوع الخط ومزود الخدمة ودرجة الاحتيال المرتبطة به.</p>
-                    <div class="flex flex-col md:flex-row gap-2 mb-4">
-                        <input type="tel" id="phoneInput" placeholder="أدخل رقم الهاتف مع الترميز (مثل +962778...)" class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-yellow-500 outline-none font-mono text-left" dir="ltr">
-                        <button onclick="checkPhone()" class="bg-yellow-900/40 hover:bg-yellow-800 px-6 py-3 rounded-xl font-bold border border-yellow-800/50 transition-all text-yellow-400 flex items-center justify-center w-full md:w-auto min-w-[140px]">
-                            فحص الرقم
-                        </button>
-                    </div>
-                    <div id="phoneResult" class="hidden p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-sm"></div>
-                </div>
-
-            </div>
-
             <div id="ghost-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-pink-400 border-b border-slate-700 pb-2 flex items-center gap-2">
                     <span>🔥</span> قنوات الدردشة والرسائل الأمنة
@@ -5366,63 +5423,6 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
                 </div>
-            </div>
-
-
-
-            <div id="training-section" class="hidden space-y-6">
-                <h2 class="text-xl font-bold text-amber-300 border-b border-slate-700 pb-2">🎯 قسم التدريب</h2>
-                <div class="training-subtabs-shell rounded-xl p-3 bg-slate-900/50 border border-slate-700 mb-4">
-                    <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
-                        <button id="btn-training-learninglab" onclick="setTrainingSubTab('learninglab')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🎓 موسوعة الهجمات</button>
-                        <button id="btn-training-tools-kb" onclick="setTrainingSubTab('tools-kb')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🛠️ موسوعة الأدوات</button>
-                        <button id="btn-training-vuln-kb" onclick="setTrainingSubTab('vuln-kb')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🐞 موسوعة الثغرات</button>
-                        <button id="btn-training-defense-kb" onclick="setTrainingSubTab('defense-kb')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🛡️ موسوعة الدفاع</button>
-                        <button id="btn-training-ctf" onclick="setTrainingSubTab('ctf')" class="training-subtab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all">🏁 CTF</button>
-                    </div>
-                </div>
-                <div id="training-subtabs-content">
-                    <div id="tools-kb-section" class="hidden space-y-6">
-                        <h2 class="text-xl font-bold text-emerald-300 border-b border-slate-700 pb-2">🛠️ موسوعة الأدوات</h2>
-
-                <div class="bg-emerald-950/20 border border-emerald-900/40 p-4 rounded-3xl text-xs text-emerald-100/90 leading-6 shadow-[0_12px_40px_rgba(8,145,178,0.12)]">
-                    هذا القسم يعرض أدوات وتطبيقات الأمن السيبراني مرتبة حسب مرحلة الاستخدام، مع تفاصيل لكل أداة وكويز مرتبط لفهمها بسرعة.
-                </div>
-
-                <div class="toolskb-filters-shell p-4">
-                    <div class="grid grid-cols-1 xl:grid-cols-5 gap-3">
-                        <input id="toolskbSearchInput" type="text" oninput="toolskbApplyFilters()" placeholder="ابحث باسم الأداة أو الفئة..." class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none xl:col-span-3">
-                        <select id="toolskbCategoryFilter" onchange="toolskbApplyFilters()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-xs outline-none">
-                            <option value="all">كل الفئات</option>
-                        </select>
-                                <button onclick="toolskbResetFilters()" class="w-full px-4 py-2 rounded-2xl bg-emerald-900/30 hover:bg-emerald-800/45 border border-emerald-800/50 text-emerald-200 text-xs font-bold">إعادة ضبط الفلاتر</button>
-                        <div id="toolskbCatalogStats" class="text-[11px] text-gray-400 xl:col-span-5"></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-9 gap-5">
-                    <div class="xl:col-span-4 space-y-4">
-                        <div class="toolskb-panel p-5 rounded-[1.5rem] space-y-4">
-                            <div class="flex items-center justify-between gap-2">
-                                <div>
-                                    <div class="text-sm font-bold text-emerald-300">قائمة الأدوات</div>
-                                    <div class="text-[11px] text-gray-400">انقر لعرض التفاصيل والكويز الخاص بكل أداة.</div>
-                                </div>
-                                <span class="text-[10px] text-slate-400">البحث المباشر</span>
-                            </div>
-                            <div id="toolskbCatalog" class="grid grid-cols-1 gap-3 max-h-[72vh] overflow-y-auto pr-1"></div>
-                            <div id="toolskbEmpty" class="hidden text-[11px] text-rose-300 font-bold">لم يتم العثور على أدوات مطابقة.</div>
-                            <div class="mt-3 text-center">
-                                <button id="toolskbCatalogShowMore" onclick="toolskbShowMore()" class="hidden w-full py-2 rounded-xl bg-emerald-900/30 hover:bg-emerald-800/45 border border-emerald-800/50 text-emerald-200 text-xs font-bold">عرض المزيد</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="xl:col-span-5 space-y-4">
-                        <div class="toolskb-detail-shell p-5 rounded-[1.5rem] space-y-4">
-                            <div class="flex items-center justify-between gap-2">
-                                <div>
-                                    <div class="text-sm font-bold text-emerald-300">تفاصيل الأداة</div>
-                                    <div class="text-[11px] text-gray-400">عرض تعريفي وعملي لكل أداة.</div>
                                 </div>
                                 <button onclick="toolskbQuizStart()" class="px-3 py-2 rounded-xl bg-emerald-900/30 border border-emerald-800/50 text-emerald-200 text-xs font-bold">بدء كويز الأداة</button>
                             </div>
@@ -6884,8 +6884,8 @@ HTML_TEMPLATE = """
 
 
         // --- التحكم بالتبويبات ---
-        const ALL_TABS = ['dash','pass','learninglab','vault','crypt','filelab','fileprotect','suite','tools','osint','ghost','training','ctf','se','audio','video','qr','identity','admin'];
-        const TRAINING_SUB_TABS = ['learninglab', 'tools-kb', 'vuln-kb', 'defense-kb', 'ai-lab', 'ctf'];
+        const ALL_TABS = ['dash','pass','vault','crypt','filelab','fileprotect','suite','osint','ghost','se','audio','video','qr','identity','admin'];
+        const TRAINING_SUB_TABS = [];
         let __trainingSubTab = 'learninglab';
         let _aiActiveSubTab = 'chat';
         let _prevTab = 'pass';
@@ -10703,10 +10703,14 @@ HTML_TEMPLATE = """
         }
 
         function _resultEscape(value) {
+            if (value && typeof value === 'object') {
+                try { value = JSON.stringify(value); } catch(e) { value = '[Complex Object]'; }
+            }
             const div = document.createElement('div');
             div.textContent = String(value ?? '');
             return div.innerHTML;
         }
+        const _osintEscape = _resultEscape;
 
         function _resultToneByScore(score) {
             const n = Number(score || 0);
@@ -11947,7 +11951,7 @@ HTML_TEMPLATE = """
                             </div>
                             <div class="bg-slate-800/40 p-2 rounded border border-white/5 text-center">
                                 <div class="text-[9px] text-gray-400">عمر الدومين</div>
-                                <div class="text-sm font-bold text-blue-400">${deepRes.domain_info?.age_days || '?'} يوم</div>
+                                <div class="text-sm font-bold text-blue-400">${(deepRes.domain_info && deepRes.domain_info.age_days !== null) ? deepRes.domain_info.age_days : '?'} يوم</div>
                             </div>
                             <div class="bg-slate-800/40 p-2 rounded border border-white/5 text-center">
                                 <div class="text-[9px] text-gray-400">خدمة Tunneling</div>
@@ -12034,6 +12038,7 @@ HTML_TEMPLATE = """
 
         function osintRenderFullEmailResult(box, payload, email) {
             console.log('TITAN OSINT Debug:', payload);
+            try {
             
             // --- 1. Flexible Data Extraction ---
             const raw = payload?.raw_response || payload || {};
@@ -12212,6 +12217,93 @@ HTML_TEMPLATE = """
                 </div>
             </div>`;
 
+            // --- 3.1.1 Intelligence Discovery (Detailed List) ---
+            if (matchedAccounts.length > 0) {
+                html += `
+                <div class="bg-[#0c0c0c] border border-white/5 rounded-2xl p-8 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-3xl pointer-events-none"></div>
+                    <div class="flex items-center gap-3 mb-8">
+                        <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Aggregated Intelligence Findings</h3>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                        <!-- Left Column: Identity Info -->
+                        <div class="space-y-10">
+                            ${allNames.length > 0 ? `
+                            <div class="space-y-4">
+                                <div class="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                                    <span class="w-4 h-px bg-slate-800"></span> Identified Names
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    ${allNames.map(name => `<span class="px-3 py-1.5 rounded-lg bg-indigo-500/5 border border-indigo-500/10 text-xs font-bold text-indigo-300 shadow-sm">${_osintEscape(name)}</span>`).join('')}
+                                </div>
+                            </div>` : ''}
+
+                            ${allUsernames.length > 0 ? `
+                            <div class="space-y-4">
+                                <div class="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                                    <span class="w-4 h-px bg-slate-800"></span> Digital Aliases (Usernames)
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    ${allUsernames.map(u => `<span class="px-3 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-xs font-mono text-emerald-400 shadow-sm">${_osintEscape(u)}</span>`).join('')}
+                                </div>
+                            </div>` : ''}
+
+                            ${allLocations.length > 0 ? `
+                            <div class="space-y-4">
+                                <div class="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                                    <span class="w-4 h-px bg-slate-800"></span> Geographic Traces
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    ${allLocations.map(loc => `<span class="px-3 py-1.5 rounded-lg bg-cyan-500/5 border border-cyan-500/10 text-xs font-bold text-cyan-400 shadow-sm">${_osintEscape(loc)}</span>`).join('')}
+                                </div>
+                            </div>` : ''}
+
+                            ${allLinks.length > 0 ? `
+                            <div class="space-y-4">
+                                <div class="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                                    <span class="w-4 h-px bg-slate-800"></span> Verified Profile Links
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    ${allLinks.slice(0, 10).map(link => `
+                                        <a href="${link}" target="_blank" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/10 hover:bg-amber-500/10 transition-all group">
+                                            <div class="w-4 h-4 rounded bg-black flex items-center justify-center p-0.5 border border-white/5">
+                                                <img src="https://www.google.com/s2/favicons?domain=${link}&sz=32" class="w-full h-full opacity-60 group-hover:opacity-100">
+                                            </div>
+                                            <span class="text-[10px] font-mono text-amber-500/80 group-hover:text-amber-400 truncate">${_osintEscape(link)}</span>
+                                        </a>`).join('')}
+                                </div>
+                            </div>` : ''}
+                        </div>
+
+                        <!-- Right Column: Visual Evidence -->
+                        <div class="space-y-6">
+                            <div class="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                                <span class="w-4 h-px bg-slate-800"></span> Visual Profile Repository
+                            </div>
+                            <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                ${matchedAccounts.map(p => {
+                                    const pic = getBestImage(accounts[p]);
+                                    if (!pic) return '';
+                                    return `
+                                    <div class="group relative aspect-square rounded-xl overflow-hidden border border-white/5 bg-white/5 hover:border-indigo-500/50 transition-all shadow-xl">
+                                        <img src="${pic}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                                            <div class="flex items-center gap-1.5">
+                                                <img src="https://www.google.com/s2/favicons?domain=${accounts[p].domain || p.toLowerCase() + '.com'}&sz=32" class="w-2.5 h-2.5">
+                                                <span class="text-[8px] font-bold text-white truncate">${_osintEscape(p)}</span>
+                                            </div>
+                                        </div>
+                                    </div>`;
+                                }).join('')}
+                                ${allPics.length === 0 ? '<div class="col-span-full py-10 text-center text-[10px] font-bold text-slate-600 uppercase tracking-widest">No Visual Data Captured</div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
             // --- 3.2 Breach Timeline ---
             if (breaches.length > 0) {
                 const sortedBreaches = [...breaches].sort((a, b) => new Date(b.date || b.breach_date) - new Date(a.date || a.breach_date));
@@ -12384,6 +12476,76 @@ HTML_TEMPLATE = """
                         <p class="text-[10px] text-slate-700 mt-2">The intelligence engines did not find public profiles associated with this email.</p>
                     </div>`;
             }
+            
+            // --- 6. Malware Intelligence (Stealer Logs) ---
+            html += `
+            <div class="mt-16 space-y-8">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-2xl shadow-lg shadow-rose-500/10 border border-rose-500/20">☣️</div>
+                        <div>
+                            <h3 class="text-xl font-black text-white tracking-tight">Malware Intelligence</h3>
+                            <div class="text-[9px] font-bold text-rose-500 uppercase tracking-widest">Stealer logs & Infected machine footprint</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full ${extraAccounts.length > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}"></span>
+                        <span class="text-[10px] font-bold ${extraAccounts.length > 0 ? 'text-rose-400' : 'text-emerald-400'} uppercase tracking-widest">
+                            ${extraAccounts.length > 0 ? 'Threat Detected' : 'No Active Threats'}
+                        </span>
+                    </div>
+                </div>`;
+
+            if (extraAccounts.length > 0) {
+                html += `
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    ${extraAccounts.map(p => {
+                        const acc = additionalAccounts[p];
+                        return `
+                        <div class="bg-[#0f0f0f] border border-rose-500/10 rounded-2xl p-6 hover:border-rose-500/30 transition-all group relative overflow-hidden shadow-2xl">
+                            <div class="absolute -top-12 -right-12 w-24 h-24 bg-rose-500/5 blur-3xl group-hover:bg-rose-500/10 transition-all pointer-events-none"></div>
+                            <div class="flex items-center justify-between mb-5">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-xl bg-black p-2 border border-white/5 flex items-center justify-center shadow-inner">
+                                        <img src="https://www.google.com/s2/favicons?domain=${acc.domain || p.toLowerCase() + '.com'}&sz=32" class="w-full h-full opacity-80 group-hover:opacity-100 transition-opacity">
+                                    </div>
+                                    <div class="font-black text-slate-100 text-sm tracking-tight">${_osintEscape(p)}</div>
+                                </div>
+                                <span class="bg-rose-500/5 text-rose-500 text-[8px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest border border-rose-500/10">Infected</span>
+                            </div>
+                            <div class="space-y-4">
+                                ${acc.username ? `
+                                <div class="bg-white/5 rounded-xl p-3 border border-white/5">
+                                    <div class="text-[8px] text-slate-500 font-bold uppercase tracking-widest mb-1">Target Account</div>
+                                    <div class="text-xs text-slate-300 font-mono truncate">${_osintEscape(acc.username)}</div>
+                                </div>` : ''}
+                                
+                                ${acc.password ? `
+                                <div class="bg-rose-500/5 rounded-xl p-3 border border-rose-500/10">
+                                    <div class="text-[8px] text-rose-400/60 font-bold uppercase tracking-widest mb-1">Compromised Credential</div>
+                                    <div class="text-xs text-rose-400 font-mono break-all leading-tight">${_osintEscape(acc.password)}</div>
+                                </div>` : ''}
+
+                                ${acc.last_seen ? `
+                                <div class="flex items-center justify-between px-1">
+                                    <span class="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Last Activity</span>
+                                    <span class="text-[10px] text-slate-400 font-bold">${_fmt(acc.last_seen)}</span>
+                                </div>` : ''}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>`;
+            } else {
+                html += `
+                <div class="bg-[#111] border border-white/5 rounded-2xl p-12 text-center flex flex-col items-center justify-center gap-4">
+                    <div class="w-16 h-16 rounded-full bg-emerald-500/5 flex items-center justify-center text-3xl mb-2">🛡️</div>
+                    <div>
+                        <h4 class="text-white font-bold mb-1">System Integrity Clear</h4>
+                        <p class="text-xs text-slate-500 max-w-sm">No evidence of this identity has been found in recent stealer logs or malware-infected repositories.</p>
+                    </div>
+                </div>`;
+            }
+            html += `</div>`;
 
             html += `
                 <div class="pt-16 border-t border-white/5 text-center pb-6">
@@ -12396,17 +12558,18 @@ HTML_TEMPLATE = """
                 badge: breachCount > 0 ? `ALERT: ${breachCount} SOURCES` : 'STATUS: CLEAR', 
                 riskScore: breachCount > 0 ? 80 : 10 
             });
+        } catch (err) {
+            console.error('TITAN OSINT Render Error:', err);
+            box.innerHTML = `<div class="p-4 bg-rose-950/20 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-bold">
+                ⚠️ Error rendering full intelligence report. Check console for details.
+            </div>`;
         }
+    }
 
 
 
 
 
-        function _osintEscape(value) {
-            const div = document.createElement('div');
-            div.textContent = String(value ?? '');
-            return div.innerHTML;
-        }
 
         let _ctfChallenges = [];
         let _ctfLastPayload = null;
