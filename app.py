@@ -38,6 +38,7 @@ import psutil  # type: ignore
 from cryptography.hazmat.primitives.asymmetric import rsa  # type: ignore
 from cryptography.hazmat.primitives import serialization, hashes  # type: ignore
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # type: ignore
+import ipaddress
 import urllib.parse
 import smtplib
 from email.mime.text import MIMEText
@@ -2836,15 +2837,26 @@ def is_trusted_domain(url):
         'google.com', 'github.com', 'microsoft.com', 'apple.com', 'amazon.com',
         'facebook.com', 'instagram.com', 'twitter.com', 'linkedin.com', 'netflix.com',
         'youtube.com', 'gmail.com', 'outlook.com', 'cloudflare.com', 'adobe.com',
-        'dropbox.com', 'slack.com', 'zoom.us', 'spotify.com', 'openai.com', 'bing.com'
+        'dropbox.com', 'slack.com', 'zoom.us', 'spotify.com', 'openai.com', 'bing.com',
+        'wikipedia.org', 'stackoverflow.com', 'reddit.com', 'whatsapp.com', 'telegram.org',
+        'paypal.com', 'stripe.com', 'aws.amazon.com', 'azure.microsoft.com',
+        'live.com', 'office.com', 'office365.com', 'twitch.tv', 'discord.com',
+        'tiktok.com', 'pinterest.com', 'ebay.com', 'wordpress.com', 'medium.com',
+        'yahoo.com', 'aol.com', 'bbc.com', 'cnn.com', 'nytimes.com',
     ]
+    # Trusted TLD patterns (education and government domains worldwide)
+    trusted_tld_patterns = ['.edu', '.gov', '.mil', '.edu.', '.gov.', '.ac.']
     try:
         domain = urllib.parse.urlparse(url).netloc.lower()
         if domain.startswith('www.'):
             domain = domain[4:]
-        # التحقق من أن الدومين هو الدومين الموثوق نفسه أو ساب-دومين له
+        # التحقق من الدومينات الموثوقة
         for trusted in trusted_list:
             if domain == trusted or domain.endswith('.' + trusted):
+                return True
+        # التحقق من نطاقات التعليم والحكومة
+        for pattern in trusted_tld_patterns:
+            if pattern in domain:
                 return True
         return False
     except:
@@ -2863,31 +2875,154 @@ def check_tunneling_service(url):
             return True, t_domain
     return False, None
 
+def _analyze_url_structure(url):
+    """تحليل بنية الرابط للكشف عن مؤشرات التصيد في الـ URL نفسه"""
+    findings = []
+    score_inc = 0
+    parsed = urllib.parse.urlparse(url)
+    domain = parsed.netloc.lower()
+    path = parsed.path.lower()
+    if ':' in domain:
+        domain = domain.rsplit(':', 1)[0]
+    bare_domain = domain[4:] if domain.startswith('www.') else domain
+
+    # 1. IP-based URL (e.g. http://192.168.1.1/login)
+    ip_pattern = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+    if ip_pattern.match(bare_domain):
+        findings.append("الرابط يستخدم عنوان IP بدل اسم دومين (IP-based URL)")
+        score_inc += 30
+
+    # 2. Excessive subdomains (e.g. secure.login.bank.evil.com)
+    parts = bare_domain.split('.')
+    if len(parts) > 4:
+        findings.append(f"عدد كبير من الساب-دومينات ({len(parts)} أجزاء) - مؤشر تصيد")
+        score_inc += 20
+
+    # 3. Suspicious TLDs
+    suspicious_tlds = ['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top', '.work', '.click',
+                       '.link', '.buzz', '.surf', '.rest', '.fit', '.icu', '.cam', '.monster']
+    for tld in suspicious_tlds:
+        if bare_domain.endswith(tld):
+            findings.append(f"نطاق TLD مشبوه مكتشف: {tld}")
+            score_inc += 15
+            break
+
+    # 4. Lookalike/Typosquatting detection
+    brand_targets = {
+        'paypal': 'PayPal', 'facebook': 'Facebook', 'instagram': 'Instagram',
+        'google': 'Google', 'microsoft': 'Microsoft', 'apple': 'Apple',
+        'amazon': 'Amazon', 'netflix': 'Netflix', 'linkedin': 'LinkedIn',
+        'twitter': 'Twitter', 'whatsapp': 'WhatsApp', 'telegram': 'Telegram',
+        'outlook': 'Outlook', 'yahoo': 'Yahoo', 'chase': 'Chase Bank',
+        'wellsfargo': 'Wells Fargo', 'bankofamerica': 'Bank of America',
+        'dropbox': 'Dropbox', 'icloud': 'iCloud', 'gmail': 'Gmail',
+    }
+    for brand_key, brand_name in brand_targets.items():
+        # Brand in subdomain/path but NOT the real domain
+        if brand_key in bare_domain and not bare_domain.endswith(f'{brand_key}.com') and not bare_domain.endswith(f'{brand_key}.net') and not bare_domain.endswith(f'{brand_key}.org'):
+            findings.append(f"انتحال محتمل لعلامة تجارية: {brand_name} (Lookalike Domain)")
+            score_inc += 35
+            break
+
+    # 5. Very long URL path (common in phishing)
+    if len(url) > 200:
+        findings.append(f"رابط طويل جداً ({len(url)} حرف) - شائع في التصيد")
+        score_inc += 10
+
+    # 6. Encoded characters in URL (%xx patterns)
+    encoded_count = url.count('%')
+    if encoded_count > 5:
+        findings.append(f"عدد كبير من الأحرف المشفرة في الرابط ({encoded_count} ترميز)")
+        score_inc += 15
+
+    # 7. @ symbol in URL (can trick users)
+    if '@' in parsed.netloc:
+        findings.append("رمز @ موجود في الرابط - يمكن استخدامه لخداع المستخدمين")
+        score_inc += 25
+
+    # 8. Hyphen-heavy domain (e.g. secure-login-bank-verify.com)
+    if bare_domain.count('-') >= 3:
+        findings.append(f"عدد كبير من الشرطات في اسم الدومين ({bare_domain.count('-')}) - مؤشر تصيد")
+        score_inc += 15
+
+    # 9. Suspicious path keywords
+    path_keywords = ['login', 'signin', 'verify', 'secure', 'account', 'update', 'confirm',
+                     'banking', 'password', 'credential', 'auth', 'wallet', 'recover']
+    found_path_keys = [k for k in path_keywords if k in path]
+    if found_path_keys and not is_trusted_domain(url):
+        findings.append(f"كلمات حساسة في مسار الرابط: {', '.join(found_path_keys[:4])}")
+        score_inc += 10
+
+    # 10. Non-standard port
+    if parsed.port and parsed.port not in (80, 443, None):
+        findings.append(f"منفذ غير قياسي مستخدم: {parsed.port}")
+        score_inc += 10
+
+    return findings, score_inc
+
+
 def scrape_phishing_indicators(url):
-    """تحليل المحتوى (Content Scraper) للبحث عن أنماط التصيد"""
+    """تحليل المحتوى المتقدم (Advanced Content Analysis) للكشف عن أنماط التصيد"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-        resp = requests.get(url, timeout=10, headers=headers)
+        resp = requests.get(url, timeout=10, headers=headers, verify=True)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
         findings = []
         score_inc = 0
         
+        # === تحليل بنية الرابط (URL Structure Analysis) ===
+        url_findings, url_score = _analyze_url_structure(url)
+        findings.extend(url_findings)
+        score_inc += url_score
+        
+        # === تحليل المحتوى (Content Analysis) ===
+        
         # 1. البحث عن حقول كلمة السر
         pw_fields = soup.find_all('input', {'type': 'password'})
         if pw_fields:
             findings.append(f"تم اكتشاف {len(pw_fields)} حقل لطلب كلمات السر (Password Fields)")
-            score_inc += 45
-            
-        # 2. البحث عن كلمات مشبوهة في النصوص والعناوين
-        phish_keywords = ['login', 'signin', 'verify', 'account', 'banking', 'secure', 'update', 'password', 'تسجيل الدخول', 'تحقق', 'بنك']
-        page_text = soup.get_text().lower()
-        found_keys = [k for k in phish_keywords if k in page_text]
-        if found_keys:
-            findings.append(f"كلمات مشبوهة مكتشفة: {', '.join(found_keys[:5])}")
+            score_inc += 40
+
+        # 2. حقول بريد إلكتروني
+        email_fields = soup.find_all('input', {'type': 'email'})
+        if email_fields and pw_fields:
+            findings.append("نموذج تسجيل دخول مكتشف (حقل إيميل + كلمة سر)")
             score_inc += 15
+
+        # 3. حقول بطاقات ائتمان
+        cc_patterns = ['card', 'credit', 'cvv', 'ccv', 'expiry', 'cardnumber', 'cc-number']
+        all_inputs = soup.find_all('input')
+        cc_found = False
+        for inp in all_inputs:
+            inp_name = (inp.get('name', '') + ' ' + inp.get('id', '') + ' ' + inp.get('placeholder', '')).lower()
+            if any(p in inp_name for p in cc_patterns):
+                cc_found = True
+                break
+        if cc_found:
+            findings.append("حقول إدخال بيانات بطاقة ائتمان مكتشفة (Credit Card Fields)")
+            score_inc += 40
             
-        # 3. التحقق من وجود نماذج (Forms) ترسل البيانات لجهات خارجية
+        # 4. البحث عن كلمات مشبوهة (قائمة موسعة)
+        phish_keywords_high = ['verify your account', 'confirm your identity', 'suspended',
+                               'unusual activity', 'unauthorized', 'locked', 'limited access',
+                               'تأكيد هويتك', 'تم تعليق', 'نشاط مشبوه', 'تم إيقاف']
+        phish_keywords_medium = ['login', 'signin', 'sign-in', 'log-in', 'verify', 'account',
+                                 'banking', 'secure', 'update', 'password', 'credential',
+                                 'تسجيل الدخول', 'تحقق', 'بنك', 'كلمة المرور', 'تحديث البيانات']
+        page_text = soup.get_text().lower()
+        
+        found_high = [k for k in phish_keywords_high if k in page_text]
+        if found_high:
+            findings.append(f"عبارات تصيد عالية الخطورة: {', '.join(found_high[:3])}")
+            score_inc += 25
+        
+        found_medium = [k for k in phish_keywords_medium if k in page_text]
+        if found_medium:
+            findings.append(f"كلمات مشبوهة مكتشفة: {', '.join(found_medium[:5])}")
+            score_inc += 12
+            
+        # 5. التحقق من نماذج ترسل البيانات لجهات خارجية
         forms = soup.find_all('form')
         for f in forms:
             action = f.get('action', '')
@@ -2895,34 +3030,240 @@ def scrape_phishing_indicators(url):
                 findings.append("نموذج إرسال بيانات يوجه لموقع خارجي (External Form Action)")
                 score_inc += 25
                 break
+            # Form with empty or javascript action (data theft)
+            if action.lower().startswith('javascript:') or (action == '' and pw_fields):
+                findings.append("نموذج بدون وجهة واضحة مع حقول حساسة (Suspicious Form)")
+                score_inc += 15
+                break
+
+        # 6. Hidden iframes (often used to load phishing content)
+        iframes = soup.find_all('iframe')
+        hidden_iframes = [f for f in iframes if f.get('style') and ('display:none' in f.get('style', '').replace(' ', '') or 'visibility:hidden' in f.get('style', '').replace(' ', '') or 'height:0' in f.get('style', '').replace(' ', '') or 'width:0' in f.get('style', '').replace(' ', ''))]
+        if hidden_iframes:
+            findings.append(f"إطارات مخفية مكتشفة ({len(hidden_iframes)} iframe) - شائع في التصيد")
+            score_inc += 20
+
+        # 7. Obfuscated JavaScript (eval, atob, fromCharCode, unescape)
+        scripts = soup.find_all('script')
+        obfusc_patterns = ['eval(', 'atob(', 'fromcharcode', 'unescape(', 'document.write(decod',
+                           '\\x', 'string.fromcharcode']
+        for script in scripts:
+            script_text = (script.string or '').lower()
+            found_obfusc = [p for p in obfusc_patterns if p in script_text]
+            if found_obfusc:
+                findings.append(f"جافاسكربت مشفر/مموّه مكتشف: {', '.join(found_obfusc[:3])}")
+                score_inc += 20
+                break
+
+        # 8. Data URIs in links or forms (can hide malicious payloads)
+        data_links = soup.find_all('a', href=re.compile(r'^data:', re.I))
+        if data_links:
+            findings.append("روابط data URI مكتشفة - يمكن إخفاء محتوى ضار فيها")
+            score_inc += 15
+
+        # 9. Meta refresh redirect
+        meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile(r'refresh', re.I)})
+        if meta_refresh:
+            content = meta_refresh.get('content', '')
+            if 'url=' in content.lower():
+                findings.append("إعادة توجيه تلقائية عبر Meta Refresh - مؤشر تصيد")
+                score_inc += 15
+
+        # 10. Right-click disabled (to prevent inspection)
+        body = soup.find('body')
+        if body and body.get('oncontextmenu', '').lower().replace(' ', '') == 'returnfalse':
+            findings.append("تعطيل الزر الأيمن (No Right-Click) - لمنع فحص الصفحة")
+            score_inc += 10
+
+        # 11. Favicon mismatch (favicon from different domain)
+        favicons = soup.find_all('link', rel=re.compile(r'icon', re.I))
+        for fav in favicons:
+            href = fav.get('href', '')
+            if href.startswith('http'):
+                fav_domain = urllib.parse.urlparse(href).netloc.lower()
+                page_domain = urllib.parse.urlparse(url).netloc.lower()
+                if fav_domain and page_domain and fav_domain != page_domain:
+                    # Check it's not a CDN
+                    cdn_domains = ['cdn', 'static', 'assets', 'cloudflare', 'googleapis', 'gstatic', 'jsdelivr', 'unpkg', 'cdnjs']
+                    if not any(c in fav_domain for c in cdn_domains):
+                        findings.append(f"أيقونة الموقع (Favicon) محملة من دومين مختلف: {fav_domain}")
+                        score_inc += 15
+                        break
+
+        # 12. Page title mimicking known brands
+        page_title = (soup.title.string or '').lower() if soup.title else ''
+        brand_names = ['paypal', 'facebook', 'instagram', 'google', 'microsoft', 'apple',
+                       'amazon', 'netflix', 'linkedin', 'whatsapp', 'yahoo', 'chase', 'bank']
+        page_domain = urllib.parse.urlparse(url).netloc.lower()
+        for brand in brand_names:
+            if brand in page_title and brand not in page_domain:
+                findings.append(f"عنوان الصفحة يحاكي علامة {brand.title()} لكن الدومين مختلف")
+                score_inc += 20
+                break
+
+        # 13. Very little content (phishing pages are often minimal)
+        text_len = len(page_text.strip())
+        if text_len < 200 and pw_fields:
+            findings.append("صفحة قليلة المحتوى مع حقول كلمة سر - نمط تصيد شائع")
+            score_inc += 15
+
+        # 14. Multiple external resource loading from different domains
+        ext_scripts = soup.find_all('script', src=True)
+        ext_domains = set()
+        for s in ext_scripts:
+            src = s.get('src', '')
+            if src.startswith('http'):
+                ext_domains.add(urllib.parse.urlparse(src).netloc)
+        if len(ext_domains) > 8:
+            findings.append(f"تحميل سكربتات من {len(ext_domains)} دومين مختلف - مريب")
+            score_inc += 10
+
+        # Cap individual content score contribution
+        score_inc = min(score_inc, 95)
 
         return {
             "findings": findings,
             "risk_score_inc": score_inc,
             "title": soup.title.string if soup.title else "No Title"
         }
+    except requests.exceptions.SSLError:
+        return {"findings": ["فشل التحقق من شهادة SSL - الموقع قد يكون غير آمن"], "risk_score_inc": 30, "title": "SSL Error"}
     except Exception as e:
         return {"findings": [f"Scrape Error: {str(e)}"], "risk_score_inc": 0, "title": "N/A"}
 
 def analyze_domain_age(url):
-    """تحليل عمر الدومين (Domain Age Analysis)"""
+    """تحليل عمر الدومين (Domain Age Analysis) - محسّن مع عدة طرق بديلة"""
     try:
         domain = urllib.parse.urlparse(url).netloc
         if ':' in domain:
             domain = domain.split(':')[0]
-            
-        # محاولة WHOIS
-        w = whois.whois(domain)
-        creation_date = w.creation_date
-        if isinstance(creation_date, list):
-            creation_date = creation_date[0]
-            
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        if not domain:
+            return {"age_days": None, "creation_date": "N/A", "method": "none"}
+
+        creation_date = None
+        method_used = "none"
+
+        # === الطريقة 1: مكتبة python-whois ===
+        try:
+            w = whois.whois(domain)
+            cd = w.creation_date
+            if isinstance(cd, list):
+                cd = cd[0]
+            if cd and hasattr(cd, 'year'):
+                creation_date = cd
+                method_used = "whois-lib"
+        except Exception:
+            pass
+
+        # === الطريقة 2: RDAP API (طريقة حديثة وأكثر موثوقية) ===
+        if creation_date is None:
+            try:
+                # Try RDAP for the domain
+                rdap_url = f"https://rdap.org/domain/{domain}"
+                rdap_resp = requests.get(rdap_url, timeout=8, headers={
+                    'Accept': 'application/rdap+json',
+                    'User-Agent': 'TITAN-Security-Scanner/2.0'
+                })
+                if rdap_resp.status_code == 200:
+                    rdap_data = rdap_resp.json()
+                    events = rdap_data.get('events', [])
+                    for event in events:
+                        if event.get('eventAction') == 'registration':
+                            date_str = event.get('eventDate', '')
+                            if date_str:
+                                # Parse ISO format date
+                                date_str = date_str.replace('Z', '+00:00')
+                                try:
+                                    creation_date = datetime.datetime.fromisoformat(date_str)
+                                    if creation_date.tzinfo:
+                                        creation_date = creation_date.replace(tzinfo=None)
+                                    method_used = "rdap"
+                                except Exception:
+                                    pass
+                            break
+            except Exception:
+                pass
+
+        # === الطريقة 3: تحليل نص WHOIS الخام ===
+        if creation_date is None:
+            try:
+                w = whois.whois(domain)
+                raw_text = ''
+                if hasattr(w, 'text'):
+                    raw_text = str(w.text or '')
+                elif isinstance(w, dict):
+                    raw_text = str(w)
+                else:
+                    raw_text = str(w)
+
+                if raw_text:
+                    # Patterns for creation date in raw whois text
+                    date_patterns = [
+                        r'(?:Creation Date|Created|created|Registration Date|Registered|Domain Registration Date|domain_dateregistered|Registered on|Registration Time|Created On|creation_date)[:\s]+(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})',
+                        r'(?:Creation Date|Created|created)[:\s]+(\d{1,2}[-/.]\w{3}[-/.]\d{4})',
+                        r'(?:Creation Date|Created|created)[:\s]+(\d{1,2}[-/.]\d{1,2}[-/.]\d{4})',
+                        r'(?:Creation Date|Created|Registered)[:\s]+(\w+ \d{1,2},? \d{4})',
+                        r'(?:Creation Date)[:\s]+(.+?)(?:\n|$)',
+                    ]
+                    for pattern in date_patterns:
+                        match = re.search(pattern, raw_text, re.IGNORECASE)
+                        if match:
+                            date_str = match.group(1).strip()
+                            # Try multiple date parsing formats
+                            for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%d-%b-%Y', '%d/%m/%Y',
+                                        '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%SZ',
+                                        '%d-%m-%Y', '%B %d, %Y', '%B %d %Y',
+                                        '%Y.%m.%d', '%d.%m.%Y']:
+                                try:
+                                    creation_date = datetime.datetime.strptime(date_str[:len(fmt)+5], fmt)
+                                    method_used = "whois-raw"
+                                    break
+                                except (ValueError, IndexError):
+                                    continue
+                            if creation_date:
+                                break
+            except Exception:
+                pass
+
+        # === الطريقة 4: WHOIS على الدومين الرئيسي (لو كان ساب-دومين) ===
+        if creation_date is None:
+            parts = domain.split('.')
+            if len(parts) > 2:
+                # Try parent domain (e.g., edu.jo -> jo, aabu.edu.jo -> edu.jo)
+                for i in range(1, len(parts) - 1):
+                    parent_domain = '.'.join(parts[i:])
+                    try:
+                        w = whois.whois(parent_domain)
+                        cd = w.creation_date
+                        if isinstance(cd, list):
+                            cd = cd[0]
+                        if cd and hasattr(cd, 'year'):
+                            creation_date = cd
+                            method_used = f"whois-parent({parent_domain})"
+                            break
+                    except Exception:
+                        continue
+
+        # === حساب النتيجة ===
         if creation_date:
-            age_days = (datetime.datetime.now() - creation_date).days
-            return {"age_days": age_days, "creation_date": creation_date.strftime('%Y-%m-%d')}
-        return {"age_days": None, "creation_date": "N/A"}
+            now = datetime.datetime.now()
+            # Handle timezone-aware dates
+            if hasattr(creation_date, 'tzinfo') and creation_date.tzinfo:
+                creation_date = creation_date.replace(tzinfo=None)
+            age_days = (now - creation_date).days
+            if age_days < 0:
+                age_days = 0
+            return {
+                "age_days": age_days,
+                "creation_date": creation_date.strftime('%Y-%m-%d'),
+                "method": method_used
+            }
+
+        return {"age_days": None, "creation_date": "N/A", "method": "failed"}
     except Exception:
-        return {"age_days": None, "creation_date": "N/A"}
+        return {"age_days": None, "creation_date": "N/A", "method": "error"}
 
 def deep_scan_link_logic(target_url):
     """المنطق الأساسي للتحليل العميق وحساب النقاط"""
@@ -3011,12 +3352,24 @@ VIRUSTOTAL_BASE_URL = "https://www.virustotal.com/api/v3"
 
 def vt_upload_file(file_path, filename):
     """رفع ملف إلى VirusTotal للتحليل"""
-    url = f"{VIRUSTOTAL_BASE_URL}/files"
     headers = {"x-apikey": VIRUSTOTAL_API_KEY}
     try:
+        file_size = os.path.getsize(file_path)
+        upload_url = f"{VIRUSTOTAL_BASE_URL}/files"
+        
+        # إذا كان حجم الملف 32 ميجابايت فأكثر (حدود VT المجانية للرفع المباشر)
+        # نطلب رابط رفع مخصص للملفات الكبيرة
+        if file_size >= 33554432:  # 32 * 1024 * 1024
+            url_resp = requests.get(f"{VIRUSTOTAL_BASE_URL}/files/upload_url", headers=headers, timeout=15)
+            if url_resp.status_code == 200:
+                upload_url = url_resp.json().get("data", upload_url)
+            else:
+                return {"error": f"فشل الحصول على رابط رفع للملفات الكبيرة. الخطأ: {url_resp.status_code}"}
+                
         with open(file_path, 'rb') as f:
             files = {'file': (filename, f)}
-            resp = requests.post(url, headers=headers, files=files, timeout=300)
+            # زيادة المهلة لرفع الملفات الكبيرة لتجنب Timeout
+            resp = requests.post(upload_url, headers=headers, files=files, timeout=600)
             if resp.status_code == 200:
                 data = resp.json()
                 # VT returns an analysis ID in data['data']['id']
@@ -3085,6 +3438,10 @@ def vt_get_analysis_summary(id_or_hash):
                 
                 malicious = stats.get("malicious", 0)
                 total = sum(stats.values()) if stats else 0
+                
+                if total == 0:
+                    return {"success": False, "status": "IN_PROGRESS", "message": "التحليل لا يزال جارياً في VirusTotal أو النتائج غير جاهزة..."}
+                    
                 score = int((malicious / total * 100)) if total > 0 else 0
                 
                 stats_mapped = {}
@@ -3113,7 +3470,7 @@ def check_url_intelligence(target_url: str) -> dict:
     API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
     url_clean = urllib.parse.quote(target_url.strip(), safe='')
     url = f'https://www.ipqualityscore.com/api/json/url/{API_KEY}/{url_clean}'
-    params = {'fast': 'true', 'strictness': 0}
+    params = {'fast': 'false', 'strictness': 2}
         
     try:
         response = requests.get(url, params=params, timeout=10)
@@ -3673,48 +4030,176 @@ def check_hibp_leak(password: str) -> int:
 
 # --- فحص IP ---
 def get_ip_intelligence_data(ip=""):
-    if not ip or ip == "127.0.0.1" or ip == "8.8.8.8":
-        url = "http://ip-api.com/json/?fields=status,message,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,proxy,query"
-        ip_target = ""
-    else:
-        url = f"http://ip-api.com/json/{ip}?fields=status,message,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,proxy,query"
-        ip_target = ip
     try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") == "success":
-                is_proxy = data.get("proxy", False)
+        # فحص أولاً ما إذا كان الـ IP داخلي أو محلي باستخدام ipaddress
+        if ip:
+            try:
+                ip_obj = ipaddress.ip_address(ip)
+                if ip_obj.is_private:
+                    return {
+                        "success": True,
+                        "proxy": False,
+                        "vpn": False,
+                        "fraud_score": 0,
+                        "country_code": "LOCAL",
+                        "ISP": "Private Network (LAN)",
+                        "org": "Private Network",
+                        "query": ip,
+                        "network_type": "Private IP (Local Network / Router)"
+                    }
+                if ip_obj.is_loopback:
+                    return {
+                        "success": True,
+                        "proxy": False,
+                        "vpn": False,
+                        "fraud_score": 0,
+                        "country_code": "LOCAL",
+                        "ISP": "Localhost (Loopback)",
+                        "org": "This Device",
+                        "query": ip,
+                        "network_type": "Device IP (Localhost)"
+                    }
+            except ValueError:
+                pass
                 
-                # فحص إضافي وموثوق للـ VPN باستخدام أداة مجانية أخرى (proxycheck.io)
-                try:
-                    target = ip_target or data.get("query", "")
-                    if target:
-                        pc_url = f"http://proxycheck.io/v2/{target}?vpn=1&asn=1"
-                        pc_res = requests.get(pc_url, timeout=5)
-                        if pc_res.status_code == 200:
-                            pc_data = pc_res.json()
-                            if target in pc_data and pc_data[target].get("proxy") == "yes":
-                                is_proxy = True
-                except Exception:
-                    pass
-
-                # تنسيق البيانات لتتوافق مع ما يتوقعه سكريبت الجافاسكريبت
-                return {
-                    "success": True,
-                    "proxy": is_proxy,
-                    "vpn": is_proxy,
-                    "fraud_score": 100 if is_proxy else 0,
-                    "country_code": data.get("countryCode", "US"),
-                    "ISP": data.get("isp", "Unknown"),
-                    "query": data.get("query", ip)
-                }
-            else:
-                 return {"success": False, "message": data.get("message", "فشل جلب البيانات")}
+        # للآيبيهات العامة، استخدم API خارجي
+        if not ip or ip == "127.0.0.1" or ip == "8.8.8.8":
+            # إضافة حقل 'hosting' لكشف خوادم مراكز البيانات (غالباً VPNs)
+            url = "http://ip-api.com/json/?fields=status,message,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,proxy,hosting,query"
+            ip_target = ""
         else:
-            return {"success": False, "message": f"Error {response.status_code}: {response.text}"}
+            url = f"http://ip-api.com/json/{ip}?fields=status,message,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,proxy,hosting,query"
+            ip_target = ip
+            
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success":
+                    is_proxy = data.get("proxy", False)
+                    is_hosting = data.get("hosting", False)
+                    
+                    # مركز بيانات أو بروكسي صريح يُعتبر VPN
+                    vpn_detected = is_proxy or is_hosting
+                    fraud_score_val = 0
+                    
+                    # فحص إضافي ومتقدم للـ VPN باستخدام IPQualityScore (لاكتشاف الـ Residential VPNs مثل Tuxler)
+                    try:
+                        target = ip_target or data.get("query", "")
+                        if target:
+                            IPQS_API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
+                            ipqs_url = f"https://www.ipqualityscore.com/api/json/ip/{IPQS_API_KEY}/{target}?strictness=1"
+                            ipqs_res = requests.get(ipqs_url, timeout=5)
+                            if ipqs_res.status_code == 200:
+                                ipqs_data = ipqs_res.json()
+                                if ipqs_data.get("success"):
+                                    is_strict_vpn = ipqs_data.get("vpn") or ipqs_data.get("tor") or ipqs_data.get("active_vpn") or ipqs_data.get("active_tor")
+                                    is_proxy = ipqs_data.get("proxy", False)
+                                    fraud_score_val = ipqs_data.get("fraud_score", 0)
+                                    
+                                    if is_strict_vpn:
+                                        vpn_detected = True
+                                        is_proxy = True
+                                    elif is_proxy and fraud_score_val >= 85:
+                                        # إما TuxlerVPN أو شبكة اتصالات محلية CGNAT عليها تبليغات
+                                        is_proxy = True
+                    except Exception:
+                        pass
+
+                    if vpn_detected:
+                        net_type = "VPN / Data Center (Masked IP)"
+                        risk_msg = "VPN نشط (هوية مخفية)"
+                        badge = "Masked"
+                        tone = "warn"
+                        risk_score = 95
+                    elif is_proxy:
+                        net_type = "Shared IP / Residential Proxy"
+                        risk_msg = "IP مشبوه (قد يكون VPN أو CGNAT)"
+                        badge = "Suspicious"
+                        tone = "warn"
+                        risk_score = 60
+                    else:
+                        net_type = "Public IP (العام)"
+                        risk_msg = "اتصال مباشر"
+                        badge = "Direct"
+                        tone = "safe"
+                        risk_score = 10
+
+                    return {
+                        "success": True,
+                        "proxy": is_proxy,
+                        "vpn": vpn_detected,
+                        "fraud_score": fraud_score_val,
+                        "country_code": data.get("countryCode", "US"),
+                        "ISP": data.get("isp", "Unknown"),
+                        "org": data.get("org", ""),
+                        "query": data.get("query", ip),
+                        "network_type": net_type,
+                        "risk_msg": risk_msg,
+                        "badge": badge,
+                        "tone": tone,
+                        "risk_score": risk_score
+                    }
+                else:
+                    return {"success": False, "message": data.get("message", "فشل جلب البيانات")}
+            else:
+                return {"success": False, "message": f"Error {response.status_code}: {response.text}"}
+        except requests.exceptions.RequestException:
+            # في حال فشل ip-api (مثلاً الـ VPN يمنع اتصالات HTTP)، ننتقل مباشرة للـ IPQualityScore (HTTPS)
+            target = ip_target or ip
+            if target:
+                IPQS_API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
+                ipqs_url = f"https://www.ipqualityscore.com/api/json/ip/{IPQS_API_KEY}/{target}?strictness=1"
+                try:
+                    ipqs_res = requests.get(ipqs_url, timeout=10)
+                    if ipqs_res.status_code == 200:
+                        ipqs_data = ipqs_res.json()
+                        if ipqs_data.get("success"):
+                            is_strict_vpn = ipqs_data.get("vpn") or ipqs_data.get("tor") or ipqs_data.get("active_vpn") or ipqs_data.get("active_tor")
+                            is_proxy = ipqs_data.get("proxy", False)
+                            fraud_score = ipqs_data.get("fraud_score", 0)
+                            
+                            vpn_detected = is_strict_vpn
+                            if vpn_detected:
+                                net_type = "VPN / Data Center (Masked IP)"
+                                risk_msg = "VPN نشط (هوية مخفية)"
+                                badge = "Masked"
+                                tone = "warn"
+                                risk_score = 95
+                            elif is_proxy and fraud_score >= 85:
+                                net_type = "Shared IP / Residential Proxy"
+                                risk_msg = "IP مشبوه (قد يكون VPN أو CGNAT)"
+                                badge = "Suspicious"
+                                tone = "warn"
+                                risk_score = 60
+                            else:
+                                net_type = "Public IP (العام)"
+                                risk_msg = "اتصال مباشر"
+                                badge = "Direct"
+                                tone = "safe"
+                                risk_score = 10
+                                
+                            return {
+                                "success": True,
+                                "proxy": is_proxy,
+                                "vpn": vpn_detected,
+                                "fraud_score": fraud_score,
+                                "country_code": ipqs_data.get("country_code", "US"),
+                                "ISP": ipqs_data.get("ISP", "Unknown"),
+                                "org": ipqs_data.get("organization", ""),
+                                "query": target,
+                                "network_type": net_type,
+                                "risk_msg": risk_msg,
+                                "badge": badge,
+                                "tone": tone,
+                                "risk_score": risk_score
+                            }
+                except Exception as e2:
+                    return {"success": False, "message": "تم إجهاض الاتصال من قبل الشبكة أو الـ VPN", "error": str(e2)}
+                    
+            return {"success": False, "message": "انقطع الاتصال بالخادم، يرجى المحاولة مرة أخرى"}
     except Exception as e:
-        return {"success": False, "message": str(e), "error": str(e)}
+        return {"success": False, "message": "خطأ غير متوقع في فحص الشبكة", "error": str(e)}
 
 # --- واجهة المستخدم (HTML) ---
 
@@ -11144,10 +11629,11 @@ HTML_TEMPLATE = """
                 const proxyDetected = proxyFlag === 'true' || proxyFlag === '1' || data.proxy === true || data.vpn === true;
                 setResultInfo(dataBox, 'IP Intelligence', [
                     { label: 'IP', value: ip || data.query || 'غير معروف', tone: 'info', dir: 'ltr' },
-                    { label: 'ISP', value: data.ISP || 'غير متاح', tone: 'info' },
+                    { label: 'ISP / Org', value: (data.ISP + (data.org && data.org !== data.ISP ? ` (${data.org})` : '')) || 'غير متاح', tone: 'info' },
                     { label: 'Country', value: data.country_code || 'N/A', tone: 'info' },
-                    { label: 'Privacy Risk', value: proxyDetected ? 'Proxy/VPN محتمل' : 'لا يوجد Proxy واضح', tone: proxyDetected ? 'warn' : 'safe' }
-                ], { badge: proxyDetected ? 'Suspicious' : 'Clean', cols: 2, riskScore: proxyDetected ? 70 : 15 });
+                    { label: 'Network Type', value: data.network_type || 'Public IP', tone: data.tone || (proxyDetected ? 'warn' : 'safe') },
+                    { label: 'Privacy Risk', value: data.risk_msg || (proxyDetected ? 'VPN/Proxy نشط' : 'اتصال مباشر'), tone: data.tone || (proxyDetected ? 'warn' : 'safe') }
+                ], { badge: data.badge || (proxyDetected ? 'Masked' : 'Direct'), cols: 2, riskScore: data.risk_score || (proxyDetected ? 85 : 10) });
             } else {
                 soundManager.error();
                 setResultError(dataBox, data.message || 'فشل جلب البيانات');
@@ -11866,7 +12352,8 @@ HTML_TEMPLATE = """
                             </div>
                             <div class="bg-slate-800/40 p-2 rounded border border-white/5 text-center">
                                 <div class="text-[9px] text-gray-400">عمر الدومين</div>
-                                <div class="text-sm font-bold text-blue-400">${deepRes.domain_info?.age_days || '?'} يوم</div>
+                                <div class="text-sm font-bold ${deepRes.domain_info?.age_days != null ? (deepRes.domain_info.age_days < 30 ? 'text-red-500' : (deepRes.domain_info.age_days < 180 ? 'text-yellow-500' : 'text-blue-400')) : 'text-gray-500'}">${deepRes.domain_info?.age_days != null ? (deepRes.domain_info.age_days + ' يوم') : 'غير متاح'}</div>
+                                ${deepRes.domain_info?.creation_date && deepRes.domain_info.creation_date !== 'N/A' ? `<div class="text-[8px] text-gray-500 mt-0.5">${deepRes.domain_info.creation_date}</div>` : ''}
                             </div>
                             <div class="bg-slate-800/40 p-2 rounded border border-white/5 text-center">
                                 <div class="text-[9px] text-gray-400">خدمة Tunneling</div>
@@ -14215,7 +14702,7 @@ HTML_TEMPLATE = """
                 
                 const pollInterval = setInterval(async () => {
                     try {
-                        const statusRes = await fetch(`/api/malware/sandbox/status/${sha256 || jobId}`);
+                        const statusRes = await fetch(`/api/malware/sandbox/status/${jobId || sha256}`);
                         const statusData = await statusRes.json();
 
                         if (statusData.success) {
