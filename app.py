@@ -1237,8 +1237,11 @@ def _repair_garbled_ai_reply(raw_reply: str, context_hint: str = '') -> str:
 _dash_metrics_lock = threading.Lock()
 _dash_prev_net = None
 _dash_prev_ts = 0.0
+_dash_last_up_kbps = 0.0
+_dash_last_down_kbps = 0.0
 _dash_prev_disk_io = None
 _dash_prev_disk_io_ts = 0.0
+_dash_last_disk_io_kbps = 0.0
 _dash_cpu_primed = False
 _dash_public_ip = 'غير متاح'
 _dash_public_ip_ts = 0.0
@@ -5228,7 +5231,7 @@ HTML_TEMPLATE = """
             <div id="dash-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-purple-400 border-b border-slate-700 pb-2">📊 لوحة التحكم – معلومات النظام</h2>
                 <div class="text-[11px] text-gray-500 -mt-4 flex items-center gap-2">آخر تحديث: <span id="dashUpdatedAt" class="text-purple-300 font-mono">—</span><span id="dashPulse" class="inline-block w-2 h-2 rounded-full bg-gray-600 opacity-60"></span></div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="dashCards">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3" id="dashCards">
                     <div id="dashCpuCard" class="bg-slate-900 rounded-xl p-4 border border-purple-800/40 text-center transition-all duration-300">
                         <div class="text-3xl font-black text-purple-400" id="dashCpu">—</div>
                         <div class="text-xs text-gray-500 mt-1">CPU %</div>
@@ -5240,10 +5243,6 @@ HTML_TEMPLATE = """
                     <div id="dashDiskCard" class="bg-slate-900 rounded-xl p-4 border border-green-800/40 text-center transition-all duration-300">
                         <div class="text-3xl font-black text-green-400" id="dashDisk">—</div>
                         <div class="text-xs text-gray-500 mt-1">Disk I/O (KB/s)</div>
-                    </div>
-                    <div class="bg-slate-900 rounded-xl p-4 border border-yellow-800/40 text-center">
-                        <div class="text-3xl font-black text-yellow-400" id="dashBurn">—</div>
-                        <div class="text-xs text-gray-500 mt-1">Burn Notes</div>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -15593,6 +15592,8 @@ HTML_TEMPLATE = """
                 if(d.error) throw new Error(d.error);
                 const cpu = Number(d.cpu_percent || 0);
                 const ram = Number(d.ram_percent || 0);
+                
+                // Show raw disk activity in KB/s (Task Manager shows Disk Active Time % by default, not KB/s)
                 const diskIo = Number(d.disk_io_kbps || 0);
 
                 document.getElementById('dashCpu').innerText  = cpu.toFixed(1) + '%';
@@ -15602,7 +15603,6 @@ HTML_TEMPLATE = """
                 updateDashMetricCard('dashCpuCard', 'dashCpu', cpu, 60, 85);
                 updateDashMetricCard('dashRamCard', 'dashRam', ram, 65, 88);
                 updateDashMetricCard('dashDiskCard', 'dashDisk', diskIo, 512, 2048);
-                document.getElementById('dashBurn').innerText = d.burn_notes;
                 document.getElementById('dashLocalIp').innerText = d.local_ip;
                 document.getElementById('dashPubIp').innerText  = d.public_ip;
                 document.getElementById('dashSent').innerText   = Number(d.net_up_kbps || 0).toFixed(2);
@@ -22160,11 +22160,14 @@ def fake_identity_route():
 @app.route('/api/dashboard/stats', methods=['GET'])
 def dashboard_stats():
     global _dash_prev_net, _dash_prev_ts, _dash_prev_disk_io, _dash_prev_disk_io_ts, _dash_cpu_primed
+    global _dash_last_up_kbps, _dash_last_down_kbps, _dash_last_disk_io_kbps
     try:
         if not _dash_cpu_primed:
             psutil.cpu_percent(interval=None)
             _dash_cpu_primed = True
-        cpu = psutil.cpu_percent(interval=0.2)
+        
+        # Blocking for 0.1s ensures accurate CPU % without freezing the app noticeably
+        cpu = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage('/')
         net = psutil.net_io_counters()
@@ -22173,24 +22176,46 @@ def dashboard_stats():
         public_ip = _dash_public_ip_cached()
 
         now_ts = time.time()
-        up_kbps = 0.0
-        down_kbps = 0.0
-        disk_io_kbps = 0.0
+        
         with _dash_metrics_lock:
-            if _dash_prev_net is not None and _dash_prev_ts > 0:
-                dt = max(now_ts - _dash_prev_ts, 1e-6)
-                up_kbps = ((net.bytes_sent - _dash_prev_net.bytes_sent) / 1024.0) / dt
-                down_kbps = ((net.bytes_recv - _dash_prev_net.bytes_recv) / 1024.0) / dt
-            _dash_prev_net = net
-            _dash_prev_ts = now_ts
+            # Network Calculations
+            if _dash_prev_net is None or _dash_prev_ts == 0.0:
+                _dash_prev_net = net
+                _dash_prev_ts = now_ts
+                up_kbps = 0.0
+                down_kbps = 0.0
+            else:
+                dt = now_ts - _dash_prev_ts
+                if dt >= 0.5:
+                    up_kbps = ((net.bytes_sent - _dash_prev_net.bytes_sent) / 1024.0) / dt
+                    down_kbps = ((net.bytes_recv - _dash_prev_net.bytes_recv) / 1024.0) / dt
+                    _dash_last_up_kbps = up_kbps
+                    _dash_last_down_kbps = down_kbps
+                    _dash_prev_net = net
+                    _dash_prev_ts = now_ts
+                else:
+                    up_kbps = _dash_last_up_kbps
+                    down_kbps = _dash_last_down_kbps
 
-            if disk_io is not None and _dash_prev_disk_io is not None and _dash_prev_disk_io_ts > 0:
-                dt_disk = max(now_ts - _dash_prev_disk_io_ts, 1e-6)
-                total_delta = (disk_io.read_bytes - _dash_prev_disk_io.read_bytes) + (disk_io.write_bytes - _dash_prev_disk_io.write_bytes)
-                disk_io_kbps = (total_delta / 1024.0) / dt_disk
-            if disk_io is not None:
-                _dash_prev_disk_io = disk_io
-                _dash_prev_disk_io_ts = now_ts
+            # Disk I/O Calculations
+            if _dash_prev_disk_io is None or _dash_prev_disk_io_ts == 0.0:
+                if disk_io is not None:
+                    _dash_prev_disk_io = disk_io
+                    _dash_prev_disk_io_ts = now_ts
+                disk_io_kbps = 0.0
+            else:
+                if disk_io is not None:
+                    dt_disk = now_ts - _dash_prev_disk_io_ts
+                    if dt_disk >= 0.5:
+                        total_delta = (disk_io.read_bytes - _dash_prev_disk_io.read_bytes) + (disk_io.write_bytes - _dash_prev_disk_io.write_bytes)
+                        disk_io_kbps = (total_delta / 1024.0) / dt_disk
+                        _dash_last_disk_io_kbps = disk_io_kbps
+                        _dash_prev_disk_io = disk_io
+                        _dash_prev_disk_io_ts = now_ts
+                    else:
+                        disk_io_kbps = _dash_last_disk_io_kbps
+                else:
+                    disk_io_kbps = _dash_last_disk_io_kbps
 
         up_kbps = max(up_kbps, 0.0)
         down_kbps = max(down_kbps, 0.0)
