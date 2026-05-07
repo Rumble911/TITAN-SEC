@@ -2542,19 +2542,6 @@ def _pkcs7_unpad(data: bytes, block_size: int = 16) -> bytes:
     return data[:-pad_len]
 
 
-def _xor_keystream(password: str, salt: bytes, length: int, rounds: int = 1) -> bytes:
-    safe_rounds = max(1, min(int(rounds or 1), 8))
-    stream = bytearray()
-    counter = 0
-    seed = password.encode('utf-8') + salt
-    while len(stream) < length:
-        block = seed + counter.to_bytes(8, 'big')
-        digest = hashlib.sha256(block).digest()
-        for _ in range(safe_rounds - 1):
-            digest = hashlib.sha256(digest + seed).digest()
-        stream.extend(digest)
-        counter += 1
-    return bytes(stream[:length])
 
 
 def _b64e(raw: bytes) -> str:
@@ -2615,17 +2602,7 @@ def encrypt_text_with_method(plain_text: str, password: str, method: str, option
             'c': _b64e(ct),
         }
         payload_bytes = json.dumps(payload, separators=(',', ':')).encode('utf-8')
-    elif algo == 'xor-stream':
-        salt = os.urandom(16)
-        rounds = 2
-        ks = _xor_keystream(password, salt, len(raw_plain), rounds=rounds)
-        ct = bytes(a ^ b for a, b in zip(raw_plain, ks))
-        payload = {
-            's': _b64e(salt),
-            'r': rounds,
-            'c': _b64e(ct),
-        }
-        payload_bytes = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+
     else:
         raise ValueError('خوارزمية غير مدعومة')
 
@@ -2671,13 +2648,7 @@ def decrypt_text_with_method(cipher_text: str, password: str, method: str = 'aut
             dec = cipher.decryptor()
             plain = dec.update(ct) + dec.finalize()
             return plain.decode('utf-8', errors='replace')
-        if algo == 'xor-stream':
-            salt = _b64d(payload['s'])
-            rounds = int(payload.get('r') or 1)
-            ct = _b64d(payload['c'])
-            ks = _xor_keystream(password, salt, len(ct), rounds=rounds)
-            plain = bytes(a ^ b for a, b in zip(ct, ks))
-            return plain.decode('utf-8', errors='replace')
+
         raise ValueError('خوارزمية غير مدعومة')
 
     if selected not in ('auto', 'fernet'):
@@ -4880,7 +4851,7 @@ HTML_TEMPLATE = """
                                                 <option value="fernet">Fernet + PBKDF2 (قوي جدًا - موصى به)</option>
                                                 <option value="aes-cbc">AES-256-CBC + PBKDF2 (قوي)</option>
                                                 <option value="chacha20">ChaCha20 + PBKDF2 (متوازن)</option>
-                                                <option value="xor-stream">XOR Stream (تعليمي - ضعيف)</option>
+
                                             </select>
                                         </div>
                                         <div>
@@ -4899,7 +4870,7 @@ HTML_TEMPLATE = """
                                             </select>
                                         </div>
                                     </div>
-                                    <div id="cryptAdvisorLastConfig" class="mt-3 text-[11px] text-cyan-300 bg-cyan-950/15 border border-cyan-900/35 rounded-lg px-3 py-2">لا توجد توصية مطبقة بعد.</div>
+                                    <div id="cryptAdvisorLastConfig" style="display: none;" class="mt-3 text-[11px] text-cyan-300 bg-cyan-950/15 border border-cyan-900/35 rounded-lg px-3 py-2"></div>
                                 </div>
 
                                 <div class="rounded-2xl border border-violet-900/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-violet-950/20 p-4">
@@ -10890,10 +10861,7 @@ HTML_TEMPLATE = """
             const kdfProfile = document.getElementById('cryptKdfProfile')?.value || 'strong';
             const outputFormat = document.getElementById('cryptOutputFormat')?.value || 'b64';
             if(!text || !key) return titanAlert("يرجى إدخال النص وكلمة السر!");
-            if (action === 'encrypt' && method === 'xor-stream') {
-                const ok = window.confirm('تحذير: XOR Stream ضعيف وغير مناسب للبيانات الحساسة. هل تريد الاستمرار؟');
-                if (!ok) return;
-            }
+
             const res = await fetch('/crypt-text', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
@@ -10946,11 +10914,12 @@ HTML_TEMPLATE = """
 
             if (!metaEl) return;
             if (!rec || !rec.method) {
-                metaEl.textContent = 'لا توجد توصية مطبقة بعد.';
+                metaEl.style.display = 'none';
                 return;
             }
 
             const reason = rec.reason ? (' | السبب: ' + rec.reason) : '';
+            metaEl.style.display = 'block';
             metaEl.textContent = 'آخر توصية: ' + rec.method + ' / ' + (rec.kdf_profile || 'strong') + ' / ' + (rec.output_format || 'b64') + reason;
         }
 
@@ -16711,7 +16680,7 @@ def _normalize_crypt_recommendation(rec: dict) -> dict:
     reason = str(rec.get('reason') or 'تم اختيار إعداد آمن ومتوازن حسب السياق.').strip()
     warning = str(rec.get('warning') or '').strip()
 
-    if method not in ('fernet', 'aes-cbc', 'chacha20', 'xor-stream'):
+    if method not in ('fernet', 'aes-cbc', 'chacha20'):
         method = 'fernet'
     if kdf_profile not in ('balanced', 'strong', 'paranoid'):
         kdf_profile = 'strong'
@@ -16764,8 +16733,7 @@ def _enforce_platform_crypto_reply_scope(reply: str) -> str:
     text = str(reply or '').strip()
     if not text:
         return (
-            "ضمن المنصة الحالية، خيارات التشفير المتاحة فقط هي: "
-            "Fernet + PBKDF2، AES-256-CBC + PBKDF2، ChaCha20 + PBKDF2، و XOR Stream (تعليمي)."
+            "Fernet + PBKDF2، AES-256-CBC + PBKDF2، و ChaCha20 + PBKDF2."
         )
 
     unsupported = re.search(
@@ -16775,8 +16743,7 @@ def _enforce_platform_crypto_reply_scope(reply: str) -> str:
     )
     if unsupported:
         return (
-            "ضمن هذه المنصة، لن أطرح إلا الخوارزميات المتوفرة فعليًا: "
-            "Fernet + PBKDF2، AES-256-CBC + PBKDF2، ChaCha20 + PBKDF2، و XOR Stream (تعليمي فقط). "
+            "Fernet + PBKDF2، AES-256-CBC + PBKDF2، و ChaCha20 + PBKDF2. "
             "اكتب لي حالة الاستخدام وسأعطيك أفضل اختيار من هذه الخيارات فقط."
         )
     return text
@@ -16800,11 +16767,11 @@ def crypt_recommend_route():
     advisor_system = (
         "You are a cryptography advisor for a secure messaging app. "
         "Return strict JSON only with keys: method, kdf_profile, output_format, reason, warning. "
-        "method must be one of: fernet, aes-cbc, chacha20, xor-stream. "
+        "method must be one of: fernet, aes-cbc, chacha20. "
         "kdf_profile must be one of: balanced, strong, paranoid. "
         "output_format must be one of: b64, b64url. "
         "Prefer security and practical sharing compatibility. "
-        "Avoid recommending xor-stream unless user explicitly asks for learning/demo."
+
     )
     advisor_prompt = (
         f"Recipient context: {audience}\n"
@@ -16871,7 +16838,7 @@ def crypt_recommend_chat_route():
         "\n\n"
         "قواعد إلزامية لمستشار التشفير داخل المنصة:\n"
         "- ممنوع اقتراح أي خوارزمية غير موجودة في المنصة.\n"
-        "- الخيارات الوحيدة المسموحة: fernet، aes-cbc، chacha20، xor-stream.\n"
+        "- الخيارات الوحيدة المسموحة: fernet، aes-cbc، chacha20.\n"
         "- إذا طلب المستخدم خوارزمية غير متاحة، ارفض بلطف واقترح أقرب بديل من الخيارات المتاحة فقط.\n"
         "- لا تذكر RSA أو AES-GCM أو ECC أو PGP كخيارات تنفيذ داخل المنصة."
     )
