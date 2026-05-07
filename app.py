@@ -5785,6 +5785,12 @@ HTML_TEMPLATE = """
                                                     <span id="idDob" class="text-xl font-mono text-white font-black tracking-widest"></span>
                                                 </div>
                                             </div>
+
+                                            <!-- Mother Name -->
+                                            <div class="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors mt-4">
+                                                <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest block mb-1 opacity-60">Mother's Full Name</span>
+                                                <span id="idMotherName" class="text-lg font-bold text-gray-200"></span>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -5801,6 +5807,10 @@ HTML_TEMPLATE = """
                                         <div class="text-center md:text-right">
                                             <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Physical Specs</span>
                                             <span class="text-xl font-bold text-gray-200" dir="ltr"><span id="idHeight"></span> | <span id="idWeight"></span></span>
+                                        </div>
+                                        <div class="text-center md:text-right">
+                                            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Favorite Color</span>
+                                            <span id="idColor" class="text-lg font-bold text-amber-400"></span>
                                         </div>
                                         <div class="text-center md:text-right">
                                             <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Primary Asset</span>
@@ -5848,6 +5858,18 @@ HTML_TEMPLATE = """
                                         <div class="bg-cyan-500/5 p-5 rounded-2xl border border-cyan-500/10">
                                             <span class="text-[9px] text-cyan-500/60 font-bold uppercase tracking-widest block mb-1">Primary Email Node</span>
                                             <p id="idEmail" class="text-xs font-mono text-cyan-300 break-all select-all font-bold"></p>
+                                        </div>
+
+                                        <!-- Company & Job -->
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Corporation</span>
+                                                <p id="idCompany" class="text-sm font-black text-white"></p>
+                                            </div>
+                                            <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Occupation</span>
+                                                <p id="idJob" class="text-sm font-black text-emerald-400"></p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
