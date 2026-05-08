@@ -5028,6 +5028,7 @@ HTML_TEMPLATE = """
             
             <div style="position:absolute;top:0;left:0;display:flex;align-items:center;gap:0.5rem;">
                 <span id="header-username" style="color:#a855f7;font-size:0.75rem;font-weight:700;letter-spacing:0.05em;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);padding:4px 10px;border-radius:8px;"></span>
+                <button onclick="showChangePasswordModal()" title="تغيير كلمة السر" style="background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#c084fc;padding:4px 10px;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:700;transition:all 0.2s;" onmouseover="this.style.background='rgba(168,85,247,0.3)'" onmouseout="this.style.background='rgba(168,85,247,0.15)'">🔐 كلمة السر</button>
                 <button onclick="doLogout()" title="تسجيل الخروج" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:4px 10px;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:700;transition:all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.3)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">🚪 خروج</button>
             </div>
         </header>
@@ -5543,7 +5544,10 @@ HTML_TEMPLATE = """
 
                 <!-- === VAULT FORGOT MODAL === -->
                 <div id="vault-forgot-modal" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;">
-                    <div style="background:#0a0a1e;border:1px solid rgba(234,179,8,0.4);border-radius:20px;padding:2rem;max-width:420px;width:90%;box-shadow:0 0 60px rgba(234,179,8,0.2);">
+                    <div style="position:relative;background:#0a0a1e;border:1px solid rgba(234,179,8,0.4);border-radius:20px;padding:2rem;max-width:420px;width:90%;box-shadow:0 0 60px rgba(234,179,8,0.2);">
+                        <button onclick="closeVaultForgot()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(234,179,8,0.2);color:#fbbf24;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;font-size:1.1rem;line-height:1;font-weight:bold;z-index:10;" onmouseover="this.style.background='rgba(234,179,8,0.2)';this.style.transform='scale(1.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.transform='scale(1)'">
+                            &times;
+                        </button>
                         <div id="vf-step1">
                             <div style="text-align:center;margin-bottom:1.5rem;">
                                 <div style="font-size:2rem">📧</div>
@@ -5574,6 +5578,36 @@ HTML_TEMPLATE = """
                             <button onclick="doVaultForgotReset()" style="width:100%;padding:0.75rem;background:linear-gradient(135deg,#d97706,#b45309);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;font-size:0.9rem;">حفظ كلمة السر الجديدة 💾</button>
                         </div>
                         <div id="vf-error" style="display:none;margin-top:1rem;color:#f87171;font-size:0.75rem;text-align:center;padding:0.5rem;background:rgba(239,68,68,0.1);border-radius:8px;"></div>
+                    </div>
+                </div>
+
+                <!-- === ACCOUNT CHANGE PASSWORD MODAL === -->
+                <div id="change-password-modal" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;">
+                    <div style="position:relative;background:#0a0a1e;border:1px solid rgba(168,85,247,0.4);border-radius:20px;padding:2rem;max-width:420px;width:90%;box-shadow:0 0 60px rgba(168,85,247,0.2);">
+                        <button onclick="closeChangePasswordModal()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);color:#c084fc;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;font-size:1.1rem;line-height:1;font-weight:bold;z-index:10;" onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.transform='scale(1.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.transform='scale(1)'">
+                            &times;
+                        </button>
+                        <div style="text-align:center;margin-bottom:1.5rem;">
+                            <div style="font-size:2.5rem; filter: drop-shadow(0 0 10px #a855f7);">🔐</div>
+                            <h3 style="color:#c084fc;font-weight:700;margin:0.5rem 0; font-size:1.25rem;">تغيير كلمة مرور الحساب</h3>
+                            <p style="color:#6b7280;font-size:0.75rem;">يرجى إدخال كلمة المرور القديمة والجديدة لتحديث بيانات حسابك.</p>
+                        </div>
+                        <div class="space-y-3">
+                            <div style="margin-bottom:1rem;">
+                                <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الحالية</label>
+                                <input id="cp-old-pass" type="password" placeholder="كلمة المرور الحالية..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                            </div>
+                            <div style="margin-bottom:1rem;">
+                                <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الجديدة</label>
+                                <input id="cp-new-pass" type="password" placeholder="كلمة المرور الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                            </div>
+                            <div style="margin-bottom:1.5rem;">
+                                <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">تأكيد كلمة المرور الجديدة</label>
+                                <input id="cp-new-pass2" type="password" placeholder="تأكيد الكلمة الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                            </div>
+                            <button onclick="doChangePassword()" style="width:100%;padding:0.85rem;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;font-size:0.95rem;box-shadow: 0 4px 15px rgba(124,58,237,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">تحديث كلمة المرور ✨</button>
+                        </div>
+                        <div id="cp-error" style="display:none;margin-top:1rem;color:#f87171;font-size:0.75rem;text-align:center;padding:0.6rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px;"></div>
                     </div>
                 </div>
 
@@ -6194,7 +6228,7 @@ HTML_TEMPLATE = """
                             <!-- Main Card -->
                             <div class="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-slate-900/80 backdrop-blur-3xl shadow-[0_30px_100px_rgba(0,0,0,0.5)] p-0">
                                 <!-- Design Accents -->
-                                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-50"></div>
+                                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-5"></div>
                                 <div class="absolute -right-20 -top-20 w-64 h-64 bg-cyan-500/10 rounded-full blur-[100px]"></div>
                                 <div class="absolute -left-20 -bottom-20 w-64 h-64 bg-purple-500/10 rounded-full blur-[100px]"></div>
                                 
@@ -6502,6 +6536,58 @@ HTML_TEMPLATE = """
                 await fetch('/api/auth/logout', { method: 'POST' });
             } catch(e) {}
             window.location.reload();
+        }
+
+        function showChangePasswordModal() {
+            document.getElementById('cp-old-pass').value = '';
+            document.getElementById('cp-new-pass').value = '';
+            document.getElementById('cp-new-pass2').value = '';
+            document.getElementById('cp-error').style.display = 'none';
+            document.getElementById('change-password-modal').style.display = 'flex';
+        }
+        function closeChangePasswordModal() {
+            document.getElementById('change-password-modal').style.display = 'none';
+        }
+        async function doChangePassword() {
+            const oldPass = document.getElementById('cp-old-pass').value;
+            const newPass = document.getElementById('cp-new-pass').value;
+            const newPass2 = document.getElementById('cp-new-pass2').value;
+            const errDiv = document.getElementById('cp-error');
+            
+            if (!oldPass || !newPass || !newPass2) {
+                errDiv.innerText = 'يرجى ملء جميع الحقول';
+                errDiv.style.display = 'block';
+                return;
+            }
+            if (newPass !== newPass2) {
+                errDiv.innerText = 'كلمات المرور الجديدة غير متطابقة';
+                errDiv.style.display = 'block';
+                return;
+            }
+            if (newPass.length < 6) {
+                errDiv.innerText = 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل';
+                errDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const r = await fetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({old_password: oldPass, new_password: newPass})
+                });
+                const res = await r.json();
+                if (res.success) {
+                    titanAlert('تم تغيير كلمة المرور بنجاح ✅');
+                    closeChangePasswordModal();
+                } else {
+                    errDiv.innerText = res.error || 'حدث خطأ ما';
+                    errDiv.style.display = 'block';
+                }
+            } catch(e) {
+                errDiv.innerText = 'فشل الاتصال بالخادم';
+                errDiv.style.display = 'block';
+            }
         }
 
         function switchAuthTab(tab) {
@@ -22638,6 +22724,54 @@ def forgot_password_reset():
     except Exception as e:
         print(f"[TITAN] Forgot password reset error: {e}")
         return jsonify({"error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+@app.route('/api/auth/change-password', methods=['POST'])
+def auth_change_password():
+    """تغيير كلمة سر المستخدم من داخل الجلسة النشطة"""
+    if 'user_id' not in session:
+        return jsonify({"error": "غير مصرح"}), 401
+    
+    data = request.json or {}
+    old_password = data.get('old_password', '')
+    new_password = data.get('new_password', '')
+    
+    if not old_password or not new_password:
+        return jsonify({"error": "يرجى إدخال كلمة السر القديمة والجديدة"}), 400
+    
+    if len(new_password) < 6:
+        return jsonify({"error": "كلمة السر الجديدة قصيرة جداً (6 أحرف على الأقل)"}), 400
+        
+    conn = None
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+        
+        # جلب الهش القديم
+        cur.execute("SELECT password_hash, username FROM users WHERE id=%s", (session['user_id'],))
+        user = cur.fetchone()
+        if not user:
+            return jsonify({"error": "المستخدم غير موجود"}), 404
+            
+        stored_hash = user[0]
+        username = user[1]
+        
+        # التحقق من كلمة السر القديمة
+        if not verify_password(old_password, stored_hash):
+            return jsonify({"error": "كلمة المرور الحالية غير صحيحة"}), 403
+            
+        # تحديث بكلمة السر الجديدة
+        new_hash = hash_password(new_password)
+        cur.execute("UPDATE users SET password_hash=%s WHERE id=%s", (new_hash, session['user_id']))
+        conn.commit()
+        
+        add_audit_log("تغيير كلمة السر 🔐", f"قام المستخدم {username} بتغيير كلمة سره", username=username)
+        return jsonify({"success": True, "message": "تم تحديث كلمة المرور بنجاح"})
+        
+    except Exception as e:
+        print(f"[TITAN] Change password error: {e}")
+        return jsonify({"error": "فشل تحديث كلمة المرور"}), 500
     finally:
         if conn: conn.close()
 
