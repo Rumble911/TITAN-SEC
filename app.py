@@ -4076,137 +4076,58 @@ def get_ip_intelligence_data(ip=""):
             if response.status_code == 200:
                 data = response.json()
                 if data.get("status") == "success":
-                    ipapi_proxy = data.get("proxy", False)
+                    is_proxy = data.get("proxy", False)
                     is_hosting = data.get("hosting", False)
-                    isp_name = str(data.get("isp", "")).strip().lower()
-                    org_name = str(data.get("org", "")).strip().lower()
-                    as_info = str(data.get("as", "")).strip().lower()
                     
-                    # --- قائمة مزودي خدمة الإنترنت السكنية المعروفين الذين يستخدمون CGNAT ---
-                    # هذه شركات اتصالات حقيقية، proxy=true عندها يعني CGNAT وليس VPN
-                    _RESIDENTIAL_ISP_KEYWORDS = [
-                        # الأردن
-                        'jordan telecom', 'jordan data comm', 'orange jordan', 'zain jo', 'umniah',
-                        'batelco jordan', 'damamax', 'vi networks',
-                        # السعودية
-                        'saudi telecom', 'stc', 'mobily', 'zain ksa', 'integrated telecom',
-                        'etihad etisalat', 'arabian internet',
-                        # الإمارات
-                        'etisalat', 'emirates telecom', 'du telecom', 'emirates integrated',
-                        # مصر
-                        'telecom egypt', 'vodafone egypt', 'orange egypt', 'we egypt', 'etisalat misr',
-                        'link egypt', 'noor',
-                        # عام
-                        'comcast', 'at&t', 'verizon', 'charter', 'cox comm', 'spectrum',
-                        'bt group', 'sky broadband', 'virgin media', 'talktalk', 'plusnet',
-                        'deutsche telekom', 'vodafone', 'o2', 'orange', 'free sas', 'sfr',
-                        'turk telekom', 'turkcell', 'superonline',
-                        'rostelecom', 'beeline', 'megafon', 'mts ',
-                    ]
-                    
-                    def _is_known_residential_isp(isp_str, org_str, as_str):
-                        """تحقق من أن المزود هو شركة اتصالات سكنية معروفة"""
-                        combined = f"{isp_str} {org_str} {as_str}".lower()
-                        for kw in _RESIDENTIAL_ISP_KEYWORDS:
-                            if kw in combined:
-                                return True
-                        return False
-                    
-                    is_known_isp = _is_known_residential_isp(isp_name, org_name, as_info)
-                    
-                    # --- المنطق الأساسي: hosting = datacenter = VPN مؤكد ---
-                    # لكن proxy من ip-api وحده لا يكفي — كثير من مزودي CGNAT يطلعون proxy=true
-                    vpn_detected = False
-                    is_proxy_final = False
+                    # مركز بيانات أو بروكسي صريح يُعتبر VPN
+                    vpn_detected = is_proxy or is_hosting
                     fraud_score_val = 0
                     
-                    if is_hosting and not is_known_isp:
-                        # مركز بيانات (ليس ISP سكني) = VPN مؤكد
-                        vpn_detected = True
-                    
-                    # فحص متقدم بـ IPQualityScore
-                    ipqs_active_vpn = False
-                    ipqs_active_tor = False
-                    ipqs_vpn_flag = False
-                    ipqs_proxy_flag = False
-                    ipqs_recent_abuse = False
-                    ipqs_connection_type = ""
+                    # فحص إضافي ومتقدم للـ VPN باستخدام IPQualityScore (لاكتشاف الـ Residential VPNs مثل Tuxler)
                     try:
                         target = ip_target or data.get("query", "")
                         if target:
                             IPQS_API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
-                            ipqs_url = f"https://www.ipqualityscore.com/api/json/ip/{IPQS_API_KEY}/{target}?strictness=0&allow_public_access_points=true"
+                            ipqs_url = f"https://www.ipqualityscore.com/api/json/ip/{IPQS_API_KEY}/{target}?strictness=1"
                             ipqs_res = requests.get(ipqs_url, timeout=5)
                             if ipqs_res.status_code == 200:
                                 ipqs_data = ipqs_res.json()
                                 if ipqs_data.get("success"):
-                                    ipqs_active_vpn = bool(ipqs_data.get("active_vpn", False))
-                                    ipqs_active_tor = bool(ipqs_data.get("active_tor", False))
-                                    ipqs_vpn_flag = bool(ipqs_data.get("vpn", False))
-                                    ipqs_proxy_flag = bool(ipqs_data.get("proxy", False))
-                                    ipqs_recent_abuse = bool(ipqs_data.get("recent_abuse", False))
-                                    fraud_score_val = int(ipqs_data.get("fraud_score", 0))
-                                    ipqs_connection_type = str(ipqs_data.get("connection_type", "")).strip().lower()
+                                    is_strict_vpn = ipqs_data.get("vpn") or ipqs_data.get("tor") or ipqs_data.get("active_vpn") or ipqs_data.get("active_tor")
+                                    is_proxy = ipqs_data.get("proxy", False)
+                                    fraud_score_val = ipqs_data.get("fraud_score", 0)
+                                    
+                                    if is_strict_vpn:
+                                        vpn_detected = True
+                                        is_proxy = True
+                                    elif is_proxy and fraud_score_val >= 85:
+                                        # إما TuxlerVPN أو شبكة اتصالات محلية CGNAT عليها تبليغات
+                                        is_proxy = True
                     except Exception:
                         pass
-                    
-                    # === قرار التصنيف النهائي (أولوية عليا للأدلة القوية) ===
-                    
-                    # 1) active_vpn أو active_tor = VPN مؤكد 100% بغض النظر عن أي شيء
-                    if ipqs_active_vpn or ipqs_active_tor:
-                        vpn_detected = True
-                    
-                    # 2) ISP معروف + لا يوجد active_vpn = الـ proxy/vpn flags هي CGNAT → تجاهلها
-                    elif is_known_isp:
-                        # مزود سكني معروف — نثق فيه إلا إذا كان fraud_score عالي جداً مع أدلة إضافية
-                        if fraud_score_val >= 90 and ipqs_recent_abuse:
-                            # الـ IP فعلاً عليه تبليغات كثيرة حتى لو ISP سكني
-                            is_proxy_final = True
-                        else:
-                            # CGNAT عادي — ليس VPN ولا بروكسي
-                            vpn_detected = False
-                            is_proxy_final = False
-                    
-                    # 3) ISP غير معروف + أعلام VPN/proxy من IPQS
-                    else:
-                        if ipqs_vpn_flag and fraud_score_val >= 75:
-                            vpn_detected = True
-                        elif ipqs_proxy_flag and fraud_score_val >= 75:
-                            is_proxy_final = True
-                        elif ipapi_proxy and is_hosting:
-                            vpn_detected = True
-                    
-                    # === تحديد الحالة النهائية ===
+
                     if vpn_detected:
                         net_type = "VPN / Data Center (Masked IP)"
                         risk_msg = "VPN نشط (هوية مخفية)"
                         badge = "Masked"
                         tone = "warn"
                         risk_score = 95
-                    elif is_proxy_final:
+                    elif is_proxy:
                         net_type = "Shared IP / Residential Proxy"
-                        risk_msg = "IP مشبوه (بروكسي أو شبكة مشتركة)"
+                        risk_msg = "IP مشبوه (قد يكون VPN أو CGNAT)"
                         badge = "Suspicious"
                         tone = "warn"
                         risk_score = 60
                     else:
-                        # اتصال نظيف — سواء IP عام مباشر أو CGNAT سكني
-                        if is_known_isp and (ipapi_proxy or ipqs_proxy_flag) and fraud_score_val < 75:
-                            net_type = "Residential CGNAT (اتصال سكني مشترك)"
-                            risk_msg = "اتصال سكني عبر CGNAT — آمن"
-                            badge = "Clean"
-                            tone = "safe"
-                            risk_score = 5
-                        else:
-                            net_type = "Public IP (العام)"
-                            risk_msg = "اتصال مباشر"
-                            badge = "Direct"
-                            tone = "safe"
-                            risk_score = 10
+                        net_type = "Public IP (العام)"
+                        risk_msg = "اتصال مباشر"
+                        badge = "Direct"
+                        tone = "safe"
+                        risk_score = 10
 
                     return {
                         "success": True,
-                        "proxy": is_proxy_final,
+                        "proxy": is_proxy,
                         "vpn": vpn_detected,
                         "fraud_score": fraud_score_val,
                         "country_code": data.get("countryCode", "US"),
@@ -4228,75 +4149,39 @@ def get_ip_intelligence_data(ip=""):
             target = ip_target or ip
             if target:
                 IPQS_API_KEY = '1ZFJTNYsuxNXvJwdiETskE0DqpHJDIc4'
-                ipqs_url = f"https://www.ipqualityscore.com/api/json/ip/{IPQS_API_KEY}/{target}?strictness=0&allow_public_access_points=true"
+                ipqs_url = f"https://www.ipqualityscore.com/api/json/ip/{IPQS_API_KEY}/{target}?strictness=1"
                 try:
                     ipqs_res = requests.get(ipqs_url, timeout=10)
                     if ipqs_res.status_code == 200:
                         ipqs_data = ipqs_res.json()
                         if ipqs_data.get("success"):
-                            fb_active_vpn = bool(ipqs_data.get("active_vpn", False))
-                            fb_active_tor = bool(ipqs_data.get("active_tor", False))
-                            fb_vpn_flag = bool(ipqs_data.get("vpn", False))
-                            fb_proxy_flag = bool(ipqs_data.get("proxy", False))
-                            fb_recent_abuse = bool(ipqs_data.get("recent_abuse", False))
-                            fraud_score = int(ipqs_data.get("fraud_score", 0))
-                            fb_isp = str(ipqs_data.get("ISP", "")).strip().lower()
-                            fb_org = str(ipqs_data.get("organization", "")).strip().lower()
+                            is_strict_vpn = ipqs_data.get("vpn") or ipqs_data.get("tor") or ipqs_data.get("active_vpn") or ipqs_data.get("active_tor")
+                            is_proxy = ipqs_data.get("proxy", False)
+                            fraud_score = ipqs_data.get("fraud_score", 0)
                             
-                            # تحقق هل ISP سكني معروف
-                            fb_combined = f"{fb_isp} {fb_org}".lower()
-                            fb_known_isp = any(kw in fb_combined for kw in [
-                                'jordan telecom', 'jordan data comm', 'orange', 'zain',
-                                'umniah', 'stc', 'mobily', 'etisalat', 'vodafone',
-                                'telecom egypt', 'comcast', 'at&t', 'verizon',
-                                'charter', 'deutsche telekom', 'bt group',
-                                'turk telekom', 'rostelecom',
-                            ])
-                            
-                            vpn_detected = False
-                            is_proxy_fb = False
-                            
-                            if fb_active_vpn or fb_active_tor:
-                                vpn_detected = True
-                            elif fb_known_isp:
-                                if fraud_score >= 90 and fb_recent_abuse:
-                                    is_proxy_fb = True
-                                # else: CGNAT — clean
-                            else:
-                                if fb_vpn_flag and fraud_score >= 75:
-                                    vpn_detected = True
-                                elif fb_proxy_flag and fraud_score >= 75:
-                                    is_proxy_fb = True
-                            
+                            vpn_detected = is_strict_vpn
                             if vpn_detected:
                                 net_type = "VPN / Data Center (Masked IP)"
                                 risk_msg = "VPN نشط (هوية مخفية)"
                                 badge = "Masked"
                                 tone = "warn"
                                 risk_score = 95
-                            elif is_proxy_fb:
+                            elif is_proxy and fraud_score >= 85:
                                 net_type = "Shared IP / Residential Proxy"
-                                risk_msg = "IP مشبوه (بروكسي أو شبكة مشتركة)"
+                                risk_msg = "IP مشبوه (قد يكون VPN أو CGNAT)"
                                 badge = "Suspicious"
                                 tone = "warn"
                                 risk_score = 60
                             else:
-                                if fb_known_isp and (fb_proxy_flag or fb_vpn_flag) and fraud_score < 75:
-                                    net_type = "Residential CGNAT (اتصال سكني مشترك)"
-                                    risk_msg = "اتصال سكني عبر CGNAT — آمن"
-                                    badge = "Clean"
-                                    tone = "safe"
-                                    risk_score = 5
-                                else:
-                                    net_type = "Public IP (العام)"
-                                    risk_msg = "اتصال مباشر"
-                                    badge = "Direct"
-                                    tone = "safe"
-                                    risk_score = 10
+                                net_type = "Public IP (العام)"
+                                risk_msg = "اتصال مباشر"
+                                badge = "Direct"
+                                tone = "safe"
+                                risk_score = 10
                                 
                             return {
                                 "success": True,
-                                "proxy": is_proxy_fb,
+                                "proxy": is_proxy,
                                 "vpn": vpn_detected,
                                 "fraud_score": fraud_score,
                                 "country_code": ipqs_data.get("country_code", "US"),
