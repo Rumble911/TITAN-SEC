@@ -1266,14 +1266,39 @@ def _dash_local_ip():
 def _dash_public_ip_cached():
     global _dash_public_ip, _dash_public_ip_ts
     now = time.time()
-    if _dash_public_ip != 'غير متاح' and (now - _dash_public_ip_ts) < 60:
+    # Cache for 30 seconds instead of 60 for better accuracy
+    if _dash_public_ip != 'غير متاح' and (now - _dash_public_ip_ts) < 30:
         return _dash_public_ip
-    try:
-        pub_ip_data = requests.get('https://api.ipify.org?format=json', timeout=2).json()
-        _dash_public_ip = pub_ip_data.get('ip', 'غير متاح')
-        _dash_public_ip_ts = now
-    except Exception:
-        pass
+    
+    services = [
+        'https://api.ipify.org?format=json',
+        'https://ifconfig.me/all.json',
+        'https://ipinfo.io/json',
+        'https://api.my-ip.io/ip.json'
+    ]
+    
+    for svc in services:
+        try:
+            r = requests.get(svc, timeout=3)
+            if r.status_code == 200:
+                # Check if it's JSON
+                try:
+                    data = r.json()
+                    ip = data.get('ip') or data.get('ip_addr') or data.get('query')
+                    if ip:
+                        _dash_public_ip = ip
+                        _dash_public_ip_ts = now
+                        return _dash_public_ip
+                except Exception:
+                    # If not JSON, maybe it's plain text (some services return plain text)
+                    ip = r.text.strip()
+                    if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', ip):
+                        _dash_public_ip = ip
+                        _dash_public_ip_ts = now
+                        return _dash_public_ip
+        except Exception:
+            continue
+            
     return _dash_public_ip
 
 
@@ -5228,22 +5253,18 @@ HTML_TEMPLATE = """
             <div id="dash-section" class="hidden space-y-6">
                 <h2 class="text-xl font-bold text-purple-400 border-b border-slate-700 pb-2">📊 لوحة التحكم – معلومات النظام</h2>
                 <div class="text-[11px] text-gray-500 -mt-4 flex items-center gap-2">آخر تحديث: <span id="dashUpdatedAt" class="text-purple-300 font-mono">—</span><span id="dashPulse" class="inline-block w-2 h-2 rounded-full bg-gray-600 opacity-60"></span></div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="dashCards">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3" id="dashCards">
                     <div id="dashCpuCard" class="bg-slate-900 rounded-xl p-4 border border-purple-800/40 text-center transition-all duration-300">
                         <div class="text-3xl font-black text-purple-400" id="dashCpu">—</div>
-                        <div class="text-xs text-gray-500 mt-1">CPU %</div>
+                        <div class="text-xs text-gray-500 mt-1">% CPU</div>
                     </div>
                     <div id="dashRamCard" class="bg-slate-900 rounded-xl p-4 border border-blue-800/40 text-center transition-all duration-300">
                         <div class="text-3xl font-black text-blue-400" id="dashRam">—</div>
-                        <div class="text-xs text-gray-500 mt-1">RAM %</div>
+                        <div class="text-xs text-gray-500 mt-1">% RAM</div>
                     </div>
                     <div id="dashDiskCard" class="bg-slate-900 rounded-xl p-4 border border-green-800/40 text-center transition-all duration-300">
                         <div class="text-3xl font-black text-green-400" id="dashDisk">—</div>
                         <div class="text-xs text-gray-500 mt-1">Disk I/O (KB/s)</div>
-                    </div>
-                    <div class="bg-slate-900 rounded-xl p-4 border border-yellow-800/40 text-center">
-                        <div class="text-3xl font-black text-yellow-400" id="dashBurn">—</div>
-                        <div class="text-xs text-gray-500 mt-1">Burn Notes</div>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -5254,8 +5275,6 @@ HTML_TEMPLATE = """
                             <div class="flex justify-between"><span class="text-gray-500">IP العام</span><span class="text-blue-400" id="dashPubIp">—</span></div>
                             <div class="flex justify-between"><span class="text-gray-500">سرعة صادر (KB/s)</span><span class="text-purple-400" id="dashSent">—</span></div>
                             <div class="flex justify-between"><span class="text-gray-500">سرعة وارد (KB/s)</span><span class="text-purple-400" id="dashRecv">—</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">إجمالي صادر (MB)</span><span class="text-violet-300" id="dashSentTotal">—</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">إجمالي وارد (MB)</span><span class="text-violet-300" id="dashRecvTotal">—</span></div>
                         </div>
                     </div>
                     <div class="bg-slate-900/70 rounded-xl p-4 border border-slate-700">
@@ -5725,35 +5744,7 @@ HTML_TEMPLATE = """
                     <span>🔥</span> قنوات الدردشة والرسائل الأمنة
                 </h2>
 
-                <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50 border-r-4 border-r-orange-500 relative overflow-hidden group">
-                    <div class="absolute inset-0 bg-gradient-to-l from-orange-500/5 to-transparent pointer-events-none"></div>
-                    <div class="flex items-center gap-3 mb-2 relative z-10">
-                        <span class="text-orange-500 text-2xl drop-shadow-[0_0_10px_rgba(249,115,22,0.6)] animate-pulse">💣</span>
-                        <h3 class="text-sm font-bold text-gray-200">الرسائل ذاتية التدمير (Burn Notes)</h3>
-                    </div>
-                    <p class="text-xs text-gray-400 mb-3 relative z-10">رسالة سرية لمرة واحدة، تُحذف فور قراءتها.</p>
-                    <textarea id="burnNoteText" rows="3" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-600 focus:ring-1 focus:ring-orange-500 outline-none text-sm mb-3 relative z-10" placeholder="اكتب رسالتك السرية هنا..."></textarea>
-                    <input id="burnNoteMedia" type="file" accept="image/*" class="hidden">
-                    <div class="bg-slate-900/40 border border-slate-700/60 rounded-xl p-3 mb-2 relative z-10">
-                        <div class="space-y-2 mb-2">
-                            <button type="button" onclick="triggerBurnNoteImagePicker()" class="w-full py-2 rounded-lg border border-orange-700/50 bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 text-xs font-bold">🖼️ اختيار صورة</button>
-                        </div>
-                        <div class="flex items-center justify-between gap-2">
-                            <div id="burnNoteMediaState" class="text-[11px] text-gray-400 truncate">لم يتم اختيار صورة بعد.</div>
-                            <button type="button" onclick="clearBurnNoteSelectedMedia()" class="text-[11px] px-2 py-1 rounded border border-slate-700 text-gray-300 hover:bg-slate-800">مسح</button>
-                        </div>
-                    </div>
-                    <p class="text-[11px] text-gray-500 mb-3 relative z-10">اختياري: أرسل نص فقط، أو صورة.</p>
-                    <button onclick="createBurnNote()" class="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold px-4 py-2 rounded-xl transition-all text-sm shadow-[0_0_15px_rgba(234,88,12,0.35)] flex items-center justify-center gap-2 relative z-10">
-                        توليد رابط التدمير السري 🔥
-                    </button>
-                    <div id="burnNoteResult" class="hidden mt-3 p-3 bg-slate-900/80 border border-orange-800/30 rounded-xl flex flex-col md:flex-row items-center justify-between gap-2 relative z-10">
-                        <input type="text" id="burnNoteLink" readonly class="w-full bg-black/50 text-orange-400 font-mono text-xs p-2 rounded-lg border border-slate-700/50 focus:outline-none" dir="ltr">
-                        <button id="burnCopyBtn" onclick="copyBurnNoteLink()" class="w-full md:w-auto bg-slate-800 hover:bg-slate-700 text-xs px-4 py-2 rounded-lg text-gray-300 transition-colors whitespace-nowrap border border-slate-600 font-bold">نسخ الرابط</button>
-                    </div>
-                </div>
-
-                <div>
+                <div id="burn-chat-container">
                     <h2 class="text-xl font-bold text-pink-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
                         <span>🔥</span> غرفة الـ Burn Chat (P2P مشفر)
                     </h2>
@@ -15602,24 +15593,20 @@ HTML_TEMPLATE = """
                 updateDashMetricCard('dashCpuCard', 'dashCpu', cpu, 60, 85);
                 updateDashMetricCard('dashRamCard', 'dashRam', ram, 65, 88);
                 updateDashMetricCard('dashDiskCard', 'dashDisk', diskIo, 512, 2048);
-                document.getElementById('dashBurn').innerText = d.burn_notes;
-                document.getElementById('dashLocalIp').innerText = d.local_ip;
-                document.getElementById('dashPubIp').innerText  = d.public_ip;
+                
+                document.getElementById('dashLocalIp').innerText = d.local_ip || '---';
+                document.getElementById('dashPubIp').innerText  = d.public_ip || '---';
                 document.getElementById('dashSent').innerText   = Number(d.net_up_kbps || 0).toFixed(2);
                 document.getElementById('dashRecv').innerText   = Number(d.net_down_kbps || 0).toFixed(2);
-                const sentTotalEl = document.getElementById('dashSentTotal');
-                const recvTotalEl = document.getElementById('dashRecvTotal');
-                if (sentTotalEl) sentTotalEl.innerText = Number(d.net_sent_mb || 0).toFixed(2);
-                if (recvTotalEl) recvTotalEl.innerText = Number(d.net_recv_mb || 0).toFixed(2);
                 const updatedAtEl = document.getElementById('dashUpdatedAt');
                 if (updatedAtEl) updatedAtEl.innerText = d.measured_at || new Date().toLocaleTimeString();
                 pulseDashIndicator(true);
                 const logsEl = document.getElementById('dashLogs');
                 if(d.recent_logs && d.recent_logs.length) {
                     logsEl.innerHTML = d.recent_logs.map(l =>
-                        `<div class="text-purple-400">[${l.time.split(' ')[1]}] <span class="text-gray-300">${l.action}</span></div>`
+                        `<div class="text-purple-400 opacity-80">[${l.time.split(' ')[1]}] <span class="text-gray-300 font-bold">${l.action}</span></div>`
                     ).join('');
-                } else { logsEl.innerHTML = '<div class="text-gray-600">لا يوجد نشاط</div>'; }
+                } else { logsEl.innerHTML = '<div class="text-gray-600 italic">لا يوجد نشاط مسجل</div>'; }
             } catch(e) {
                 const updatedAtEl = document.getElementById('dashUpdatedAt');
                 if (updatedAtEl) updatedAtEl.innerText = 'فشل الاتصال';
@@ -22264,16 +22251,12 @@ def dashboard_stats():
             'disk_total_gb': round(disk.total / 1024**3, 2),
             'disk_percent': disk.percent,
             'disk_io_kbps': round(disk_io_kbps, 2),
-            'net_sent_mb': round(net.bytes_sent / 1024**2, 2),
-            'net_recv_mb': round(net.bytes_recv / 1024**2, 2),
             'net_up_kbps': round(up_kbps, 2),
             'net_down_kbps': round(down_kbps, 2),
             'local_ip': local_ip,
             'public_ip': public_ip,
-            'vault_items': 0,
-            'burn_notes': len(BURN_NOTES),
             'audit_count': len(AUDIT_LOGS),
-            'recent_logs': AUDIT_LOGS[:5], # type: ignore
+            'recent_logs': AUDIT_LOGS[:8], # Increased log count for more accuracy in "displaying results"
             'measured_at': datetime.datetime.now().strftime('%H:%M:%S'),
         })
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
