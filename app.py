@@ -11708,12 +11708,10 @@ HTML_TEMPLATE = """
                 const proxyFlag = String(data.proxy || data.vpn || '').toLowerCase();
                 const proxyDetected = proxyFlag === 'true' || proxyFlag === '1' || data.proxy === true || data.vpn === true;
                 setResultInfo(dataBox, 'IP Intelligence', [
-                    { label: 'IP', value: ip || data.query || 'غير معروف', tone: 'info', dir: 'ltr' },
+                    { label: 'IP Address (Public)', value: ip || data.query || 'غير معروف', tone: 'info', dir: 'ltr' },
                     { label: 'ISP / Org', value: (data.ISP + (data.org && data.org !== data.ISP ? ` (${data.org})` : '')) || 'غير متاح', tone: 'info' },
-                    { label: 'Country', value: data.country_code || 'N/A', tone: 'info' },
-                    { label: 'Network Type', value: data.network_type || 'Public IP', tone: data.tone || (proxyDetected ? 'warn' : 'safe') },
-                    { label: 'Privacy Risk', value: data.risk_msg || (proxyDetected ? 'VPN/Proxy نشط' : 'اتصال مباشر'), tone: data.tone || (proxyDetected ? 'warn' : 'safe') }
-                ], { badge: data.badge || (proxyDetected ? 'Masked' : 'Direct'), cols: 2, riskScore: data.risk_score || (proxyDetected ? 85 : 10) });
+                    { label: 'Country', value: data.country_code || 'N/A', tone: 'info' }
+                ], { badge: data.badge || (proxyDetected ? 'Masked' : 'Direct'), cols: 1, riskScore: data.risk_score || 10 });
             } else {
                 soundManager.error();
                 setResultError(dataBox, data.message || 'فشل جلب البيانات');
