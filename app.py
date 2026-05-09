@@ -22748,14 +22748,15 @@ def auth_change_password():
         conn = get_db_conn()
         cur = conn.cursor()
         
-        # جلب الهش القديم
-        cur.execute("SELECT password_hash, username FROM users WHERE id=%s", (session['user_id'],))
+        # جلب البيانات الحالية
+        cur.execute("SELECT password_hash, username, email FROM users WHERE id=%s", (session['user_id'],))
         user = cur.fetchone()
         if not user:
             return jsonify({"error": "المستخدم غير موجود"}), 404
             
         stored_hash = user[0]
         username = user[1]
+        user_email = user[2]
         
         # التحقق من كلمة السر القديمة
         if not verify_password(old_password, stored_hash):
@@ -22766,8 +22767,40 @@ def auth_change_password():
         cur.execute("UPDATE users SET password_hash=%s WHERE id=%s", (new_hash, session['user_id']))
         conn.commit()
         
-        add_audit_log("تغيير كلمة السر 🔐", f"قام المستخدم {username} بتغيير كلمة سره", username=username)
-        return jsonify({"success": True, "message": "تم تحديث كلمة المرور بنجاح"})
+        # إرسال تنبيهات بريدية
+        subject = "تنبيه أمني: تغيير كلمة المرور في TITAN"
+        msg_body = f"""مرحباً {username}،
+
+تم تغيير كلمة المرور لحسابك في TITAN بنجاح.
+إذا لم تقم بهذا الإجراء بنفسك، يرجى التواصل مع الدعم الفني فوراً لحماية حسابك.
+
+تفاصيل العملية:
+- الوقت: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+- عنوان IP: {request.remote_addr}
+
+— فريق TITAN Security
+"""
+        # إرسال للمستخدم إذا كان لديه بريد مسجل
+        if user_email:
+            _send_email_async(subject, msg_body, to=user_email)
+            
+        # إرسال للأدمن
+        admin_subject = f"تنبيه إدارة: تغيير كلمة مرور - {username}"
+        admin_body = f"""قام المستخدم ({username}) بتغيير كلمة مروره بنجاح.
+
+تفاصيل المستخدم:
+- ID: {session['user_id']}
+- Username: {username}
+- Email: {user_email or 'غير مسجل'}
+- IP: {request.remote_addr}
+- Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+— نظام التنبيهات التلقائي
+"""
+        _send_email_async(admin_subject, admin_body, to=ADMIN_EMAIL)
+
+        add_audit_log("تغيير كلمة السر 🔐", f"قام المستخدم {username} بتغيير كلمة سره (تم إرسال تنبيهات بريدية)", username=username)
+        return jsonify({"success": True, "message": "تم تحديث كلمة المرور بنجاح وإرسال التنبيهات"})
         
     except Exception as e:
         print(f"[TITAN] Change password error: {e}")
