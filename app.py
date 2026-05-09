@@ -1272,9 +1272,9 @@ def _dash_public_ip_cached():
     
     services = [
         'https://api.ipify.org?format=json',
-        'https://ifconfig.me/all.json',
+        'https://api64.ipify.org?format=json',
         'https://ipinfo.io/json',
-        'https://api.my-ip.io/ip.json'
+        'https://ifconfig.me/all.json'
     ]
     
     for svc in services:
@@ -5581,35 +5581,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <!-- === ACCOUNT CHANGE PASSWORD MODAL === -->
-                <div id="change-password-modal" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;">
-                    <div style="position:relative;background:#0a0a1e;border:1px solid rgba(168,85,247,0.4);border-radius:20px;padding:2rem;max-width:420px;width:90%;box-shadow:0 0 60px rgba(168,85,247,0.2);">
-                        <button onclick="closeChangePasswordModal()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);color:#c084fc;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;font-size:1.1rem;line-height:1;font-weight:bold;z-index:10;" onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.transform='scale(1.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.transform='scale(1)'">
-                            &times;
-                        </button>
-                        <div style="text-align:center;margin-bottom:1.5rem;">
-                            <div style="font-size:2.5rem; filter: drop-shadow(0 0 10px #a855f7);">🔐</div>
-                            <h3 style="color:#c084fc;font-weight:700;margin:0.5rem 0; font-size:1.25rem;">تغيير كلمة مرور الحساب</h3>
-                            <p style="color:#6b7280;font-size:0.75rem;">يرجى إدخال كلمة المرور القديمة والجديدة لتحديث بيانات حسابك.</p>
-                        </div>
-                        <div class="space-y-3">
-                            <div style="margin-bottom:1rem;">
-                                <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الحالية</label>
-                                <input id="cp-old-pass" type="password" placeholder="كلمة المرور الحالية..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
-                            </div>
-                            <div style="margin-bottom:1rem;">
-                                <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الجديدة</label>
-                                <input id="cp-new-pass" type="password" placeholder="كلمة المرور الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
-                            </div>
-                            <div style="margin-bottom:1.5rem;">
-                                <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">تأكيد كلمة المرور الجديدة</label>
-                                <input id="cp-new-pass2" type="password" placeholder="تأكيد الكلمة الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
-                            </div>
-                            <button onclick="doChangePassword()" style="width:100%;padding:0.85rem;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;font-size:0.95rem;box-shadow: 0 4px 15px rgba(124,58,237,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">تحديث كلمة المرور ✨</button>
-                        </div>
-                        <div id="cp-error" style="display:none;margin-top:1rem;color:#f87171;font-size:0.75rem;text-align:center;padding:0.6rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px;"></div>
-                    </div>
-                </div>
+
 
 
                 <!-- === VAULT CONTENT (shown after unlock) === -->
@@ -6480,6 +6452,37 @@ HTML_TEMPLATE = """
     </div>
 
     <!-- Panic Button Removed as per User Request -->
+
+    <!-- === ACCOUNT CHANGE PASSWORD MODAL (Moved Globally) === -->
+    <div id="change-password-modal" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;">
+        <div style="position:relative;background:#0a0a1e;border:1px solid rgba(168,85,247,0.4);border-radius:20px;padding:2rem;max-width:420px;width:90%;box-shadow:0 0 60px rgba(168,85,247,0.2);">
+            <button onclick="closeChangePasswordModal()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);color:#c084fc;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;font-size:1.1rem;line-height:1;font-weight:bold;z-index:10;" onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.transform='scale(1.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.transform='scale(1)'">
+                &times;
+            </button>
+            <div style="text-align:center;margin-bottom:1.5rem;">
+                <div style="font-size:2.5rem; filter: drop-shadow(0 0 10px #a855f7);">🔐</div>
+                <h3 style="color:#c084fc;font-weight:700;margin:0.5rem 0; font-size:1.25rem;">تغيير كلمة مرور الحساب</h3>
+                <p style="color:#6b7280;font-size:0.75rem;">يرجى إدخال كلمة المرور القديمة والجديدة لتحديث بيانات حسابك.</p>
+            </div>
+            <div class="space-y-3">
+                <div style="margin-bottom:1rem;">
+                    <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الحالية</label>
+                    <input id="cp-old-pass" type="password" placeholder="كلمة المرور الحالية..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                </div>
+                <div style="margin-bottom:1rem;">
+                    <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الجديدة</label>
+                    <input id="cp-new-pass" type="password" placeholder="كلمة المرور الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                </div>
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">تأكيد كلمة المرور الجديدة</label>
+                    <input id="cp-new-pass2" type="password" placeholder="تأكيد الكلمة الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                </div>
+                <button onclick="doChangePassword()" style="width:100%;padding:0.85rem;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;font-size:0.95rem;box-shadow: 0 4px 15px rgba(124,58,237,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">تحديث كلمة المرور ✨</button>
+            </div>
+            <div id="cp-error" style="display:none;margin-top:1rem;color:#f87171;font-size:0.75rem;text-align:center;padding:0.6rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px;"></div>
+        </div>
+    </div>
+
 
     <script>
         // --- نظام المؤثرات الصوتية (Web Audio API) ---
@@ -15681,7 +15684,16 @@ HTML_TEMPLATE = """
                 updateDashMetricCard('dashDiskCard', 'dashDisk', diskIo, 512, 2048);
                 
                 document.getElementById('dashLocalIp').innerText = d.local_ip || '---';
-                document.getElementById('dashPubIp').innerText  = d.public_ip || '---';
+                
+                // --- Unified IP Sync ---
+                if (!window.__dashUserIp) {
+                    try {
+                        const ipRes = await fetch('https://api.ipify.org?format=json');
+                        const ipData = await ipRes.json();
+                        if(ipData && ipData.ip) window.__dashUserIp = ipData.ip;
+                    } catch(e) {}
+                }
+                document.getElementById('dashPubIp').innerText  = window.__dashUserIp || d.public_ip || '---';
                 document.getElementById('dashSent').innerText   = Number(d.net_up_kbps || 0).toFixed(2);
                 document.getElementById('dashRecv').innerText   = Number(d.net_down_kbps || 0).toFixed(2);
                 const updatedAtEl = document.getElementById('dashUpdatedAt');
@@ -22120,53 +22132,68 @@ def fake_identity_route():
         gender = 'ذكر / Male' if gender_code == 'male' else 'أنثى / Female'
 
         # --- 2. توليد الاسم والبيانات حسب اللغة والجنس ---
-        if lang == 'ar_JO':
-            # رقم وطني أردني: 10 أرقام يبدأ بـ 2
-            national_id = '2' + ''.join([str(random.randint(0,9)) for _ in range(9)])
-            country_code = '+962'
-            city_options = ["عمّان", "الزرقاء", "إربد", "العقبة", "المفرق", "الكرك", "معان", "جرش", "السلط", "مادبا", "عجلون"]
-            address_str = f"{random.choice(city_options)}، الأردن، شارع {fake_en.street_name()}"
-            zip_code = str(random.randint(10000, 99999))
-            
-            # قوائم أسماء أردنية محسنة
-            male_first = ["محمد", "أحمد", "خالد", "عمر", "يوسف", "علي", "حسن", "ماجد", "فيصل", "سامي", "ليث", "زيد", "يزن", "حمزة", "عبد الله"]
-            female_first = ["فاطمة", "مريم", "سارة", "نور", "لينا", "رنا", "دانا", "هند", "أمل", "لمى", "رهف", "تالا", "جنى", "سلمى", "ليان"]
-            last_names = ["العبدلي", "الخطيب", "القضاة", "الزيود", "الشرايري", "الطراونة", "البطاينة", "الحجاوي", "العساف", "المجالي", "العدوان", "الفايز", "الروسان", "الخصاونة", "العبادي"]
-            
+        # قوائم أسماء عربية محسنة وشاملة
+        male_first = ["محمد", "أحمد", "محمود", "يوسف", "علي", "إبراهيم", "زيد", "حمزة", "عمر", "خالد", "حسن", "حسين", "عبد الله", "عبد الرحمن", "ليث", "يزن", "باسل", "سامر", "هاني", "رامي", "منصور", "فيصل", "خليل", "ماجد", "أسامة", "سلطان", "طارق", "فارس", "جمال", "صلاح", "إياد"]
+        female_first = ["فاطمة", "مريم", "زينب", "سارة", "نور", "ليلى", "روان", "دانا", "رهف", "تالا", "سلمى", "حلا", "لانا", "جنى", "غنى", "هند", "أمل", "ريم", "ندى", "فرح", "ميار", "لجين", "ياسمين", "عبير", "إيمان", "ضحى", "خلود", "منار"]
+        
+        if lang.startswith('ar_'):
+            # في الهوية العربية، يطلب المستخدم الاسم الأول واسم الأب فقط
             first_name = random.choice(male_first if gender_code == 'male' else female_first)
-            last_name = random.choice(last_names)
-            full_name = f"{first_name} {last_name}"
+            father_name = random.choice(male_first)
+            full_name = f"{first_name} {father_name}"
             
+            # الأم: اسم أول + اسم أب
             mother_first = random.choice(female_first)
-            mother_name = f"{mother_first} {random.choice(last_names)}"
-            phone = f"+962 7{random.choice(['7','8','9'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+            mother_father = random.choice(male_first)
+            mother_name = f"{mother_first} {mother_father}"
             
-            # --- شركات أردنية واقعية ---
-            _jo_companies = [
-                "مجموعة الحكمة للاستثمار", "شركة المناصير للنقل والتجارة", "الشركة الأردنية لصناعة الأدوية",
-                "دار الدواء للتنمية والاستثمار", "مؤسسة النسر العربي للتأمين", "شركة زين الأردن للاتصالات",
-                "البنك العربي", "شركة أمنية للاتصالات", "مجموعة أبو خضر للأجهزة الكهربائية",
-                "شركة المتحدة للصناعات الغذائية", "المؤسسة الأردنية لتطوير المشاريع", "شركة نقليات الحسين",
-                "مجموعة طلال أبو غزالة", "الشركة العربية لصناعة الإسمنت", "شركة كهرباء إربد",
-                "البنك الأهلي الأردني", "شركة أورنج الأردن", "الشركة الأردنية للطيران",
-                "مجموعة الخطوط الملكية الأردنية", "شركة مياه اليرموك", "مجموعة الفوسفات الأردنية",
-                "شركة البوتاس العربية", "مصفاة البترول الأردنية", "شركة المدن الصناعية الأردنية",
-                "بنك الإسكان للتجارة والتمويل", "مجموعة سمارت للتقنية", "الشركة الأولى لتأجير السيارات",
-                "شركة الأسواق الحرة الأردنية", "مستشفى الأردن", "شركة مناجم الفوسفات الأردنية",
-                "مجموعة القلعة للاستشارات", "شركة نور كابيتال للاستثمار", "الشركة المتقدمة للتكنولوجيا",
-            ]
-            _jo_jobs = [
-                "مهندس برمجيات", "طبيب عام", "محاسب قانوني", "مدير تسويق", "معلم",
-                "صيدلاني", "مهندس مدني", "محامي", "مدير موارد بشرية", "ممرض/ة",
-                "مصمم جرافيك", "مهندس كهرباء", "أخصائي أمن معلومات", "مدير مشاريع", "طبيب أسنان",
-                "مراقب مالي", "مهندس شبكات", "أخصائي تغذية", "مدير عمليات", "مترجم",
-                "صحفي", "مدير مبيعات", "مهندس معماري", "محلل بيانات", "مطوّر تطبيقات",
-                "مدير مالي", "أخصائي علاج طبيعي", "مهندس ميكانيكي", "مسؤول علاقات عامة", "خبير تأمين",
-            ]
-            company = random.choice(_jo_companies)
-            job = random.choice(_jo_jobs)
+            # بيانات جغرافية وشركات حسب الدولة
+            if lang == 'ar_JO':
+                national_id = '2' + ''.join([str(random.randint(0,9)) for _ in range(9)])
+                country_code = '+962'
+                city_options = ["عمّان", "الزرقاء", "إربد", "العقبة", "المفرق", "الكرك", "معان", "جرش", "السلط", "مادبا", "عجلون"]
+                address_str = f"{random.choice(city_options)}، الأردن، شارع {fake_en.street_name()}"
+                zip_code = str(random.randint(10000, 99999))
+                phone = f"+962 7{random.choice(['7','8','9'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["مجموعة المناصير", "شركة زين الأردن", "البنك العربي", "شركة أورانج الأردن", "شركة مصفاة البترول الأردنية", "شركة دار الدواء", "البنك الإسلامي الأردني", "شركة الفوسفات الأردنية", "شركة البوتاس العربية", "شركة الملكية الأردنية", "مؤسسة الضمان الاجتماعي", "شركة مياهنا", "مجموعة الحكمة للأدوية", "شركة تطوير العقبة", "بنك الإسكان"]
+            elif lang == 'ar_SA':
+                national_id = '1' + ''.join([str(random.randint(0,9)) for _ in range(9)])
+                country_code = '+966'
+                city_options = ["الرياض", "جدة", "مكة المكرمة", "المدينة المنورة", "الدمام", "الخبر", "تبوك", "أبها"]
+                address_str = f"{random.choice(city_options)}، السعودية، حي {fake_en.street_name()}"
+                zip_code = str(random.randint(10000, 99999))
+                phone = f"+966 5{random.choice(['0','5','6','4'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["شركة أرامكو السعودية", "مجموعة سابك", "شركة STC", "البنك الأهلي السعودي", "مصرف الراجحي", "شركة المراعي", "شركة جرير للتسويق", "السعودية للكهرباء", "شركة معادن", "مجموعة صافولا"]
+            elif lang == 'ar_AE':
+                national_id = '784-' + ''.join([str(random.randint(0,9)) for _ in range(4)]) + '-' + ''.join([str(random.randint(0,9)) for _ in range(7)]) + '-' + str(random.randint(0,9))
+                country_code = '+971'
+                city_options = ["دبي", "أبوظبي", "الشارقة", "عجمان", "رأس الخيمة", "الفجيرة"]
+                address_str = f"{random.choice(city_options)}، الإمارات، منطقة {fake_en.street_name()}"
+                zip_code = str(random.randint(10000, 99999))
+                phone = f"+971 5{random.choice(['0','2','5','6'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["مجموعة إعمار", "شركة اتصالات", "بنك أبوظبي الأول", "شركة أدنوك", "طيران الإمارات", "موانئ دبي العالمية", "دبي القابضة", "شركة نخيل"]
+            elif lang == 'ar_EG':
+                national_id = str(random.randint(2,3)) + ''.join([str(random.randint(0,9)) for _ in range(13)])
+                country_code = '+20'
+                city_options = ["القاهرة", "الإسكندرية", "الجيزة", "المنصورة", "طنطا", "أسوان", "الأقصر"]
+                address_str = f"{random.choice(city_options)}، مصر، شارع {fake_en.street_name()}"
+                zip_code = str(random.randint(10000, 99999))
+                phone = f"+20 1{random.choice(['0','1','2','5'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["أوراسكوم للإنشاءات", "فودافون مصر", "البنك التجاري الدولي CIB", "مجموعة طلعت مصطفى", "شركة أورانج مصر", "البنك الأهلي المصري", "السويدي إليكتريك", "المصرية للاتصالات"]
+            else:
+                national_id = ''.join([str(random.randint(0,9)) for _ in range(12)])
+                country_code = '+99'
+                address_str = f"منطقة رقم {random.randint(1,100)}، شارع {fake_en.street_name()}"
+                zip_code = "00000"
+                phone = f"+99 {random.randint(100,999)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["الشركة الدولية للتجارة", "مجموعة المستقبل", "شركة الأمل للصناعة", "المؤسسة العربية للتقنية"]
+            
+            _jobs = ["مهندس برمجيات", "محاسب قانوني", "مدير تسويق", "محامي", "أخصائي أمن معلومات", "مدير مشاريع", "محلل بيانات", "مطوّر تطبيقات", "مدير مبيعات", "أخصائي موارد بشرية", "محلل نظم", "مصمم جرافيك"]
+            company = random.choice(_companies)
+            job = random.choice(_jobs)
             
         else:
+            # اللغات غير العربية (International)
             national_id = ''.join([str(random.randint(0,9)) for _ in range(10)])
             try: country_code = fake.country_calling_code()
             except Exception: country_code = fake_en.country_calling_code()
@@ -22175,69 +22202,23 @@ def fake_identity_route():
             try: zip_code = fake.postcode()
             except Exception: zip_code = fake_en.postcode()
             
-            # توليد الاسم بناءً على الجنس المحدد لكل اللغات
+            if gender_code == 'male':
+                full_name = f"{fake.first_name_male()} {fake.first_name_male()}" # First + Father/Middle
+            else:
+                full_name = f"{fake.first_name_female()} {fake.first_name_male()}"
+            
             try:
-                if gender_code == 'male':
-                    full_name = fake.name_male()
-                else:
-                    full_name = fake.name_female()
+                mother_name = fake.first_name_female() + ' ' + fake.first_name_male()
             except Exception:
-                # Fallback to English but keep gender
-                if gender_code == 'male':
-                    full_name = fake_en.name_male()
-                else:
-                    full_name = fake_en.name_female()
-
-            try:
-                mother_name = fake.first_name_female() + ' ' + fake.last_name()
-            except Exception:
-                mother_name = fake_en.first_name_female() + ' ' + fake_en.last_name()
+                mother_name = fake_en.first_name_female() + ' ' + fake_en.first_name_male()
                 
             try: phone = fake.phone_number()
             except Exception: phone = fake_en.phone_number()
-
-            # --- شركات ووظائف واقعية للغات العربية الأخرى ---
-            if lang in ('ar_SA', 'ar_AE', 'ar_EG', 'ar_AA'):
-                _ar_companies_map = {
-                    'ar_SA': [
-                        "شركة أرامكو السعودية", "مجموعة سابك", "شركة الاتصالات السعودية STC", "بنك الراجحي",
-                        "شركة المراعي", "البنك الأهلي السعودي", "مجموعة بن لادن", "شركة جرير للتسويق",
-                        "مجموعة صافولا", "الشركة السعودية للكهرباء", "شركة معادن", "مجموعة الطيار للسفر",
-                        "شركة مقام للتطوير العقاري", "البنك السعودي الفرنسي", "شركة زين السعودية",
-                        "مجموعة الفيصلية", "شركة نسما القابضة", "الشركة السعودية للصناعات الأساسية",
-                        "شركة التصنيع الوطنية", "مجموعة العليان", "شركة دله للخدمات الصحية",
-                    ],
-                    'ar_AE': [
-                        "مجموعة إعمار العقارية", "شركة اتصالات الإمارات", "بنك أبوظبي الأول",
-                        "شركة أدنوك", "مجموعة الفطيم", "مجموعة ماجد الفطيم", "شركة دبي القابضة",
-                        "طيران الإمارات", "شركة دو للاتصالات", "مجموعة الحبتور", "بنك دبي الإسلامي",
-                        "شركة داماك العقارية", "مجموعة الغرير", "شركة موانئ دبي العالمية",
-                        "مجموعة المنصوري", "الشركة الوطنية لتوزيع الكهرباء", "شركة نخيل العقارية",
-                    ],
-                    'ar_EG': [
-                        "شركة أوراسكوم للإنشاءات", "المجموعة المالية هيرميس", "شركة فودافون مصر",
-                        "البنك التجاري الدولي CIB", "شركة طلعت مصطفى القابضة", "مجموعة منصور",
-                        "شركة أورنج مصر", "البنك الأهلي المصري", "شركة السويدي إليكتريك",
-                        "مجموعة العربي", "شركة جهينة للصناعات الغذائية", "المصرية للاتصالات",
-                        "شركة حديد عز", "مجموعة كليوباترا", "شركة إيديتا للصناعات الغذائية",
-                    ],
-                }
-                _ar_jobs = [
-                    "مهندس برمجيات", "طبيب عام", "محاسب قانوني", "مدير تسويق", "معلم",
-                    "صيدلاني", "مهندس مدني", "محامي", "مدير موارد بشرية", "ممرض/ة",
-                    "مصمم جرافيك", "مهندس كهرباء", "أخصائي أمن معلومات", "مدير مشاريع", "طبيب أسنان",
-                    "مراقب مالي", "مهندس شبكات", "أخصائي تغذية", "مدير عمليات", "مترجم",
-                    "صحفي", "مدير مبيعات", "مهندس معماري", "محلل بيانات", "مطوّر تطبيقات",
-                    "مدير مالي", "أخصائي علاج طبيعي", "مهندس ميكانيكي", "مسؤول علاقات عامة", "خبير تأمين",
-                ]
-                _co_list = _ar_companies_map.get(lang, _ar_companies_map.get('ar_SA', []))
-                company = random.choice(_co_list) if _co_list else fake_en.company()
-                job = random.choice(_ar_jobs)
-            else:
-                try: company = fake.company()
-                except Exception: company = fake_en.company()
-                try: job = fake.job()
-                except Exception: job = fake_en.job()
+            
+            try: company = fake.company()
+            except Exception: company = fake_en.company()
+            try: job = fake.job()
+            except Exception: job = fake_en.job()
 
         # color_name قد يفشل مع بعض اللغات
         try:
