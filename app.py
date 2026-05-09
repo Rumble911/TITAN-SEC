@@ -5750,6 +5750,44 @@ HTML_TEMPLATE = """
                     <span>🔥</span> قنوات الدردشة والرسائل الأمنة
                 </h2>
 
+                <!-- 1. Secure Message One-Time (Burn Note) -->
+                <div id="burn-note-container" class="bg-slate-900/40 p-5 rounded-2xl border border-pink-500/10 mb-6 backdrop-blur-md">
+                    <h2 class="text-xl font-bold text-pink-400 mb-4 flex items-center gap-2">
+                        <span>🛡️</span> توليد رسالة مؤمنة (Burn Note)
+                    </h2>
+                    <p class="text-[11px] text-gray-400 mb-4 text-right">رسالة مشفرة برابط فريد يتم تدميره فور فتحه. يمكنك إرسال نصوص أو صور بحماية مطلقة.</p>
+                    
+                    <div class="space-y-4">
+                        <textarea id="burnNoteText" placeholder="اكتب رسالتك السرية هنا... (سيتم حذفها تلقائياً بعد القراءة)" class="w-full h-24 p-3 rounded-xl bg-black border border-slate-700 focus:ring-2 focus:ring-pink-500 outline-none text-right" dir="rtl"></textarea>
+                        
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <button onclick="triggerBurnNoteImagePicker()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-gray-300 text-xs font-bold rounded-lg border border-slate-700 transition-all flex items-center gap-2">
+                                    <span>🖼️</span> إرفاق صورة
+                                </button>
+                                <button onclick="clearBurnNoteSelectedMedia()" class="p-2 bg-slate-800/50 hover:bg-rose-900/30 text-rose-400 rounded-lg border border-slate-700 transition-all" title="مسح المرفق">
+                                    <span class="text-sm">✖</span>
+                                </button>
+                                <input type="file" id="burnNoteMedia" class="hidden" accept="image/*">
+                            </div>
+                            <div id="burnNoteMediaState" class="text-[10px] text-gray-500 italic">لم يتم اختيار صورة بعد.</div>
+                        </div>
+
+                        <button onclick="createBurnNote()" class="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 py-3 rounded-xl font-black text-white shadow-lg shadow-pink-900/20 transition-all border border-pink-400/20">
+                            توليد الرابط المؤمن 🔒
+                        </button>
+                    </div>
+
+                    <div id="burnNoteResult" class="hidden mt-6 p-4 bg-black rounded-xl border border-pink-500/30 animate-pulse-subtle">
+                        <label class="block text-[10px] font-bold text-pink-300 mb-2 uppercase tracking-widest text-center">الرابط جاهز للإرسال (تدمير ذاتي)</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="burnNoteLink" readonly class="flex-1 p-2 bg-slate-900 border border-slate-800 rounded text-pink-400 font-mono text-xs text-center outline-none">
+                            <button onclick="copyBurnNoteLink()" class="px-4 bg-pink-600 hover:bg-pink-500 text-white rounded font-bold text-xs">نسخ</button>
+                        </div>
+                        <p class="text-[10px] text-rose-400 mt-3 text-center font-bold italic">⚠️ تحذير: سيختفي المحتوى تماماً بعد فتحه لمرة واحدة فقط.</p>
+                    </div>
+                </div>
+
                 <div id="burn-chat-container">
                     <h2 class="text-xl font-bold text-pink-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
                         <span>🔥</span> غرفة الـ Burn Chat (P2P مشفر)
