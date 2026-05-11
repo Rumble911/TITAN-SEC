@@ -1272,9 +1272,9 @@ def _dash_public_ip_cached():
     
     services = [
         'https://api.ipify.org?format=json',
-        'https://ifconfig.me/all.json',
+        'https://api64.ipify.org?format=json',
         'https://ipinfo.io/json',
-        'https://api.my-ip.io/ip.json'
+        'https://ifconfig.me/all.json'
     ]
     
     for svc in services:
@@ -2474,6 +2474,18 @@ def verify_password(password: str, stored_hash: str) -> bool:
     except Exception:
         return False
 
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    if len(password) < 8:
+        return False, "كلمة السر يجب أن تكون 8 أحرف على الأقل"
+    if not re.search(r"[A-Z]", password):
+        return False, "يجب أن تحتوي كلمة السر على حرف كبير واحد على الأقل (A-Z)"
+    if not re.search(r"[a-z]", password):
+        return False, "يجب أن تحتوي كلمة السر على حرف صغير واحد على الأقل (a-z)"
+    if not re.search(r"\d", password):
+        return False, "يجب أن تحتوي كلمة السر على رقم واحد على الأقل (0-9)"
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False, "يجب أن تحتوي كلمة السر على رمز خاص واحد على الأقل (مثل !@#$%^&*)"
+    return True, ""
 
 
 # --- نظام سجل النشاط الأمني (Audit Log) ---
@@ -3602,144 +3614,33 @@ def wave_lsb_decode(wav_bytes: bytes, filename: str = "") -> str:
 
 
 # --- إخفاء البيانات في الفيديو (Video Steganography) ---
-def _save_temp_bytes(data: bytes, suffix: str) -> str:
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    try:
-        tmp.write(data)
-        return tmp.name
-    finally:
-        tmp.close()
-
-
 def video_lsb_encode(video_bytes: bytes, secret_data: str) -> bytes:
-    """إخفاء نص داخل فيديو عبر تعديل أقل بت مؤثر في قناة اللون الأزرق."""
+    """إخفاء نص داخل فيديو عبر طريقة EOF (نهاية الملف) لضمان العمل مع كافة التنسيقات والمشغلات."""
     try:
-        import cv2  # type: ignore
-        import numpy as np  # type: ignore
-    except Exception:
-        raise ValueError("مكتبات الفيديو غير متاحة في الخادم")
-
-    in_path = _save_temp_bytes(video_bytes, '.mp4')
-    out_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4').name
-    marker = b'##TITAN_VIDEO_END##'
-    payload_bits = ''.join(format(b, '08b') for b in (secret_data.encode('utf-8') + marker))
-
-    cap = cv2.VideoCapture(in_path)
-    if not cap.isOpened():
-        cap.release()
-        os.remove(in_path)
-        raise ValueError("تعذر قراءة ملف الفيديو")
-
-    fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-
-    if width <= 0 or height <= 0 or frame_count <= 0:
-        cap.release()
-        os.remove(in_path)
-        raise ValueError("تعذر تحليل خصائص الفيديو")
-
-    capacity_bits = frame_count * width * height
-    if len(payload_bits) > capacity_bits:
-        cap.release()
-        os.remove(in_path)
-        raise ValueError("النص كبير جداً بالنسبة لسعة الفيديو")
-
-    # Access through getattr to avoid stub mismatch warnings in some cv2 typings.
-    fourcc_fn = getattr(cv2, 'VideoWriter_fourcc', None)
-    fourcc_raw = fourcc_fn(*'mp4v') if callable(fourcc_fn) else 0
-    if isinstance(fourcc_raw, (int, np.integer)):
-        fourcc = int(fourcc_raw)
-    else:
-        fourcc = 0
-    writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
-
-    bit_index = 0
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
-
-        if bit_index < len(payload_bits):
-            blue_flat = frame[:, :, 0].reshape(-1).astype(np.uint8, copy=False)
-            remaining = len(payload_bits) - bit_index
-            n = min(remaining, blue_flat.size)
-            bit_chunk = payload_bits[bit_index:bit_index + n]
-            bits_np = np.fromiter((1 if c == '1' else 0 for c in bit_chunk), dtype=np.uint8, count=n)
-            blue_flat[:n] = (blue_flat[:n] & 0xFE) | bits_np
-            bit_index += n
-
-        writer.write(frame)
-
-    cap.release()
-    writer.release()
-    os.remove(in_path)
-
-    if bit_index < len(payload_bits):
-        if os.path.exists(out_path):
-            os.remove(out_path)
-        raise ValueError("تعذر إكمال عملية الإخفاء داخل الفيديو")
-
-    try:
-        with open(out_path, 'rb') as f:
-            return f.read()
-    finally:
-        if os.path.exists(out_path):
-            os.remove(out_path)
+        marker = b'##TITAN_VIDEO_END##'
+        # نحتفظ بالاسم للتوافق مع المسارات، لكننا نستخدم طريقة الحاق البيانات في نهاية الملف لضمان الجودة
+        return video_bytes + marker + secret_data.encode('utf-8')
+    except Exception as e:
+        raise ValueError(f"فشل إخفاء النص في الفيديو: {str(e)}")
 
 
 def video_lsb_decode(video_bytes: bytes) -> str:
-    """استخراج النص المخفي من الفيديو."""
+    """استخراج النص المخفي من الفيديو عبر البحث عن علامة النهاية."""
     try:
-        import cv2  # type: ignore
-    except Exception:
-        return "مكتبات الفيديو غير متاحة في الخادم"
+        marker = b'##TITAN_VIDEO_END##'
+        if marker in video_bytes:
+            parts = video_bytes.split(marker)
+            if len(parts) >= 2:
+                payload = parts[-1]
+                try:
+                    return payload.decode('utf-8')
+                except UnicodeDecodeError:
+                    return payload.decode('latin-1', errors='ignore')
+        
+        return "لم يتم العثور على بيانات مخفية داخل الفيديو"
+    except Exception as e:
+        return f"خطأ أثناء استخراج البيانات: {str(e)}"
 
-    in_path = _save_temp_bytes(video_bytes, '.mp4')
-    marker = b'##TITAN_VIDEO_END##'
-
-    cap = cv2.VideoCapture(in_path)
-    if not cap.isOpened():
-        cap.release()
-        os.remove(in_path)
-        return "تعذر قراءة ملف الفيديو"
-
-    decoded = bytearray()
-    current_byte = 0
-    bit_count = 0
-    max_bytes = 1024 * 1024
-
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        blue_flat = frame[:, :, 0].reshape(-1)
-        for val in blue_flat:
-            current_byte = (current_byte << 1) | (int(val) & 1)
-            bit_count += 1
-            if bit_count == 8:
-                decoded.append(current_byte)
-                if len(decoded) >= len(marker) and decoded[-len(marker):] == marker:
-                    cap.release()
-                    os.remove(in_path)
-                    payload = bytes(decoded[:-len(marker)])
-                    try:
-                        return payload.decode('utf-8')
-                    except UnicodeDecodeError:
-                        return payload.decode('latin-1', errors='ignore')
-
-                if len(decoded) > max_bytes:
-                    cap.release()
-                    os.remove(in_path)
-                    return "لم يتم العثور على بيانات مخفية داخل الفيديو"
-
-                bit_count = 0
-                current_byte = 0
-
-    cap.release()
-    os.remove(in_path)
-    return "لم يتم العثور على بيانات مخفية داخل الفيديو"
 
 
 # --- تنظيف ملفات PDF من الميتابيانات ---
@@ -4449,8 +4350,9 @@ HTML_TEMPLATE = """
                         <input id="auth-reg-email" type="email" placeholder="بريدك الإلكتروني (لتفعيل الحساب)..." autocomplete="email" style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;transition:border-color 0.2s;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(139,92,246,0.3)'">
                     </div>
                     <div style="margin-bottom:1rem;">
-                        <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;letter-spacing:0.05em;">كلمة السر (6 أحرف على الأقل)</label>
+                        <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;letter-spacing:0.05em;">كلمة السر (يجب أن تكون قوية)</label>
                         <input id="auth-reg-pass" type="password" placeholder="اختر كلمة سر قوية..." autocomplete="new-password" style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;transition:border-color 0.2s;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(139,92,246,0.3)'">
+                        <div style="font-size:0.7rem;color:rgba(255,255,255,0.45);margin-top:0.4rem;line-height:1.3;">يجب أن تكون 8 أحرف، حرف كبير، حرف صغير، رقم، ورمز خاص.</div>
                     </div>
                     <div style="margin-bottom:1.5rem;">
                         <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;letter-spacing:0.05em;">تأكيد كلمة السر</label>
@@ -4554,8 +4456,9 @@ HTML_TEMPLATE = """
                             <h3 style="color:#a855f7;font-weight:700;">تعيين كلمة سر جديدة</h3>
                         </div>
                         <div style="margin-bottom:1rem;">
-                            <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;">كلمة السر الجديدة</label>
+                            <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;">كلمة السر الجديدة (قوية)</label>
                             <input id="forgot-newpass" type="password" placeholder="كلمة السر الجديدة..." style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(139,92,246,0.3)'">
+                            <div style="font-size:0.7rem;color:rgba(255,255,255,0.45);margin-top:0.4rem;line-height:1.3;">يجب أن تكون 8 أحرف، حرف كبير، حرف صغير، رقم، ورمز خاص.</div>
                         </div>
                         <div style="margin-bottom:1.5rem;">
                             <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;">تأكيد كلمة السر</label>
@@ -5065,12 +4968,13 @@ HTML_TEMPLATE = """
                 <div class="tab-group">
                     <div class="tab-group-title px-1"><span>🧪</span> مختبر التشفير</div>
                     <div class="tab-grid">
-                    <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير</button>
-                    <button onclick="showTab('filelab')" id="btn-filelab" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span class="inline-block animate-pulse">📝</span> إخفاء نص TXT</button>
-                    <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> تشفير الصور</button>
-                    <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء صوتي</button>
-                    <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> اخفاء نص داخل فيديو</button>
-                    <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> QR آمن</button>
+                    <button onclick="showTab('crypt')" id="btn-crypt" class="px-3 py-1.5 rounded-lg hover:bg-blue-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-blue-500/30"><span>🔐</span> التشفير النصي</button>
+                    <button onclick="showTab('filelab')" id="btn-filelab" class="px-3 py-1.5 rounded-lg hover:bg-emerald-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-emerald-500/30"><span>📝</span> إخفاء في النصوص</button>
+                    <button onclick="showTab('suite')" id="btn-suite" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🖼️</span> إخفاء في الصور</button>
+                    <button onclick="showTab('audio')" id="btn-audio" class="px-3 py-1.5 rounded-lg hover:bg-orange-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-orange-500/30"><span>🎵</span> إخفاء في الصوت</button>
+                    <button onclick="showTab('video')" id="btn-video" class="px-3 py-1.5 rounded-lg hover:bg-rose-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-rose-500/30"><span>🎬</span> إخفاء في الفيديو</button>
+                    <button onclick="showTab('qr')" id="btn-qr" class="px-3 py-1.5 rounded-lg hover:bg-green-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-green-500/30"><span>🔳</span> رموز QR</button>
+
                     <button onclick="openAiSection()" id="btn-ai" class="hidden px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🤖</span> الذكاء الاصطناعي</button>
                     <button onclick="showAdminTab()" id="btn-admin" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all items-center gap-1.5 border border-red-600/40 hover:bg-red-600/20 bg-red-600/10"><span>👑</span> لوحة الإدارة</button>
                 </div>
@@ -5308,23 +5212,56 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <div id="suite-section" class="hidden space-y-8">
-                <!-- Features Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="md:col-span-2 bg-slate-900/50 p-5 rounded-xl border border-slate-700 hover:border-purple-500/50 transition-all group text-right">
-                        <div class="flex items-center justify-end gap-3 mb-4">
-                            <h4 class="font-bold">Stegano-Vault (تشفير الصور)</h4>
-                            <div class="w-10 h-10 rounded-lg bg-purple-900/30 flex items-center justify-center text-purple-400">🕵️</div>
+                <!-- ===== IMAGE STEGANOGRAPHY SECTION (PREMIUM) ===== -->
+                <div id="suite-section" class="hidden space-y-6">
+                    <div class="rounded-2xl border border-purple-900/40 bg-gradient-to-r from-purple-950/25 via-slate-900/80 to-slate-950/20 p-4">
+                        <h2 class="text-xl font-black text-purple-400 flex items-center gap-2">🖼️ إخفاء البيانات في الصور</h2>
+                        <p class="text-xs text-gray-400 mt-1">إخفاء رسائل نصية مشفرة داخل بكسلات الصور (LSB) بشكل غير مرئي تماماً.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Encode -->
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-purple-500/20 shadow-xl">
+                             <h3 class="text-sm font-bold text-purple-300 mb-4 flex items-center gap-2">🛠️ إخفاء نص جديد:</h3>
+                             <div class="space-y-4">
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">1. اختيار الصورة المصدر</label>
+                                     <input type="file" id="imageFileEncrypt" accept="image/*" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-600/10 file:text-purple-400 hover:file:bg-purple-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">2. الرسالة المراد إخفاؤها</label>
+                                     <textarea id="imageSecretText" rows="3" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-purple-500 outline-none transition-all" placeholder="اكتب رسالتك هنا..."></textarea>
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">3. كلمة سر التشفير (اختياري)</label>
+                                     <input type="password" id="imageSecretPass" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-purple-500 outline-none" placeholder="لحماية الرسالة داخل الصورة...">
+                                 </div>
+                                 <button onclick="processImage('encode')" class="w-full titan-gradient py-3 rounded-xl font-black shadow-lg shadow-purple-900/20 transition-transform active:scale-95">إخفاء البيانات 🔒</button>
+                             </div>
                         </div>
-                        <p class="text-[11px] text-gray-500 mb-4 h-8">إخفاء رسائل نصية مشفرة داخل بكسلات الصور بشكل غير مرئي تماماً.</p>
-                        <div class="flex gap-2">
-                             <button onclick="showStego('encode')" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm transition-all border border-slate-700">إخفاء نص 🔒</button>
-                             <button onclick="showStego('decode')" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm transition-all border border-slate-700">استخراج 🔓</button>
+
+                        <!-- Decode -->
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-amber-500/20 shadow-xl">
+                             <h3 class="text-sm font-bold text-amber-300 mb-4 flex items-center gap-2">🔓 استخراج من صورة:</h3>
+                             <div class="space-y-4">
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">اختيار الصورة المشفرة</label>
+                                     <input type="file" id="imageFileDecrypt" accept="image/*" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-600/10 file:text-amber-400 hover:file:bg-amber-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">كلمة السر (إن وجدت)</label>
+                                     <input type="password" id="imageDecodePass" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-amber-500 outline-none" placeholder="فك تشفير الرسالة المستخرجة...">
+                                 </div>
+                                 <button onclick="processImage('decode')" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg shadow-amber-900/20 transition-transform active:scale-95">استخراج البيانات 🔓</button>
+                                 <div class="mt-4 p-4 rounded-xl bg-slate-950/80 border border-slate-800 min-h-[100px]">
+                                     <span class="block text-[10px] text-gray-500 mb-2 uppercase">النتيجة:</span>
+                                     <p id="imageDecodedResult" class="text-sm text-amber-200/80 break-words font-mono">بانتظار تحليل الملف...</p>
+                                 </div>
+                             </div>
                         </div>
                     </div>
                 </div>
 
-            </div>
 
                 </div>
 
@@ -5395,34 +5332,48 @@ HTML_TEMPLATE = """
                 </div>
 
                 <!-- ===== TXT HIDDEN TEXT LAB ===== -->
+                <!-- ===== TXT STEGANOGRAPHY SECTION (PREMIUM) ===== -->
                 <div id="filelab-section" class="hidden space-y-6">
-                    <div class="bg-slate-900/60 p-5 rounded-2xl border border-emerald-900/40">
-                        <h2 class="text-xl font-bold text-emerald-400 border-b border-slate-700 pb-2 flex items-center gap-2">
-                            <span class="inline-block animate-bounce">📝</span>
-                            إخفاء نص داخل ملفات TXT فقط
-                        </h2>
-                        <p class="text-xs text-gray-400 mt-3 mb-4">
-                            هذا التبويب مخصص فقط لملفات النص `.txt`.
-                            يمكنك إدخال نص سري وإخفاؤه داخل الملف النصي، ثم استخراج النص لاحقاً من نفس الملف.
-                        </p>
+                    <div class="rounded-2xl border border-emerald-900/40 bg-gradient-to-r from-emerald-950/25 via-slate-900/80 to-slate-950/20 p-4">
+                        <h2 class="text-xl font-black text-emerald-400 flex items-center gap-2">📝 إخفاء البيانات في النصوص</h2>
+                        <p class="text-xs text-gray-400 mt-1">استخدام تقنيات التلاعب بالمسافات والرموز غير المرئية لإخفاء نص داخل ملف نصي آخر.</p>
+                    </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            <div class="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/50 p-2">
-                                <input type="file" id="fileLabInput" accept=".txt,text/plain" class="hidden" onchange="updateFileLabName(this)">
-                                <label for="fileLabInput" class="px-4 py-2 rounded-lg bg-emerald-900/40 hover:bg-emerald-800 text-emerald-300 border border-emerald-800/40 text-sm font-bold cursor-pointer transition-all">اختيار ملف TXT</label>
-                                <span id="fileLabName" class="text-xs text-gray-400 truncate">لم يتم اختيار ملف</span>
-                            </div>
-                            <textarea id="fileLabSecret" rows="3" placeholder="اكتب النص السري الذي تريد إخفاءه داخل ملف TXT..." class="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"></textarea>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Encode -->
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-emerald-500/20 shadow-xl">
+                             <h3 class="text-sm font-bold text-emerald-300 mb-4 flex items-center gap-2">🛠️ إخفاء في ملف نصي:</h3>
+                             <div class="space-y-4">
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">1. الملف النصي (الغطاء)</label>
+                                     <input type="file" id="txtFileEncrypt" accept=".txt" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-600/10 file:text-emerald-400 hover:file:bg-emerald-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">2. الرسالة المراد إخفاؤها</label>
+                                     <textarea id="txtSecretText" rows="3" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-emerald-500 outline-none transition-all" placeholder="اكتب رسالتك السرية هنا..."></textarea>
+                                 </div>
+                                 <button onclick="processFileLab('encode')" class="w-full titan-gradient py-3 rounded-xl font-black shadow-lg shadow-emerald-900/20 transition-transform active:scale-95">إخفاء البيانات 🔒</button>
+                             </div>
                         </div>
 
-                        <div class="flex flex-col md:flex-row gap-2">
-                            <button onclick="processFileLab('encode')" class="flex-1 bg-emerald-700/60 hover:bg-emerald-600 rounded-xl font-bold p-3 border border-emerald-700/40">إخفاء النص داخل الملف 🔒</button>
-                            <button onclick="processFileLab('decode')" class="flex-1 bg-emerald-900/40 hover:bg-emerald-800 rounded-xl font-bold p-3 border border-emerald-800/40 text-emerald-300">استخراج النص من الملف 🔍</button>
+                        <!-- Decode -->
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-amber-500/20 shadow-xl">
+                             <h3 class="text-sm font-bold text-amber-300 mb-4 flex items-center gap-2">🔓 استخراج من نص:</h3>
+                             <div class="space-y-4">
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">ملف TXT المشفر</label>
+                                     <input type="file" id="txtFileDecrypt" accept=".txt" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-600/10 file:text-amber-400 hover:file:bg-amber-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                                 </div>
+                                 <button onclick="processFileLab('decode')" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg shadow-amber-900/20 transition-transform active:scale-95">استخراج البيانات 🔓</button>
+                                 <div class="mt-4 p-4 rounded-xl bg-slate-950/80 border border-slate-800 min-h-[100px]">
+                                     <span class="block text-[10px] text-gray-500 mb-2 uppercase">الرسالة المستخرجة:</span>
+                                     <p id="txtDecodedResult" class="text-sm text-emerald-200/80 break-words font-mono">بانتظار تحليل الملف...</p>
+                                 </div>
+                             </div>
                         </div>
-
-                        <div id="fileLabDecoded" class="hidden mt-4 p-3 rounded-xl border border-slate-700 bg-black/40 text-xs font-mono whitespace-pre-wrap" dir="ltr"></div>
                     </div>
                 </div>
+
 
                 <!-- ===== FILE PROTECTION SECTION ===== -->
                 <div id="fileprotect-section" class="hidden space-y-6">
@@ -5445,64 +5396,120 @@ HTML_TEMPLATE = """
                 </div>
 
                 <!-- ===== AUDIO STEGANOGRAPHY SECTION ===== -->
+                <!-- ===== AUDIO STEGANOGRAPHY SECTION (PREMIUM) ===== -->
                 <div id="audio-section" class="hidden space-y-6">
-                    <h2 class="text-xl font-bold text-blue-400 border-b border-slate-700 pb-2">🎵 إخفاء البيانات في الصوت (Audio Stegano)</h2>
-                    <div class="bg-slate-900/50 p-4 rounded-2xl border border-cyan-500/20 space-y-3">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <button onclick="startAudioRecording()" id="audioRecStartBtn" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-xs font-bold">🎙️ بدء التسجيل</button>
-                            <button onclick="stopAudioRecording()" id="audioRecStopBtn" class="px-4 py-2 bg-red-700 hover:bg-red-600 rounded-lg text-xs font-bold" disabled>⏹️ إيقاف التسجيل</button>
-                            <span id="audioRecStatus" class="text-xs text-cyan-300">جاهز للتسجيل من الميكروفون</span>
-                        </div>
-                        <audio id="audioRecordedPreview" controls class="w-full hidden"></audio>
-                        <div class="text-[11px] text-gray-500">يمكنك التسجيل مباشرة ثم إخفاء النص المشفر داخل التسجيل بدون رفع ملف يدوي.</div>
+                    <div class="rounded-2xl border border-orange-900/40 bg-gradient-to-r from-orange-950/25 via-slate-900/80 to-slate-950/20 p-4">
+                        <h2 class="text-xl font-black text-orange-400 flex items-center gap-2">🎵 إخفاء البيانات في الصوت</h2>
+                        <p class="text-xs text-gray-400 mt-1">تشفير وإخفاء النصوص داخل ملفات الصوت (WAV/MP3) دون تغيير ملحوظ في جودة الصوت.</p>
                     </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-slate-900/50 p-6 rounded-2xl border border-blue-500/20">
-                            <label class="block text-sm text-blue-400 mb-3 font-bold">🛠️ تشفير (إخفاء):</label>
-                            <input type="file" id="audioFileEncrypt" accept=".wav, .mp3, .ogg, .webm, .m4a, .aac" class="hidden" onchange="document.getElementById('audioEncryptName').innerText = this.files[0].name">
-                            <label for="audioFileEncrypt" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-600/10 file:text-blue-400 hover:file:bg-blue-600/20 mb-4 cursor-pointer flex items-center justify-center p-2 rounded-xl border border-blue-600/30">
-                                <span id="audioEncryptName" class="truncate">اختر ملف صوتي أو استخدم التسجيل المباشر</span>
-                            </label>
-                            <textarea id="audioSecretText" placeholder="أدخل النص السري هنا..." class="w-full h-24 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-blue-500 outline-none mb-4"></textarea>
-                            <input type="password" id="audioSecretPass" placeholder="كلمة سر لتشفير النص قبل الإخفاء (اختياري لكن موصى به)" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-blue-500 outline-none mb-4">
-                            <button onclick="processAudio('encode')" class="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20">حفظ النص في الملف 💾</button>
+                        <!-- Encode -->
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-orange-500/20 shadow-xl">
+                             <h3 class="text-sm font-bold text-orange-300 mb-4 flex items-center gap-2">🛠️ إخفاء في ملف صوتي:</h3>
+                             <div class="space-y-4">
+                                 <div class="p-3 rounded-xl bg-orange-950/20 border border-orange-500/20 mb-2">
+                                     <div class="flex items-center justify-between mb-2">
+                                         <span class="text-[10px] text-orange-300 font-bold uppercase">🎙️ تسجيل صوتي مباشر</span>
+                                         <span id="audioRecStatus" class="text-[9px] text-gray-500 italic">جاهز</span>
+                                     </div>
+                                     <div class="flex gap-2">
+                                         <button onclick="startAudioRecording()" id="audioRecStartBtn" class="flex-1 py-2 rounded-lg bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 text-[10px] font-bold transition-all border border-orange-600/30">بدء التسجيل</button>
+                                         <button onclick="stopAudioRecording()" id="audioRecStopBtn" class="flex-1 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-400 text-[10px] font-bold transition-all border border-red-600/30" disabled>إيقاف</button>
+                                     </div>
+                                     <audio id="audioRecordedPreview" controls class="w-full h-8 mt-2 hidden"></audio>
+                                 </div>
+
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">أو: اختر ملف صوت جاهز (Cover)</label>
+                                     <input type="file" id="audioFileEncrypt" accept="audio/*" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-orange-600/10 file:text-orange-400 hover:file:bg-orange-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">2. الرسالة المراد إخفاؤها</label>
+                                     <textarea id="audioSecretText" rows="3" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-orange-500 outline-none transition-all" placeholder="اكتب رسالتك هنا..."></textarea>
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">3. كلمة سر إضافية (اختياري)</label>
+                                     <input type="password" id="audioSecretPass" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-orange-500 outline-none" placeholder="تشفير الرسالة قبل الإخفاء...">
+                                 </div>
+                                 <button onclick="processAudio('encode')" class="w-full titan-gradient py-3 rounded-xl font-black shadow-lg shadow-orange-900/20 transition-transform active:scale-95">إخفاء البيانات 🔒</button>
+                             </div>
                         </div>
-                        <div class="bg-slate-900/50 p-6 rounded-2xl border border-purple-500/20">
-                            <label class="block text-sm text-purple-400 mb-3 font-bold">🔍 فك التشفير (استخراج):</label>
-                            <input type="file" id="audioFileDecrypt" accept=".wav, .mp3, .ogg, .webm, .m4a, .aac" class="hidden" onchange="document.getElementById('audioDecryptName').innerText = this.files[0].name">
-                            <label for="audioFileDecrypt" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-600/10 file:text-purple-400 hover:file:bg-purple-600/20 mb-4 cursor-pointer flex items-center justify-center p-2 rounded-xl border border-purple-600/30">
-                                <span id="audioDecryptName" class="truncate">اختر ملف صوتي للتحليل</span>
-                            </label>
-                            <input type="password" id="audioDecodePass" placeholder="كلمة سر فك النص (إذا كان مشفراً)" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-purple-500 outline-none mb-4">
-                            <div id="audioDecodedResult" class="w-full h-24 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm overflow-y-auto mb-4 text-gray-400 font-mono italic">سيظهر النص المستخرج هنا...</div>
-                            <button onclick="processAudio('decode')" class="w-full py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20">استخراج النص السري 🔑</button>
+
+                        <!-- Decode -->
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-amber-500/20 shadow-xl">
+                             <h3 class="text-sm font-bold text-amber-300 mb-4 flex items-center gap-2">🔓 استخراج من صوت:</h3>
+                             <div class="space-y-4">
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">ملف الصوت المشفر</label>
+                                     <input type="file" id="audioFileDecrypt" accept="audio/*" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-600/10 file:text-amber-400 hover:file:bg-amber-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">كلمة السر (إن وجدت)</label>
+                                     <input type="password" id="audioDecodePass" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-amber-500 outline-none" placeholder="فك تشفير المحتوى المستخرج...">
+                                 </div>
+                                 <button onclick="processAudio('decode')" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg shadow-amber-900/20 transition-transform active:scale-95">استخراج البيانات 🔓</button>
+                                 <div class="mt-4 p-4 rounded-xl bg-slate-950/80 border border-slate-800 min-h-[100px]">
+                                     <span class="block text-[10px] text-gray-500 mb-2 uppercase">النتيجة:</span>
+                                     <p id="audioDecodedResult" class="text-sm text-amber-200/80 break-words font-mono">بانتظار تحليل الملف...</p>
+                                 </div>
+                             </div>
                         </div>
                     </div>
                 </div>
+
 
                 <!-- ===== VIDEO STEGANOGRAPHY SECTION ===== -->
+                <!-- ===== VIDEO STEGANOGRAPHY SECTION (PREMIUM) ===== -->
                 <div id="video-section" class="hidden space-y-6">
-                    <h2 class="text-xl font-bold text-rose-400 border-b border-slate-700 pb-2">🎬 اخفاء نص داخل فيديو</h2>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-slate-900/50 p-6 rounded-2xl border border-cyan-500/20">
-                            <label class="block text-sm text-cyan-400 mb-3 font-bold">🛠️ إخفاء نص داخل الفيديو:</label>
-                            <input type="file" id="videoFileEncrypt" accept="video/*" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-cyan-600/10 file:text-cyan-400 hover:file:bg-cyan-600/20 border border-slate-700 p-2 rounded-xl mb-4">
-                            <textarea id="videoSecretText" placeholder="اكتب النص المراد إخفاؤه داخل الفيديو..." class="w-full h-24 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-cyan-500 outline-none mb-4"></textarea>
-                            <input type="password" id="videoSecretPass" placeholder="كلمة سر لتشفير النص قبل الإخفاء (اختياري)" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-cyan-500 outline-none mb-4">
-                            <button onclick="processVideo('encode')" class="w-full py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold transition-all shadow-lg shadow-cyan-900/20">تشفير وإخفاء النص 💾</button>
-                        </div>
-
-                        <div class="bg-slate-900/50 p-6 rounded-2xl border border-amber-500/20">
-                            <label class="block text-sm text-amber-400 mb-3 font-bold">🔓 استخراج وفك التشفير:</label>
-                            <input type="file" id="videoFileDecrypt" accept="video/*" class="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-600/10 file:text-amber-400 hover:file:bg-amber-600/20 border border-slate-700 p-2 rounded-xl mb-4">
-                            <input type="password" id="videoDecodePass" placeholder="كلمة سر فك النص (إذا كان مشفراً)" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-amber-500 outline-none mb-4">
-                            <div id="videoDecodedResult" class="w-full h-24 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm overflow-y-auto mb-4 text-gray-400 font-mono italic">سيظهر النص المستخرج هنا...</div>
-                            <button onclick="processVideo('decode')" class="w-full py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold transition-all shadow-lg shadow-amber-900/20">استخراج النص 🔑</button>
-                        </div>
+                    <div class="rounded-2xl border border-rose-900/40 bg-gradient-to-r from-rose-950/25 via-slate-900/80 to-slate-950/20 p-4">
+                        <h2 class="text-xl font-black text-rose-400 flex items-center gap-2">🎬 إخفاء البيانات في الفيديو</h2>
+                        <p class="text-xs text-gray-400 mt-1">تشفير وإخفاء النصوص داخل ملفات الفيديو (MP4/MKV) باستخدام تقنيات متطورة تحافظ على استقرار الملف.</p>
                     </div>
 
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Encode -->
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-rose-500/20 shadow-xl">
+                             <h3 class="text-sm font-bold text-rose-300 mb-4 flex items-center gap-2">🛠️ إخفاء في ملف فيديو:</h3>
+                             <div class="space-y-4">
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">1. ملف الفيديو (Cover)</label>
+                                     <input type="file" id="videoFileEncrypt" accept="video/*" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-rose-600/10 file:text-rose-400 hover:file:bg-rose-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">2. الرسالة المراد إخفاؤها</label>
+                                     <textarea id="videoSecretText" rows="3" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-rose-500 outline-none transition-all" placeholder="اكتب رسالتك هنا..."></textarea>
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">3. كلمة سر التشفير (اختياري)</label>
+                                     <input type="password" id="videoSecretPass" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-rose-500 outline-none" placeholder="تشفير الرسالة قبل الإخفاء...">
+                                 </div>
+                                 <button onclick="processVideo('encode')" class="w-full titan-gradient py-3 rounded-xl font-black shadow-lg shadow-rose-900/20 transition-transform active:scale-95">إخفاء البيانات 🔒</button>
+                             </div>
+                        </div>
+
+                        <!-- Decode -->
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-amber-500/20 shadow-xl">
+                             <h3 class="text-sm font-bold text-amber-300 mb-4 flex items-center gap-2">🔓 استخراج من فيديو:</h3>
+                             <div class="space-y-4">
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">ملف الفيديو المشفر</label>
+                                     <input type="file" id="videoFileDecrypt" accept="video/*" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-600/10 file:text-amber-400 hover:file:bg-amber-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                                 </div>
+                                 <div>
+                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">كلمة السر (إن وجدت)</label>
+                                     <input type="password" id="videoDecodePass" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-amber-500 outline-none" placeholder="فك تشفير المحتوى المستخرج...">
+                                 </div>
+                                 <button onclick="processVideo('decode')" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg shadow-amber-900/20 transition-transform active:scale-95">استخراج البيانات 🔓</button>
+                                 <div class="mt-4 p-4 rounded-xl bg-slate-950/80 border border-slate-800 min-h-[100px]">
+                                     <span class="block text-[10px] text-gray-500 mb-2 uppercase">النتيجة:</span>
+                                     <p id="videoDecodedResult" class="text-sm text-amber-200/80 break-words font-mono">بانتظار تحليل الملف...</p>
+                                 </div>
+                             </div>
+                        </div>
+                    </div>
                 </div>
+
             <!-- ===== VAULT SECTION ===== -->
             <div id="vault-section" class="hidden space-y-4">
                 <h2 class="text-xl font-bold text-yellow-400 border-b border-yellow-900/50 pb-2 flex items-center gap-2">🗄️ قبو كلمات المرور الآمن</h2>
@@ -5581,35 +5588,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <!-- === ACCOUNT CHANGE PASSWORD MODAL === -->
-                <div id="change-password-modal" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;">
-                    <div style="position:relative;background:#0a0a1e;border:1px solid rgba(168,85,247,0.4);border-radius:20px;padding:2rem;max-width:420px;width:90%;box-shadow:0 0 60px rgba(168,85,247,0.2);">
-                        <button onclick="closeChangePasswordModal()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);color:#c084fc;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;font-size:1.1rem;line-height:1;font-weight:bold;z-index:10;" onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.transform='scale(1.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.transform='scale(1)'">
-                            &times;
-                        </button>
-                        <div style="text-align:center;margin-bottom:1.5rem;">
-                            <div style="font-size:2.5rem; filter: drop-shadow(0 0 10px #a855f7);">🔐</div>
-                            <h3 style="color:#c084fc;font-weight:700;margin:0.5rem 0; font-size:1.25rem;">تغيير كلمة مرور الحساب</h3>
-                            <p style="color:#6b7280;font-size:0.75rem;">يرجى إدخال كلمة المرور القديمة والجديدة لتحديث بيانات حسابك.</p>
-                        </div>
-                        <div class="space-y-3">
-                            <div style="margin-bottom:1rem;">
-                                <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الحالية</label>
-                                <input id="cp-old-pass" type="password" placeholder="كلمة المرور الحالية..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
-                            </div>
-                            <div style="margin-bottom:1rem;">
-                                <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الجديدة</label>
-                                <input id="cp-new-pass" type="password" placeholder="كلمة المرور الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
-                            </div>
-                            <div style="margin-bottom:1.5rem;">
-                                <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">تأكيد كلمة المرور الجديدة</label>
-                                <input id="cp-new-pass2" type="password" placeholder="تأكيد الكلمة الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
-                            </div>
-                            <button onclick="doChangePassword()" style="width:100%;padding:0.85rem;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;font-size:0.95rem;box-shadow: 0 4px 15px rgba(124,58,237,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">تحديث كلمة المرور ✨</button>
-                        </div>
-                        <div id="cp-error" style="display:none;margin-top:1rem;color:#f87171;font-size:0.75rem;text-align:center;padding:0.6rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px;"></div>
-                    </div>
-                </div>
+
 
 
                 <!-- === VAULT CONTENT (shown after unlock) === -->
@@ -5777,6 +5756,44 @@ HTML_TEMPLATE = """
                 <h2 class="text-xl font-bold text-pink-400 border-b border-slate-700 pb-2 flex items-center gap-2">
                     <span>🔥</span> قنوات الدردشة والرسائل الأمنة
                 </h2>
+
+                <!-- 1. Secure Message One-Time (Burn Note) -->
+                <div id="burn-note-container" class="bg-slate-900/40 p-5 rounded-2xl border border-pink-500/10 mb-6 backdrop-blur-md">
+                    <h2 class="text-xl font-bold text-pink-400 mb-4 flex items-center gap-2">
+                        <span>🛡️</span> توليد رسالة مؤمنة (Burn Note)
+                    </h2>
+                    <p class="text-[11px] text-gray-400 mb-4 text-right">رسالة مشفرة برابط فريد يتم تدميره فور فتحه. يمكنك إرسال نصوص أو صور بحماية مطلقة.</p>
+                    
+                    <div class="space-y-4">
+                        <textarea id="burnNoteText" placeholder="اكتب رسالتك السرية هنا... (سيتم حذفها تلقائياً بعد القراءة)" class="w-full h-24 p-3 rounded-xl bg-black border border-slate-700 focus:ring-2 focus:ring-pink-500 outline-none text-right" dir="rtl"></textarea>
+                        
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <button onclick="triggerBurnNoteImagePicker()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-gray-300 text-xs font-bold rounded-lg border border-slate-700 transition-all flex items-center gap-2">
+                                    <span>🖼️</span> إرفاق صورة
+                                </button>
+                                <button onclick="clearBurnNoteSelectedMedia()" class="p-2 bg-slate-800/50 hover:bg-rose-900/30 text-rose-400 rounded-lg border border-slate-700 transition-all" title="مسح المرفق">
+                                    <span class="text-sm">✖</span>
+                                </button>
+                                <input type="file" id="burnNoteMedia" class="hidden" accept="image/*">
+                            </div>
+                            <div id="burnNoteMediaState" class="text-[10px] text-gray-500 italic">لم يتم اختيار صورة بعد.</div>
+                        </div>
+
+                        <button onclick="createBurnNote()" class="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 py-3 rounded-xl font-black text-white shadow-lg shadow-pink-900/20 transition-all border border-pink-400/20">
+                            توليد الرابط المؤمن 🔒
+                        </button>
+                    </div>
+
+                    <div id="burnNoteResult" class="hidden mt-6 p-4 bg-black rounded-xl border border-pink-500/30 animate-pulse-subtle">
+                        <label class="block text-[10px] font-bold text-pink-300 mb-2 uppercase tracking-widest text-center">الرابط جاهز للإرسال (تدمير ذاتي)</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="burnNoteLink" readonly class="flex-1 p-2 bg-slate-900 border border-slate-800 rounded text-pink-400 font-mono text-xs text-center outline-none">
+                            <button onclick="copyBurnNoteLink()" class="px-4 bg-pink-600 hover:bg-pink-500 text-white rounded font-bold text-xs">نسخ</button>
+                        </div>
+                        <p class="text-[10px] text-rose-400 mt-3 text-center font-bold italic">⚠️ تحذير: سيختفي المحتوى تماماً بعد فتحه لمرة واحدة فقط.</p>
+                    </div>
+                </div>
 
                 <div id="burn-chat-container">
                     <h2 class="text-xl font-bold text-pink-500 mb-4 border-b border-slate-700 pb-2 flex items-center gap-2">
@@ -6481,7 +6498,48 @@ HTML_TEMPLATE = """
 
     <!-- Panic Button Removed as per User Request -->
 
+    <!-- === ACCOUNT CHANGE PASSWORD MODAL (Moved Globally) === -->
+    <div id="change-password-modal" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;">
+        <div style="position:relative;background:#0a0a1e;border:1px solid rgba(168,85,247,0.4);border-radius:20px;padding:2rem;max-width:420px;width:90%;box-shadow:0 0 60px rgba(168,85,247,0.2);">
+            <button onclick="closeChangePasswordModal()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);color:#c084fc;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;font-size:1.1rem;line-height:1;font-weight:bold;z-index:10;" onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.transform='scale(1.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.transform='scale(1)'">
+                &times;
+            </button>
+            <div style="text-align:center;margin-bottom:1.5rem;">
+                <div style="font-size:2.5rem; filter: drop-shadow(0 0 10px #a855f7);">🔐</div>
+                <h3 style="color:#c084fc;font-weight:700;margin:0.5rem 0; font-size:1.25rem;">تغيير كلمة مرور الحساب</h3>
+                <p style="color:#6b7280;font-size:0.75rem;">يرجى إدخال كلمة المرور القديمة والجديدة لتحديث بيانات حسابك.</p>
+            </div>
+            <div class="space-y-3">
+                <div style="margin-bottom:1rem;">
+                    <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الحالية</label>
+                    <input id="cp-old-pass" type="password" placeholder="كلمة المرور الحالية..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                </div>
+                <div style="margin-bottom:1rem;">
+                    <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الجديدة (قوية)</label>
+                    <input id="cp-new-pass" type="password" placeholder="كلمة المرور الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                    <div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:0.35rem;line-height:1.2;">8 أحرف، حرف كبير، حرف صغير، رقم، ورمز.</div>
+                </div>
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">تأكيد كلمة المرور الجديدة</label>
+                    <input id="cp-new-pass2" type="password" placeholder="تأكيد الكلمة الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                </div>
+                <button onclick="doChangePassword()" style="width:100%;padding:0.85rem;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;font-size:0.95rem;box-shadow: 0 4px 15px rgba(124,58,237,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">تحديث كلمة المرور ✨</button>
+            </div>
+            <div id="cp-error" style="display:none;margin-top:1rem;color:#f87171;font-size:0.75rem;text-align:center;padding:0.6rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px;"></div>
+        </div>
+    </div>
+
+
     <script>
+        function validatePass(p) {
+            if (p.length < 8) return { ok: false, msg: 'كلمة السر يجب أن تكون 8 أحرف على الأقل' };
+            if (!/[A-Z]/.test(p)) return { ok: false, msg: 'يجب أن تحتوي كلمة السر على حرف كبير واحد (A-Z)' };
+            if (!/[a-z]/.test(p)) return { ok: false, msg: 'يجب أن تحتوي كلمة السر على حرف صغير واحد (a-z)' };
+            if (!/[0-9]/.test(p)) return { ok: false, msg: 'يجب أن تحتوي كلمة السر على رقم واحد على الأقل (0-9)' };
+            if (!/[!@#$%^&*(),.?":{}|<>]/.test(p)) return { ok: false, msg: 'يجب أن تحتوي كلمة السر على رمز خاص واحد على الأقل (!@#$...)' };
+            return { ok: true };
+        }
+
         // --- نظام المؤثرات الصوتية (Web Audio API) ---
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         let audioCtx;
@@ -6564,8 +6622,9 @@ HTML_TEMPLATE = """
                 errDiv.style.display = 'block';
                 return;
             }
-            if (newPass.length < 6) {
-                errDiv.innerText = 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل';
+            const passCheck = validatePass(newPass);
+            if (!passCheck.ok) {
+                errDiv.innerText = passCheck.msg;
                 errDiv.style.display = 'block';
                 return;
             }
@@ -6878,7 +6937,8 @@ HTML_TEMPLATE = """
 
             if (!username || !email || !password || !password2) { errEl.textContent = 'يرجى ملء جميع الحقول'; errEl.style.display = 'block'; return; }
             if (password !== password2) { errEl.textContent = 'كلمتا السر غير متطابقتين!'; errEl.style.display = 'block'; return; }
-            if (password.length < 6) { errEl.textContent = 'كلمة السر يجب أن تكون 6 أحرف على الأقل'; errEl.style.display = 'block'; return; }
+            const passCheck = validatePass(password);
+            if (!passCheck.ok) { errEl.textContent = passCheck.msg; errEl.style.display = 'block'; return; }
             if (!acceptedTerms) { errEl.textContent = 'يجب الموافقة على الشروط والأحكام لإكمال إنشاء الحساب.'; errEl.style.display = 'block'; return; }
 
             btn.textContent = '⏳ جاري إنشاء الحساب...';
@@ -11618,53 +11678,8 @@ HTML_TEMPLATE = """
             out.innerText = file ? file.name : 'لم يتم اختيار ملف';
         }
 
-        async function processFileLab(action) {
-            const file = document.getElementById('fileLabInput').files[0];
-            if(!file) return titanAlert("يرجى اختيار ملف TXT أولاً!");
-            if (!/\\.txt$/i.test(file.name)) return titanAlert("هذه الأداة تدعم ملفات TXT فقط.");
+        // processFileLab logic moved to consolidated steganography block below.
 
-            const normalizedAction = action === 'encrypt' ? 'encode' : (action === 'decrypt' ? 'decode' : action);
-            const outBox = document.getElementById('fileLabDecoded');
-            if (outBox) outBox.classList.add('hidden');
-
-            const formData = new FormData();
-            formData.append('file', file);
-            if (normalizedAction === 'encode') {
-                const secret = (document.getElementById('fileLabSecret')?.value || '').trim();
-                if (!secret) return titanAlert('اكتب النص السري أولاً.');
-                formData.append('secret', secret);
-            }
-
-            const endpoint = normalizedAction === 'encode' ? '/api/text-hide/encode' : '/api/text-hide/decode';
-            const res = await fetch(endpoint, { method:'POST', body: formData });
-            if (res.ok) {
-                soundManager.success();
-                if (normalizedAction === 'encode') {
-                    const blob = await res.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = file.name.replace(/\\.txt$/i, '') + '_with_hidden.txt';
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    titanAlert('✅ تم إخفاء النص داخل ملف TXT بنجاح');
-                } else {
-                    const data = await res.json();
-                    if (!data.success) {
-                        titanAlert(data.error || 'فشل استخراج النص');
-                        return;
-                    }
-                    if (outBox) {
-                        outBox.classList.remove('hidden');
-                        outBox.innerText = data.secret || 'لا يوجد نص مخفي داخل الملف.';
-                    }
-                }
-            } else {
-                soundManager.error();
-                const err = await res.json();
-                titanAlert(err.error || 'فشل عملية الملف');
-            }
-        }
 
         async function generatePass(mode = 'random') {
             const res = await fetch(`/generate?mode=${mode}`);
@@ -11705,12 +11720,10 @@ HTML_TEMPLATE = """
                 const proxyFlag = String(data.proxy || data.vpn || '').toLowerCase();
                 const proxyDetected = proxyFlag === 'true' || proxyFlag === '1' || data.proxy === true || data.vpn === true;
                 setResultInfo(dataBox, 'IP Intelligence', [
-                    { label: 'IP', value: ip || data.query || 'غير معروف', tone: 'info', dir: 'ltr' },
+                    { label: 'IP Address (Public)', value: ip || data.query || 'غير معروف', tone: 'info', dir: 'ltr' },
                     { label: 'ISP / Org', value: (data.ISP + (data.org && data.org !== data.ISP ? ` (${data.org})` : '')) || 'غير متاح', tone: 'info' },
-                    { label: 'Country', value: data.country_code || 'N/A', tone: 'info' },
-                    { label: 'Network Type', value: data.network_type || 'Public IP', tone: data.tone || (proxyDetected ? 'warn' : 'safe') },
-                    { label: 'Privacy Risk', value: data.risk_msg || (proxyDetected ? 'VPN/Proxy نشط' : 'اتصال مباشر'), tone: data.tone || (proxyDetected ? 'warn' : 'safe') }
-                ], { badge: data.badge || (proxyDetected ? 'Masked' : 'Direct'), cols: 2, riskScore: data.risk_score || (proxyDetected ? 85 : 10) });
+                    { label: 'Country', value: data.country_code || 'N/A', tone: 'info' }
+                ], { badge: data.badge || (proxyDetected ? 'Masked' : 'Direct'), cols: 1, riskScore: data.risk_score || 10 });
             } else {
                 soundManager.error();
                 setResultError(dataBox, data.message || 'فشل جلب البيانات');
@@ -15540,7 +15553,8 @@ HTML_TEMPLATE = """
             const newpass2 = document.getElementById('forgot-newpass2').value;
             const errEl = document.getElementById('forgot-step3-error');
             errEl.style.display = 'none';
-            if (!newpass || newpass.length < 6) { errEl.textContent = 'كلمة السر يجب أن تكون 6 أحرف على الأقل.'; errEl.style.display = 'block'; return; }
+            const passCheck = validatePass(newpass);
+            if (!passCheck.ok) { errEl.textContent = passCheck.msg; errEl.style.display = 'block'; return; }
             if (newpass !== newpass2) { errEl.textContent = 'كلمتا السر غير متطابقتين.'; errEl.style.display = 'block'; return; }
             try {
                 const res = await fetch('/api/auth/forgot-password/reset', {
@@ -15681,7 +15695,16 @@ HTML_TEMPLATE = """
                 updateDashMetricCard('dashDiskCard', 'dashDisk', diskIo, 512, 2048);
                 
                 document.getElementById('dashLocalIp').innerText = d.local_ip || '---';
-                document.getElementById('dashPubIp').innerText  = d.public_ip || '---';
+                
+                // --- Unified IP Sync ---
+                if (!window.__dashUserIp) {
+                    try {
+                        const ipRes = await fetch('https://api.ipify.org?format=json');
+                        const ipData = await ipRes.json();
+                        if(ipData && ipData.ip) window.__dashUserIp = ipData.ip;
+                    } catch(e) {}
+                }
+                document.getElementById('dashPubIp').innerText  = window.__dashUserIp || d.public_ip || '---';
                 document.getElementById('dashSent').innerText   = Number(d.net_up_kbps || 0).toFixed(2);
                 document.getElementById('dashRecv').innerText   = Number(d.net_down_kbps || 0).toFixed(2);
                 const updatedAtEl = document.getElementById('dashUpdatedAt');
@@ -16635,6 +16658,105 @@ UUID: ${getVal('idUuid')}
         }
 
         // --- وظائف الأدوات الجديدة المتقدمة ---
+        // --- UNIFIED STEGANOGRAPHY ENGINE ---
+        function _arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.subarray(i, i + chunkSize);
+                binary += String.fromCharCode.apply(null, chunk);
+            }
+            return btoa(binary);
+        }
+
+        async function _stegoCrypto(action, text, passphrase, prefix) {
+            const encoder = new TextEncoder();
+            const toBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+            if (action === 'encrypt') {
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+                const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+                const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(text));
+                return `${prefix}:${_arrayBufferToBase64(salt)}:${_arrayBufferToBase64(iv)}:${_arrayBufferToBase64(cipherBuf)}`;
+            } else {
+                if (!text.startsWith(prefix + ':')) return text;
+                const parts = text.split(':');
+                if (parts.length !== 4) throw new Error('صيغة التشفير غير صالحة.');
+                const salt = toBytes(parts[1]), iv = toBytes(parts[2]), cipherBytes = toBytes(parts[3]);
+                const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+                const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+                const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBytes);
+                return new TextDecoder().decode(plainBuf);
+            }
+        }
+
+        async function _commonStegoProcess(type, action, config) {
+            const formData = new FormData();
+            try {
+                if (action === 'encode') {
+                    const file = document.getElementById(config.fileIn).files[0];
+                    const text = document.getElementById(config.textIn).value.trim();
+                    const pass = document.getElementById(config.passIn)?.value.trim();
+
+                    if (!file || !text) return titanAlert('يرجى اختيار ملف وإدخال نص للإخفاء.');
+                    
+                    let finalSecret = text;
+                    if (pass) finalSecret = await _stegoCrypto('encrypt', text, pass, 'TITAN_SECURE');
+
+                    formData.append('file', file);
+                    formData.append('text', finalSecret);
+
+                    const res = await fetch(config.urlEncode, { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error((await res.json()).error || 'فشلت العملية');
+
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `TITAN_HIDDEN_${file.name}`;
+                    a.click();
+                    titanAlert('✅ تم إخفاء البيانات وحفظ الملف بنجاح');
+                } else {
+                    const file = document.getElementById(config.fileOut).files[0];
+                    const pass = document.getElementById(config.passOut)?.value.trim();
+                    if (!file) return titanAlert('يرجى اختيار ملف للتحليل.');
+
+                    formData.append('file', file);
+                    const res = await fetch(config.urlDecode, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || 'فشل الاستخراج');
+
+                    let result = data.hidden_data || data.secret || data.result;
+                    if (result && result.startsWith('TITAN_SECURE:')) {
+                        if (!pass) result = '🔒 المحتوى مشفر. يرجى إدخال كلمة السر.';
+                        else {
+                            try { result = await _stegoCrypto('decrypt', result, pass, 'TITAN_SECURE'); }
+                            catch(e) { result = '❌ خطأ: كلمة السر غير صحيحة.'; }
+                        }
+                    }
+                    document.getElementById(config.resultDiv).innerText = result || 'لا توجد بيانات.';
+                    titanAlert('✅ تمت عملية التحليل');
+                }
+                soundManager.success();
+                if (typeof refreshLogs === 'function') refreshLogs();
+            } catch (e) {
+                titanAlert('Error: ' + e.message);
+                soundManager.error();
+            }
+        }
+
+        async function processImage(action) {
+            await _commonStegoProcess('image', action, {
+                fileIn: 'imageFileEncrypt', textIn: 'imageSecretText', passIn: 'imageSecretPass',
+                fileOut: 'imageFileDecrypt', passOut: 'imageDecodePass', resultDiv: 'imageDecodedResult',
+                urlEncode: '/api/steganography/encode', urlDecode: '/api/steganography/decode'
+            });
+        }
+
+        // --- AUDIO RECORDING ENGINE ---
         let _audioRecorder = null;
         let _audioStream = null;
         let _audioChunks = [];
@@ -16655,12 +16777,12 @@ UUID: ${getVal('idUuid')}
                     const status = document.getElementById('audioRecStatus');
                     preview.src = URL.createObjectURL(_recordedAudioBlob);
                     preview.classList.remove('hidden');
-                    status.innerText = 'تم حفظ التسجيل محلياً وجاهز للإخفاء.';
+                    status.innerText = 'التسجيل جاهز للإخفاء ✅';
                 };
                 _audioRecorder.start();
                 document.getElementById('audioRecStartBtn').disabled = true;
                 document.getElementById('audioRecStopBtn').disabled = false;
-                document.getElementById('audioRecStatus').innerText = 'جاري التسجيل... تحدث الآن.';
+                document.getElementById('audioRecStatus').innerText = 'جاري التسجيل...';
             } catch (e) {
                 titanAlert('تعذر الوصول للميكروفون. تأكد من السماح بالصلاحية.');
             }
@@ -16678,299 +16800,62 @@ UUID: ${getVal('idUuid')}
             document.getElementById('audioRecStopBtn').disabled = true;
         }
 
-        function _arrayBufferToBase64(buffer) {
-            let binary = '';
-            const bytes = new Uint8Array(buffer);
-            const chunkSize = 0x8000;
-            for (let i = 0; i < bytes.length; i += chunkSize) {
-                const chunk = bytes.subarray(i, i + chunkSize);
-                binary += String.fromCharCode.apply(null, chunk);
-            }
-            return btoa(binary);
-        }
-
-        async function _encryptAudioSecretInBrowser(text, passphrase) {
-            const encoder = new TextEncoder();
-            const salt = crypto.getRandomValues(new Uint8Array(16));
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const keyMaterial = await crypto.subtle.importKey(
-                'raw',
-                encoder.encode(passphrase),
-                'PBKDF2',
-                false,
-                ['deriveKey']
-            );
-            const key = await crypto.subtle.deriveKey(
-                { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['encrypt']
-            );
-            const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(text));
-            return `ENC_AUDIO_V1:${_arrayBufferToBase64(salt)}:${_arrayBufferToBase64(iv)}:${_arrayBufferToBase64(cipherBuf)}`;
-        }
-
-        async function _decryptAudioSecretInBrowser(payload, passphrase) {
-            if (!payload.startsWith('ENC_AUDIO_V1:')) return payload;
-            const parts = payload.split(':');
-            if (parts.length !== 4) throw new Error('صيغة النص المشفر داخل الصوت غير صالحة.');
-            const [, saltB64, ivB64, cipherB64] = parts;
-            const toBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-            const salt = toBytes(saltB64);
-            const iv = toBytes(ivB64);
-            const cipherBytes = toBytes(cipherB64);
-
-            const encoder = new TextEncoder();
-            const keyMaterial = await crypto.subtle.importKey(
-                'raw',
-                encoder.encode(passphrase),
-                'PBKDF2',
-                false,
-                ['deriveKey']
-            );
-            const key = await crypto.subtle.deriveKey(
-                { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['decrypt']
-            );
-            const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBytes);
-            return new TextDecoder().decode(plainBuf);
-        }
-        
         async function processAudio(action) {
-            const formData = new FormData();
             if (action === 'encode') {
-                const fileEl = document.getElementById('audioFileEncrypt');
-                const file = fileEl.files[0];
+                const file = document.getElementById('audioFileEncrypt').files[0];
                 const text = document.getElementById('audioSecretText').value.trim();
-                const passphrase = document.getElementById('audioSecretPass').value.trim();
-                
-                if (!text) {
-                    return titanAlert('يرجى كتابة النص السري المراد إخفاؤه.');
-                }
-
+                const pass = document.getElementById('audioSecretPass').value.trim();
+                if (!text) return titanAlert('يرجى إدخال نص للإخفاء.');
                 const sourceBlob = file || _recordedAudioBlob;
-                if (!sourceBlob) {
-                    return titanAlert('اختر ملف صوتي أو سجّل صوتاً أولاً.');
-                }
+                if (!sourceBlob) return titanAlert('يرجى اختيار ملف أو تسجيل صوتي أولاً.');
 
+                const formData = new FormData();
                 let finalSecret = text;
-                if (passphrase) {
-                    finalSecret = await _encryptAudioSecretInBrowser(text, passphrase);
-                }
+                if (pass) finalSecret = await _stegoCrypto('encrypt', text, pass, 'TITAN_SECURE');
                 
-                console.log('جاري المعالجة...');
-
-                const extGuess = file ? file.name.split('.').pop() : 'webm';
-                const uploadName = file ? file.name : `recorded_audio.${extGuess || 'webm'}`;
+                const uploadName = file ? file.name : 'recorded_voice.webm';
                 formData.append('file', sourceBlob, uploadName);
                 formData.append('text', finalSecret);
-                
+
                 try {
-                    const response = await fetch('/api/audio/stego/encode', { method:'POST', body:formData });
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.error || 'عذراً، فشلت عملية التشفير.');
-                    }
-                    
-                    const blob = await response.blob();
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const downloadAnchor = document.createElement('a');
-                    downloadAnchor.href = downloadUrl;
-                    downloadAnchor.download = "TITAN_SECURE_" + uploadName;
-                    document.body.appendChild(downloadAnchor);
-                    downloadAnchor.click();
-                    
-                    titanAlert(passphrase ? 'تم تشفير النص ثم إخفاؤه داخل الصوت ✅' : 'تم إخفاء النص داخل الصوت ✅');
-                    
-                    setTimeout(() => {
-                        document.body.removeChild(downloadAnchor);
-                        window.URL.revokeObjectURL(downloadUrl);
-                    }, 500);
-                } catch (error) {
-                    titanAlert('خطأ: ' + error.message);
+                    const res = await fetch('/api/audio/stego/encode', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error((await res.json()).error || 'فشلت العملية');
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `TITAN_SECURE_${uploadName.split('.')[0]}.wav`;
+                    a.click();
+                    titanAlert('✅ تم إخفاء البيانات في التسجيل وحفظ الملف!');
+                    soundManager.success();
+                } catch (e) {
+                    titanAlert('Error: ' + e.message);
+                    soundManager.error();
                 }
             } else {
-                const file = document.getElementById('audioFileDecrypt').files[0];
-                const decodePass = document.getElementById('audioDecodePass').value.trim();
-                if (!file) return titanAlert('يرجى اختيار الملف المراد فحصه.');
-                
-                console.log('جاري التحليل...');
-                formData.append('file', file);
-                
-                try {
-                    const res = await fetch('/api/audio/stego/decode', { method:'POST', body:formData });
-                    const data = await res.json();
-                    
-                    if (data.error) {
-                        titanAlert('تنبيه: ' + data.error);
-                    } else if (data.success && data.hidden_data) {
-                        let shownText = data.hidden_data;
-                        if (shownText.startsWith('ENC_AUDIO_V1:')) {
-                            if (!decodePass) {
-                                shownText = 'تم العثور على نص مشفر. أدخل كلمة السر لفك التشفير.';
-                            } else {
-                                try {
-                                    shownText = await _decryptAudioSecretInBrowser(shownText, decodePass);
-                                } catch (e) {
-                                    shownText = 'فشل فك التشفير: كلمة السر غير صحيحة أو البيانات تالفة.';
-                                }
-                            }
-                        }
-                        document.getElementById('audioDecodedResult').innerText = shownText;
-                        titanAlert('✅ تم العثور على نص مخفي!');
-                    } else {
-                        titanAlert('لم يتم العثور على بيانات مخفية.');
-                    }
-                } catch (error) {
-                    titanAlert('خطأ في الاتصال بالخادم.');
-                }
+                await _commonStegoProcess('audio', 'decode', {
+                    fileOut: 'audioFileDecrypt', passOut: 'audioDecodePass', resultDiv: 'audioDecodedResult',
+                    urlDecode: '/api/audio/stego/decode'
+                });
             }
-        }
-
-        async function _encryptVideoSecretInBrowser(text, passphrase) {
-            const encoder = new TextEncoder();
-            const salt = crypto.getRandomValues(new Uint8Array(16));
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const keyMaterial = await crypto.subtle.importKey(
-                'raw',
-                encoder.encode(passphrase),
-                'PBKDF2',
-                false,
-                ['deriveKey']
-            );
-            const key = await crypto.subtle.deriveKey(
-                { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['encrypt']
-            );
-            const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(text));
-            return `ENC_VIDEO_V1:${_arrayBufferToBase64(salt)}:${_arrayBufferToBase64(iv)}:${_arrayBufferToBase64(cipherBuf)}`;
-        }
-
-        async function _decryptVideoSecretInBrowser(payload, passphrase) {
-            if (!payload.startsWith('ENC_VIDEO_V1:')) return payload;
-            const parts = payload.split(':');
-            if (parts.length !== 4) throw new Error('صيغة النص المشفر داخل الفيديو غير صالحة.');
-            const [, saltB64, ivB64, cipherB64] = parts;
-            const toBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-
-            const salt = toBytes(saltB64);
-            const iv = toBytes(ivB64);
-            const cipherBytes = toBytes(cipherB64);
-            const encoder = new TextEncoder();
-
-            const keyMaterial = await crypto.subtle.importKey(
-                'raw',
-                encoder.encode(passphrase),
-                'PBKDF2',
-                false,
-                ['deriveKey']
-            );
-            const key = await crypto.subtle.deriveKey(
-                { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['decrypt']
-            );
-            const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBytes);
-            return new TextDecoder().decode(plainBuf);
         }
 
         async function processVideo(action) {
-            const formData = new FormData();
-            if (action === 'encode') {
-                const file = document.getElementById('videoFileEncrypt').files[0];
-                const text = document.getElementById('videoSecretText').value.trim();
-                const passphrase = document.getElementById('videoSecretPass').value.trim();
-
-                if (!file) return titanAlert('يرجى اختيار ملف فيديو.');
-                if (!text) return titanAlert('يرجى كتابة النص المراد إخفاؤه.');
-
-                let finalSecret = text;
-                if (passphrase) {
-                    finalSecret = await _encryptVideoSecretInBrowser(text, passphrase);
-                }
-
-                formData.append('file', file);
-                formData.append('text', finalSecret);
-
-                try {
-                    const response = await fetch('/api/video/stego/encode', { method: 'POST', body: formData });
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.error || 'فشلت عملية الإخفاء داخل الفيديو');
-                    }
-
-                    const blob = await response.blob();
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = downloadUrl;
-                    a.download = 'TITAN_STEGO_' + file.name.replace(/\\.[^/.]+$/, '') + '.mp4';
-                    document.body.appendChild(a);
-                    a.click();
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(downloadUrl);
-                    }, 500);
-
-                    titanAlert(passphrase ? 'تم تشفير النص ثم إخفاؤه داخل الفيديو ✅' : 'تم إخفاء النص داخل الفيديو ✅');
-                    soundManager.success();
-                    refreshLogs();
-                } catch (e) {
-                    titanAlert('خطأ: ' + e.message);
-                    soundManager.error();
-                }
-            } else {
-                const file = document.getElementById('videoFileDecrypt').files[0];
-                const decodePass = document.getElementById('videoDecodePass').value.trim();
-                if (!file) return titanAlert('يرجى اختيار ملف فيديو للتحليل.');
-
-                formData.append('file', file);
-
-                try {
-                    const res = await fetch('/api/video/stego/decode', { method: 'POST', body: formData });
-                    const data = await res.json();
-
-                    if (data.error) {
-                        titanAlert('تنبيه: ' + data.error);
-                        return;
-                    }
-
-                    if (data.success && data.hidden_data) {
-                        let shownText = data.hidden_data;
-                        if (shownText.startsWith('ENC_VIDEO_V1:')) {
-                            if (!decodePass) {
-                                shownText = 'تم العثور على نص مشفر. أدخل كلمة السر لفك التشفير.';
-                            } else {
-                                try {
-                                    shownText = await _decryptVideoSecretInBrowser(shownText, decodePass);
-                                } catch (e) {
-                                    shownText = 'فشل فك التشفير: كلمة السر غير صحيحة أو البيانات تالفة.';
-                                }
-                            }
-                        }
-
-                        document.getElementById('videoDecodedResult').innerText = shownText;
-                        titanAlert('✅ تم استخراج النص من الفيديو');
-                        soundManager.success();
-                        refreshLogs();
-                    } else {
-                        document.getElementById('videoDecodedResult').innerText = 'لا توجد بيانات مخفية.';
-                        titanAlert('لم يتم العثور على بيانات مخفية داخل الفيديو.');
-                    }
-                } catch (e) {
-                    titanAlert('خطأ في الاتصال بالخادم.');
-                    soundManager.error();
-                }
-            }
+            await _commonStegoProcess('video', action, {
+                fileIn: 'videoFileEncrypt', textIn: 'videoSecretText', passIn: 'videoSecretPass',
+                fileOut: 'videoFileDecrypt', passOut: 'videoDecodePass', resultDiv: 'videoDecodedResult',
+                urlEncode: '/api/video/stego/encode', urlDecode: '/api/video/stego/decode'
+            });
         }
+
+        async function processFileLab(action) {
+            await _commonStegoProcess('text', action, {
+                fileIn: 'txtFileEncrypt', textIn: 'txtSecretText', passIn: null,
+                fileOut: 'txtFileDecrypt', passOut: null, resultDiv: 'txtDecodedResult',
+                urlEncode: '/api/text-hide/encode', urlDecode: '/api/text-hide/decode'
+            });
+        }
+
 
         async function cleanPdf() {
             const file = document.getElementById('pdfCleanFile').files[0];
@@ -22120,53 +22005,68 @@ def fake_identity_route():
         gender = 'ذكر / Male' if gender_code == 'male' else 'أنثى / Female'
 
         # --- 2. توليد الاسم والبيانات حسب اللغة والجنس ---
-        if lang == 'ar_JO':
-            # رقم وطني أردني: 10 أرقام يبدأ بـ 2
-            national_id = '2' + ''.join([str(random.randint(0,9)) for _ in range(9)])
-            country_code = '+962'
-            city_options = ["عمّان", "الزرقاء", "إربد", "العقبة", "المفرق", "الكرك", "معان", "جرش", "السلط", "مادبا", "عجلون"]
-            address_str = f"{random.choice(city_options)}، الأردن، شارع {fake_en.street_name()}"
-            zip_code = str(random.randint(10000, 99999))
-            
-            # قوائم أسماء أردنية محسنة
-            male_first = ["محمد", "أحمد", "خالد", "عمر", "يوسف", "علي", "حسن", "ماجد", "فيصل", "سامي", "ليث", "زيد", "يزن", "حمزة", "عبد الله"]
-            female_first = ["فاطمة", "مريم", "سارة", "نور", "لينا", "رنا", "دانا", "هند", "أمل", "لمى", "رهف", "تالا", "جنى", "سلمى", "ليان"]
-            last_names = ["العبدلي", "الخطيب", "القضاة", "الزيود", "الشرايري", "الطراونة", "البطاينة", "الحجاوي", "العساف", "المجالي", "العدوان", "الفايز", "الروسان", "الخصاونة", "العبادي"]
-            
+        # قوائم أسماء عربية محسنة وشاملة
+        male_first = ["محمد", "أحمد", "محمود", "يوسف", "علي", "إبراهيم", "زيد", "حمزة", "عمر", "خالد", "حسن", "حسين", "عبد الله", "عبد الرحمن", "ليث", "يزن", "باسل", "سامر", "هاني", "رامي", "منصور", "فيصل", "خليل", "ماجد", "أسامة", "سلطان", "طارق", "فارس", "جمال", "صلاح", "إياد"]
+        female_first = ["فاطمة", "مريم", "زينب", "سارة", "نور", "ليلى", "روان", "دانا", "رهف", "تالا", "سلمى", "حلا", "لانا", "جنى", "غنى", "هند", "أمل", "ريم", "ندى", "فرح", "ميار", "لجين", "ياسمين", "عبير", "إيمان", "ضحى", "خلود", "منار"]
+        
+        if lang.startswith('ar_'):
+            # في الهوية العربية، يطلب المستخدم الاسم الأول واسم الأب فقط
             first_name = random.choice(male_first if gender_code == 'male' else female_first)
-            last_name = random.choice(last_names)
-            full_name = f"{first_name} {last_name}"
+            father_name = random.choice(male_first)
+            full_name = f"{first_name} {father_name}"
             
+            # الأم: اسم أول + اسم أب
             mother_first = random.choice(female_first)
-            mother_name = f"{mother_first} {random.choice(last_names)}"
-            phone = f"+962 7{random.choice(['7','8','9'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+            mother_father = random.choice(male_first)
+            mother_name = f"{mother_first} {mother_father}"
             
-            # --- شركات أردنية واقعية ---
-            _jo_companies = [
-                "مجموعة الحكمة للاستثمار", "شركة المناصير للنقل والتجارة", "الشركة الأردنية لصناعة الأدوية",
-                "دار الدواء للتنمية والاستثمار", "مؤسسة النسر العربي للتأمين", "شركة زين الأردن للاتصالات",
-                "البنك العربي", "شركة أمنية للاتصالات", "مجموعة أبو خضر للأجهزة الكهربائية",
-                "شركة المتحدة للصناعات الغذائية", "المؤسسة الأردنية لتطوير المشاريع", "شركة نقليات الحسين",
-                "مجموعة طلال أبو غزالة", "الشركة العربية لصناعة الإسمنت", "شركة كهرباء إربد",
-                "البنك الأهلي الأردني", "شركة أورنج الأردن", "الشركة الأردنية للطيران",
-                "مجموعة الخطوط الملكية الأردنية", "شركة مياه اليرموك", "مجموعة الفوسفات الأردنية",
-                "شركة البوتاس العربية", "مصفاة البترول الأردنية", "شركة المدن الصناعية الأردنية",
-                "بنك الإسكان للتجارة والتمويل", "مجموعة سمارت للتقنية", "الشركة الأولى لتأجير السيارات",
-                "شركة الأسواق الحرة الأردنية", "مستشفى الأردن", "شركة مناجم الفوسفات الأردنية",
-                "مجموعة القلعة للاستشارات", "شركة نور كابيتال للاستثمار", "الشركة المتقدمة للتكنولوجيا",
-            ]
-            _jo_jobs = [
-                "مهندس برمجيات", "طبيب عام", "محاسب قانوني", "مدير تسويق", "معلم",
-                "صيدلاني", "مهندس مدني", "محامي", "مدير موارد بشرية", "ممرض/ة",
-                "مصمم جرافيك", "مهندس كهرباء", "أخصائي أمن معلومات", "مدير مشاريع", "طبيب أسنان",
-                "مراقب مالي", "مهندس شبكات", "أخصائي تغذية", "مدير عمليات", "مترجم",
-                "صحفي", "مدير مبيعات", "مهندس معماري", "محلل بيانات", "مطوّر تطبيقات",
-                "مدير مالي", "أخصائي علاج طبيعي", "مهندس ميكانيكي", "مسؤول علاقات عامة", "خبير تأمين",
-            ]
-            company = random.choice(_jo_companies)
-            job = random.choice(_jo_jobs)
+            # بيانات جغرافية وشركات حسب الدولة
+            if lang == 'ar_JO':
+                national_id = '2' + ''.join([str(random.randint(0,9)) for _ in range(9)])
+                country_code = '+962'
+                city_options = ["عمّان", "الزرقاء", "إربد", "العقبة", "المفرق", "الكرك", "معان", "جرش", "السلط", "مادبا", "عجلون"]
+                address_str = f"{random.choice(city_options)}، الأردن، شارع {fake_en.street_name()}"
+                zip_code = str(random.randint(10000, 99999))
+                phone = f"+962 7{random.choice(['7','8','9'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["مجموعة المناصير", "شركة زين الأردن", "البنك العربي", "شركة أورانج الأردن", "شركة مصفاة البترول الأردنية", "شركة دار الدواء", "البنك الإسلامي الأردني", "شركة الفوسفات الأردنية", "شركة البوتاس العربية", "شركة الملكية الأردنية", "مؤسسة الضمان الاجتماعي", "شركة مياهنا", "مجموعة الحكمة للأدوية", "شركة تطوير العقبة", "بنك الإسكان"]
+            elif lang == 'ar_SA':
+                national_id = '1' + ''.join([str(random.randint(0,9)) for _ in range(9)])
+                country_code = '+966'
+                city_options = ["الرياض", "جدة", "مكة المكرمة", "المدينة المنورة", "الدمام", "الخبر", "تبوك", "أبها"]
+                address_str = f"{random.choice(city_options)}، السعودية، حي {fake_en.street_name()}"
+                zip_code = str(random.randint(10000, 99999))
+                phone = f"+966 5{random.choice(['0','5','6','4'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["شركة أرامكو السعودية", "مجموعة سابك", "شركة STC", "البنك الأهلي السعودي", "مصرف الراجحي", "شركة المراعي", "شركة جرير للتسويق", "السعودية للكهرباء", "شركة معادن", "مجموعة صافولا"]
+            elif lang == 'ar_AE':
+                national_id = '784-' + ''.join([str(random.randint(0,9)) for _ in range(4)]) + '-' + ''.join([str(random.randint(0,9)) for _ in range(7)]) + '-' + str(random.randint(0,9))
+                country_code = '+971'
+                city_options = ["دبي", "أبوظبي", "الشارقة", "عجمان", "رأس الخيمة", "الفجيرة"]
+                address_str = f"{random.choice(city_options)}، الإمارات، منطقة {fake_en.street_name()}"
+                zip_code = str(random.randint(10000, 99999))
+                phone = f"+971 5{random.choice(['0','2','5','6'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["مجموعة إعمار", "شركة اتصالات", "بنك أبوظبي الأول", "شركة أدنوك", "طيران الإمارات", "موانئ دبي العالمية", "دبي القابضة", "شركة نخيل"]
+            elif lang == 'ar_EG':
+                national_id = str(random.randint(2,3)) + ''.join([str(random.randint(0,9)) for _ in range(13)])
+                country_code = '+20'
+                city_options = ["القاهرة", "الإسكندرية", "الجيزة", "المنصورة", "طنطا", "أسوان", "الأقصر"]
+                address_str = f"{random.choice(city_options)}، مصر، شارع {fake_en.street_name()}"
+                zip_code = str(random.randint(10000, 99999))
+                phone = f"+20 1{random.choice(['0','1','2','5'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["أوراسكوم للإنشاءات", "فودافون مصر", "البنك التجاري الدولي CIB", "مجموعة طلعت مصطفى", "شركة أورانج مصر", "البنك الأهلي المصري", "السويدي إليكتريك", "المصرية للاتصالات"]
+            else:
+                national_id = ''.join([str(random.randint(0,9)) for _ in range(12)])
+                country_code = '+99'
+                address_str = f"منطقة رقم {random.randint(1,100)}، شارع {fake_en.street_name()}"
+                zip_code = "00000"
+                phone = f"+99 {random.randint(100,999)} {random.randint(100,999)} {random.randint(1000,9999)}"
+                _companies = ["الشركة الدولية للتجارة", "مجموعة المستقبل", "شركة الأمل للصناعة", "المؤسسة العربية للتقنية"]
+            
+            _jobs = ["مهندس برمجيات", "محاسب قانوني", "مدير تسويق", "محامي", "أخصائي أمن معلومات", "مدير مشاريع", "محلل بيانات", "مطوّر تطبيقات", "مدير مبيعات", "أخصائي موارد بشرية", "محلل نظم", "مصمم جرافيك"]
+            company = random.choice(_companies)
+            job = random.choice(_jobs)
             
         else:
+            # اللغات غير العربية (International)
             national_id = ''.join([str(random.randint(0,9)) for _ in range(10)])
             try: country_code = fake.country_calling_code()
             except Exception: country_code = fake_en.country_calling_code()
@@ -22175,69 +22075,23 @@ def fake_identity_route():
             try: zip_code = fake.postcode()
             except Exception: zip_code = fake_en.postcode()
             
-            # توليد الاسم بناءً على الجنس المحدد لكل اللغات
+            if gender_code == 'male':
+                full_name = f"{fake.first_name_male()} {fake.first_name_male()}" # First + Father/Middle
+            else:
+                full_name = f"{fake.first_name_female()} {fake.first_name_male()}"
+            
             try:
-                if gender_code == 'male':
-                    full_name = fake.name_male()
-                else:
-                    full_name = fake.name_female()
+                mother_name = fake.first_name_female() + ' ' + fake.first_name_male()
             except Exception:
-                # Fallback to English but keep gender
-                if gender_code == 'male':
-                    full_name = fake_en.name_male()
-                else:
-                    full_name = fake_en.name_female()
-
-            try:
-                mother_name = fake.first_name_female() + ' ' + fake.last_name()
-            except Exception:
-                mother_name = fake_en.first_name_female() + ' ' + fake_en.last_name()
+                mother_name = fake_en.first_name_female() + ' ' + fake_en.first_name_male()
                 
             try: phone = fake.phone_number()
             except Exception: phone = fake_en.phone_number()
-
-            # --- شركات ووظائف واقعية للغات العربية الأخرى ---
-            if lang in ('ar_SA', 'ar_AE', 'ar_EG', 'ar_AA'):
-                _ar_companies_map = {
-                    'ar_SA': [
-                        "شركة أرامكو السعودية", "مجموعة سابك", "شركة الاتصالات السعودية STC", "بنك الراجحي",
-                        "شركة المراعي", "البنك الأهلي السعودي", "مجموعة بن لادن", "شركة جرير للتسويق",
-                        "مجموعة صافولا", "الشركة السعودية للكهرباء", "شركة معادن", "مجموعة الطيار للسفر",
-                        "شركة مقام للتطوير العقاري", "البنك السعودي الفرنسي", "شركة زين السعودية",
-                        "مجموعة الفيصلية", "شركة نسما القابضة", "الشركة السعودية للصناعات الأساسية",
-                        "شركة التصنيع الوطنية", "مجموعة العليان", "شركة دله للخدمات الصحية",
-                    ],
-                    'ar_AE': [
-                        "مجموعة إعمار العقارية", "شركة اتصالات الإمارات", "بنك أبوظبي الأول",
-                        "شركة أدنوك", "مجموعة الفطيم", "مجموعة ماجد الفطيم", "شركة دبي القابضة",
-                        "طيران الإمارات", "شركة دو للاتصالات", "مجموعة الحبتور", "بنك دبي الإسلامي",
-                        "شركة داماك العقارية", "مجموعة الغرير", "شركة موانئ دبي العالمية",
-                        "مجموعة المنصوري", "الشركة الوطنية لتوزيع الكهرباء", "شركة نخيل العقارية",
-                    ],
-                    'ar_EG': [
-                        "شركة أوراسكوم للإنشاءات", "المجموعة المالية هيرميس", "شركة فودافون مصر",
-                        "البنك التجاري الدولي CIB", "شركة طلعت مصطفى القابضة", "مجموعة منصور",
-                        "شركة أورنج مصر", "البنك الأهلي المصري", "شركة السويدي إليكتريك",
-                        "مجموعة العربي", "شركة جهينة للصناعات الغذائية", "المصرية للاتصالات",
-                        "شركة حديد عز", "مجموعة كليوباترا", "شركة إيديتا للصناعات الغذائية",
-                    ],
-                }
-                _ar_jobs = [
-                    "مهندس برمجيات", "طبيب عام", "محاسب قانوني", "مدير تسويق", "معلم",
-                    "صيدلاني", "مهندس مدني", "محامي", "مدير موارد بشرية", "ممرض/ة",
-                    "مصمم جرافيك", "مهندس كهرباء", "أخصائي أمن معلومات", "مدير مشاريع", "طبيب أسنان",
-                    "مراقب مالي", "مهندس شبكات", "أخصائي تغذية", "مدير عمليات", "مترجم",
-                    "صحفي", "مدير مبيعات", "مهندس معماري", "محلل بيانات", "مطوّر تطبيقات",
-                    "مدير مالي", "أخصائي علاج طبيعي", "مهندس ميكانيكي", "مسؤول علاقات عامة", "خبير تأمين",
-                ]
-                _co_list = _ar_companies_map.get(lang, _ar_companies_map.get('ar_SA', []))
-                company = random.choice(_co_list) if _co_list else fake_en.company()
-                job = random.choice(_ar_jobs)
-            else:
-                try: company = fake.company()
-                except Exception: company = fake_en.company()
-                try: job = fake.job()
-                except Exception: job = fake_en.job()
+            
+            try: company = fake.company()
+            except Exception: company = fake_en.company()
+            try: job = fake.job()
+            except Exception: job = fake_en.job()
 
         # color_name قد يفشل مع بعض اللغات
         try:
@@ -22386,8 +22240,9 @@ def auth_register():
         return jsonify({"error": "اسم المستخدم وكلمة السر والإيميل مطلوبان"}), 400
     if len(username) < 3:
         return jsonify({"error": "اسم المستخدم يجب أن يكون 3 أحرف على الأقل"}), 400
-    if len(password) < 6:
-        return jsonify({"error": "كلمة السر يجب أن تكون 6 أحرف على الأقل"}), 400
+    is_strong, msg = validate_password_strength(password)
+    if not is_strong:
+        return jsonify({"error": msg}), 400
     if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
         return jsonify({"error": "البريد الإلكتروني غير صالح"}), 400
     if not accepted_terms:
@@ -22700,8 +22555,9 @@ def forgot_password_reset():
     new_password = data.get('new_password', '')
     if not username or not otp or not new_password:
         return jsonify({"error": "البيانات ناقصة"}), 400
-    if len(new_password) < 6:
-        return jsonify({"error": "كلمة السر قصيرة جداً (6 أحرف على الأقل)"}), 400
+    is_strong, msg = validate_password_strength(new_password)
+    if not is_strong:
+        return jsonify({"error": msg}), 400
     stored = _FORGOT_OTP_STORE.get(username)
     if not stored:
         return jsonify({"error": "يرجى إعادة طلب كود التحقق."}), 400
@@ -22740,22 +22596,24 @@ def auth_change_password():
     if not old_password or not new_password:
         return jsonify({"error": "يرجى إدخال كلمة السر القديمة والجديدة"}), 400
     
-    if len(new_password) < 6:
-        return jsonify({"error": "كلمة السر الجديدة قصيرة جداً (6 أحرف على الأقل)"}), 400
+    is_strong, msg = validate_password_strength(new_password)
+    if not is_strong:
+        return jsonify({"error": msg}), 400
         
     conn = None
     try:
         conn = get_db_conn()
         cur = conn.cursor()
         
-        # جلب الهش القديم
-        cur.execute("SELECT password_hash, username FROM users WHERE id=%s", (session['user_id'],))
+        # جلب البيانات الحالية
+        cur.execute("SELECT password_hash, username, email FROM users WHERE id=%s", (session['user_id'],))
         user = cur.fetchone()
         if not user:
             return jsonify({"error": "المستخدم غير موجود"}), 404
             
         stored_hash = user[0]
         username = user[1]
+        user_email = user[2]
         
         # التحقق من كلمة السر القديمة
         if not verify_password(old_password, stored_hash):
@@ -22766,8 +22624,40 @@ def auth_change_password():
         cur.execute("UPDATE users SET password_hash=%s WHERE id=%s", (new_hash, session['user_id']))
         conn.commit()
         
-        add_audit_log("تغيير كلمة السر 🔐", f"قام المستخدم {username} بتغيير كلمة سره", username=username)
-        return jsonify({"success": True, "message": "تم تحديث كلمة المرور بنجاح"})
+        # إرسال تنبيهات بريدية
+        subject = "تنبيه أمني: تغيير كلمة المرور في TITAN"
+        msg_body = f"""مرحباً {username}،
+
+تم تغيير كلمة المرور لحسابك في TITAN بنجاح.
+إذا لم تقم بهذا الإجراء بنفسك، يرجى التواصل مع الدعم الفني فوراً لحماية حسابك.
+
+تفاصيل العملية:
+- الوقت: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+- عنوان IP: {request.remote_addr}
+
+— فريق TITAN Security
+"""
+        # إرسال للمستخدم إذا كان لديه بريد مسجل
+        if user_email:
+            _send_email_async(subject, msg_body, to=user_email)
+            
+        # إرسال للأدمن
+        admin_subject = f"تنبيه إدارة: تغيير كلمة مرور - {username}"
+        admin_body = f"""قام المستخدم ({username}) بتغيير كلمة مروره بنجاح.
+
+تفاصيل المستخدم:
+- ID: {session['user_id']}
+- Username: {username}
+- Email: {user_email or 'غير مسجل'}
+- IP: {request.remote_addr}
+- Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+— نظام التنبيهات التلقائي
+"""
+        _send_email_async(admin_subject, admin_body, to=ADMIN_EMAIL)
+
+        add_audit_log("تغيير كلمة السر 🔐", f"قام المستخدم {username} بتغيير كلمة سره (تم إرسال تنبيهات بريدية)", username=username)
+        return jsonify({"success": True, "message": "تم تحديث كلمة المرور بنجاح وإرسال التنبيهات"})
         
     except Exception as e:
         print(f"[TITAN] Change password error: {e}")
