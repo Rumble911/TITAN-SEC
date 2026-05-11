@@ -19640,7 +19640,7 @@ def osint_intelbase_email_route():
         }), 400
     
     # IntelBase API Configuration
-    INTELBASE_API_KEY = os.environ.get('INTELBASE_API_KEY', 'in_ryLuN70FA969M5AYkrp5')
+    INTELBASE_API_KEY = os.environ.get('INTELBASE_API_KEY', 'in_pJwqZl4TmL636ZDW9MuE')
     intelbase_url = 'https://api.intelbase.is/lookup/email'
     
     payload = {
