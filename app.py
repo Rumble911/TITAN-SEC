@@ -19626,9 +19626,9 @@ def scan_email_route():
     return jsonify(res)
 
 
-@app.route('/api/osint/intelbase-email', methods=['POST'])
-def osint_intelbase_email_route():
-    """استخدام IntelBase API للبحث عن معلومات الإيميل والتسريبات"""
+@app.route('/api/osint/-email', methods=['POST'])
+def osint__email_route():
+    """استخدام  API للبحث عن معلومات الإيميل والتسريبات"""
     data = request.get_json(silent=True) or {}
     email = str(data.get('email', '')).strip().lower()
     include_breaches = bool(data.get('include_data_breaches', True))
@@ -19639,7 +19639,7 @@ def osint_intelbase_email_route():
             'error': 'يجب تمرير بريد إلكتروني صالح'
         }), 400
     
-    # IntelBase API Configuration
+    #  API Configuration
     INTELBASE_API_KEY = os.environ.get('INTELBASE_API_KEY', 'in_kmnBuC89MvFYkWSbGqQu')
     intelbase_url = 'https://api.intelbase.is/lookup/email'
     
