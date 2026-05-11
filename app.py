@@ -6215,18 +6215,11 @@ HTML_TEMPLATE = """
                                     <optgroup label="Arabic Locales">
                                         <option value="ar_JO" selected>🇯🇴 الأردن (Jordan)</option>
                                         <option value="ar_SA">🇸🇦 السعودية (Saudi Arabia)</option>
-                                        <option value="ar_AE">🇦🇪 الإمارات (UAE)</option>
                                         <option value="ar_EG">🇪🇬 مصر (Egypt)</option>
                                     </optgroup>
                                     <optgroup label="International">
-                                        <option value="en_US">🇺🇸 United States</option>
-                                        <option value="en_GB">🇬🇧 United Kingdom</option>
-                                        <option value="fr_FR">🇫🇷 France</option>
-                                        <option value="de_DE">🇩🇪 Germany</option>
-                                        <option value="es_ES">🇪🇸 Spain</option>
-                                        <option value="tr_TR">🇹🇷 Turkey</option>
-                                        <option value="ru_RU">🇷🇺 Russia</option>
-                                        <option value="zh_CN">🇨🇳 China</option>
+                                        <option value="en_US">🇺🇸 ENGLISH US</option>
+                                        <option value="en_GB">🇬🇧 ENGLISH GB</option>
                                     </optgroup>
                                 </select>
                                 <div class="absolute left-4 top-1/2 -translate-y-1/2 text-teal-500/50 pointer-events-none">▼</div>
@@ -21977,10 +21970,8 @@ def fake_identity_route():
         # قائمة اللغات المدعومة
         SUPPORTED_LANGS = {
             'en_US': 'en_US', 'en_GB': 'en_GB',
-            'ar_SA': 'ar_SA', 'ar_AA': 'ar_AA',
-            'ar_JO': 'ar_AA',  # Faker لا يدعم ar_JO بشكل رسمي — نستخدم ar_AA كبديل
-            'fr_FR': 'fr_FR', 'de_DE': 'de_DE', 'es_ES': 'es_ES',
-            'tr_TR': 'tr_TR', 'ru_RU': 'ru_RU', 'zh_CN': 'zh_CN',
+            'ar_SA': 'ar_SA', 'ar_JO': 'ar_AA',
+            'ar_EG': 'ar_EG'
         }
         faker_lang = SUPPORTED_LANGS.get(lang, 'ar_AA')
         
