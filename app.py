@@ -19640,7 +19640,7 @@ def osint_intelbase_email_route():
         }), 400
     
     # IntelBase API Configuration
-    INTELBASE_API_KEY = os.environ.get('INTELBASE_API_KEY', 'in_pJwqZl4TmL636ZDW9MuE')
+    INTELBASE_API_KEY = os.environ.get('INTELBASE_API_KEY', 'in_ryLuN70FA969M5AYkrp5')
     intelbase_url = 'https://api.intelbase.is/lookup/email'
     
     payload = {
@@ -19698,10 +19698,29 @@ def osint_intelbase_email_route():
                 'email': email
             }), 200 # نستخدم 200 لتجنب تدخل Heroku Error Pages
         
-        result = response.json()
-        
+        try:
+            result = response.json()
+        except ValueError:
+            body = response.text or ''
+            error_msg = f'رد غير صالح من المزود (ليس JSON): {body[:100]}'
+            add_audit_log('OSINT IntelBase Email JSON Error', f'email={email} body={body[:100]}')
+            return jsonify({
+                'success': False,
+                'error': 'فشل تحليل البيانات من IntelBase. قد يكون هناك ضغط على الخادم أو مشكلة في الاتصال.',
+                'email': email
+            }), 200
+
+        # التحقق مما إذا كان الرد يحتوي على خطأ داخلي من IntelBase
+        if not result or not isinstance(result, dict) or result.get('status') == 'error' or result.get('error'):
+            msg = result.get('message') or result.get('error') or 'لا توجد بيانات متاحة حالياً لهذا البريد.'
+            add_audit_log('OSINT IntelBase Email API Error', f'email={email} msg={msg}')
+            return jsonify({
+                'success': False,
+                'error': f'IntelBase: {msg}',
+                'email': email
+            }), 200
+
         # استخراج البيانات من الصيغة الفعلية لـ IntelBase API
-        # data_breaches هو dict يحتوي على: {amount, redacted, results, sources}
         breaches_data = result.get('data_breaches', {})
         if isinstance(breaches_data, dict):
             breaches_list = breaches_data.get('results', [])
@@ -19709,11 +19728,10 @@ def osint_intelbase_email_route():
             breaches_list = breaches_data if isinstance(breaches_data, list) else []
         
         # استخراج معلومات الحسابات من identifier.accounts
-        # هام: IntelBase ترجع accounts كـ array، نحتاج لتحويلها إلى dict
         identifier = result.get('identifier', {})
         accounts_array = identifier.get('accounts', []) if isinstance(identifier, dict) else []
         
-        # تحويل array من الحسابات إلى dict مع اسم المنصة كـ key
+        # تحويل array من الحسابات إلى dict مع اسم المنصة كـ key لسهولة المعالجة
         accounts_data = {}
         if isinstance(accounts_array, list):
             for account in accounts_array:
@@ -19722,36 +19740,41 @@ def osint_intelbase_email_route():
                     data_account = account.get('data', {})
                     platform_name = module.get('name_formatted') or module.get('name') or 'Unknown'
                     
-                    # دمج module و data معاً
                     accounts_data[platform_name] = {
-                        **data_account,  # كل بيانات المستخدم (full_name, username, etc.)
+                        **data_account,
                         'platform': platform_name,
                         'domain': module.get('domain'),
-                        'module_id': module.get('id')
+                        'module_id': module.get('id'),
+                        'is_match': True
                     }
         
-        # استخراج معلومات Meta
+        # معلومات Meta والتحقق
         meta_data = result.get('meta', {}) if isinstance(result.get('meta'), dict) else {}
+        validator_data = result.get('validator', {}) if isinstance(result.get('validator'), dict) else {}
+        stealer_logs = result.get('stealer_logs', []) if isinstance(result.get('stealer_logs'), list) else []
         
-        # تحويل النتيجة إلى صيغة متوافقة مع التطبيق
+        # إذا لم نجد أي خروقات وأي حسابات وكان الرد ناجحاً، فقد يكون البريد نظيفاً أو المفتاح لا يرى النتائج
+        if not breaches_list and not accounts_data and not stealer_logs:
+            add_audit_log('OSINT IntelBase Empty', f'email={email} (No data found)')
+        
         processed_result = {
             'success': True,
             'email': email,
             'data_breaches': {'results': breaches_list, 'amount': len(breaches_list)},
             'identifier': {'accounts': accounts_data},
             'meta': meta_data,
-            'stealer_logs': result.get('stealer_logs') or [],
-            'validator': result.get('validator') or {},
-            'raw_response': result  # أرسل البيانات الخام أيضاً
+            'stealer_logs': stealer_logs,
+            'validator': validator_data,
+            'raw_response': result
         }
         
         add_audit_log(
             'OSINT IntelBase Email',
-            f'email={email} breaches={len(breaches_list)} accounts={len(accounts_data)} first_seen={meta_data.get("first_seen", "unknown")}'
+            f'email={email} breaches={len(breaches_list)} accounts={len(accounts_data)}'
         )
         return jsonify(processed_result)
         
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         error_msg = f'خطأ غير متوقع في الاتصال بـ IntelBase: {str(e)}'
         add_audit_log('OSINT IntelBase Email Exception', f'email={email} error={str(e)}')
         return jsonify({
