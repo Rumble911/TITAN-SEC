@@ -2474,6 +2474,18 @@ def verify_password(password: str, stored_hash: str) -> bool:
     except Exception:
         return False
 
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    if len(password) < 8:
+        return False, "كلمة السر يجب أن تكون 8 أحرف على الأقل"
+    if not re.search(r"[A-Z]", password):
+        return False, "يجب أن تحتوي كلمة السر على حرف كبير واحد على الأقل (A-Z)"
+    if not re.search(r"[a-z]", password):
+        return False, "يجب أن تحتوي كلمة السر على حرف صغير واحد على الأقل (a-z)"
+    if not re.search(r"\d", password):
+        return False, "يجب أن تحتوي كلمة السر على رقم واحد على الأقل (0-9)"
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False, "يجب أن تحتوي كلمة السر على رمز خاص واحد على الأقل (مثل !@#$%^&*)"
+    return True, ""
 
 
 # --- نظام سجل النشاط الأمني (Audit Log) ---
@@ -4338,8 +4350,9 @@ HTML_TEMPLATE = """
                         <input id="auth-reg-email" type="email" placeholder="بريدك الإلكتروني (لتفعيل الحساب)..." autocomplete="email" style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;transition:border-color 0.2s;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(139,92,246,0.3)'">
                     </div>
                     <div style="margin-bottom:1rem;">
-                        <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;letter-spacing:0.05em;">كلمة السر (6 أحرف على الأقل)</label>
+                        <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;letter-spacing:0.05em;">كلمة السر (يجب أن تكون قوية)</label>
                         <input id="auth-reg-pass" type="password" placeholder="اختر كلمة سر قوية..." autocomplete="new-password" style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;transition:border-color 0.2s;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(139,92,246,0.3)'">
+                        <div style="font-size:0.7rem;color:rgba(255,255,255,0.45);margin-top:0.4rem;line-height:1.3;">يجب أن تكون 8 أحرف، حرف كبير، حرف صغير، رقم، ورمز خاص.</div>
                     </div>
                     <div style="margin-bottom:1.5rem;">
                         <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;letter-spacing:0.05em;">تأكيد كلمة السر</label>
@@ -4443,8 +4456,9 @@ HTML_TEMPLATE = """
                             <h3 style="color:#a855f7;font-weight:700;">تعيين كلمة سر جديدة</h3>
                         </div>
                         <div style="margin-bottom:1rem;">
-                            <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;">كلمة السر الجديدة</label>
+                            <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;">كلمة السر الجديدة (قوية)</label>
                             <input id="forgot-newpass" type="password" placeholder="كلمة السر الجديدة..." style="width:100%;box-sizing:border-box;padding:0.85rem 1rem;background:rgba(15,15,40,0.9);border:1px solid rgba(139,92,246,0.3);border-radius:12px;color:white;font-size:0.95rem;outline:none;font-family:Tajawal,sans-serif;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(139,92,246,0.3)'">
+                            <div style="font-size:0.7rem;color:rgba(255,255,255,0.45);margin-top:0.4rem;line-height:1.3;">يجب أن تكون 8 أحرف، حرف كبير، حرف صغير، رقم، ورمز خاص.</div>
                         </div>
                         <div style="margin-bottom:1.5rem;">
                             <label style="display:block;color:#9ca3af;font-size:0.78rem;margin-bottom:6px;">تأكيد كلمة السر</label>
@@ -6501,8 +6515,9 @@ HTML_TEMPLATE = """
                     <input id="cp-old-pass" type="password" placeholder="كلمة المرور الحالية..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
                 </div>
                 <div style="margin-bottom:1rem;">
-                    <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الجديدة</label>
+                    <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الجديدة (قوية)</label>
                     <input id="cp-new-pass" type="password" placeholder="كلمة المرور الجديدة..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
+                    <div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:0.35rem;line-height:1.2;">8 أحرف، حرف كبير، حرف صغير، رقم، ورمز.</div>
                 </div>
                 <div style="margin-bottom:1.5rem;">
                     <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">تأكيد كلمة المرور الجديدة</label>
@@ -6516,6 +6531,15 @@ HTML_TEMPLATE = """
 
 
     <script>
+        function validatePass(p) {
+            if (p.length < 8) return { ok: false, msg: 'كلمة السر يجب أن تكون 8 أحرف على الأقل' };
+            if (!/[A-Z]/.test(p)) return { ok: false, msg: 'يجب أن تحتوي كلمة السر على حرف كبير واحد (A-Z)' };
+            if (!/[a-z]/.test(p)) return { ok: false, msg: 'يجب أن تحتوي كلمة السر على حرف صغير واحد (a-z)' };
+            if (!/[0-9]/.test(p)) return { ok: false, msg: 'يجب أن تحتوي كلمة السر على رقم واحد على الأقل (0-9)' };
+            if (!/[!@#$%^&*(),.?":{}|<>]/.test(p)) return { ok: false, msg: 'يجب أن تحتوي كلمة السر على رمز خاص واحد على الأقل (!@#$...)' };
+            return { ok: true };
+        }
+
         // --- نظام المؤثرات الصوتية (Web Audio API) ---
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         let audioCtx;
@@ -6598,8 +6622,9 @@ HTML_TEMPLATE = """
                 errDiv.style.display = 'block';
                 return;
             }
-            if (newPass.length < 6) {
-                errDiv.innerText = 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل';
+            const passCheck = validatePass(newPass);
+            if (!passCheck.ok) {
+                errDiv.innerText = passCheck.msg;
                 errDiv.style.display = 'block';
                 return;
             }
@@ -6912,7 +6937,8 @@ HTML_TEMPLATE = """
 
             if (!username || !email || !password || !password2) { errEl.textContent = 'يرجى ملء جميع الحقول'; errEl.style.display = 'block'; return; }
             if (password !== password2) { errEl.textContent = 'كلمتا السر غير متطابقتين!'; errEl.style.display = 'block'; return; }
-            if (password.length < 6) { errEl.textContent = 'كلمة السر يجب أن تكون 6 أحرف على الأقل'; errEl.style.display = 'block'; return; }
+            const passCheck = validatePass(password);
+            if (!passCheck.ok) { errEl.textContent = passCheck.msg; errEl.style.display = 'block'; return; }
             if (!acceptedTerms) { errEl.textContent = 'يجب الموافقة على الشروط والأحكام لإكمال إنشاء الحساب.'; errEl.style.display = 'block'; return; }
 
             btn.textContent = '⏳ جاري إنشاء الحساب...';
@@ -15527,7 +15553,8 @@ HTML_TEMPLATE = """
             const newpass2 = document.getElementById('forgot-newpass2').value;
             const errEl = document.getElementById('forgot-step3-error');
             errEl.style.display = 'none';
-            if (!newpass || newpass.length < 6) { errEl.textContent = 'كلمة السر يجب أن تكون 6 أحرف على الأقل.'; errEl.style.display = 'block'; return; }
+            const passCheck = validatePass(newpass);
+            if (!passCheck.ok) { errEl.textContent = passCheck.msg; errEl.style.display = 'block'; return; }
             if (newpass !== newpass2) { errEl.textContent = 'كلمتا السر غير متطابقتين.'; errEl.style.display = 'block'; return; }
             try {
                 const res = await fetch('/api/auth/forgot-password/reset', {
@@ -22213,8 +22240,9 @@ def auth_register():
         return jsonify({"error": "اسم المستخدم وكلمة السر والإيميل مطلوبان"}), 400
     if len(username) < 3:
         return jsonify({"error": "اسم المستخدم يجب أن يكون 3 أحرف على الأقل"}), 400
-    if len(password) < 6:
-        return jsonify({"error": "كلمة السر يجب أن تكون 6 أحرف على الأقل"}), 400
+    is_strong, msg = validate_password_strength(password)
+    if not is_strong:
+        return jsonify({"error": msg}), 400
     if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
         return jsonify({"error": "البريد الإلكتروني غير صالح"}), 400
     if not accepted_terms:
@@ -22527,8 +22555,9 @@ def forgot_password_reset():
     new_password = data.get('new_password', '')
     if not username or not otp or not new_password:
         return jsonify({"error": "البيانات ناقصة"}), 400
-    if len(new_password) < 6:
-        return jsonify({"error": "كلمة السر قصيرة جداً (6 أحرف على الأقل)"}), 400
+    is_strong, msg = validate_password_strength(new_password)
+    if not is_strong:
+        return jsonify({"error": msg}), 400
     stored = _FORGOT_OTP_STORE.get(username)
     if not stored:
         return jsonify({"error": "يرجى إعادة طلب كود التحقق."}), 400
@@ -22567,8 +22596,9 @@ def auth_change_password():
     if not old_password or not new_password:
         return jsonify({"error": "يرجى إدخال كلمة السر القديمة والجديدة"}), 400
     
-    if len(new_password) < 6:
-        return jsonify({"error": "كلمة السر الجديدة قصيرة جداً (6 أحرف على الأقل)"}), 400
+    is_strong, msg = validate_password_strength(new_password)
+    if not is_strong:
+        return jsonify({"error": msg}), 400
         
     conn = None
     try:
