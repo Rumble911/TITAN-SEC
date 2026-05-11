@@ -6449,6 +6449,100 @@ HTML_TEMPLATE = """
                                 </div>
                             </div>
 
+                            <!-- Travel & Academic Card -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="bg-slate-900/60 backdrop-blur-2xl rounded-[2rem] border border-white/5 p-8 shadow-xl">
+                                    <div class="flex items-center gap-3 mb-8">
+                                        <div class="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]">🛂</div>
+                                        <h4 class="text-sm font-black text-white uppercase tracking-[0.2em]">Travel & Passport</h4>
+                                    </div>
+                                    <div class="space-y-6">
+                                        <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Passport Number</span>
+                                            <p id="idPassportNo" class="text-lg font-mono text-white font-black tracking-widest"></p>
+                                        </div>
+                                        <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Expiry Date</span>
+                                            <p id="idPassportExpire" class="text-lg font-mono text-amber-400 font-black"></p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="bg-slate-900/60 backdrop-blur-2xl rounded-[2rem] border border-white/5 p-8 shadow-xl">
+                                    <div class="flex items-center gap-3 mb-8">
+                                        <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]">🎓</div>
+                                        <h4 class="text-sm font-black text-white uppercase tracking-[0.2em]">Education & Academic</h4>
+                                    </div>
+                                    <div class="space-y-6">
+                                        <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">University / Institute</span>
+                                            <p id="idEduUni" class="text-sm font-black text-white"></p>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Degree</span>
+                                                <p id="idEduDegree" class="text-xs font-bold text-blue-400"></p>
+                                            </div>
+                                            <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">GPA</span>
+                                                <p id="idEduGpa" class="text-sm font-mono text-green-400 font-black"></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Network & Banking Card -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="bg-slate-900/60 backdrop-blur-2xl rounded-[2rem] border border-white/5 p-8 shadow-xl">
+                                    <div class="flex items-center gap-3 mb-8">
+                                        <div class="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]">🏦</div>
+                                        <h4 class="text-sm font-black text-white uppercase tracking-[0.2em]">Banking Details</h4>
+                                    </div>
+                                    <div class="space-y-4">
+                                        <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block">Bank Name</span>
+                                            <p id="idBankName" class="text-sm font-bold text-white"></p>
+                                        </div>
+                                        <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block">IBAN</span>
+                                            <p id="idBankIban" class="text-[10px] font-mono text-indigo-300 break-all"></p>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                                                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block">SWIFT / BIC</span>
+                                                <p id="idBankSwift" class="text-sm font-mono text-white font-bold"></p>
+                                            </div>
+                                            <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                                                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block">Account No</span>
+                                                <p id="idBankAcc" class="text-sm font-mono text-white font-bold"></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="bg-slate-900/60 backdrop-blur-2xl rounded-[2rem] border border-white/5 p-8 shadow-xl">
+                                    <div class="flex items-center gap-3 mb-8">
+                                        <div class="w-10 h-10 bg-rose-500/20 rounded-xl flex items-center justify-center text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.2)]">🌐</div>
+                                        <h4 class="text-sm font-black text-white uppercase tracking-[0.2em]">Network Intelligence</h4>
+                                    </div>
+                                    <div class="space-y-4">
+                                        <div class="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Virtual IPv4 Address</span>
+                                            <p id="idNetIp" class="text-lg font-mono text-rose-400 font-black tracking-widest"></p>
+                                        </div>
+                                        <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block">MAC Hardware ID</span>
+                                            <p id="idNetMac" class="text-sm font-mono text-gray-300"></p>
+                                        </div>
+                                        <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block">Connection Type</span>
+                                            <p id="idNetConn" class="text-sm font-bold text-emerald-400"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Meta Sigature Card -->
                             <div class="bg-black/50 backdrop-blur-md rounded-[2rem] border border-white/5 p-8">
                                 <h4 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] mb-6 flex items-center justify-center gap-4">
@@ -16563,6 +16657,23 @@ HTML_TEMPLATE = """
                 setEl('idUserAgent', data.user_agent);
                 setEl('idUuid', data.uuid);
                 
+                // --- New Fields Population ---
+                setEl('idPassportNo', data.passport_no);
+                setEl('idPassportExpire', data.passport_expire);
+                
+                setEl('idBankName', data.bank_name);
+                setEl('idBankIban', data.bank_iban);
+                setEl('idBankSwift', data.bank_swift);
+                setEl('idBankAcc', data.bank_acc);
+                
+                setEl('idNetIp', data.net_ip);
+                setEl('idNetMac', data.net_mac);
+                setEl('idNetConn', data.net_connection);
+                
+                setEl('idEduUni', data.edu_uni);
+                setEl('idEduDegree', data.edu_degree);
+                setEl('idEduGpa', data.edu_gpa);
+                
                 // Show area and restore opacity
                 resArea.classList.remove('hidden');
                 resArea.style.opacity = '1';
@@ -16613,7 +16724,21 @@ HTML_TEMPLATE = """
 تاريخ الانتهاء: ${getVal('idCcExp')}
 CVV: ${getVal('idCcCvv')}
 
-[بيانات رقمية]
+[بيانات السفر والتعليم]
+رقم جواز السفر: ${getVal('idPassportNo')} (ينتهي في: ${getVal('idPassportExpire')})
+المؤسسة التعليمية: ${getVal('idEduUni')}
+الدرجة العلمية: ${getVal('idEduDegree')} (المعدل: ${getVal('idEduGpa')})
+
+[البيانات البنكية]
+البنك: ${getVal('idBankName')}
+IBAN: ${getVal('idBankIban')}
+SWIFT: ${getVal('idBankSwift')}
+رقم الحساب: ${getVal('idBankAcc')}
+
+[بيانات الشبكة والبيانات الرقمية]
+IP Address: ${getVal('idNetIp')}
+MAC Address: ${getVal('idNetMac')}
+نوع الاتصال: ${getVal('idNetConn')}
 اسم المستخدم: ${getVal('idUsername')}
 كلمة المرور: ${getVal('idPassword')}
 موقع الويب: ${getVal('idWebsite')}
@@ -22019,7 +22144,8 @@ def fake_identity_route():
                 address_str = f"{random.choice(city_options)}، الأردن، شارع {fake_en.street_name()}"
                 zip_code = str(random.randint(10000, 99999))
                 phone = f"+962 7{random.choice(['7','8','9'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
-                _companies = ["مجموعة المناصير", "شركة زين الأردن", "البنك العربي", "شركة أورانج الأردن", "شركة مصفاة البترول الأردنية", "شركة دار الدواء", "البنك الإسلامي الأردني", "شركة الفوسفات الأردنية", "شركة البوتاس العربية", "شركة الملكية الأردنية", "مؤسسة الضمان الاجتماعي", "شركة مياهنا", "مجموعة الحكمة للأدوية", "شركة تطوير العقبة", "بنك الإسكان"]
+                _companies = ["مجموعة المناصير", "شركة زين الأردن", "شركة أورانج الأردن", "شركة مصفاة البترول الأردنية", "شركة دار الدواء", "شركة الفوسفات الأردنية", "شركة البوتاس العربية", "شركة الملكية الأردنية", "مؤسسة الضمان الاجتماعي", "شركة مياهنا", "مجموعة الحكمة للأدوية", "شركة تطوير العقبة"]
+                _banks = ["البنك العربي", "بنك الإسكان للتجارة والتمويل", "البنك الإسلامي الأردني", "بنك الأردن", "بنك القاهرة عمان", "بنك الاتحاد", "كابيتال بنك", "صفوة الإسلامي", "البنك الأردني الكويتي"]
             elif lang == 'ar_SA':
                 national_id = '1' + ''.join([str(random.randint(0,9)) for _ in range(9)])
                 country_code = '+966'
@@ -22027,7 +22153,8 @@ def fake_identity_route():
                 address_str = f"{random.choice(city_options)}، السعودية، حي {fake_en.street_name()}"
                 zip_code = str(random.randint(10000, 99999))
                 phone = f"+966 5{random.choice(['0','5','6','4'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
-                _companies = ["شركة أرامكو السعودية", "مجموعة سابك", "شركة STC", "البنك الأهلي السعودي", "مصرف الراجحي", "شركة المراعي", "شركة جرير للتسويق", "السعودية للكهرباء", "شركة معادن", "مجموعة صافولا"]
+                _companies = ["شركة أرامكو السعودية", "مجموعة سابك", "شركة STC", "شركة المراعي", "شركة جرير للتسويق", "السعودية للكهرباء", "شركة معادن", "مجموعة صافولا", "شركة نادك", "التموين السعودية"]
+                _banks = ["البنك الأهلي السعودي (SNB)", "مصرف الراجحي", "بنك الرياض", "مصرف الإنماء", "البنك السعودي الأول (SAB)", "البنك العربي الوطني (ANB)", "بنك البلاد", "بنك الاستثمار العربي الأردني (الفرع السعودي)"]
             elif lang == 'ar_AE':
                 national_id = '784-' + ''.join([str(random.randint(0,9)) for _ in range(4)]) + '-' + ''.join([str(random.randint(0,9)) for _ in range(7)]) + '-' + str(random.randint(0,9))
                 country_code = '+971'
@@ -22035,7 +22162,8 @@ def fake_identity_route():
                 address_str = f"{random.choice(city_options)}، الإمارات، منطقة {fake_en.street_name()}"
                 zip_code = str(random.randint(10000, 99999))
                 phone = f"+971 5{random.choice(['0','2','5','6'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
-                _companies = ["مجموعة إعمار", "شركة اتصالات", "بنك أبوظبي الأول", "شركة أدنوك", "طيران الإمارات", "موانئ دبي العالمية", "دبي القابضة", "شركة نخيل"]
+                _companies = ["مجموعة إعمار", "شركة اتصالات", "شركة أدنوك", "طيران الإمارات", "موانئ دبي العالمية", "دبي القابضة", "شركة نخيل", "شركة القدرة"]
+                _banks = ["بنك أبوظبي الأول (FAB)", "بنك الإمارات دبي الوطني", "بنك أبوظبي التجاري", "مصرف أبوظبي الإسلامي", "بنك دبي الإسلامي", "بنك المشرق"]
             elif lang == 'ar_EG':
                 national_id = str(random.randint(2,3)) + ''.join([str(random.randint(0,9)) for _ in range(13)])
                 country_code = '+20'
@@ -22043,7 +22171,8 @@ def fake_identity_route():
                 address_str = f"{random.choice(city_options)}، مصر، شارع {fake_en.street_name()}"
                 zip_code = str(random.randint(10000, 99999))
                 phone = f"+20 1{random.choice(['0','1','2','5'])}{random.randint(0,9)} {random.randint(100,999)} {random.randint(1000,9999)}"
-                _companies = ["أوراسكوم للإنشاءات", "فودافون مصر", "البنك التجاري الدولي CIB", "مجموعة طلعت مصطفى", "شركة أورانج مصر", "البنك الأهلي المصري", "السويدي إليكتريك", "المصرية للاتصالات"]
+                _companies = ["أوراسكوم للإنشاءات", "فودافون مصر", "مجموعة طلعت مصطفى", "شركة أورانج مصر", "السويدي إليكتريك", "المصرية للاتصالات", "شركة حديد عز"]
+                _banks = ["البنك الأهلي المصري", "بنك مصر", "البنك التجاري الدولي (CIB)", "بنك القاهرة", "بنك الإسكندرية", "إتش إس بي سي مصر", "مصرف أبوظبي الإسلامي مصر"]
             else:
                 national_id = ''.join([str(random.randint(0,9)) for _ in range(12)])
                 country_code = '+99'
@@ -22055,6 +22184,7 @@ def fake_identity_route():
             _jobs = ["مهندس برمجيات", "محاسب قانوني", "مدير تسويق", "محامي", "أخصائي أمن معلومات", "مدير مشاريع", "محلل بيانات", "مطوّر تطبيقات", "مدير مبيعات", "أخصائي موارد بشرية", "محلل نظم", "مصمم جرافيك"]
             company = random.choice(_companies)
             job = random.choice(_jobs)
+            bank_name = random.choice(_banks)
             
         else:
             # اللغات غير العربية (International)
@@ -22083,6 +22213,10 @@ def fake_identity_route():
             except Exception: company = fake_en.company()
             try: job = fake.job()
             except Exception: job = fake_en.job()
+            
+            # International Banks
+            _int_banks = ["JP Morgan Chase", "HSBC", "Citibank", "Bank of America", "Barclays", "Standard Chartered", "Wells Fargo", "Goldman Sachs"]
+            bank_name = random.choice(_int_banks)
 
         # color_name قد يفشل مع بعض اللغات
         try:
@@ -22122,6 +22256,25 @@ def fake_identity_route():
             'credit_card': fake_en.credit_card_number(card_type='visa' if random.random() > 0.5 else 'mastercard'),
             'cc_expire': fake_en.credit_card_expire(),
             'cc_cvv': fake_en.credit_card_security_code(),
+
+            # --- New Fields Added per User Request ---
+            'passport_no': (random.choice(string.ascii_uppercase) + ''.join([str(random.randint(0,9)) for _ in range(8)])) if lang.startswith('ar_') else fake_en.bothify('??#######').upper(),
+            'passport_expire': (datetime.date.today() + datetime.timedelta(days=random.randint(365, 3650))).strftime('%Y-%m-%d'),
+            
+            'bank_name': bank_name,
+            'bank_iban': fake_en.iban(),
+            'bank_swift': fake_en.swift8(),
+            'bank_acc': ''.join([str(random.randint(0,9)) for _ in range(12)]),
+            
+            'net_ip': fake_en.ipv4(),
+            'net_mac': fake_en.mac_address(),
+            'net_ua': fake_en.user_agent(),
+            'net_connection': random.choice(["Fiber Optic", "4G LTE", "5G Ultra", "Satellite", "Broadband"]),
+            
+            'edu_uni': (random.choice(["جامعة العلوم والتكنولوجيا", "الجامعة الأردنية", "جامعة القاهرة", "جامعة الملك سعود", "جامعة دبي"]) if lang.startswith('ar_') else fake_en.company() + " University"),
+            'edu_degree': random.choice(["بكالوريوس", "ماستر", "دكتوراة"]) if lang.startswith('ar_') else random.choice(["Bachelor's Degree", "Master's Degree", "PhD"]),
+            'edu_year': random.randint(2010, 2024),
+            'edu_gpa': f"{random.uniform(2.5, 4.0):.2f}/4.0",
 
             'username': username_base,
             'password': password_fake,
