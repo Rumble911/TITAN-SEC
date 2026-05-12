@@ -2912,33 +2912,8 @@ def check_tunneling_service(url):
             return True, t_domain
     return False, None
 
-def _calculate_string_entropy(s):
-    """حساب الشتات (Entropy) للنص لاكتشاف النصوص العشوائية (DGA)"""
-    if not s: return 0
-    import math
-    prob = [float(s.count(c)) / len(s) for c in dict.fromkeys(list(s))]
-    entropy = - sum([p * math.log(p) / math.log(2.0) for p in prob])
-    return entropy
-
-def _levenshtein_distance(s1, s2):
-    """حساب مسافة ليفنشتاين لاكتشاف انتحال أسماء المواقع (Typosquatting)"""
-    if len(s1) < len(s2):
-        return _levenshtein_distance(s2, s1)
-    if len(s2) == 0:
-        return len(s1)
-    previous_row = range(len(s2) + 1)
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
-        for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
-    return previous_row[-1]
-
 def _analyze_url_structure(url):
-    """تحليل بنية الرابط للكشف عن مؤشرات التصيد في الـ URL نفسه بشكل متقدم"""
+    """تحليل بنية الرابط للكشف عن مؤشرات التصيد في الـ URL نفسه"""
     findings = []
     score_inc = 0
     parsed = urllib.parse.urlparse(url)
@@ -2948,34 +2923,28 @@ def _analyze_url_structure(url):
         domain = domain.rsplit(':', 1)[0]
     bare_domain = domain[4:] if domain.startswith('www.') else domain
 
-    # 1. IP-based URL
+    # 1. IP-based URL (e.g. http://192.168.1.1/login)
     ip_pattern = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
     if ip_pattern.match(bare_domain):
         findings.append("الرابط يستخدم عنوان IP بدل اسم دومين (IP-based URL)")
-        score_inc += 40
+        score_inc += 30
 
-    # 2. Punycode detection (Homograph attack)
-    if 'xn--' in bare_domain:
-        findings.append("دومين بترميز Punycode مكتشف (محاولة انتحال أحرف متشابهة xn--)")
-        score_inc += 50
-
-    # 3. Excessive subdomains
+    # 2. Excessive subdomains (e.g. secure.login.bank.evil.com)
     parts = bare_domain.split('.')
     if len(parts) > 4:
-        findings.append(f"عدد كبير من الساب-دومينات ({len(parts)} أجزاء) - مؤشر تضليل")
-        score_inc += 25
+        findings.append(f"عدد كبير من الساب-دومينات ({len(parts)} أجزاء) - مؤشر تصيد")
+        score_inc += 20
 
-    # 4. Suspicious TLDs
+    # 3. Suspicious TLDs
     suspicious_tlds = ['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top', '.work', '.click',
-                       '.link', '.buzz', '.surf', '.rest', '.fit', '.icu', '.cam', '.monster',
-                       '.life', '.live', '.today', '.zip', '.mov']
+                       '.link', '.buzz', '.surf', '.rest', '.fit', '.icu', '.cam', '.monster']
     for tld in suspicious_tlds:
         if bare_domain.endswith(tld):
-            findings.append(f"نطاق TLD مشبوه/رخيص مكتشف: {tld}")
-            score_inc += 20
+            findings.append(f"نطاق TLD مشبوه مكتشف: {tld}")
+            score_inc += 15
             break
 
-    # 5. Lookalike / Typosquatting (Advanced)
+    # 4. Lookalike/Typosquatting detection
     brand_targets = {
         'paypal': 'PayPal', 'facebook': 'Facebook', 'instagram': 'Instagram',
         'google': 'Google', 'microsoft': 'Microsoft', 'apple': 'Apple',
@@ -2984,190 +2953,220 @@ def _analyze_url_structure(url):
         'outlook': 'Outlook', 'yahoo': 'Yahoo', 'chase': 'Chase Bank',
         'wellsfargo': 'Wells Fargo', 'bankofamerica': 'Bank of America',
         'dropbox': 'Dropbox', 'icloud': 'iCloud', 'gmail': 'Gmail',
-        'binance': 'Binance', 'coinbase': 'Coinbase', 'metamask': 'MetaMask'
     }
-    
-    # Check for direct inclusion first
-    brand_found = False
     for brand_key, brand_name in brand_targets.items():
-        if brand_key in bare_domain:
-            # If brand is in domain but it's not the official one
-            if not any(bare_domain.endswith(f"{brand_key}.{ext}") for ext in ['com', 'net', 'org', 'me', 'io']):
-                 findings.append(f"انتحال اسم علامة تجارية في الرابط: {brand_name}")
-                 score_inc += 45
-                 brand_found = True
-                 break
-    
-    # Check for Typosquatting using Levenshtein distance
-    if not brand_found:
-        domain_main_part = parts[0] if parts else ""
-        for brand_key, brand_name in brand_targets.items():
-            if 1 <= _levenshtein_distance(domain_main_part, brand_key) <= 2:
-                findings.append(f"دومين شبيه جداً بـ {brand_name} (احتمال Typosquatting)")
-                score_inc += 50
-                break
+        # Brand in subdomain/path but NOT the real domain
+        if brand_key in bare_domain and not bare_domain.endswith(f'{brand_key}.com') and not bare_domain.endswith(f'{brand_key}.net') and not bare_domain.endswith(f'{brand_key}.org'):
+            findings.append(f"انتحال محتمل لعلامة تجارية: {brand_name} (Lookalike Domain)")
+            score_inc += 35
+            break
 
-    # 6. Domain Entropy (DGA Detection)
-    domain_entropy = _calculate_string_entropy(bare_domain)
-    if domain_entropy > 4.2:
-        findings.append(f"شتات عالي في اسم الدومين ({domain_entropy:.2f}) - قد يكون مولداً آلياً (DGA)")
-        score_inc += 30
+    # 5. Very long URL path (common in phishing)
+    if len(url) > 200:
+        findings.append(f"رابط طويل جداً ({len(url)} حرف) - شائع في التصيد")
+        score_inc += 10
 
-    # 7. Double Extensions / Suspicious Files in URL
-    if re.search(r'\.(pdf|doc|docx|zip|rar|txt|jpg)\.(php|html|htm|aspx|js)$', path):
-        findings.append("امتداد ملف مزدوج مشبوه في الرابط (Double Extension)")
-        score_inc += 40
-
-    # 8. Hyphen-heavy domain
-    if bare_domain.count('-') >= 3:
-        findings.append(f"عدد كبير من الشرطات ({bare_domain.count('-')}) - محاولة تضليل بصري")
-        score_inc += 20
-
-    # 9. @ symbol in URL
-    if '@' in parsed.netloc:
-        findings.append("رمز @ موجود في الرابط - أسلوب قديم لخداع المستخدمين")
-        score_inc += 30
-
-    # 10. Long URL
-    if len(url) > 150:
-        findings.append(f"رابط طويل جداً ({len(url)} حرف) - شائع في حملات التصيد")
+    # 6. Encoded characters in URL (%xx patterns)
+    encoded_count = url.count('%')
+    if encoded_count > 5:
+        findings.append(f"عدد كبير من الأحرف المشفرة في الرابط ({encoded_count} ترميز)")
         score_inc += 15
 
-    # 11. Suspicious path keywords
+    # 7. @ symbol in URL (can trick users)
+    if '@' in parsed.netloc:
+        findings.append("رمز @ موجود في الرابط - يمكن استخدامه لخداع المستخدمين")
+        score_inc += 25
+
+    # 8. Hyphen-heavy domain (e.g. secure-login-bank-verify.com)
+    if bare_domain.count('-') >= 3:
+        findings.append(f"عدد كبير من الشرطات في اسم الدومين ({bare_domain.count('-')}) - مؤشر تصيد")
+        score_inc += 15
+
+    # 9. Suspicious path keywords
     path_keywords = ['login', 'signin', 'verify', 'secure', 'account', 'update', 'confirm',
-                     'banking', 'password', 'credential', 'auth', 'wallet', 'recover', 'validate']
+                     'banking', 'password', 'credential', 'auth', 'wallet', 'recover']
     found_path_keys = [k for k in path_keywords if k in path]
     if found_path_keys and not is_trusted_domain(url):
-        findings.append(f"كلمات حساسة في المسار: {', '.join(found_path_keys[:4])}")
-        score_inc += 15
+        findings.append(f"كلمات حساسة في مسار الرابط: {', '.join(found_path_keys[:4])}")
+        score_inc += 10
+
+    # 10. Non-standard port
+    if parsed.port and parsed.port not in (80, 443, None):
+        findings.append(f"منفذ غير قياسي مستخدم: {parsed.port}")
+        score_inc += 10
 
     return findings, score_inc
 
 
 def scrape_phishing_indicators(url):
-    \"\"\"تحليل المحتوى المتقدم (Advanced Content Analysis) للكشف عن أنماط التصيد بذكاء واحترافية\"\"\"
+    """تحليل المحتوى المتقدم (Advanced Content Analysis) للكشف عن أنماط التصيد"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-        resp = requests.get(url, timeout=12, headers=headers, verify=True)
+        resp = requests.get(url, timeout=10, headers=headers, verify=True)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
         findings = []
         score_inc = 0
-        page_text = soup.get_text()
-        page_text_lower = page_text.lower()
         
-        # === 1. تحليل بنية الرابط (URL Structure Analysis) ===
+        # === تحليل بنية الرابط (URL Structure Analysis) ===
         url_findings, url_score = _analyze_url_structure(url)
         findings.extend(url_findings)
         score_inc += url_score
         
-        # === 2. تحليل العناصر الحساسة (Sensitive Elements) ===
+        # === تحليل المحتوى (Content Analysis) ===
+        
+        # 1. البحث عن حقول كلمة السر
         pw_fields = soup.find_all('input', {'type': 'password'})
         if pw_fields:
             findings.append(f"تم اكتشاف {len(pw_fields)} حقل لطلب كلمات السر (Password Fields)")
-            score_inc += 45
-            
-            # Check for autocomplete="off"
-            for f in pw_fields:
-                if f.get('autocomplete') == 'off':
-                    findings.append("تعطيل الإكمال التلقائي (Autocomplete Off) - شائع في صفحات التصيد")
-                    score_inc += 15
-                    break
+            score_inc += 40
 
-        # 3. حقول بطاقات ائتمان (Credit Card Detection)
-        cc_patterns = ['card', 'credit', 'cvv', 'ccv', 'expiry', 'cardnumber', 'cc-number', 'باقة', 'ائتمان', 'دفع']
-        all_inputs = soup.find_all(['input', 'select'])
+        # 2. حقول بريد إلكتروني
+        email_fields = soup.find_all('input', {'type': 'email'})
+        if email_fields and pw_fields:
+            findings.append("نموذج تسجيل دخول مكتشف (حقل إيميل + كلمة سر)")
+            score_inc += 15
+
+        # 3. حقول بطاقات ائتمان
+        cc_patterns = ['card', 'credit', 'cvv', 'ccv', 'expiry', 'cardnumber', 'cc-number']
+        all_inputs = soup.find_all('input')
         cc_found = False
         for inp in all_inputs:
-            inp_str = (inp.get('name', '') + ' ' + inp.get('id', '') + ' ' + inp.get('placeholder', '')).lower()
-            if any(p in inp_str for p in cc_patterns):
+            inp_name = (inp.get('name', '') + ' ' + inp.get('id', '') + ' ' + inp.get('placeholder', '')).lower()
+            if any(p in inp_name for p in cc_patterns):
                 cc_found = True
                 break
         if cc_found:
-            findings.append("حقول إدخال بيانات بنكية/بطاقات ائتمان مكتشفة (Financial Data Theft)")
-            score_inc += 50
+            findings.append("حقول إدخال بيانات بطاقة ائتمان مكتشفة (Credit Card Fields)")
+            score_inc += 40
             
-        # 4. تحليل الكلمات المفتاحية (Keyword Analysis) - AR/EN
-        phish_keywords_high = [
-            'verify your account', 'confirm your identity', 'suspended', 'unusual activity', 
-            'unauthorized', 'locked', 'limited access', 'security alert', 'action required',
-            'تأكيد هويتك', 'تم تعليق حسابك', 'نشاط مشبوه', 'تم إيقاف', 'تنبيه أمني', 'يجب اتخاذ إجراء'
-        ]
-        found_high = [k for k in phish_keywords_high if k in page_text_lower]
+        # 4. البحث عن كلمات مشبوهة (قائمة موسعة)
+        phish_keywords_high = ['verify your account', 'confirm your identity', 'suspended',
+                               'unusual activity', 'unauthorized', 'locked', 'limited access',
+                               'تأكيد هويتك', 'تم تعليق', 'نشاط مشبوه', 'تم إيقاف']
+        phish_keywords_medium = ['login', 'signin', 'sign-in', 'log-in', 'verify', 'account',
+                                 'banking', 'secure', 'update', 'password', 'credential',
+                                 'تسجيل الدخول', 'تحقق', 'بنك', 'كلمة المرور', 'تحديث البيانات']
+        page_text = soup.get_text().lower()
+        
+        found_high = [k for k in phish_keywords_high if k in page_text]
         if found_high:
-            findings.append(f"عبارات تصيد عالية الخطورة: {', '.join(found_high[:2])}")
-            score_inc += 30
-            
-        # 5. كشف التلاعب بالنصوص (Text Manipulation)
-        if any(char in page_text for char in ['\u200b', '\u200c', '\u200d', '\ufeff']):
-            findings.append("نصوص مخفية (Zero-width characters) مكتشفة - تستخدم لتجاوز الفلاتر")
+            findings.append(f"عبارات تصيد عالية الخطورة: {', '.join(found_high[:3])}")
             score_inc += 25
-
-        # 6. تحليل النماذج والوجهات (Form Analysis)
+        
+        found_medium = [k for k in phish_keywords_medium if k in page_text]
+        if found_medium:
+            findings.append(f"كلمات مشبوهة مكتشفة: {', '.join(found_medium[:5])}")
+            score_inc += 12
+            
+        # 5. التحقق من نماذج ترسل البيانات لجهات خارجية
         forms = soup.find_all('form')
-        page_domain = urllib.parse.urlparse(url).netloc.lower()
         for f in forms:
             action = f.get('action', '')
-            if action.startswith('http'):
-                action_domain = urllib.parse.urlparse(action).netloc.lower()
-                if action_domain != page_domain and not any(c in action_domain for c in ['cdn', 'static', 'assets', 'google']):
-                    findings.append(f"النموذج يرسل البيانات لموقع خارجي مريب: {action_domain}")
-                    score_inc += 40
-            
-            if re.search(r'(login|post|action|capture|save|secure|send|data)\.(php|py|aspx|js)$', action.lower()):
-                if not is_trusted_domain(url):
-                    findings.append(f"ملف معالجة بيانات مريب مكتشف: {action}")
-                    score_inc += 25
-
-        # 7. الأيقونات والماركات (Branding & Trust)
-        page_title = (soup.title.string or '').lower() if soup.title else ''
-        brand_targets = ['paypal', 'facebook', 'google', 'microsoft', 'apple', 'amazon', 'netflix', 'binance', 'coinbase', 'bank']
-        for brand in brand_targets:
-            if brand in page_title and brand not in page_domain:
-                findings.append(f"الموقع ينتحل هوية {brand.title()} (Domain/Title mismatch)")
-                score_inc += 35
+            if action.startswith('http') and urllib.parse.urlparse(action).netloc != urllib.parse.urlparse(url).netloc:
+                findings.append("نموذج إرسال بيانات يوجه لموقع خارجي (External Form Action)")
+                score_inc += 25
                 break
-        
-        trust_badge_patterns = ['norton', 'mcafee', 'trustpilot', 'ssl-secured', 'verified-by']
-        images = soup.find_all('img')
-        for img in images:
-            img_src = (img.get('src', '') + ' ' + img.get('alt', '')).lower()
-            if any(p in img_src for p in trust_badge_patterns) and not is_trusted_domain(url):
-                findings.append("أختام ثقة مزيفة مكتشفة (Fake Trust Badges)")
+            # Form with empty or javascript action (data theft)
+            if action.lower().startswith('javascript:') or (action == '' and pw_fields):
+                findings.append("نموذج بدون وجهة واضحة مع حقول حساسة (Suspicious Form)")
                 score_inc += 15
                 break
 
-        # 8. تحليل إعادة التوجيه (Redirects)
-        meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile(r'refresh', re.I)})
-        if meta_refresh and 'url=' in meta_refresh.get('content', '').lower():
-            findings.append("إعادة توجيه تلقائية (Meta Refresh) - أسلوب لإخفاء صفحة التصيد")
-            score_inc += 25
+        # 6. Hidden iframes (often used to load phishing content)
+        iframes = soup.find_all('iframe')
+        hidden_iframes = [f for f in iframes if f.get('style') and ('display:none' in f.get('style', '').replace(' ', '') or 'visibility:hidden' in f.get('style', '').replace(' ', '') or 'height:0' in f.get('style', '').replace(' ', '') or 'width:0' in f.get('style', '').replace(' ', ''))]
+        if hidden_iframes:
+            findings.append(f"إطارات مخفية مكتشفة ({len(hidden_iframes)} iframe) - شائع في التصيد")
+            score_inc += 20
 
-        # 9. حماية الصفحة (Anti-Inspection)
-        if 'oncontextmenu' in str(soup).lower() or 'onkeydown' in str(soup).lower():
-            if 'return false' in str(soup).lower() or 'event.preventdefault' in str(soup).lower():
-                findings.append("تعطيل وظائف المتصفح (منع الزر الأيمن أو النسخ) لمنع التحليل")
-                score_inc += 15
-
-        # 10. تنوع الروابط (Link Diversity)
-        links = soup.find_all('a', href=True)
-        if len(links) > 0:
-            ext_links = [l.get('href') for l in links if l.get('href').startswith('http')]
-            if len(ext_links) / len(links) > 0.8 and not is_trusted_domain(url):
-                findings.append("أغلبية الروابط توجه لمواقع خارجية - مريب جداً")
+        # 7. Obfuscated JavaScript (eval, atob, fromCharCode, unescape)
+        scripts = soup.find_all('script')
+        obfusc_patterns = ['eval(', 'atob(', 'fromcharcode', 'unescape(', 'document.write(decod',
+                           '\\x', 'string.fromcharcode']
+        for script in scripts:
+            script_text = (script.string or '').lower()
+            found_obfusc = [p for p in obfusc_patterns if p in script_text]
+            if found_obfusc:
+                findings.append(f"جافاسكربت مشفر/مموّه مكتشف: {', '.join(found_obfusc[:3])}")
                 score_inc += 20
+                break
 
-        score_inc = min(100, score_inc)
-        
+        # 8. Data URIs in links or forms (can hide malicious payloads)
+        data_links = soup.find_all('a', href=re.compile(r'^data:', re.I))
+        if data_links:
+            findings.append("روابط data URI مكتشفة - يمكن إخفاء محتوى ضار فيها")
+            score_inc += 15
+
+        # 9. Meta refresh redirect
+        meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile(r'refresh', re.I)})
+        if meta_refresh:
+            content = meta_refresh.get('content', '')
+            if 'url=' in content.lower():
+                findings.append("إعادة توجيه تلقائية عبر Meta Refresh - مؤشر تصيد")
+                score_inc += 15
+
+        # 10. Right-click disabled (to prevent inspection)
+        body = soup.find('body')
+        if body and body.get('oncontextmenu', '').lower().replace(' ', '') == 'returnfalse':
+            findings.append("تعطيل الزر الأيمن (No Right-Click) - لمنع فحص الصفحة")
+            score_inc += 10
+
+        # 11. Favicon mismatch (favicon from different domain)
+        favicons = soup.find_all('link', rel=re.compile(r'icon', re.I))
+        for fav in favicons:
+            href = fav.get('href', '')
+            if href.startswith('http'):
+                fav_domain = urllib.parse.urlparse(href).netloc.lower()
+                page_domain = urllib.parse.urlparse(url).netloc.lower()
+                if fav_domain and page_domain and fav_domain != page_domain:
+                    # Check it's not a CDN
+                    cdn_domains = ['cdn', 'static', 'assets', 'cloudflare', 'googleapis', 'gstatic', 'jsdelivr', 'unpkg', 'cdnjs']
+                    if not any(c in fav_domain for c in cdn_domains):
+                        findings.append(f"أيقونة الموقع (Favicon) محملة من دومين مختلف: {fav_domain}")
+                        score_inc += 15
+                        break
+
+        # 12. Page title mimicking known brands
+        page_title = (soup.title.string or '').lower() if soup.title else ''
+        brand_names = ['paypal', 'facebook', 'instagram', 'google', 'microsoft', 'apple',
+                       'amazon', 'netflix', 'linkedin', 'whatsapp', 'yahoo', 'chase', 'bank']
+        page_domain = urllib.parse.urlparse(url).netloc.lower()
+        for brand in brand_names:
+            if brand in page_title and brand not in page_domain:
+                findings.append(f"عنوان الصفحة يحاكي علامة {brand.title()} لكن الدومين مختلف")
+                score_inc += 20
+                break
+
+        # 13. Very little content (phishing pages are often minimal)
+        text_len = len(page_text.strip())
+        if text_len < 200 and pw_fields:
+            findings.append("صفحة قليلة المحتوى مع حقول كلمة سر - نمط تصيد شائع")
+            score_inc += 15
+
+        # 14. Multiple external resource loading from different domains
+        ext_scripts = soup.find_all('script', src=True)
+        ext_domains = set()
+        for s in ext_scripts:
+            src = s.get('src', '')
+            if src.startswith('http'):
+                ext_domains.add(urllib.parse.urlparse(src).netloc)
+        if len(ext_domains) > 8:
+            findings.append(f"تحميل سكربتات من {len(ext_domains)} دومين مختلف - مريب")
+            score_inc += 10
+
+        # Cap individual content score contribution
+        score_inc = min(score_inc, 95)
+
         return {
             "findings": findings,
             "risk_score_inc": score_inc,
             "title": soup.title.string if soup.title else "No Title"
         }
     except requests.exceptions.SSLError:
-        return {"findings": ["فشل التحقق من شهادة SSL - خطر محتمل"], "risk_score_inc": 40, "title": "SSL Error"}
+        return {"findings": ["فشل التحقق من شهادة SSL - الموقع قد يكون غير آمن"], "risk_score_inc": 30, "title": "SSL Error"}
     except Exception as e:
-        return {"findings": [f"خطأ في تحليل المحتوى: {str(e)}"], "risk_score_inc": 0, "title": "N/A"}
+        return {"findings": [f"Scrape Error: {str(e)}"], "risk_score_inc": 0, "title": "N/A"}
 
 def analyze_domain_age(url):
     """تحليل عمر الدومين (Domain Age Analysis) - محسّن مع عدة طرق بديلة"""
