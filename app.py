@@ -19838,31 +19838,54 @@ def osint_intelbase_email_route():
             breaches_list = breaches_data if isinstance(breaches_data, list) else []
         
         # استخراج معلومات الحسابات من identifier.accounts
-        # هام: IntelBase ترجع accounts كـ array، نحتاج لتحويلها إلى dict
+        # نقوم بإضافة flags المطابقة يدوياً لضمان قيام الـ Frontend باكتشافها
         identifier = result.get('identifier', {})
         accounts_array = identifier.get('accounts', []) if isinstance(identifier, dict) else []
         
-        # تحويل array من الحسابات إلى dict مع اسم المنصة كـ key
+        enriched_accounts = []
         accounts_data = {}
+        
         if isinstance(accounts_array, list):
             for account in accounts_array:
                 if isinstance(account, dict):
+                    # إضافة علامات المطابقة لضمان اكتشافها بواسطة deepScan في الواجهة الأمامية
+                    account['match'] = True
+                    account['exists'] = True
+                    enriched_accounts.append(account)
+                    
+                    # استخراج الاسم للمنصة
                     module = account.get('module', {})
                     data_account = account.get('data', {})
                     platform_name = module.get('name_formatted') or module.get('name') or 'Unknown'
                     
-                    # دمج module و data معاً
+                    # دمج module و data معاً للـ dict المتوافق
                     accounts_data[platform_name] = {
-                        **data_account,  # كل بيانات المستخدم (full_name, username, etc.)
+                        **data_account,
                         'platform': platform_name,
                         'domain': module.get('domain'),
-                        'module_id': module.get('id')
+                        'module_id': module.get('id'),
+                        'is_match': True
                     }
         
+        # تحديث الحسابات في النتيجة الأصلية بنسخة محسنة
+        if isinstance(result.get('identifier'), dict):
+            result['identifier']['accounts'] = enriched_accounts
+        
+        # معالجة تسريبات البيانات (Data Breaches)
+        breaches_data = result.get('data_breaches', {})
+        if isinstance(breaches_data, dict):
+            breaches_list = breaches_data.get('results', [])
+            # إضافة علامة مطابقة لكل تسريب لضمان الظهور
+            for b in breaches_list:
+                if isinstance(b, dict):
+                    b['match'] = True
+        else:
+            breaches_list = breaches_data if isinstance(breaches_data, list) else []
+
         # استخراج معلومات Meta
         meta_data = result.get('meta', {}) if isinstance(result.get('meta'), dict) else {}
         
-        # تحويل النتيجة إلى صيغة متوافقة مع التطبيق
+        # تحويل النتيجة إلى صيغة متوافقة تماماً مع متطلبات الواجهة
         processed_result = {
             'success': True,
             'email': email,
@@ -19871,7 +19894,7 @@ def osint_intelbase_email_route():
             'meta': meta_data,
             'stealer_logs': result.get('stealer_logs') or [],
             'validator': result.get('validator') or {},
-            'raw_response': result  # أرسل البيانات الخام أيضاً
+            'raw_response': result  # نرسل الـ result الأصلي بعد الـ enrichment
         }
         
         add_audit_log(
