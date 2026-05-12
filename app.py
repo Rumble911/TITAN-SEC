@@ -5809,17 +5809,13 @@ HTML_TEMPLATE = """
                             <button id="burnChatDestroyBtn" onclick="destroyBurnChatRoom()" class="bg-rose-900/30 hover:bg-rose-800/40 text-rose-300 px-5 py-2 rounded border border-rose-800/50 transition-all font-bold" disabled>تدمير الغرفة</button>
                         </div>
 
-                        <div class="mb-4 p-3 rounded-lg border border-amber-700/50 bg-amber-950/40">
-                            <label class="text-xs font-bold text-amber-300 mb-2 block">عدد الأشخاص في الغرفة</label>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button type="button" id="btn-people-2" onclick="setBurnChatPeopleCount('2')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">شخصين (2)</button>
-                                <button type="button" id="btn-people-3" onclick="setBurnChatPeopleCount('3')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">3 أشخاص</button>
+                        <!-- Burn Chat Restricted to 2 people -->
+                        <div class="mb-4 p-3 rounded-lg border border-pink-500/20 bg-pink-900/10">
+                            <div class="flex items-center justify-center gap-2 text-pink-400 font-bold text-xs uppercase tracking-widest">
+                                <span>👥</span> 
+                                <span>الغرفة محصورة بين شخصين فقط (1:1)</span>
                             </div>
-                            <input type="hidden" id="burnChatPeopleCount" value="">
-                        </div>
-
-                        <div id="burnChatPeopleBadge" class="hidden mb-3 text-center text-[11px] font-bold text-amber-200 bg-amber-900/30 border border-amber-700/40 rounded-lg py-2">
-                            عدد المشاركين المختار: <span id="burnChatPeopleBadgeValue">-</span>
+                            <input type="hidden" id="burnChatPeopleCount" value="2">
                         </div>
 
                         <div id="burnChatDisplay" class="h-64 bg-black rounded-lg border border-pink-900/30 mb-4 p-4 overflow-y-auto flex flex-col gap-2 shadow-inner">
@@ -15242,17 +15238,16 @@ HTML_TEMPLATE = """
         async function joinBurnChat() {
             const roomId = document.getElementById('burnChatId').value.trim();
             const user = document.getElementById('burnChatUser').value.trim() || 'Anonymous';
-            const peopleCount = document.getElementById('burnChatPeopleCount').value.trim();
+            const peopleCount = "2";
             
             if(!roomId) return titanAlert("الرجاء إدخال رقم الغرفة للاتصال المشفر!");
-            if(!peopleCount) return titanAlert("حدد عدد الأشخاص أولاً: 2 أو 3");
             
             // Call server to validate/join room with capacity enforcement
             try {
                 const res = await fetch('/api/chat/join', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({room_id: roomId, sender: user, limit: parseInt(peopleCount)})
+                    body: JSON.stringify({room_id: roomId, sender: user, limit: 2})
                 });
                 const data = await res.json();
                 if (!data.success) {
@@ -15419,6 +15414,17 @@ HTML_TEMPLATE = """
                 if(data.messages && data.messages.length > 0) {
                     const display = document.getElementById('burnChatDisplay');
                     data.messages.forEach(m => {
+                        if (m.sender === 'SYSTEM') {
+                            display.innerHTML += `
+                                <div class="flex justify-center mt-4 mb-2">
+                                    <div class="bg-rose-900/60 border-2 border-rose-500 text-white px-6 py-4 rounded-xl text-sm max-w-[90%] text-center shadow-[0_0_30px_rgba(244,63,94,0.4)] animate-pulse">
+                                        <div class="font-black mb-1 text-lg">⚠️ نظام الحماية (TITAN)</div>
+                                        <div class="font-bold">${m.msg}</div>
+                                    </div>
+                                </div>
+                            `;
+                            return;
+                        }
                         // Generate a unique ID for this message block
                         const msgId = 'msg-' + Math.random().toString(36).substr(2, 9);
                         const cipherRaw = String(m.msg || '');
@@ -21734,17 +21740,26 @@ def toggle_fim():
         add_audit_log("إيقاف مراقب التكامل", "تم إيقاف المراقبة")
         return jsonify({"status": "inactive"})
 
-# 3. Secure Comms: P2P Burn Chat
-# In-memory only storage. Structure: { "room_id": [ {"sender": "A", "msg": "hello", "timestamp": ...} ] }
-BURN_CHAT_ROOMS = {} # room_id -> {"messages": [], "participants": [], "limit": 3}
+BURN_CHAT_ROOMS = {} # room_id -> {"messages": [], "participants": [], "limit": 2}
 BURN_CHAT_DESTROYED: dict[str, dict[str, str]] = {}
+
+def _destroy_room_delayed(room_id, intruder):
+    """تدمير الغرفة بعد 10 ثوانٍ من محاولة الاختراق"""
+    time.sleep(10)
+    if room_id in BURN_CHAT_ROOMS:
+        BURN_CHAT_ROOMS.pop(room_id, None)
+        BURN_CHAT_DESTROYED[room_id] = {
+            'by': f"SYSTEM (Auto-Destroy due to intrusion by {intruder})",
+            'at': datetime.datetime.now().isoformat()
+        }
+        add_audit_log("Burn Chat 💥", f"تم تدمير الغرفة [{room_id}] تلقائياً بسبب محاولة دخول من {intruder}")
 
 @app.route('/api/chat/join', methods=['POST'])
 def chat_join():
     data = request.json or {}
     room_id = (data.get('room_id') or '').strip()
     sender = (data.get('sender') or 'Anonymous').strip()
-    limit = int(data.get('limit', 3))
+    limit = 2  # Forced to 2 persons only
     
     if not room_id:
         return jsonify({"error": "room_id مطلوب"}), 400
@@ -21762,7 +21777,21 @@ def chat_join():
     room = BURN_CHAT_ROOMS[room_id]
     if sender not in room["participants"]:
         if len(room["participants"]) >= room["limit"]:
-            return jsonify({"error": f"الغرفة ممتلئة! الحد الأقصى هو {room['limit']} أشخاص فقط لهذه الجلسة."}), 403
+            # Notify Admin
+            subject = f"TITAN SECURITY: Intrusion attempt in Burn Chat [{room_id}]"
+            body = f"User '{sender}' tried to enter Burn Chat room '{room_id}' which is already full (2/2).\nThe room is scheduled for self-destruction in 10 seconds."
+            threading.Thread(target=_resend_send, args=(ADMIN_EMAIL, subject, body)).start()
+
+            # Notify Participants
+            warning_msg = "⚠️ تنبيه أمني: تم رصد محاولة دخول غير مصرح بها! سيتم تدمير هذه الغرفة وحذف جميع الرسائل نهائياً خلال 10 ثوانٍ."
+            room["messages"].append({"sender": "SYSTEM", "msg": warning_msg})
+            
+            # Start timer if not already started
+            if not room.get("destruction_timer_started"):
+                room["destruction_timer_started"] = True
+                threading.Thread(target=_destroy_room_delayed, args=(room_id, sender)).start()
+
+            return jsonify({"error": "⚠️ محاولة دخول غير مصرح بها! الغرفة الآن في وضع التدمير الذاتي لحماية البيانات."}), 403
         room["participants"].append(sender)
     
     return jsonify({"success": True})
@@ -21781,7 +21810,7 @@ def chat_send():
         
     if room_id not in BURN_CHAT_ROOMS:
         # Fallback creation if join somehow missed
-        BURN_CHAT_ROOMS[room_id] = {"messages": [], "participants": [sender], "limit": 3}
+        BURN_CHAT_ROOMS[room_id] = {"messages": [], "participants": [sender], "limit": 2}
     
     room = BURN_CHAT_ROOMS[room_id]
     # Re-verify participant
