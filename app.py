@@ -15316,9 +15316,14 @@ HTML_TEMPLATE = """
             
             if(!roomId) return titanAlert("الرجاء إدخال رقم الغرفة للاتصال المشفر!");
             
-            // توليد/استرجاع معرّف فريد ثابت للمستخدم ضمن نفس الغرفة
+            // توليد/استرجاع معرّف فريد ثابت للمستخدم ضمن نفس الغرفة (لكل تبويب)
             const storedKey = `burnChatUserId:${roomId}`;
-            const storedId = localStorage.getItem(storedKey);
+            let storedId = null;
+            try {
+                storedId = sessionStorage.getItem(storedKey);
+            } catch (e) {
+                storedId = null;
+            }
             currentUserId = storedId || ('user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
             
             // تعيين عدد الأشخاص التلقائي إلى 2
@@ -15336,7 +15341,11 @@ HTML_TEMPLATE = """
                 if (!data.success) {
                     return titanAlert(data.error || "تعذر الانضمام: الغرفة ممتلئة!", "error");
                 }
-                localStorage.setItem(storedKey, currentUserId);
+                try {
+                    sessionStorage.setItem(storedKey, currentUserId);
+                } catch (e) {
+                    // ignore storage errors
+                }
             } catch (e) {
                 return titanAlert("فشل الاتصال بالخادم للتحقق من الغرفة", "error");
             }
@@ -15443,9 +15452,9 @@ HTML_TEMPLATE = """
             try {
                 const roomIdInput = document.getElementById('burnChatId');
                 const roomIdValue = roomIdInput ? roomIdInput.value.trim() : '';
-                if (roomIdValue) localStorage.removeItem(`burnChatUserId:${roomIdValue}`);
+                if (roomIdValue) sessionStorage.removeItem(`burnChatUserId:${roomIdValue}`);
             } catch (e) {
-                // ignore localStorage errors
+                // ignore storage errors
             }
             const display = document.getElementById('burnChatDisplay');
             if (display) {
