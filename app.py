@@ -19816,8 +19816,19 @@ def osint_intelbase_email_route():
                 'email': email
             }), 200 # نستخدم 200 لتجنب تدخل Heroku Error Pages
         
-        result = response.json()
-        
+        try:
+            result = response.json()
+        except Exception:
+            # في حال لم تكن الاستجابة JSON (مثلاً صفحة خطأ HTML أو رد فارغ)
+            body_peek = response.text[:200] if response.text else "استجابة فارغة"
+            error_msg = f"استجابة غير صالحة من IntelBase (ليست JSON). الكود: {response.status_code}. الرد: {body_peek}"
+            add_audit_log('OSINT IntelBase Email JSON Error', f'email={email} status={response.status_code} body={body_peek}')
+            return jsonify({
+                'success': False,
+                'error': error_msg,
+                'email': email
+            }), 200
+
         # استخراج البيانات من الصيغة الفعلية لـ IntelBase API
         # data_breaches هو dict يحتوي على: {amount, redacted, results, sources}
         breaches_data = result.get('data_breaches', {})
@@ -19869,7 +19880,7 @@ def osint_intelbase_email_route():
         )
         return jsonify(processed_result)
         
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         error_msg = f'خطأ غير متوقع في الاتصال بـ IntelBase: {str(e)}'
         add_audit_log('OSINT IntelBase Email Exception', f'email={email} error={str(e)}')
         return jsonify({
