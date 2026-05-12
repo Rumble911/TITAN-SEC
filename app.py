@@ -1999,6 +1999,64 @@ def send_chat_decrypt_failure_alert(username: str, ip: str, user_agent: str, roo
     send_security_alert_email(subject, body)
 
 
+def send_third_person_join_alert(attempted_user: str, room_id: str, existing_participants: list, ip: str):
+    """إرسال تنبيه بريدي للمسؤول والمستخدمين الموجودين في الغرفة عند محاولة شخص ثالث الدخول"""
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # البريد للمسؤول
+    admin_subject = f"🚨 تنبيه أمني: محاولة دخول شخص ثالث لغرفة دردشة - {room_id}"
+    admin_body = f"""تنبيه أمني - غرفة دردشة مشفرة
+
+تم اكتشاف محاولة دخول شخص ثالث إلى غرفة دردشة مشفرة:
+
+- المستخدم الذي حاول الدخول: {attempted_user}
+- رقم الغرفة: {room_id}
+- عنوان IP: {ip}
+- الوقت: {now}
+- المستخدمون الموجودون في الغرفة: {', '.join(existing_participants)}
+
+تم رفض الطلب تلقائياً - غرفة الدردشة تقبل شخصين فقط.
+"""
+    send_security_alert_email(admin_subject, admin_body, to=ADMIN_EMAIL)
+    
+    # محاولة الحصول على بريد المستخدمين الموجودين والبريد للمستخدمين
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        
+        for participant in existing_participants:
+            try:
+                c.execute("SELECT email FROM users WHERE username = %s", (participant,))
+                row = c.fetchone()
+                if row and row[0]:
+                    email = row[0]
+                    user_subject = f"⚠️ تنبيه أمني: محاولة دخول غير مصرح بها لغرفة الدردشة"
+                    user_body = f"""تنبيه أمني - غرفة دردشة مشفرة
+
+مرحباً {participant}،
+
+تم اكتشاف محاولة من قبل مستخدم آخر للدخول إلى غرفة الدردشة التي أنت موجود فيها:
+
+- المستخدم الذي حاول الدخول: {attempted_user}
+- رقم الغرفة: {room_id}
+- الوقت: {now}
+
+تم رفض الطلب تلقائياً لأن غرفة الدردشة تقبل شخصين فقط.
+إذا كنت تشك في هذا النشاط، يرجى الاتصال بالدعم الفني فوراً.
+
+فريق الأمن - TITAN
+"""
+                    send_security_alert_email(user_subject, user_body, to=email)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    finally:
+        if conn:
+            conn.close()
+
+
 def send_new_device_alert(username, ip, user_agent, email):
     """تنبيه الدخول من جهاز جديد"""
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -5809,17 +5867,10 @@ HTML_TEMPLATE = """
                             <button id="burnChatDestroyBtn" onclick="destroyBurnChatRoom()" class="bg-rose-900/30 hover:bg-rose-800/40 text-rose-300 px-5 py-2 rounded border border-rose-800/50 transition-all font-bold" disabled>تدمير الغرفة</button>
                         </div>
 
-                        <div class="mb-4 p-3 rounded-lg border border-amber-700/50 bg-amber-950/40">
-                            <label class="text-xs font-bold text-amber-300 mb-2 block">عدد الأشخاص في الغرفة</label>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button type="button" id="btn-people-2" onclick="setBurnChatPeopleCount('2')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">شخصين (2)</button>
-                                <button type="button" id="btn-people-3" onclick="setBurnChatPeopleCount('3')" class="py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all">3 أشخاص</button>
-                            </div>
-                            <input type="hidden" id="burnChatPeopleCount" value="">
-                        </div>
-
+                        <!-- عدد الأشخاص محدث تلقائياً إلى 2 فقط -->
+                        <input type="hidden" id="burnChatPeopleCount" value="2">
                         <div id="burnChatPeopleBadge" class="hidden mb-3 text-center text-[11px] font-bold text-amber-200 bg-amber-900/30 border border-amber-700/40 rounded-lg py-2">
-                            عدد المشاركين المختار: <span id="burnChatPeopleBadgeValue">-</span>
+                            عدد المشاركين: <span id="burnChatPeopleBadgeValue">2</span>
                         </div>
 
                         <div id="burnChatDisplay" class="h-64 bg-black rounded-lg border border-pink-900/30 mb-4 p-4 overflow-y-auto flex flex-col gap-2 shadow-inner">
@@ -15213,39 +15264,21 @@ HTML_TEMPLATE = """
             }
         }
 
-        function setBurnChatPeopleCount(count) {
+        function setBurnChatPeopleCount(count = 2) {
+            // يعين عدد الأشخاص تلقائياً إلى 2
             const hidden = document.getElementById('burnChatPeopleCount');
-            if (hidden) hidden.value = String(count);
-            const badge = document.getElementById('burnChatPeopleBadge');
-            const badgeValue = document.getElementById('burnChatPeopleBadgeValue');
-            if (badge) badge.classList.remove('hidden');
-            if (badgeValue) badgeValue.textContent = String(count);
-            ['2', '3', '4', '5'].forEach((n) => {
-                const btn = document.getElementById('btn-people-' + n);
-                if (!btn) return;
-                btn.className = (n === String(count))
-                    ? 'py-2 rounded-lg border border-amber-300 bg-amber-600 text-white text-sm font-extrabold transition-all shadow-[0_0_18px_rgba(245,158,11,0.55)] ring-2 ring-amber-200/60 scale-[1.02]'
-                    : 'py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all';
-                if (n === String(count) && typeof btn.animate === 'function') {
-                    btn.animate(
-                        [
-                            { transform: 'scale(1)', filter: 'brightness(1)' },
-                            { transform: 'scale(1.08)', filter: 'brightness(1.15)' },
-                            { transform: 'scale(1)', filter: 'brightness(1)' }
-                        ],
-                        { duration: 260, easing: 'ease-out', iterations: 1 }
-                    );
-                }
-            });
+            if (hidden) hidden.value = '2';
         }
 
         async function joinBurnChat() {
             const roomId = document.getElementById('burnChatId').value.trim();
             const user = document.getElementById('burnChatUser').value.trim() || 'Anonymous';
-            const peopleCount = document.getElementById('burnChatPeopleCount').value.trim();
             
             if(!roomId) return titanAlert("الرجاء إدخال رقم الغرفة للاتصال المشفر!");
-            if(!peopleCount) return titanAlert("حدد عدد الأشخاص أولاً: 2 أو 3");
+            
+            // تعيين عدد الأشخاص التلقائي إلى 2
+            setBurnChatPeopleCount(2);
+            const peopleCount = 2;
             
             // Call server to validate/join room with capacity enforcement
             try {
@@ -15266,11 +15299,7 @@ HTML_TEMPLATE = """
             currentUser = user;
 
             _setBurnChatUiConnected(true);
-            document.getElementById('burnChatDisplay').innerHTML = '<div class="text-center text-pink-500 font-bold tracking-widest text-xs uppercase mt-auto mb-2 animate-pulse">-- 🔒 تم الاتصال بنفق مشفر (End-to-End) --</div><div class="text-center text-gray-500 tracking-widest text-[10px] uppercase">يتم تشفير/فك تشفير الرسائل محلياً داخل متصفحك فقط</div>';
-            const badge = document.getElementById('burnChatPeopleBadge');
-            const badgeValue = document.getElementById('burnChatPeopleBadgeValue');
-            if (badge) badge.classList.remove('hidden');
-            if (badgeValue) badgeValue.textContent = peopleCount;
+            document.getElementById('burnChatDisplay').innerHTML = '<div class="text-center text-pink-500 font-bold tracking-widest text-xs uppercase mt-auto mb-2 animate-pulse">-- 🔒 تم الاتصال بنفق مشفر (End-to-End) --</div><div class="text-center text-gray-500 tracking-widest text-[10px] uppercase">يتم تشفير/فك تشفير الرسائل محلياً داخل متصفحك فقط</div><div class="text-center text-yellow-500 text-[10px] mt-2">⚠️ غرفة الدردشة تقبل شخصين فقط</div>';
 
             const mediaInput = document.getElementById('burnChatMediaInput');
             if (mediaInput) {
@@ -15371,16 +15400,7 @@ HTML_TEMPLATE = """
                 `;
             }
             const peopleHidden = document.getElementById('burnChatPeopleCount');
-            if (peopleHidden) peopleHidden.value = '';
-            const badge = document.getElementById('burnChatPeopleBadge');
-            const badgeValue = document.getElementById('burnChatPeopleBadgeValue');
-            if (badge) badge.classList.add('hidden');
-            if (badgeValue) badgeValue.textContent = '-';
-            ['2', '3', '4', '5'].forEach((n) => {
-                const btn = document.getElementById('btn-people-' + n);
-                if (!btn) return;
-                btn.className = 'py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm font-bold transition-all';
-            });
+            if (peopleHidden) peopleHidden.value = '2';
             titanAlert('💥 تم تدمير غرفة الدردشة وحذف جميع الرسائل', 'warning');
         }
 
@@ -21736,7 +21756,7 @@ def toggle_fim():
 
 # 3. Secure Comms: P2P Burn Chat
 # In-memory only storage. Structure: { "room_id": [ {"sender": "A", "msg": "hello", "timestamp": ...} ] }
-BURN_CHAT_ROOMS = {} # room_id -> {"messages": [], "participants": [], "limit": 3}
+BURN_CHAT_ROOMS = {} # room_id -> {"messages": [], "participants": [], "limit": 2}
 BURN_CHAT_DESTROYED: dict[str, dict[str, str]] = {}
 
 @app.route('/api/chat/join', methods=['POST'])
@@ -21744,7 +21764,7 @@ def chat_join():
     data = request.json or {}
     room_id = (data.get('room_id') or '').strip()
     sender = (data.get('sender') or 'Anonymous').strip()
-    limit = int(data.get('limit', 3))
+    limit = 2  # Force limit to 2 people only
     
     if not room_id:
         return jsonify({"error": "room_id مطلوب"}), 400
@@ -21761,8 +21781,10 @@ def chat_join():
     
     room = BURN_CHAT_ROOMS[room_id]
     if sender not in room["participants"]:
-        if len(room["participants"]) >= room["limit"]:
-            return jsonify({"error": f"الغرفة ممتلئة! الحد الأقصى هو {room['limit']} أشخاص فقط لهذه الجلسة."}), 403
+        if len(room["participants"]) >= 2:  # Only 2 people allowed
+            # إرسال تنبيه بريدي للمسؤول والمستخدمين الموجودين
+            send_third_person_join_alert(sender, room_id, room["participants"], _get_login_ip())
+            return jsonify({"error": "الغرفة ممتلئة! يسمح فقط لشخصين فقط في غرفة الدردشة."}), 403
         room["participants"].append(sender)
     
     return jsonify({"success": True})
@@ -21781,13 +21803,15 @@ def chat_send():
         
     if room_id not in BURN_CHAT_ROOMS:
         # Fallback creation if join somehow missed
-        BURN_CHAT_ROOMS[room_id] = {"messages": [], "participants": [sender], "limit": 3}
+        BURN_CHAT_ROOMS[room_id] = {"messages": [], "participants": [sender], "limit": 2}
     
     room = BURN_CHAT_ROOMS[room_id]
     # Re-verify participant
     if sender not in room["participants"]:
-        if len(room["participants"]) >= room["limit"]:
-             return jsonify({"error": "الغرفة ممتلئة"}), 403
+        if len(room["participants"]) >= 2:  # Only 2 people allowed
+             # إرسال تنبيه بريدي للمسؤول والمستخدمين الموجودين
+             send_third_person_join_alert(sender, room_id, room["participants"], _get_login_ip())
+             return jsonify({"error": "الغرفة ممتلئة! يسمح فقط لشخصين فقط"}), 403
         room["participants"].append(sender)
 
     room["messages"].append({"sender": sender, "msg": msg})
