@@ -15224,7 +15224,7 @@ HTML_TEMPLATE = """
         }
 
         async function _sendBurnChatMediaDataUrl(dataUrl, mime, fileName) {
-            if (!currentRoomId || !dataUrl) return;
+            if (!currentRoomId || !currentUserId || !dataUrl) return;
 
             const encryptKey = prompt("🔐 أدخل مفتاح التشفير الخاص بهذه الوسائط:");
             if (!encryptKey) return;
@@ -15263,10 +15263,14 @@ HTML_TEMPLATE = """
             }
             display.scrollTop = display.scrollHeight;
 
-            await fetch('/api/chat/send', {
+            const res = await fetch('/api/chat/send', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({room_id: currentRoomId, sender: currentUser, msg: encryptedMsg})
+                body: JSON.stringify({room_id: currentRoomId, sender: currentUser, sender_id: currentUserId, msg: encryptedMsg})
             });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.error) {
+                titanAlert(data.error || 'فشل إرسال الوسائط المشفرة', 'error');
+            }
             soundManager.success();
         }
 
@@ -15312,8 +15316,10 @@ HTML_TEMPLATE = """
             
             if(!roomId) return titanAlert("الرجاء إدخال رقم الغرفة للاتصال المشفر!");
             
-            // توليد معرّف فريد للمستخدم
-            currentUserId = 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            // توليد/استرجاع معرّف فريد ثابت للمستخدم ضمن نفس الغرفة
+            const storedKey = `burnChatUserId:${roomId}`;
+            const storedId = localStorage.getItem(storedKey);
+            currentUserId = storedId || ('user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
             
             // تعيين عدد الأشخاص التلقائي إلى 2
             setBurnChatPeopleCount(2);
@@ -15330,6 +15336,7 @@ HTML_TEMPLATE = """
                 if (!data.success) {
                     return titanAlert(data.error || "تعذر الانضمام: الغرفة ممتلئة!", "error");
                 }
+                localStorage.setItem(storedKey, currentUserId);
             } catch (e) {
                 return titanAlert("فشل الاتصال بالخادم للتحقق من الغرفة", "error");
             }
@@ -15355,7 +15362,7 @@ HTML_TEMPLATE = """
         async function sendBurnChat() {
             const input = document.getElementById('burnChatInput');
             const msg = input.value.trim();
-            if(!msg || !currentRoomId) return;
+            if(!msg || !currentRoomId || !currentUserId) return;
             
             // PROMPT SENDER FOR DECRYPTION KEY
             const encryptKey = prompt("🔐 أدخل مفتاح التشفير الخاص بهذه الرسالة (يجب أن يعرفه الطرف الآخر لفك التشفير):");
@@ -15380,10 +15387,14 @@ HTML_TEMPLATE = """
             // Encrypt and Send
             const encryptedMsg = e2eEncrypt(msg, encryptKey);
             try {
-                await fetch('/api/chat/send', {
+                const res = await fetch('/api/chat/send', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({room_id: currentRoomId, sender: currentUser, sender_id: currentUserId, msg: encryptedMsg})
                 });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.error) {
+                    titanAlert(data.error || 'فشل إرسال الرسالة', 'error');
+                }
             } catch(e) {
                 console.error("Encryption Transmission Failed:", e);
             }
@@ -15429,6 +15440,13 @@ HTML_TEMPLATE = """
             _setBurnChatUiConnected(false);
             currentRoomId = null;
             currentUserId = null;
+            try {
+                const roomIdInput = document.getElementById('burnChatId');
+                const roomIdValue = roomIdInput ? roomIdInput.value.trim() : '';
+                if (roomIdValue) localStorage.removeItem(`burnChatUserId:${roomIdValue}`);
+            } catch (e) {
+                // ignore localStorage errors
+            }
             const display = document.getElementById('burnChatDisplay');
             if (display) {
                 display.innerHTML = `
@@ -15470,6 +15488,10 @@ HTML_TEMPLATE = """
             try {
                 const res = await fetch(`/api/chat/receive?room_id=${currentRoomId}&requester_id=${currentUserId}`);
                 const data = await res.json();
+
+                if (data && data.error) {
+                    return;
+                }
 
                 if (data.destroyed) {
                     _handleBurnRoomDestroyed(data.by || 'Peer');
@@ -21842,6 +21864,12 @@ def chat_join():
             existing_names = [p["name"] for p in room["participants"]]
             send_third_person_join_alert(sender, room_id, existing_names, _get_login_ip())
             _schedule_burn_chat_destruction(room_id, f"third_person:{sender}")
+            room["messages"].append({
+                "sender": "SYSTEM",
+                "sender_id": "system",
+                "msg": "⚠️ تنبيه: تم رصد محاولة دخول من شخص ثالث وتم رفضها. سيتم إغلاق الغرفة بعد 30 ثانية.",
+                "timestamp": datetime.datetime.now().isoformat()
+            })
             return jsonify({"error": "الغرفة ممتلئة! يسمح فقط لشخصين فقط في غرفة الدردشة."}), 403
         # إذا كان موجوداً بالفعل، اسمح له بالدخول مرة أخرى
         return jsonify({"success": True})
@@ -21886,6 +21914,12 @@ def chat_send():
             existing_names = [p["name"] for p in room["participants"]]
             send_third_person_join_alert(sender, room_id, existing_names, _get_login_ip())
             _schedule_burn_chat_destruction(room_id, f"third_person:{sender}")
+            room["messages"].append({
+                "sender": "SYSTEM",
+                "sender_id": "system",
+                "msg": "⚠️ تنبيه: تم رصد محاولة دخول من شخص ثالث وتم رفضها. سيتم إغلاق الغرفة بعد 30 ثانية.",
+                "timestamp": datetime.datetime.now().isoformat()
+            })
             return jsonify({"error": "الغرفة ممتلئة! يسمح فقط لشخصين فقط"}), 403
         # إذا كانت الغرفة ليست ممتلئة، لا تضيفه تلقائياً - يجب استخدام join أولاً
         return jsonify({"error": "يجب الانضمام للغرفة أولاً عبر join"}), 403
