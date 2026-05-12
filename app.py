@@ -2016,6 +2016,7 @@ def send_third_person_join_alert(attempted_user: str, room_id: str, existing_par
 - المستخدمون الموجودون في الغرفة: {', '.join(existing_participants)}
 
 تم رفض الطلب تلقائياً - غرفة الدردشة تقبل شخصين فقط.
+سيتم إغلاق الغرفة بالكامل بعد 30 ثانية احترازياً وحذف جميع الرسائل.
 """
     send_security_alert_email(admin_subject, admin_body, to=ADMIN_EMAIL)
     
@@ -2043,6 +2044,7 @@ def send_third_person_join_alert(attempted_user: str, room_id: str, existing_par
 - الوقت: {now}
 
 تم رفض الطلب تلقائياً لأن غرفة الدردشة تقبل شخصين فقط.
+سيتم إغلاق الغرفة بالكامل بعد 30 ثانية احترازياً وحذف جميع الرسائل.
 إذا كنت تشك في هذا النشاط، يرجى الاتصال بالدعم الفني فوراً.
 
 فريق الأمن - TITAN
@@ -2055,6 +2057,39 @@ def send_third_person_join_alert(attempted_user: str, room_id: str, existing_par
     finally:
         if conn:
             conn.close()
+
+
+def _cancel_pending_burn_chat_destruction(room_id: str) -> None:
+    timer = BURN_CHAT_PENDING_DESTROY.pop(room_id, None)
+    if timer:
+        try:
+            timer.cancel()
+        except Exception:
+            pass
+
+
+def _schedule_burn_chat_destruction(room_id: str, triggered_by: str) -> None:
+    if room_id in BURN_CHAT_PENDING_DESTROY:
+        return
+
+    def _destroy_room():
+        BURN_CHAT_PENDING_DESTROY.pop(room_id, None)
+        if room_id in BURN_CHAT_ROOMS:
+            BURN_CHAT_ROOMS.pop(room_id, None)
+            BURN_CHAT_DESTROYED[room_id] = {
+                'by': triggered_by,
+                'at': datetime.datetime.now().isoformat(),
+                'reason': 'third_person_attempt'
+            }
+            add_audit_log(
+                "Burn Chat ⚠️",
+                f"تم إغلاق الغرفة [{room_id}] تلقائياً بعد محاولة دخول شخص ثالث",
+            )
+
+    timer = threading.Timer(30.0, _destroy_room)
+    timer.daemon = True
+    BURN_CHAT_PENDING_DESTROY[room_id] = timer
+    timer.start()
 
 
 def send_new_device_alert(username, ip, user_agent, email):
@@ -15155,6 +15190,7 @@ HTML_TEMPLATE = """
         let burnChatTimer = null;
         let currentRoomId = null;
         let currentUser = null;
+        let currentUserId = null;  // معرّف فريد للمستخدم
 
         function _burnCipherPreview(cipherText) {
             const raw = String(cipherText || '');
@@ -15276,6 +15312,9 @@ HTML_TEMPLATE = """
             
             if(!roomId) return titanAlert("الرجاء إدخال رقم الغرفة للاتصال المشفر!");
             
+            // توليد معرّف فريد للمستخدم
+            currentUserId = 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            
             // تعيين عدد الأشخاص التلقائي إلى 2
             setBurnChatPeopleCount(2);
             const peopleCount = 2;
@@ -15285,7 +15324,7 @@ HTML_TEMPLATE = """
                 const res = await fetch('/api/chat/join', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({room_id: roomId, sender: user, limit: parseInt(peopleCount)})
+                    body: JSON.stringify({room_id: roomId, sender: user, sender_id: currentUserId, limit: parseInt(peopleCount)})
                 });
                 const data = await res.json();
                 if (!data.success) {
@@ -15343,7 +15382,7 @@ HTML_TEMPLATE = """
             try {
                 await fetch('/api/chat/send', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({room_id: currentRoomId, sender: currentUser, msg: encryptedMsg})
+                    body: JSON.stringify({room_id: currentRoomId, sender: currentUser, sender_id: currentUserId, msg: encryptedMsg})
                 });
             } catch(e) {
                 console.error("Encryption Transmission Failed:", e);
@@ -15389,6 +15428,7 @@ HTML_TEMPLATE = """
             }
             _setBurnChatUiConnected(false);
             currentRoomId = null;
+            currentUserId = null;
             const display = document.getElementById('burnChatDisplay');
             if (display) {
                 display.innerHTML = `
@@ -15425,10 +15465,10 @@ HTML_TEMPLATE = """
         }
 
         async function pollBurnChat() {
-            if(!currentRoomId) return;
+            if(!currentRoomId || !currentUserId) return;
             
             try {
-                const res = await fetch(`/api/chat/receive?room_id=${currentRoomId}&requester=${currentUser}`);
+                const res = await fetch(`/api/chat/receive?room_id=${currentRoomId}&requester_id=${currentUserId}`);
                 const data = await res.json();
 
                 if (data.destroyed) {
@@ -21758,34 +21798,61 @@ def toggle_fim():
 # In-memory only storage. Structure: { "room_id": [ {"sender": "A", "msg": "hello", "timestamp": ...} ] }
 BURN_CHAT_ROOMS = {} # room_id -> {"messages": [], "participants": [], "limit": 2}
 BURN_CHAT_DESTROYED: dict[str, dict[str, str]] = {}
+BURN_CHAT_PENDING_DESTROY: dict[str, threading.Timer] = {}
 
 @app.route('/api/chat/join', methods=['POST'])
 def chat_join():
     data = request.json or {}
     room_id = (data.get('room_id') or '').strip()
     sender = (data.get('sender') or 'Anonymous').strip()
+    sender_id = (data.get('sender_id') or '').strip()  # معرّف فريد للمستخدم
     limit = 2  # Force limit to 2 people only
     
     if not room_id:
         return jsonify({"error": "room_id مطلوب"}), 400
+    if not sender or sender == '':
+        return jsonify({"error": "اسم المستخدم مطلوب"}), 400
+    if not sender_id:
+        return jsonify({"error": "معرّف المستخدم مطلوب"}), 400
     if room_id in BURN_CHAT_DESTROYED:
         return jsonify({"error": "تم تدمير هذه الغرفة"}), 410
 
     if room_id not in BURN_CHAT_ROOMS:
         BURN_CHAT_ROOMS[room_id] = {
             "messages": [],
-            "participants": [sender],
+            "participants": [{
+                "name": sender,
+                "id": sender_id,
+                "joined_at": datetime.datetime.now().isoformat()
+            }],
             "limit": limit
         }
         return jsonify({"success": True, "created": True})
     
     room = BURN_CHAT_ROOMS[room_id]
-    if sender not in room["participants"]:
-        if len(room["participants"]) >= 2:  # Only 2 people allowed
+    
+    # تحقق إذا كان هذا المستخدم موجود بالفعل
+    participant_ids = [p["id"] for p in room["participants"]]
+    
+    # تحقق صارم: إذا كانت الغرفة تحتوي بالفعل على شخصين، رفض أي شخص جديد
+    if len(room["participants"]) >= 2:
+        # إذا كان الشخص موجوداً بالفعل، سماح له بالبقاء (reconnect)
+        if sender_id not in participant_ids:
             # إرسال تنبيه بريدي للمسؤول والمستخدمين الموجودين
-            send_third_person_join_alert(sender, room_id, room["participants"], _get_login_ip())
+            existing_names = [p["name"] for p in room["participants"]]
+            send_third_person_join_alert(sender, room_id, existing_names, _get_login_ip())
+            _schedule_burn_chat_destruction(room_id, f"third_person:{sender}")
             return jsonify({"error": "الغرفة ممتلئة! يسمح فقط لشخصين فقط في غرفة الدردشة."}), 403
-        room["participants"].append(sender)
+        # إذا كان موجوداً بالفعل، اسمح له بالدخول مرة أخرى
+        return jsonify({"success": True})
+    
+    # الآن نعلم أن الغرفة بها أقل من شخصين
+    if sender_id not in participant_ids:
+        room["participants"].append({
+            "name": sender,
+            "id": sender_id,
+            "joined_at": datetime.datetime.now().isoformat()
+        })
     
     return jsonify({"success": True})
 
@@ -21794,49 +21861,73 @@ def chat_send():
     data = request.json or {}
     room_id = data.get('room_id')
     sender = data.get('sender', 'Anonymous')
+    sender_id = data.get('sender_id', '')
     msg = data.get('msg', '')
     
     if not room_id or not msg:
         return jsonify({"error": "بيانات مفقودة"}), 400
+    if not sender_id:
+        return jsonify({"error": "معرّف المستخدم مطلوب"}), 400
     if room_id in BURN_CHAT_DESTROYED:
         return jsonify({"error": "تم تدمير هذه الغرفة"}), 410
         
     if room_id not in BURN_CHAT_ROOMS:
-        # Fallback creation if join somehow missed
-        BURN_CHAT_ROOMS[room_id] = {"messages": [], "participants": [sender], "limit": 2}
+        # لا تسمح بإنشاء غرفة جديدة عبر send - يجب استخدام join أولاً
+        return jsonify({"error": "الغرفة غير موجودة. استخدم join أولاً"}), 404
     
     room = BURN_CHAT_ROOMS[room_id]
-    # Re-verify participant
-    if sender not in room["participants"]:
-        if len(room["participants"]) >= 2:  # Only 2 people allowed
-             # إرسال تنبيه بريدي للمسؤول والمستخدمين الموجودين
-             send_third_person_join_alert(sender, room_id, room["participants"], _get_login_ip())
-             return jsonify({"error": "الغرفة ممتلئة! يسمح فقط لشخصين فقط"}), 403
-        room["participants"].append(sender)
+    
+    # تحقق صارم: المستخدم يجب أن يكون في قائمة المشاركين بناءً على معرّفه الفريد
+    participant_ids = [p["id"] for p in room["participants"]]
+    
+    if sender_id not in participant_ids:
+        # تحقق إذا كانت الغرفة ممتلئة
+        if len(room["participants"]) >= 2:
+            existing_names = [p["name"] for p in room["participants"]]
+            send_third_person_join_alert(sender, room_id, existing_names, _get_login_ip())
+            _schedule_burn_chat_destruction(room_id, f"third_person:{sender}")
+            return jsonify({"error": "الغرفة ممتلئة! يسمح فقط لشخصين فقط"}), 403
+        # إذا كانت الغرفة ليست ممتلئة، لا تضيفه تلقائياً - يجب استخدام join أولاً
+        return jsonify({"error": "يجب الانضمام للغرفة أولاً عبر join"}), 403
 
-    room["messages"].append({"sender": sender, "msg": msg})
+    # الآن نتأكد أن المستخدم مصرح له بالإرسال
+    room["messages"].append({
+        "sender": sender,
+        "sender_id": sender_id,
+        "msg": msg,
+        "timestamp": datetime.datetime.now().isoformat()
+    })
     return jsonify({"success": True})
 
 @app.route('/api/chat/receive', methods=['GET'])
 def chat_receive():
     room_id = request.args.get('room_id')
-    requester = request.args.get('requester', '')
+    requester_id = request.args.get('requester_id', '')
+
+    if not room_id or not requester_id:
+        return jsonify({"messages": []})
 
     destroyed_meta = BURN_CHAT_DESTROYED.get(room_id or '')
     if destroyed_meta:
         return jsonify({"destroyed": True, "by": destroyed_meta.get('by', '')})
     
-    if not room_id or room_id not in BURN_CHAT_ROOMS:
+    if room_id not in BURN_CHAT_ROOMS:
         return jsonify({"messages": []})
         
     room = BURN_CHAT_ROOMS[room_id]
+    
+    # تحقق: المستخدم يجب أن يكون مشارك معترف به
+    participant_ids = [p["id"] for p in room["participants"]]
+    if requester_id not in participant_ids:
+        return jsonify({"error": "أنت لست مشارك في هذه الغرفة"}), 403
+    
     messages = room["messages"]
     to_deliver = []
     remaining = []
     
     # Only deliver messages NOT sent by the requester, and burn them after reading
     for m in messages:
-        if m['sender'] != requester:
+        if m.get('sender_id') != requester_id:
             to_deliver.append(m)
         else:
             remaining.append(m)
@@ -21857,6 +21948,7 @@ def chat_destroy():
     if not room_id:
         return jsonify({"success": False, "error": "room_id مطلوب"}), 400
 
+    _cancel_pending_burn_chat_destruction(room_id)
     BURN_CHAT_ROOMS.pop(room_id, None)
     BURN_CHAT_DESTROYED[room_id] = {
         'by': requester,
@@ -21928,6 +22020,7 @@ def chat_failed_decrypt():
 
     session.clear()
     if room_id:
+        _cancel_pending_burn_chat_destruction(room_id)
         BURN_CHAT_ROOMS.pop(room_id, None)
         BURN_CHAT_DESTROYED[room_id] = {
             'by': username,
