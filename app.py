@@ -4959,8 +4959,8 @@ HTML_TEMPLATE = """
                     <div class="tab-group-title px-1"><span>🧭</span> التحليل والاستقصاء</div>
                     <div class="tab-grid">
                     <button onclick="showTab('tools')" id="btn-tools" class="px-3 py-1.5 rounded-lg hover:bg-purple-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-purple-500/30"><span>🌐</span> تتبع IP</button>
-                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
                     <button onclick="showTab('ghost')" id="btn-ghost" class="px-3 py-1.5 rounded-lg hover:bg-pink-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-pink-500/30"><span>🔥</span> قنوات الدردشة والرسائل الأمنة</button>
+                    <button onclick="showTab('osint')" id="btn-osint" class="px-3 py-1.5 rounded-lg hover:bg-indigo-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-indigo-500/30"><span>🕵️</span> OSINT</button>
                     <button onclick="showTab('training')" id="btn-training" class="px-3 py-1.5 rounded-lg hover:bg-amber-600/20 text-xs font-bold text-gray-400 transition-all flex items-center gap-1.5 border border-transparent hover:border-amber-500/30"><span>🎯</span> قسم التدريب</button>
                 </div>
                 </div>
@@ -21778,8 +21778,21 @@ def chat_join():
     if sender not in room["participants"]:
         if len(room["participants"]) >= room["limit"]:
             # Notify Admin
-            subject = f"TITAN SECURITY: Intrusion attempt in Burn Chat [{room_id}]"
-            body = f"User '{sender}' tried to enter Burn Chat room '{room_id}' which is already full (2/2).\nThe room is scheduled for self-destruction in 10 seconds."
+            ip_addr = request.remote_addr or 'Unknown'
+            now_str = datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+            participants_str = ", ".join(room["participants"])
+            
+            subject = f"🚨 تنبيه أمني: محاولة دخول شخص ثالث لغرفة دردشة - {room_id}"
+            body = f"""تنبيه أمني - غرفة دردشة مشفرة
+
+تم اكتشاف محاولة دخول شخص ثالث إلى غرفة دردشة مشفرة :تم
+
+- المستخدم الذي حاول الدخول: {sender}
+- رقم الغرفة: {room_id}
+- عنوان IP: {ip_addr}
+- الوقت: {now_str}
+- المستخدمون الموجودون في الغرفة: {participants_str}
+"""
             threading.Thread(target=_resend_send, args=(ADMIN_EMAIL, subject, body)).start()
 
             # Notify Participants
