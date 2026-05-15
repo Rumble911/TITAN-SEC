@@ -95,7 +95,7 @@ SENDER_NAME = 'TITAN'
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "abdallahalqam4040@gmail.com")
 
 # --- DigitalOcean AI Agent Config ---
-DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://laew3rj7mdvo4hv4fkf5dcsb.agents.do-ai.run').rstrip('/')
+DO_AI_ENDPOINT = os.environ.get('DO_AI_ENDPOINT', 'https://yr6qoxyuipmb7gyjrhnnn4vx.agents.do-ai.run').rstrip('/')
 DO_AI_KEY = os.environ.get('DO_AI_KEY', '')
 DO_AI_MODEL = os.environ.get('DO_AI_MODEL', 'tor1')
 
@@ -2088,6 +2088,8 @@ def init_db():
         "ALTER TABLE users ADD COLUMN last_country TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN vault_otp_code TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN lock_reason TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN is_suspended INTEGER DEFAULT 0",
         # --- تحديث جدول الجلسات (Migration) ---
         "ALTER TABLE active_sessions ADD COLUMN token TEXT",
         "ALTER TABLE active_sessions ADD COLUMN user_agent TEXT DEFAULT ''",
@@ -5149,6 +5151,14 @@ HTML_TEMPLATE = """
                     </div>
                     <div id="adminSupportTicketsList" class="space-y-3 max-h-[30rem] overflow-y-auto"></div>
                 </div>
+
+                <div class="bg-slate-900/50 border border-slate-700 p-5 rounded-2xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <h3 class="text-lg font-bold text-violet-300">👥 إدارة المستخدمين والرقابة</h3>
+                        <button onclick="loadAdminUsers()" class="px-3 py-1.5 rounded-lg bg-violet-900/30 border border-violet-800/50 text-violet-300 text-xs font-bold">تحديث القائمة</button>
+                    </div>
+                    <div id="adminUsersList" class="space-y-3 max-h-[40rem] overflow-y-auto"></div>
+                </div>
             </div>
 
             <div id="security-section" class="hidden"></div> <!-- Security section completely removed per user request -->
@@ -7953,7 +7963,10 @@ HTML_TEMPLATE = """
             if(type === 'qr' && typeof generateQR === 'function') { setTimeout(() => { document.getElementById('qrText').focus(); }, 100); }
             if(type === 'identity' && typeof generateIdentity === 'function') { setTimeout(() => { document.getElementById('identityLang').focus(); }, 100); }
             if(type === 'osint' && typeof osintInitSection === 'function') osintInitSection();
-            if(type === 'admin' && typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
+            if(type === 'admin') {
+                if(typeof loadAdminSupportTickets === 'function') loadAdminSupportTickets();
+                if(typeof loadAdminUsers === 'function') loadAdminUsers();
+            }
 
             const activeBtn = document.getElementById('btn-' + type);
             if (activeBtn && typeof activeBtn.scrollIntoView === 'function') {
@@ -12317,6 +12330,114 @@ HTML_TEMPLATE = """
             }
         }
 
+        async function loadAdminUsers() {
+            const box = document.getElementById('adminUsersList');
+            if (!box) return;
+            setResultLoading(box, 'User Management', 'جاري تحميل قائمة المستخدمين...');
+
+            try {
+                const res = await fetch('/api/admin/users');
+                const data = await res.json();
+                if (!data.success) {
+                    setResultError(box, data.error || 'فشل تحميل قائمة المستخدمين');
+                    return;
+                }
+
+                const users = data.users || [];
+                setResultMarkup(
+                    box,
+                    'User Management',
+                    users.map(u => {
+                        const isLocked = u.lockout_until && (new Date(u.lockout_until.replace(' ', 'T')) > new Date());
+                        const isSuspended = u.is_suspended;
+                        const statusColor = isSuspended ? 'bg-red-900/50 text-red-300' : (isLocked ? 'bg-orange-900/50 text-orange-300' : 'bg-green-900/50 text-green-300');
+                        const statusText = isSuspended ? 'Suspended' : (isLocked ? 'Locked' : 'Active');
+                        
+                        return `
+                            <div class="p-4 rounded-2xl bg-black/40 border border-slate-700 hover:border-violet-500/50 transition-colors">
+                                <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-full bg-violet-900/30 border border-violet-800/50 flex items-center justify-center text-violet-300 font-bold text-lg">
+                                            ${(u.username || '?')[0].toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-bold text-white flex items-center gap-2">
+                                                ${_osintEscape(u.username)} 
+                                                ${u.is_admin ? '<span class="text-[10px] bg-red-900/50 text-red-300 px-1.5 rounded border border-red-800/30">ADMIN</span>' : ''}
+                                            </div>
+                                            <div class="text-[11px] text-gray-400">${_osintEscape(u.email || 'No email')}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-[10px] px-2.5 py-1 rounded-full font-bold border ${statusColor} border-current/20">
+                                        ${statusText}
+                                    </div>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-[11px]">
+                                    <div class="space-y-1.5">
+                                        <div class="flex justify-between"><span class="text-gray-500">ID:</span> <span class="text-gray-300">#${u.id}</span></div>
+                                        <div class="flex justify-between"><span class="text-gray-500">تاريخ الإنشاء:</span> <span class="text-gray-300">${_osintEscape(u.created_at || '—')}</span></div>
+                                        <div class="flex justify-between"><span class="text-gray-500">آخر دخول:</span> <span class="text-purple-300">${_osintEscape(u.last_login_at || 'لم يدخل بعد')}</span></div>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <div class="flex justify-between"><span class="text-gray-500">آخر IP:</span> <span class="text-blue-300">${_osintEscape(u.last_login_ip || '—')}</span></div>
+                                        <div class="flex justify-between"><span class="text-gray-500">الدولة:</span> <span class="text-blue-300">${_osintEscape(u.last_country || '—')}</span></div>
+                                        <div class="flex justify-between"><span class="text-gray-500">فشل الدخول:</span> <span class="text-orange-300">${u.failed_attempts}</span></div>
+                                    </div>
+                                </div>
+
+                                ${u.lock_reason ? `
+                                <div class="mb-4 p-2 bg-orange-950/20 border border-orange-900/30 rounded-lg text-[11px] text-orange-200">
+                                    <strong>سبب القفل/الإيقاف:</strong> ${_osintEscape(u.lock_reason)}
+                                </div>
+                                ` : ''}
+
+                                <div class="flex flex-wrap gap-2">
+                                    ${(isSuspended || isLocked) ? 
+                                        `<button onclick="adminUserAction(${u.id}, '${isSuspended ? 'unsuspend' : 'unlock'}')" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-300 border border-green-800/50 p-2 rounded-xl text-[10px] font-bold">إلغاء القفل</button>` :
+                                        `<button onclick="showUserActionPrompt(${u.id}, 'suspend')" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-800/50 p-2 rounded-xl text-[10px] font-bold">إيقاف الحساب</button>
+                                         <button onclick="showUserActionPrompt(${u.id}, 'lock')" class="flex-1 bg-orange-900/40 hover:bg-orange-800/60 text-orange-300 border border-orange-800/50 p-2 rounded-xl text-[10px] font-bold">قفل مؤقت</button>`
+                                    }
+                                    ${u.is_admin ? 
+                                        `<button onclick="adminUserAction(${u.id}, 'remove_admin')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 p-2 rounded-xl text-[10px] font-bold">إزالة مسؤول</button>` :
+                                        `<button onclick="adminUserAction(${u.id}, 'make_admin')" class="bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/50 p-2 rounded-xl text-[10px] font-bold">تعيين مسؤول</button>`
+                                    }
+                                </div>
+                            </div>
+                        `;
+                    }).join(''),
+                    { badge: `${users.length} Users` }
+                );
+            } catch (e) {
+                setResultError(box, 'فشل الاتصال بالخادم');
+            }
+        }
+
+        async function showUserActionPrompt(userId, action) {
+            const reason = prompt("يرجى إدخال سبب الإجراء (سيظهر للمستخدم):", "");
+            if (reason === null) return; // Cancelled
+            adminUserAction(userId, action, reason);
+        }
+
+        async function adminUserAction(targetId, action, reason = '') {
+            try {
+                const res = await fetch('/api/admin/users/' + targetId + '/action', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action, reason })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    titanAlert(data.error || 'فشل تنفيذ الإجراء');
+                    return;
+                }
+                titanAlert('✅ تم تنفيذ الإجراء بنجاح');
+                loadAdminUsers();
+            } catch (e) {
+                titanAlert('فشل الاتصال بالخادم');
+            }
+        }
+
         async function executeRecovery() {
             const a1 = document.getElementById('rec-a1').value;
             const a2 = document.getElementById('rec-a2').value;
@@ -15174,7 +15295,12 @@ HTML_TEMPLATE = """
 
             await fetch('/api/chat/send', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({room_id: currentRoomId, sender: currentUser, msg: encryptedMsg})
+                body: JSON.stringify({
+                    room_id: currentRoomId, 
+                    sender: currentUser, 
+                    participant_id: burnChatParticipantId,
+                    msg: encryptedMsg
+                })
             });
             soundManager.success();
         }
@@ -15235,6 +15361,8 @@ HTML_TEMPLATE = """
             });
         }
 
+        let burnChatParticipantId = null;
+
         async function joinBurnChat() {
             const roomId = document.getElementById('burnChatId').value.trim();
             const user = document.getElementById('burnChatUser').value.trim() || 'Anonymous';
@@ -15242,12 +15370,21 @@ HTML_TEMPLATE = """
             
             if(!roomId) return titanAlert("الرجاء إدخال رقم الغرفة للاتصال المشفر!");
             
+            if (!burnChatParticipantId) {
+                // Generate a persistent participant ID for this session
+                burnChatParticipantId = sessionStorage.getItem('titan_chat_pid');
+                if (!burnChatParticipantId) {
+                    burnChatParticipantId = 'p-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
+                    sessionStorage.setItem('titan_chat_pid', burnChatParticipantId);
+                }
+            }
+
             // Call server to validate/join room with capacity enforcement
             try {
                 const res = await fetch('/api/chat/join', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({room_id: roomId, sender: user, limit: 2})
+                    body: JSON.stringify({room_id: roomId, sender: user, participant_id: burnChatParticipantId, limit: 2})
                 });
                 const data = await res.json();
                 if (!data.success) {
@@ -15309,7 +15446,12 @@ HTML_TEMPLATE = """
             try {
                 await fetch('/api/chat/send', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({room_id: currentRoomId, sender: currentUser, msg: encryptedMsg})
+                    body: JSON.stringify({
+                        room_id: currentRoomId, 
+                        sender: currentUser, 
+                        participant_id: burnChatParticipantId,
+                        msg: encryptedMsg
+                    })
                 });
             } catch(e) {
                 console.error("Encryption Transmission Failed:", e);
@@ -15403,7 +15545,7 @@ HTML_TEMPLATE = """
             if(!currentRoomId) return;
             
             try {
-                const res = await fetch(`/api/chat/receive?room_id=${currentRoomId}&requester=${currentUser}`);
+                const res = await fetch(`/api/chat/receive?room_id=${currentRoomId}&requester=${currentUser}&participant_id=${burnChatParticipantId}`);
                 const data = await res.json();
 
                 if (data.destroyed) {
@@ -15420,9 +15562,17 @@ HTML_TEMPLATE = """
                                     <div class="bg-rose-900/60 border-2 border-rose-500 text-white px-6 py-4 rounded-xl text-sm max-w-[90%] text-center shadow-[0_0_30px_rgba(244,63,94,0.4)] animate-pulse">
                                         <div class="font-black mb-1 text-lg">⚠️ نظام الحماية (TITAN)</div>
                                         <div class="font-bold">${m.msg}</div>
+                                        <div id="burn-countdown" class="mt-3 text-2xl font-black text-rose-300">10</div>
                                     </div>
                                 </div>
                             `;
+                            let count = 10;
+                            const intr = setInterval(() => {
+                                count--;
+                                const el = document.getElementById('burn-countdown');
+                                if (el) el.textContent = count;
+                                if (count <= 0) clearInterval(intr);
+                            }, 1000);
                             return;
                         }
                         // Generate a unique ID for this message block
@@ -18207,6 +18357,98 @@ def admin_support_tickets_update(ticket_id):
     finally:
         if conn:
             conn.close()
+
+# --- مسارات إدارة المستخدمين (Admin User Management) ---
+
+@app.route('/api/admin/users', methods=['GET'])
+def admin_users_list():
+    if 'user_id' not in session:
+        return jsonify({"error": "غير مصرح"}), 401
+    
+    user_id = session['user_id']
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        row = c.fetchone()
+        if not row or not row[0]:
+            return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
+        
+        c.execute("""
+            SELECT id, username, email, is_verified, created_at, is_admin, 
+                   failed_attempts, lockout_until, last_login_at, last_login_ip, 
+                   last_country, lock_reason, is_suspended 
+            FROM users 
+            ORDER BY id ASC
+        """)
+        users = []
+        for r in c.fetchall():
+            users.append({
+                "id": r[0],
+                "username": r[1],
+                "email": r[2],
+                "is_verified": bool(r[3]),
+                "created_at": r[4],
+                "is_admin": bool(r[5]),
+                "failed_attempts": r[6],
+                "lockout_until": r[7],
+                "last_login_at": r[8],
+                "last_login_ip": r[9],
+                "last_country": r[10],
+                "lock_reason": r[11],
+                "is_suspended": bool(r[12])
+            })
+        return jsonify({"success": True, "users": users})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+@app.route('/api/admin/users/<int:target_id>/action', methods=['POST'])
+def admin_user_action(target_id):
+    if 'user_id' not in session:
+        return jsonify({"error": "غير مصرح"}), 401
+    
+    user_id = session['user_id']
+    data = request.json or {}
+    action = data.get('action') # 'lock', 'unlock', 'suspend', 'unsuspend', 'make_admin', 'remove_admin'
+    reason = (data.get('reason') or '').strip()
+
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        row = c.fetchone()
+        if not row or not row[0]:
+            return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
+
+        if action == 'lock':
+            # Set lockout_until to a far future date
+            far_future = "2099-12-31T23:59:59"
+            c.execute("UPDATE users SET lockout_until = %s, lock_reason = %s WHERE id = %s", (far_future, reason, target_id))
+        elif action == 'unlock':
+            c.execute("UPDATE users SET lockout_until = NULL, failed_attempts = 0, lock_reason = NULL WHERE id = %s", (target_id,))
+        elif action == 'suspend':
+            c.execute("UPDATE users SET is_suspended = 1, lock_reason = %s WHERE id = %s", (reason, target_id))
+        elif action == 'unsuspend':
+            c.execute("UPDATE users SET is_suspended = 0, lock_reason = NULL WHERE id = %s", (target_id,))
+        elif action == 'make_admin':
+            c.execute("UPDATE users SET is_admin = 1 WHERE id = %s", (target_id,))
+        elif action == 'remove_admin':
+            c.execute("UPDATE users SET is_admin = 0 WHERE id = %s", (target_id,))
+        else:
+            return jsonify({"success": False, "error": "Action غير صالح"}), 400
+        
+        conn.commit()
+        add_audit_log(f"Admin Action: {action}", f"Target User #{target_id}, Reason: {reason}", username=session.get('username'))
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
 
 
 # --- مسارات الإضافات الجديدة المتقدمة ---
@@ -21740,8 +21982,41 @@ def toggle_fim():
         add_audit_log("إيقاف مراقب التكامل", "تم إيقاف المراقبة")
         return jsonify({"status": "inactive"})
 
-BURN_CHAT_ROOMS = {} # room_id -> {"messages": [], "participants": [], "limit": 2}
+BURN_CHAT_ROOMS = {} # room_id -> {"messages": [], "participants": {}, "limit": 2}
 BURN_CHAT_DESTROYED: dict[str, dict[str, str]] = {}
+
+def _handle_intruder(room_id, intruder_name, ip_addr):
+    """التعامل مع المتسلل: إبلاغ الأدمن، إرسال تنبيه للنظام، وبدء مؤقت التدمير"""
+    room = BURN_CHAT_ROOMS.get(room_id)
+    if not room: return
+    
+    # 1. إبلاغ الأدمن عبر البريد الإلكتروني
+    now_str = datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+    participants_str = ", ".join(room["participants"].values())
+    
+    subject = f"🚨 تنبيه أمني: محاولة اختراق غرفة دردشة - {room_id}"
+    body = f"""تنبيه أمني - نظام TITAN
+
+تم اكتشاف محاولة دخول شخص ثالث (غير مصرح له) إلى غرفة دردشة مشفرة :
+
+- المتسلل: {intruder_name}
+- رقم الغرفة: {room_id}
+- عنوان IP: {ip_addr}
+- الوقت: {now_str}
+- المستخدمون الفعليون: {participants_str}
+
+تم تفعيل بروتوكول التدمير الذاتي (Burn-Protocol) تلقائياً.
+"""
+    threading.Thread(target=_resend_send, args=(ADMIN_EMAIL, subject, body)).start()
+
+    # 2. إرسال رسالة نظام للمشاركين
+    warning_msg = f"⚠️ بروتوكول الحماية: تم رصد محاولة دخول من [{intruder_name} - {ip_addr}]! سيتم تدمير هذه الغرفة نهائياً خلال 10 ثوانٍ لحماية خصوصيتكم."
+    room["messages"].append({"sender": "SYSTEM", "msg": warning_msg})
+    
+    # 3. بدء مؤقت التدمير
+    if not room.get("destruction_timer_started"):
+        room["destruction_timer_started"] = True
+        threading.Thread(target=_destroy_room_delayed, args=(room_id, intruder_name)).start()
 
 def _destroy_room_delayed(room_id, intruder):
     """تدمير الغرفة بعد 10 ثوانٍ من محاولة الاختراق"""
@@ -21749,7 +22024,7 @@ def _destroy_room_delayed(room_id, intruder):
     if room_id in BURN_CHAT_ROOMS:
         BURN_CHAT_ROOMS.pop(room_id, None)
         BURN_CHAT_DESTROYED[room_id] = {
-            'by': f"SYSTEM (Auto-Destroy due to intrusion by {intruder})",
+            'by': f"SYSTEM (Intrusion by {intruder})",
             'at': datetime.datetime.now().isoformat()
         }
         add_audit_log("Burn Chat 💥", f"تم تدمير الغرفة [{room_id}] تلقائياً بسبب محاولة دخول من {intruder}")
@@ -21759,54 +22034,35 @@ def chat_join():
     data = request.json or {}
     room_id = (data.get('room_id') or '').strip()
     sender = (data.get('sender') or 'Anonymous').strip()
-    limit = 2  # Forced to 2 persons only
+    participant_id = (data.get('participant_id') or '').strip()
+    limit = 2
     
-    if not room_id:
-        return jsonify({"error": "room_id مطلوب"}), 400
+    if not room_id or not participant_id:
+        return jsonify({"error": "room_id و participant_id مطلوبان"}), 400
+        
     if room_id in BURN_CHAT_DESTROYED:
         return jsonify({"error": "تم تدمير هذه الغرفة"}), 410
 
     if room_id not in BURN_CHAT_ROOMS:
         BURN_CHAT_ROOMS[room_id] = {
             "messages": [],
-            "participants": [sender],
+            "participants": {participant_id: sender},
             "limit": limit
         }
         return jsonify({"success": True, "created": True})
     
     room = BURN_CHAT_ROOMS[room_id]
-    if sender not in room["participants"]:
-        if len(room["participants"]) >= room["limit"]:
-            # Notify Admin
-            ip_addr = request.remote_addr or 'Unknown'
-            now_str = datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-            participants_str = ", ".join(room["participants"])
-            
-            subject = f"🚨 تنبيه أمني: محاولة دخول شخص ثالث لغرفة دردشة - {room_id}"
-            body = f"""تنبيه أمني - غرفة دردشة مشفرة
-
-تم اكتشاف محاولة دخول شخص ثالث إلى غرفة دردشة مشفرة :تم
-
-- المستخدم الذي حاول الدخول: {sender}
-- رقم الغرفة: {room_id}
-- عنوان IP: {ip_addr}
-- الوقت: {now_str}
-- المستخدمون الموجودون في الغرفة: {participants_str}
-"""
-            threading.Thread(target=_resend_send, args=(ADMIN_EMAIL, subject, body)).start()
-
-            # Notify Participants
-            warning_msg = "⚠️ تنبيه أمني: تم رصد محاولة دخول غير مصرح بها! سيتم تدمير هذه الغرفة وحذف جميع الرسائل نهائياً خلال 10 ثوانٍ."
-            room["messages"].append({"sender": "SYSTEM", "msg": warning_msg})
-            
-            # Start timer if not already started
-            if not room.get("destruction_timer_started"):
-                room["destruction_timer_started"] = True
-                threading.Thread(target=_destroy_room_delayed, args=(room_id, sender)).start()
-
-            return jsonify({"error": "⚠️ محاولة دخول غير مصرح بها! الغرفة الآن في وضع التدمير الذاتي لحماية البيانات."}), 403
-        room["participants"].append(sender)
     
+    # إذا كان المشارك موجوداً بالفعل
+    if participant_id in room["participants"]:
+        return jsonify({"success": True})
+        
+    # إذا كان شخصاً جديداً
+    if len(room["participants"]) >= room["limit"]:
+        _handle_intruder(room_id, sender, request.remote_addr)
+        return jsonify({"error": "⚠️ محاولة دخول غير مصرح بها! الغرفة في وضع التدمير الذاتي."}), 403
+        
+    room["participants"][participant_id] = sender
     return jsonify({"success": True})
 
 @app.route('/api/chat/send', methods=['POST'])
@@ -21814,31 +22070,34 @@ def chat_send():
     data = request.json or {}
     room_id = data.get('room_id')
     sender = data.get('sender', 'Anonymous')
+    participant_id = data.get('participant_id')
     msg = data.get('msg', '')
     
-    if not room_id or not msg:
+    if not room_id or not msg or not participant_id:
         return jsonify({"error": "بيانات مفقودة"}), 400
     if room_id in BURN_CHAT_DESTROYED:
         return jsonify({"error": "تم تدمير هذه الغرفة"}), 410
         
     if room_id not in BURN_CHAT_ROOMS:
-        # Fallback creation if join somehow missed
-        BURN_CHAT_ROOMS[room_id] = {"messages": [], "participants": [sender], "limit": 2}
+        return jsonify({"error": "الغرفة غير موجودة"}), 404
     
     room = BURN_CHAT_ROOMS[room_id]
-    # Re-verify participant
-    if sender not in room["participants"]:
+    
+    # التحقق من الهوية والمشاركين
+    if participant_id not in room["participants"]:
         if len(room["participants"]) >= room["limit"]:
-             return jsonify({"error": "الغرفة ممتلئة"}), 403
-        room["participants"].append(sender)
+             _handle_intruder(room_id, sender, request.remote_addr)
+             return jsonify({"error": "⚠️ محاولة إرسال غير مصرح بها! الغرفة في وضع التدمير الذاتي. ⏳ سيتم حظرك في 5 ثوانٍ!"}), 403
+        room["participants"][participant_id] = sender
 
-    room["messages"].append({"sender": sender, "msg": msg})
+    room["messages"].append({"sender_id": participant_id, "sender": sender, "msg": msg})
     return jsonify({"success": True})
 
 @app.route('/api/chat/receive', methods=['GET'])
 def chat_receive():
     room_id = request.args.get('room_id')
-    requester = request.args.get('requester', '')
+    requester_id = request.args.get('participant_id')
+    requester_name = request.args.get('requester', 'Anonymous')
 
     destroyed_meta = BURN_CHAT_DESTROYED.get(room_id or '')
     if destroyed_meta:
@@ -21848,13 +22107,24 @@ def chat_receive():
         return jsonify({"messages": []})
         
     room = BURN_CHAT_ROOMS[room_id]
+    
+    if not requester_id:
+        return jsonify({"error": "participant_id مطلوب"}), 400
+
+    # فحص المتسللين (شخص ثالث يحاول القراءة)
+    if requester_id not in room["participants"]:
+        if len(room["participants"]) >= room["limit"]:
+            _handle_intruder(room_id, requester_name, request.remote_addr)
+            return jsonify({"error": "Unauthorized Access! ⏳ Alert: Self-destruct in 5 seconds."}), 403
+        return jsonify({"messages": [], "warning": "يرجى الانضمام للغرفة أولاً"})
+
     messages = room["messages"]
     to_deliver = []
     remaining = []
     
-    # Only deliver messages NOT sent by the requester, and burn them after reading
+    # تسليم الرسائل التي لم يرسلها هذا المشارك (بناءً على ID)
     for m in messages:
-        if m['sender'] != requester:
+        if m.get('sender_id') != requester_id:
             to_deliver.append(m)
         else:
             remaining.append(m)
@@ -21862,7 +22132,7 @@ def chat_receive():
     room["messages"] = remaining
     
     if to_deliver:
-        add_audit_log("Burn Chat 🔥", f"تم قراءة وتدمير {len(to_deliver)} رسالة سرية في الغرفة [{room_id}]")
+        add_audit_log("Burn Chat 🔥", f"تم قراءة وتدمير {len(to_deliver)} رسالة في الغرفة [{room_id}]")
         
     return jsonify({"messages": to_deliver})
 
@@ -22566,23 +22836,33 @@ def auth_login():
     try:
         conn = get_db_conn()
         c = conn.cursor()
-        c.execute("SELECT id, password_hash, is_verified, email, failed_attempts, lockout_until, last_user_agent, last_country FROM users WHERE username = %s", (username,))
+        c.execute("SELECT id, password_hash, is_verified, email, failed_attempts, lockout_until, last_user_agent, last_country, is_suspended, lock_reason FROM users WHERE username = %s", (username,))
         row = c.fetchone()
 
         if not row:
             add_audit_log("محاولة دخول فاشلة", f"مستخدم غير موجود: {username}", ip=ip)
             return jsonify({"error": "اسم المستخدم أو كلمة السر غير صحيحة"}), 401
 
-        user_id, pw_hash, is_verified, email, failed_attempts, lockout_until, last_ua, last_country = row
+        user_id, pw_hash, is_verified, email, failed_attempts, lockout_until, last_ua, last_country, is_suspended, lock_reason = row
+
+        # --- فحص الإيقاف (Account Suspension) ---
+        if is_suspended:
+            return jsonify({"error": "ACCOUNT_SUSPENDED",
+                            "message": f"تم إيقاف هذا الحساب من قبل الإدارة. السبب: {lock_reason or 'غير محدد'}"}), 403
 
         # --- فحص الحظر (Account Lockout) ---
         if lockout_until:
             lo_dt = datetime.datetime.fromisoformat(lockout_until)
             if datetime.datetime.now() < lo_dt:
-                remaining = int((lo_dt - datetime.datetime.now()).total_seconds() // 60) + 1
-                return jsonify({"error": "ACCOUNT_LOCKED",
-                                "message": f"الحساب مقفل. حاول مجدداً بعد {remaining} دقيقة.",
-                                "minutes": remaining}), 429
+                msg = f"الحساب مقفل. حاول مجدداً لاحقاً."
+                if lo_dt.year > 2090:
+                    msg = f"تم قفل الحساب بشكل دائم من قبل الإدارة. السبب: {lock_reason or 'غير محدد'}"
+                else:
+                    remaining = int((lo_dt - datetime.datetime.now()).total_seconds() // 60) + 1
+                    msg = f"الحساب مقفل. حاول مجدداً بعد {remaining} دقيقة."
+                    if lock_reason: msg += f" السبب: {lock_reason}"
+                
+                return jsonify({"error": "ACCOUNT_LOCKED", "message": msg}), 429
 
         if not verify_password(password, pw_hash):
             failed_attempts = (failed_attempts or 0) + 1
