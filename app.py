@@ -2090,6 +2090,9 @@ def init_db():
         "ALTER TABLE users ADD COLUMN vault_otp_code TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN lock_reason TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN is_suspended INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN is_totp_enabled INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN is_honeypot INTEGER DEFAULT 0",
         # --- تحديث جدول الجلسات (Migration) ---
         "ALTER TABLE active_sessions ADD COLUMN token TEXT",
         "ALTER TABLE active_sessions ADD COLUMN user_agent TEXT DEFAULT ''",
@@ -2405,15 +2408,36 @@ def init_db():
 
     conn.commit()
     
-    # --- Create root user if not exists ---
-    c.execute("SELECT id FROM users WHERE username = 'root'")
+    # --- Advanced Root Protection System ---
+    real_root_name = "TITAN_MASTER_ADMIN" # اسم المستخدم السري الجديد
+    
+    # تحويل الروت القديم إلى الاسم السري الجديد إذا كان موجوداً
+    c.execute("SELECT id FROM users WHERE username = 'root' AND is_honeypot = 0")
+    old_root = c.fetchone()
+    if old_root:
+        c.execute("UPDATE users SET username = %s, is_admin = 1 WHERE id = %s", (real_root_name, old_root[0]))
+        conn.commit()
+        print(f"[TITAN] Real root renamed to: {real_root_name}")
+
+    # التأكد من وجود الروت الحقيقي (باسم السري)
+    c.execute("SELECT id FROM users WHERE username = %s", (real_root_name,))
     if not c.fetchone():
         root_pass_hash = hash_password('Facebook123@@')
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        c.execute("INSERT INTO users (username, password_hash, is_verified, created_at, is_admin) VALUES (%s, %s, 1, %s, 1)",
-                  ('root', root_pass_hash, now))
+        c.execute("INSERT INTO users (username, password_hash, is_verified, created_at, is_admin, is_honeypot) VALUES (%s, %s, 1, %s, 1, 0)",
+                  (real_root_name, root_pass_hash, now))
         conn.commit()
-        print("[TITAN] Root user created.")
+        print(f"[TITAN] Secret Admin created: {real_root_name}")
+
+    # إنشاء حساب "root" كفخ (Honeypot)
+    c.execute("SELECT id FROM users WHERE username = 'root'")
+    if not c.fetchone():
+        trap_pass_hash = hash_password(secrets.token_hex(16)) # كلمة سر عشوائية مستحيلة
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        c.execute("INSERT INTO users (username, password_hash, is_verified, created_at, is_admin, is_honeypot) VALUES (%s, %s, 1, %s, 0, 1)",
+                  ('root', trap_pass_hash, now))
+        conn.commit()
+        print("[TITAN] Honeypot 'root' deployed.")
 
     conn.close()
 
@@ -4141,6 +4165,7 @@ HTML_TEMPLATE = """
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjE4IiBmaWxsPSIjMGQwZDFhIi8+PHRleHQgeD0iNTAiIHk9IjY4IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSI1NCIgZm9udC13ZWlnaHQ9IjkwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0idXJsKCNnKSI+VEFOPC90ZXh0PjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2MwODRmYyIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzdjM2FlZCIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==">
     <link rel="stylesheet" href="/tailwind.css?v=__TAILWIND_V__">
     __TAILWIND_PLAY_CDN__
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Tajawal', sans-serif; background: #070b19; color: white; margin: 0; overflow-x: hidden; cursor: crosshair; }
@@ -5255,6 +5280,33 @@ HTML_TEMPLATE = """
                         <span>🔥</span> تنفيذ المسح الشامل (FACTORY RESET)
                     </button>
                     <div id="admin-reset-msg" class="mt-4 hidden p-3 rounded-lg text-center font-mono text-sm border"></div>
+                </div>
+
+                <!-- Security Hardening Card -->
+                <div class="bg-indigo-950/20 border border-indigo-900/30 p-6 rounded-2xl relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 text-6xl group-hover:scale-110 transition-transform">🔐</div>
+                    <h3 class="text-lg font-bold text-indigo-400 mb-2">تحصين الحساب (Security Hardening)</h3>
+                    <p class="text-sm text-gray-400 mb-6 font-semibold">تفعيل المصادقة الثنائية (2FA) عبر Google Authenticator لحماية حساب المسؤول من الاختراق.</p>
+                    
+                    <div id="totp-status-container" class="flex items-center justify-between bg-black/40 p-4 rounded-xl border border-indigo-900/50">
+                        <div class="flex flex-col">
+                            <span class="text-xs text-gray-500 uppercase tracking-widest font-bold">حالة الحماية</span>
+                            <span id="admin-totp-status-text" class="text-sm font-black text-gray-400">تحميل...</span>
+                        </div>
+                        <button id="admin-totp-toggle-btn" onclick="toggleAdminTotp()" class="px-6 py-2.5 rounded-xl font-bold text-xs transition-all"></button>
+                    </div>
+                </div>
+
+                <!-- Honeypot Status Card -->
+                <div class="bg-amber-950/20 border border-amber-900/30 p-6 rounded-2xl relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 text-6xl group-hover:rotate-12 transition-transform">🪤</div>
+                    <h3 class="text-lg font-bold text-amber-500 mb-2">فخ الحسابات (Honeypot Trap)</h3>
+                    <p class="text-sm text-gray-400 mb-6 font-semibold">حساب <span class="text-red-500 font-mono">root</span> مفعل كفخ حالياً. أي محاولة دخول إليه ستؤدي لحظر الـ IP تلقائياً وإرسال تنبيه فوري.</p>
+                    
+                    <div class="flex items-center gap-3 bg-black/40 p-4 rounded-xl border border-amber-900/50">
+                        <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                        <span class="text-xs text-green-400 font-bold uppercase tracking-widest">نشط: يتم مراقبة المحاولات الوهمية</span>
+                    </div>
                 </div>
 
                 <div class="bg-slate-900/50 border border-slate-700 p-5 rounded-2xl">
@@ -7122,6 +7174,11 @@ HTML_TEMPLATE = """
                     errEl.style.display = 'block';
                     btn.textContent = 'دخول إلى TITAN 🔐';
                     btn.disabled = false;
+                } else if (data.status === 'REQUIRE_TOTP') {
+                    showTotpLoginPrompt(username, password);
+                    btn.textContent = 'دخول إلى TITAN 🔐';
+                    btn.disabled = false;
+                    return;
                 } else {
                     errEl.textContent = data.error || 'بيانات الدخول غير صحيحة';
                     errEl.style.display = 'block';
@@ -7238,6 +7295,101 @@ HTML_TEMPLATE = """
             if (__hudIntervalId) return;
             updateHUD();
             __hudIntervalId = setInterval(updateHUD, 2000);
+        }
+
+        function showTotpLoginPrompt(username, password) {
+            const existing = document.getElementById('totp-login-overlay');
+            if (existing) existing.remove();
+
+            const overlay = document.createElement('div');
+            overlay.id = 'totp-login-overlay';
+            overlay.className = 'fixed inset-0 z-[20000] bg-black/95 flex items-center justify-center p-4 backdrop-blur-xl';
+            overlay.innerHTML = `
+                <div class="bg-slate-900 border border-indigo-500/50 rounded-[2.5rem] p-10 max-w-sm w-full shadow-[0_0_150px_rgba(79,70,229,0.25)] text-center relative overflow-hidden">
+                    <div class="absolute -top-24 -left-24 w-48 h-48 bg-indigo-600/10 rounded-full blur-3xl"></div>
+                    <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-600/10 rounded-full blur-3xl"></div>
+                    
+                    <div class="relative">
+                        <div class="w-20 h-20 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-indigo-500/30">
+                            <span class="text-4xl animate-pulse">🔐</span>
+                        </div>
+                        <h3 class="text-2xl font-black text-white mb-2">المصادقة الثنائية</h3>
+                        <p class="text-[10px] text-gray-400 mb-8 font-bold uppercase tracking-[0.2em]">TITAN SECURITY SHIELD ACTIVE</p>
+                        
+                        <div class="space-y-6">
+                            <div class="relative">
+                                <input type="text" id="totp-login-code" placeholder="------" maxlength="6" 
+                                       class="w-full bg-black/40 border-2 border-indigo-500/20 rounded-2xl px-4 py-5 text-center text-4xl font-black font-mono text-white tracking-[0.3em] outline-none focus:border-indigo-500 focus:bg-black/60 transition-all">
+                                <div class="text-[9px] text-indigo-400/50 mt-2 font-mono">ENTER 6-DIGIT CODE FROM AUTHENTICATOR</div>
+                            </div>
+                            
+                            <button onclick="submitTotpLogin('${username}', '${password}')" id="totp-login-btn"
+                                    class="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm shadow-[0_10px_30px_rgba(79,70,229,0.3)] transition-all transform hover:scale-[1.02] active:scale-[0.98]">
+                                تأكيد الهوية ومتابعة الدخول
+                            </button>
+                            
+                            <button onclick="document.getElementById('totp-login-overlay').remove(); window.location.reload();" 
+                                    class="text-xs text-gray-500 hover:text-white transition-colors underline underline-offset-4 decoration-indigo-500/30">إلغاء العملية</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            const input = document.getElementById('totp-login-code');
+            input.focus();
+            input.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') submitTotpLogin(username, password);
+            });
+        }
+
+        async function submitTotpLogin(username, password) {
+            const code = document.getElementById('totp-login-code').value.trim();
+            const btn = document.getElementById('totp-login-btn');
+            if (code.length !== 6) {
+                titanAlert("يرجى إدخال رمز صحيح", "error");
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="flex items-center justify-center gap-2">⏳ جاري التحقق...</span>';
+            
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username, password, totp_code: code })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    const overlay = document.getElementById('totp-login-overlay');
+                    overlay.classList.add('opacity-0', 'scale-110');
+                    overlay.style.transition = 'all 0.5s ease-out';
+                    
+                    setTimeout(() => {
+                        overlay.remove();
+                        setAdminUi(!!data.isAdmin);
+                        setAiBubbleVisibility(true);
+                        titanAlert("✅ تم التحقق بنجاح! مرحباً بك يا بطل.", "success");
+                        showAuthSuccess();
+                    }, 500);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '❌ رمز غير صحيح';
+                    btn.classList.replace('from-indigo-600', 'from-red-600');
+                    btn.classList.replace('to-purple-600', 'to-red-800');
+                    soundManager.error();
+                    setTimeout(() => {
+                        btn.textContent = 'تأكيد الهوية ومتابعة الدخول';
+                        btn.classList.replace('from-red-600', 'from-indigo-600');
+                        btn.classList.replace('to-red-800', 'to-purple-600');
+                    }, 2000);
+                }
+            } catch(e) { 
+                titanAlert("فشل الاتصال بنظام الأمان", "error"); 
+                btn.disabled = false; 
+                btn.textContent = 'تأكيد الهوية ومتابعة الدخول';
+            }
         }
 
         function showAuthSuccess() {
@@ -8048,6 +8200,13 @@ HTML_TEMPLATE = """
                     if (shouldShow) {
                         sec.classList.remove('hidden');
                         _animateTabSection(sec);
+                        if (type === 'admin') {
+                            loadAdminSupportTickets();
+                            loadAdminUsers();
+                            fetch('/api/auth/status').then(r => r.json()).then(data => {
+                                if (typeof updateTotpUi === 'function') updateTotpUi(data.isTotpEnabled);
+                            });
+                        }
                     } else {
                         sec.classList.add('hidden');
                     }
@@ -12362,6 +12521,125 @@ HTML_TEMPLATE = """
                 btn.innerText = '🔥 تنفيذ المسح الشامل (FACTORY RESET)';
                 msgEl.innerText = 'CONNECTION LOST DURING WIPE';
             }
+        }
+
+        let currentTotpSecret = null;
+
+        async function toggleAdminTotp() {
+            const btn = document.getElementById('admin-totp-toggle-btn');
+            if (!btn) return;
+            
+            if (btn.dataset.enabled === "true") {
+                if (!confirm("⚠️ هل أنت متأكد من رغبتك في إلغاء تفعيل المصادقة الثنائية؟ هذا سيقلل من مستوى أمان حسابك بشكل كبير.")) return;
+                
+                try {
+                    const res = await fetch('/api/auth/totp/disable', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        titanAlert("🔓 تم إلغاء تفعيل المصادقة الثنائية.", "warning");
+                        updateTotpUi(false);
+                    } else {
+                        titanAlert(data.error || "خطأ في إلغاء التفعيل", "error");
+                    }
+                } catch(e) { titanAlert("فشل الاتصال بالخادم", "error"); }
+            } else {
+                titanAlert("⏳ جاري إنشاء مفتاح الأمان...");
+                try {
+                    const res = await fetch('/api/auth/totp/setup', { method: 'POST' });
+                    const data = await res.json();
+                    
+                    if (data.success && data.secret) {
+                        currentTotpSecret = data.secret;
+                        showTotpSetupModal(data.uri, data.secret);
+                    } else {
+                        titanAlert(data.error || "فشل في إنشاء مفتاح الأمان", "error");
+                    }
+                } catch(e) { titanAlert("فشل الاتصال بالخادم", "error"); }
+            }
+        }
+
+        function updateTotpUi(enabled) {
+            const statusEl = document.getElementById('admin-totp-status-text');
+            const btn = document.getElementById('admin-totp-toggle-btn');
+            if (!statusEl || !btn) return;
+
+            if (enabled) {
+                statusEl.textContent = "✅ مفعلة (نشط)";
+                statusEl.className = "text-sm font-black text-green-400";
+                btn.textContent = "إلغاء التفعيل";
+                btn.className = "px-6 py-2.5 rounded-xl font-bold text-xs bg-red-900/20 text-red-400 border border-red-800/40 hover:bg-red-800/40 transition-all";
+                btn.dataset.enabled = "true";
+            } else {
+                statusEl.textContent = "❌ غير مفعلة (حماية ضعيفة)";
+                statusEl.className = "text-sm font-black text-red-400";
+                btn.textContent = "تفعيل الآن 🔒";
+                btn.className = "px-6 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.4)] hover:bg-indigo-500 transition-all";
+                btn.dataset.enabled = "false";
+            }
+        }
+
+        function showTotpSetupModal(uri, secret) {
+            const existing = document.getElementById('totp-modal-overlay');
+            if (existing) existing.remove();
+
+            const modalHtml = `
+                <div id="totp-modal-overlay" class="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div class="bg-slate-900 border border-indigo-500/30 rounded-3xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(79,70,229,0.2)]">
+                        <h3 class="text-xl font-black text-white mb-4 text-center">🔐 إعداد المصادقة الثنائية</h3>
+                        <p class="text-sm text-gray-400 text-center mb-6">قم بمسح الكود أدناه باستخدام تطبيق <span class="text-indigo-400 font-bold">Google Authenticator</span> أو أدخل المفتاح يدوياً.</p>
+                        
+                        <div class="flex justify-center mb-6 bg-white p-3 rounded-2xl w-48 h-48 mx-auto" id="totp-qrcode"></div>
+                        
+                        <div class="bg-black/40 border border-slate-700 p-3 rounded-xl mb-6 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase tracking-tighter mb-1 font-bold">المفتاح السري (Manual Key)</div>
+                            <code class="text-xs text-indigo-300 font-mono select-all">${secret}</code>
+                        </div>
+
+                        <div class="space-y-4">
+                            <input type="text" id="totp-setup-verify" placeholder="أدخل الرمز المكون من 6 أرقام" maxlength="6" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-center text-lg font-black font-mono text-white outline-none focus:border-indigo-500 transition-colors">
+                            <div class="flex gap-3">
+                                <button onclick="document.getElementById('totp-modal-overlay').remove()" class="flex-1 py-3 rounded-xl bg-slate-800 text-gray-400 font-bold text-xs hover:text-white transition-colors">إلغاء</button>
+                                <button onclick="confirmAdminTotp()" class="flex-[2] py-3 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-lg hover:bg-indigo-500 transition-all">تفعيل الحماية</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Generate QR Code
+            setTimeout(() => {
+                new QRCode(document.getElementById("totp-qrcode"), {
+                    text: uri,
+                    width: 192,
+                    height: 192,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+            }, 50);
+        }
+
+        async function confirmAdminTotp() {
+            const code = document.getElementById('totp-setup-verify').value.trim();
+            if (code.length !== 6) { titanAlert("يرجى إدخال كود صحيح مكون من 6 أرقام", "error"); return; }
+            
+            try {
+                const res = await fetch('/api/auth/totp/enable', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ secret: currentTotpSecret, code: code })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    document.getElementById('totp-modal-overlay').remove();
+                    titanAlert("✅ تم تفعيل المصادقة الثنائية بنجاح! حسابك الآن محصن.", "success");
+                    updateTotpUi(true);
+                } else {
+                    titanAlert(data.error || "فشل التفعيل. تأكد من الكود وحاول مرة أخرى.", "error");
+                }
+            } catch(e) { titanAlert("فشل الاتصال بالخادم", "error"); }
         }
 
         function _adminTicketStatusClass(status) {
@@ -22986,14 +23264,21 @@ def auth_login():
     try:
         conn = get_db_conn()
         c = conn.cursor()
-        c.execute("SELECT id, password_hash, is_verified, email, failed_attempts, lockout_until, last_user_agent, last_country, is_suspended, lock_reason FROM users WHERE username = %s", (username,))
+        c.execute("SELECT id, password_hash, is_verified, email, failed_attempts, lockout_until, last_user_agent, last_country, is_suspended, lock_reason, is_admin, is_honeypot, totp_secret, is_totp_enabled FROM users WHERE username = %s", (username,))
         row = c.fetchone()
 
         if not row:
             add_audit_log("محاولة دخول فاشلة", f"مستخدم غير موجود: {username}", ip=ip)
             return jsonify({"error": "اسم المستخدم أو كلمة السر غير صحيحة"}), 401
 
-        user_id, pw_hash, is_verified, email, failed_attempts, lockout_until, last_ua, last_country, is_suspended, lock_reason = row
+        user_id, pw_hash, is_verified, email, failed_attempts, lockout_until, last_ua, last_country, is_suspended, lock_reason, is_admin, is_honeypot, totp_secret, is_totp_enabled = row
+
+        # --- Honeypot Trigger (فخ الروت) ---
+        if is_honeypot:
+            add_audit_log("🚨 HONEYPOT TRIGGERED", f"محاولة دخول على حساب الفخ (root) من قبل: {ip}", ip=ip, username=username)
+            # إرسال تنبيه فوري للإدارة
+            send_admin_security_alert(username, ip, "محاولة اختراق حساب الروت الوهمي (Honeypot)")
+            return jsonify({"error": "اسم المستخدم أو كلمة السر غير صحيحة"}), 401
 
         # --- فحص الإيقاف (Account Suspension) ---
         if is_suspended:
@@ -23029,6 +23314,31 @@ def auth_login():
 
         if not is_verified:
             return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "يرجى تفعيل حسابك أولاً", "username": username}), 403
+
+        # --- حماية الأدمن (Geo-Fencing & Advanced Checks) ---
+        current_country = _get_country(ip)
+        if is_admin:
+            # إذا دخل الأدمن من دولة مختلفة عن آخر دخول، نرسل تنبيه حرج جداً
+            if last_country and current_country and last_country != current_country:
+                add_audit_log("🚨 ADMIN GEO-ALARM", f"دخول مسؤول من دولة غير معتادة! من {last_country} إلى {current_country}", ip=ip, username=username)
+                send_admin_security_alert(username, ip, f"تنبيه جيو-فنسنج: دخول مسؤول من دولة مختلفة ({current_country})")
+
+        # --- فحص المصادقة الثنائية (TOTP) ---
+        if is_totp_enabled and totp_secret:
+            totp_code = data.get('totp_code')
+            if not totp_code:
+                # إذا لم يتم إرسال الكود، نطلب من الواجهة الأمامية إظهار حقل TOTP
+                return jsonify({
+                    "status": "REQUIRE_TOTP",
+                    "message": "حماية الأدمن نشطة: يرجى إدخال رمز Google Authenticator",
+                    "username": username
+                }), 200
+            
+            import pyotp
+            totp = pyotp.TOTP(totp_secret)
+            if not totp.verify(str(totp_code)):
+                add_audit_log("❌ فشل TOTP للمسؤول", f"رمز TOTP خاطئ لحساب: {username}", ip=ip, username=username)
+                return jsonify({"error": "رمز المصادقة الثنائية غير صحيح"}), 401
 
         # --- نجح الدخول: تصفير المحاولات الفاشلة ---
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -23099,11 +23409,17 @@ def auth_status():
         user_id = session['user_id']
         conn = get_db_conn()
         _cur = conn.cursor()
-        _cur.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        _cur.execute("SELECT is_admin, is_totp_enabled FROM users WHERE id = %s", (user_id,))
         res = _cur.fetchone()
         is_admin_flag = bool(res[0]) if res else False
+        is_totp_enabled = bool(res[1]) if res else False
         conn.close()
-        return jsonify({"loggedIn": True, "username": session.get('username', ''), "isAdmin": is_admin_flag})
+        return jsonify({
+            "loggedIn": True, 
+            "username": session.get('username', ''), 
+            "isAdmin": is_admin_flag,
+            "isTotpEnabled": is_totp_enabled
+        })
     return jsonify({"loggedIn": False})
 
 @app.route('/api/auth/heartbeat', methods=['POST'])
@@ -25182,6 +25498,68 @@ def ai_conversation_delete_route(conversation_id):
 @app.route('/api/ai/conversations/<conversation_id>/delete', methods=['POST'])
 def ai_conversation_delete_route_post(conversation_id):
     return ai_conversation_delete_route(conversation_id)
+
+
+@app.route('/api/auth/totp/setup', methods=['POST'])
+def auth_totp_setup():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+    
+    import pyotp
+    secret = pyotp.random_base32()
+    totp = pyotp.TOTP(secret)
+    username = session.get('username', 'TITAN_User')
+    uri = totp.provisioning_uri(name=username, issuer_name="TITAN SEC")
+    
+    return jsonify({"success": True, "secret": secret, "uri": uri})
+
+@app.route('/api/auth/totp/enable', methods=['POST'])
+def auth_totp_enable():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+    
+    data = request.json or {}
+    secret = data.get('secret')
+    code = data.get('code')
+    
+    if not secret or not code:
+        return jsonify({"success": False, "error": "الرمز السري وكود التحقق مطلوبان"}), 400
+        
+    import pyotp
+    totp = pyotp.TOTP(secret)
+    if totp.verify(str(code)):
+        conn = None
+        try:
+            conn = get_db_conn()
+            c = conn.cursor()
+            c.execute("UPDATE users SET totp_secret = %s, is_totp_enabled = 1 WHERE id = %s", (secret, session['user_id']))
+            conn.commit()
+            add_audit_log("تفعيل TOTP 🔐", "تم تفعيل المصادقة الثنائية للحساب", username=session.get('username'))
+            return jsonify({"success": True, "message": "تم تفعيل المصادقة الثنائية بنجاح!"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+        finally:
+            if conn: conn.close()
+    else:
+        return jsonify({"success": False, "error": "كود التحقق غير صحيح"}), 400
+
+@app.route('/api/auth/totp/disable', methods=['POST'])
+def auth_totp_disable():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+    
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("UPDATE users SET totp_secret = NULL, is_totp_enabled = 0 WHERE id = %s", (session['user_id'],))
+        conn.commit()
+        add_audit_log("إلغاء TOTP 🔓", "تم إلغاء المصادقة الثنائية للحساب", username=session.get('username'))
+        return jsonify({"success": True, "message": "تم إلغاء المصادقة الثنائية."})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if conn: conn.close()
 
 
 @app.route('/api/ai/analyze', methods=['POST'])
