@@ -5086,26 +5086,148 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div id="ai-sub-content-analysis" class="hidden space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="bg-slate-900/50 p-5 rounded-xl border border-purple-900/40">
-                        <h3 class="font-bold text-purple-400 mb-3">&#128273; تحليل كلمة السر بالـ AI</h3>
-                        <input type="password" id="ai-pass-input" placeholder="أدخل كلمة السر للتحليل..."
-                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none mb-3">
-                        <button onclick="analyzePassword()" class="w-full bg-purple-900/50 hover:bg-purple-800 text-purple-300 font-bold p-2 rounded-xl border border-purple-800/50 text-sm">
-                            تحليل بالذكاء الاصطناعي
-                        </button>
-                        <div id="ai-pass-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700"></div>
+
+                <!-- ===== Tool 1: AI Attack Path Mapper ===== -->
+                <div class="bg-gradient-to-br from-slate-900/80 to-red-950/30 p-5 rounded-2xl border border-red-900/40 relative overflow-hidden group">
+                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🕸️</div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">🗺️</span>
+                        <h3 class="font-black text-red-400 text-sm tracking-wide">محلل مسارات الهجوم الذكي (AI Attack Path Mapper)</h3>
                     </div>
-                    <div class="bg-slate-900/50 p-5 rounded-xl border border-violet-900/40">
-                        <h3 class="font-bold text-violet-300 mb-3">&#128269; تحليل أمني بالـ AI</h3>
-                        <textarea id="ai-security-input" rows="3" placeholder="الصق نتائج فحص IP هنا..."
-                            class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-sm rounded-xl px-4 py-2 outline-none mb-3 resize-none"></textarea>
-                        <button onclick="analyzeSecurity()" class="w-full bg-violet-900/50 hover:bg-violet-800 text-violet-300 font-bold p-2 rounded-xl border border-violet-800/50 text-sm">
-                            تحليل بالذكاء الاصطناعي
+                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">الصق نتائج فحص الشبكة (Nmap, Nessus, إلخ) وسيقوم الذكاء الاصطناعي ببناء شجرة هجوم كاملة مع سيناريوهات الاختراق المتسلسلة من منظور Red Team.</p>
+                    <textarea id="attack-path-input" rows="5" placeholder="الصق نتائج الفحص هنا (مثال: Nmap scan results, open ports, services, versions)..."
+                        class="w-full bg-black/40 border border-red-900/30 text-gray-300 text-xs rounded-xl px-4 py-3 outline-none mb-3 resize-none font-mono focus:border-red-500/60 transition-colors placeholder-gray-600"></textarea>
+                    <div class="flex gap-2">
+                        <button onclick="analyzeAttackPath()" id="attack-path-btn" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 font-bold py-2.5 rounded-xl border border-red-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(239,68,68,0.15)] flex items-center justify-center gap-2">
+                            <span>⚔️</span> بناء شجرة الهجوم (Attack Tree)
                         </button>
-                        <div id="ai-security-result" class="hidden mt-3 p-3 bg-slate-800 rounded-xl text-sm text-gray-300 border border-slate-700"></div>
+                        <button onclick="document.getElementById('attack-path-input').value='';document.getElementById('attack-path-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
                     </div>
+                    <div id="attack-path-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-red-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
                 </div>
+
+                <!-- ===== Tool 2: OSINT & Social Engineering Profiler ===== -->
+                <div class="bg-gradient-to-br from-slate-900/80 to-cyan-950/30 p-5 rounded-2xl border border-cyan-900/40 relative overflow-hidden group">
+                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🕵️</div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">🔍</span>
+                        <h3 class="font-black text-cyan-400 text-sm tracking-wide">محلل البصمة الرقمية والهندسة الاجتماعية (OSINT Profiler)</h3>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">أدخل بريد إلكتروني أو اسم مستخدم أو نطاق وسيقوم الذكاء الاصطناعي ببناء ملف تعريف المخاطر البشرية مع سيناريوهات الهندسة الاجتماعية المحتملة للتوعية.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                        <div>
+                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">نوع الهدف</label>
+                            <select id="osint-profiler-type" class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-cyan-500/60 transition-colors">
+                                <option value="email">📧 بريد إلكتروني</option>
+                                <option value="username">👤 اسم مستخدم</option>
+                                <option value="domain">🌐 نطاق (Domain)</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">الهدف</label>
+                            <input type="text" id="osint-profiler-input" placeholder="example@domain.com أو username أو domain.com"
+                                class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none focus:border-cyan-500/60 transition-colors placeholder-gray-600">
+                        </div>
+                    </div>
+                    <textarea id="osint-profiler-extra" rows="2" placeholder="(اختياري) أضف أي معلومات إضافية متاحة عن الهدف لتحسين التحليل..."
+                        class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none mb-3 resize-none focus:border-cyan-500/60 transition-colors placeholder-gray-600"></textarea>
+                    <div class="flex gap-2">
+                        <button onclick="analyzeOsintProfile()" id="osint-profiler-btn" class="flex-1 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 font-bold py-2.5 rounded-xl border border-cyan-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(6,182,212,0.15)] flex items-center justify-center gap-2">
+                            <span>🕵️</span> بناء ملف المخاطر البشرية
+                        </button>
+                        <button onclick="document.getElementById('osint-profiler-input').value='';document.getElementById('osint-profiler-extra').value='';document.getElementById('osint-profiler-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
+                    </div>
+                    <div id="osint-profiler-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-cyan-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                </div>
+
+                <!-- ===== Tool 3: Interactive Purple Team AI ===== -->
+                <div class="bg-gradient-to-br from-slate-900/80 to-purple-950/30 p-5 rounded-2xl border border-purple-900/40 relative overflow-hidden group">
+                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🟣</div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">🟣</span>
+                        <h3 class="font-black text-purple-400 text-sm tracking-wide">مساعد الفريق البنفسجي التفاعلي (Purple Team AI)</h3>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">صف بيئة العمل أو النظام المستهدف وسيولد الذكاء الاصطناعي خطة مزدوجة: سكريبتات هجومية (Red Team) + قواعد اكتشاف دفاعية (Blue Team) في آن واحد.</p>
+                    <textarea id="purple-team-input" rows="4" placeholder="صف البيئة المستهدفة بالتفصيل... (مثال: خادم ويب Apache على Ubuntu مع قاعدة بيانات MySQL وتطبيق PHP، خلف جدار ناري pfSense)..."
+                        class="w-full bg-black/40 border border-purple-900/30 text-gray-300 text-xs rounded-xl px-4 py-3 outline-none mb-3 resize-none font-mono focus:border-purple-500/60 transition-colors placeholder-gray-600"></textarea>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <div>
+                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">تركيز الهجوم</label>
+                            <select id="purple-team-focus" class="w-full bg-black/40 border border-purple-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-purple-500/60 transition-colors">
+                                <option value="full">🎯 شامل (كل النواقل)</option>
+                                <option value="web">🌐 تطبيقات الويب</option>
+                                <option value="network">🔌 الشبكة والبنية التحتية</option>
+                                <option value="privilege">⬆️ تصعيد الصلاحيات</option>
+                                <option value="lateral">↔️ الحركة الجانبية</option>
+                                <option value="exfil">📤 تسريب البيانات</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">صيغة قواعد الاكتشاف</label>
+                            <select id="purple-team-defense-format" class="w-full bg-black/40 border border-purple-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-purple-500/60 transition-colors">
+                                <option value="yara">📋 YARA Rules</option>
+                                <option value="sigma">📋 Sigma Rules</option>
+                                <option value="splunk">🔍 Splunk Queries</option>
+                                <option value="snort">🛡️ Snort/Suricata Rules</option>
+                                <option value="all">📦 جميع الصيغ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="analyzePurpleTeam()" id="purple-team-btn" class="flex-1 bg-purple-900/40 hover:bg-purple-800/60 text-purple-300 font-bold py-2.5 rounded-xl border border-purple-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(168,85,247,0.15)] flex items-center justify-center gap-2">
+                            <span>⚡</span> توليد خطة الهجوم والدفاع
+                        </button>
+                        <button onclick="document.getElementById('purple-team-input').value='';document.getElementById('purple-team-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
+                    </div>
+                    <div id="purple-team-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-purple-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                </div>
+
+                <!-- ===== Tool 4: Business Logic Flaw Hunter ===== -->
+                <div class="bg-gradient-to-br from-slate-900/80 to-amber-950/30 p-5 rounded-2xl border border-amber-900/40 relative overflow-hidden group">
+                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🐛</div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">🐛</span>
+                        <h3 class="font-black text-amber-400 text-sm tracking-wide">صائد ثغرات المنطق البرمجي (Business Logic Flaw Hunter)</h3>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">الصق كوداً برمجياً وسيحلل الذكاء الاصطناعي المنطق خلف الكود ليكتشف ثغرات IDOR, Race Conditions, وغيرها مع كتابة الكود المصحح.</p>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <div>
+                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">لغة البرمجة</label>
+                            <select id="logic-flaw-lang" class="w-full bg-black/40 border border-amber-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-amber-500/60 transition-colors">
+                                <option value="python">🐍 Python</option>
+                                <option value="php">🐘 PHP</option>
+                                <option value="javascript">🟨 JavaScript / Node.js</option>
+                                <option value="java">☕ Java</option>
+                                <option value="csharp">🔷 C#</option>
+                                <option value="go">🐹 Go</option>
+                                <option value="ruby">💎 Ruby</option>
+                                <option value="auto">🔮 كشف تلقائي</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">نوع الوظيفة</label>
+                            <select id="logic-flaw-context" class="w-full bg-black/40 border border-amber-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-amber-500/60 transition-colors">
+                                <option value="auto">🔮 كشف تلقائي</option>
+                                <option value="auth">🔐 مصادقة / تسجيل دخول</option>
+                                <option value="payment">💳 دفع / شراء</option>
+                                <option value="api">🔗 API Endpoint</option>
+                                <option value="file">📁 رفع / تحميل ملفات</option>
+                                <option value="admin">👑 لوحة إدارة</option>
+                                <option value="data">📊 معالجة بيانات</option>
+                            </select>
+                        </div>
+                    </div>
+                    <textarea id="logic-flaw-input" rows="8" placeholder="الصق الكود البرمجي هنا..."
+                        class="w-full bg-black/40 border border-amber-900/30 text-gray-300 text-xs rounded-xl px-4 py-3 outline-none mb-3 resize-none font-mono focus:border-amber-500/60 transition-colors placeholder-gray-600" style="tab-size:4"></textarea>
+                    <div class="flex gap-2">
+                        <button onclick="analyzeLogicFlaws()" id="logic-flaw-btn" class="flex-1 bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 font-bold py-2.5 rounded-xl border border-amber-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(245,158,11,0.15)] flex items-center justify-center gap-2">
+                            <span>🔬</span> تحليل المنطق البرمجي واكتشاف الثغرات
+                        </button>
+                        <button onclick="document.getElementById('logic-flaw-input').value='';document.getElementById('logic-flaw-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
+                    </div>
+                    <div id="logic-flaw-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-amber-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                </div>
+
                 </div>
 
             </div>
@@ -16670,42 +16792,70 @@ HTML_TEMPLATE = """
             }
         }
 
-        async function analyzePassword() {
-            const pass = document.getElementById('ai-pass-input').value;
-            const result = document.getElementById('ai-pass-result');
-            if (!pass) return titanAlert('أدخل كلمة السر للتحليل');
-            result.classList.remove('hidden');
-            result.textContent = 'جاري التحليل... قد يستغرق 30-60 ثانية ⏳';
+        // ===== Analysis Tab: AI-Powered Security Tools =====
+
+        async function _analysisToolCall(type, content, resultEl, btn, extraPayload = {}) {
+            resultEl.classList.remove('hidden');
+            resultEl.textContent = '⏳ جاري التحليل بالذكاء الاصطناعي... قد يستغرق 30-90 ثانية...';
+            resultEl.style.opacity = '0.6';
+            if (btn) btn.disabled = true;
             try {
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'password', content: pass})
+                    body: JSON.stringify({type, content, ...extraPayload})
                 });
                 const data = await res.json();
-                result.textContent = data.analysis || data.error || 'فشل التحليل';
+                resultEl.style.opacity = '1';
+                resultEl.textContent = data.analysis || data.error || 'فشل التحليل';
             } catch(e) {
-                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
+                resultEl.style.opacity = '1';
+                resultEl.textContent = '❌ فشل الاتصال بالخادم - حاول مرة أخرى';
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 
-        async function analyzeSecurity() {
-            const secVal = document.getElementById('ai-security-input').value;
-            const result = document.getElementById('ai-security-result');
-            if (!secVal) return titanAlert('أدخل البيانات للتحليل');
-            result.classList.remove('hidden');
-            result.textContent = 'جاري التحليل الأمني... قد يستغرق 30-60 ثانية ⏳';
-            try {
-                const res = await fetch('/api/ai/analyze', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'security', content: secVal})
-                });
-                const data = await res.json();
-                result.textContent = data.analysis || data.error || 'فشل التحليل';
-            } catch(e) {
-                result.textContent = 'فشل الاتصال - حاول مرة أخرى';
-            }
+        async function analyzeAttackPath() {
+            const input = document.getElementById('attack-path-input').value.trim();
+            const result = document.getElementById('attack-path-result');
+            const btn = document.getElementById('attack-path-btn');
+            if (!input) return titanAlert('الصق نتائج الفحص أولاً (Nmap, Nessus, إلخ)');
+            await _analysisToolCall('attack_path', input, result, btn);
+        }
+
+        async function analyzeOsintProfile() {
+            const target = document.getElementById('osint-profiler-input').value.trim();
+            const targetType = document.getElementById('osint-profiler-type').value;
+            const extra = document.getElementById('osint-profiler-extra').value.trim();
+            const result = document.getElementById('osint-profiler-result');
+            const btn = document.getElementById('osint-profiler-btn');
+            if (!target) return titanAlert('أدخل الهدف (بريد إلكتروني / اسم مستخدم / نطاق)');
+            const content = '[Target Type: ' + targetType + '] [Target: ' + target + ']' + (extra ? String.fromCharCode(10) + '[Additional Info: ' + extra + ']' : '');
+            await _analysisToolCall('osint_profiler', content, result, btn, {target_type: targetType});
+        }
+
+        async function analyzePurpleTeam() {
+            const env = document.getElementById('purple-team-input').value.trim();
+            const focus = document.getElementById('purple-team-focus').value;
+            const defenseFormat = document.getElementById('purple-team-defense-format').value;
+            const result = document.getElementById('purple-team-result');
+            const btn = document.getElementById('purple-team-btn');
+            if (!env) return titanAlert('صف البيئة أو النظام المستهدف');
+            const content = '[Environment: ' + env + ']' + String.fromCharCode(10) + '[Attack Focus: ' + focus + ']' + String.fromCharCode(10) + '[Defense Rules Format: ' + defenseFormat + ']';
+            await _analysisToolCall('purple_team', content, result, btn, {focus, defense_format: defenseFormat});
+        }
+
+        async function analyzeLogicFlaws() {
+            const code = document.getElementById('logic-flaw-input').value.trim();
+            const lang = document.getElementById('logic-flaw-lang').value;
+            const context = document.getElementById('logic-flaw-context').value;
+            const result = document.getElementById('logic-flaw-result');
+            const btn = document.getElementById('logic-flaw-btn');
+            if (!code) return titanAlert('الصق الكود البرمجي للتحليل');
+            if (code.length < 15) return titanAlert('الكود قصير جداً - أدخل كوداً أكبر للتحليل');
+            const content = '[Language: ' + lang + '] [Context: ' + context + ']' + String.fromCharCode(10,10) + code;
+            await _analysisToolCall('logic_flaw', content, result, btn, {language: lang, code_context: context});
         }
 
 
@@ -25036,7 +25186,7 @@ def ai_conversation_delete_route_post(conversation_id):
 
 @app.route('/api/ai/analyze', methods=['POST'])
 def ai_analyze():
-    """تحليل أمني بالذكاء الاصطناعي"""
+    """تحليل أمني متقدم بالذكاء الاصطناعي – 4 أدوات تحليل"""
     if 'user_id' not in session:
         return jsonify({"error": "غير مصرح"}), 401
     data = request.json or {}
@@ -25045,10 +25195,163 @@ def ai_analyze():
     if not content_to_analyze:
         return jsonify({"error": "المحتوى مطلوب"}), 400
 
+    # --- Prompt Engineering for each analysis tool ---
+
     prompts = {
+        # Legacy types (backward compatibility)
         'password': f"حلل كلمة السر هذه أمنياً بالعربية: مستوى الأمان، نقاط الضعف، اقتراحات للتحسين. كلمة السر: {content_to_analyze}",
         'ip': f"حلل بيانات IP هذه أمنياً بالعربية وأعطني تقييم وتوصيات: {content_to_analyze}",
-        'security': f"حلل هذه البيانات الأمنية بالعربية وأعطني تقييماً شاملاً وتوصيات عملية: {content_to_analyze}"
+        'security': f"حلل هذه البيانات الأمنية بالعربية وأعطني تقييماً شاملاً وتوصيات عملية: {content_to_analyze}",
+
+        # === Tool 1: AI Attack Path Mapper ===
+        'attack_path': f"""أنت محلل اختراق متقدم (Red Team Expert) ومحلل مسارات هجوم.
+
+المطلوب: حلل نتائج الفحص التالية وابنِ شجرة هجوم (Attack Tree) كاملة ومفصلة.
+
+نتائج الفحص:
+---
+{content_to_analyze}
+---
+
+أجب بالعربية وبشكل منظم كالتالي:
+
+🎯 ملخص سطح الهجوم (Attack Surface Summary):
+- عدد الخدمات المكتشفة والبورتات المفتوحة
+- تقييم الخطورة العام (حرج/عالي/متوسط/منخفض)
+
+🕸️ شجرة مسارات الهجوم (Attack Paths):
+لكل مسار هجوم ممكن، اكتب:
+  ├── المرحلة 1: نقطة الدخول الأولية (Initial Access) – ما الثغرة وكيف يتم استغلالها
+  ├── المرحلة 2: التثبيت (Persistence) – كيف يحافظ المهاجم على الوصول
+  ├── المرحلة 3: تصعيد الصلاحيات (Privilege Escalation) – كيف يصل لصلاحيات أعلى
+  ├── المرحلة 4: الحركة الجانبية (Lateral Movement) – كيف ينتقل لأنظمة أخرى
+  └── المرحلة 5: الهدف النهائي (Objective) – ما الذي يمكن تحقيقه
+
+⚡ السيناريو الأخطر (Critical Attack Chain):
+اشرح أخطر سيناريو اختراق متسلسل بربط الثغرات ببعضها
+
+🛡️ توصيات الحماية العاجلة:
+رتب التوصيات حسب الأولوية
+
+📊 تقييم CVSS التقديري لأخطر ثغرة:
+قدّر درجة CVSS مع التبرير""",
+
+        # === Tool 2: OSINT & Social Engineering Profiler ===
+        'osint_profiler': f"""أنت خبير استخبارات مصادر مفتوحة (OSINT Expert) ومحلل هندسة اجتماعية متقدم.
+
+المطلوب: حلل الهدف التالي وابنِ ملف تعريف مخاطر بشرية شامل.
+
+بيانات الهدف:
+---
+{content_to_analyze}
+---
+
+أجب بالعربية وبشكل منظم كالتالي:
+
+🔍 تحليل البصمة الرقمية (Digital Footprint Analysis):
+- ما المعلومات التي يمكن استنتاجها من هذا الهدف؟
+- المنصات المحتملة المرتبطة
+- نمط التسمية والاستخدام
+
+👤 ملف تعريف المخاطر البشرية (Human Risk Profile):
+- مستوى التعرض الرقمي (عالي/متوسط/منخفض)
+- نقاط الضعف البشرية المحتملة
+- احتمالية وجود تسريبات بيانات سابقة
+
+🎣 سيناريوهات الهندسة الاجتماعية المحتملة (للتوعية):
+اكتب 3-4 سيناريوهات تصيد/هندسة اجتماعية واقعية يمكن أن تستهدف هذا الشخص/النطاق، مع شرح:
+  - نوع الهجوم (Spear Phishing / Vishing / Pretexting / إلخ)
+  - الطُّعم المحتمل (Lure) بناءً على الاهتمامات المستنتجة
+  - نسبة نجاح تقديرية
+
+🛡️ توصيات الحماية الشخصية:
+- كيف يحمي الهدف نفسه من هذه السيناريوهات
+- إعدادات الخصوصية الموصى بها
+- خطوات عملية فورية
+
+⚠️ مؤشرات الاختراق المحتملة (IOCs to Watch):
+- ما الذي يجب مراقبته لاكتشاف محاولات الاستهداف""",
+
+        # === Tool 3: Interactive Purple Team AI ===
+        'purple_team': f"""أنت مستشار أمن سيبراني متخصص في عمليات الفريق البنفسجي (Purple Team) يجمع بين الهجوم والدفاع.
+
+المطلوب: ولّد خطة مزدوجة (هجوم + دفاع) للبيئة التالية.
+
+وصف البيئة والمتطلبات:
+---
+{content_to_analyze}
+---
+
+أجب بالعربية وبشكل منظم كالتالي:
+
+🔴 خطة الفريق الأحمر (Red Team – Attack Plan):
+
+لكل ناقل هجوم:
+  📌 اسم الهجوم ونوعه (MITRE ATT&CK Technique ID)
+  💻 الأوامر/السكريبتات الجاهزة للتنفيذ:
+  ```
+  [اكتب الأوامر أو السكريبت الكامل هنا]
+  ```
+  📝 شرح الخطوات والنتيجة المتوقعة
+
+🔵 خطة الفريق الأزرق (Blue Team – Detection & Defense):
+
+لكل هجوم في الخطة الحمراء، اكتب قاعدة اكتشاف مقابلة:
+  🛡️ قاعدة الاكتشاف:
+  ```
+  [اكتب قاعدة YARA / Sigma / Splunk / Snort حسب المطلوب]
+  ```
+  📊 مؤشرات الاختراق (IOCs) المرتبطة
+  🔔 إعدادات التنبيه الموصى بها
+
+🟣 سيناريو المحاكاة الكامل (Purple Team Exercise):
+  - الجدول الزمني المقترح للتمرين
+  - معايير النجاح/الفشل
+  - نقاط القياس (Metrics)
+
+📋 ملخص التوصيات:
+  - الفجوات الأمنية المكتشفة
+  - أولويات التحسين""",
+
+        # === Tool 4: Business Logic Flaw Hunter ===
+        'logic_flaw': f"""أنت خبير أمن تطبيقات متقدم (Application Security Expert) متخصص في اكتشاف ثغرات المنطق البرمجي (Business Logic Flaws).
+
+المطلوب: حلل الكود التالي بعمق لاكتشاف الثغرات المنطقية وليس فقط الأخطاء البنائية.
+
+الكود المُراد تحليله:
+---
+{content_to_analyze}
+---
+
+أجب بالعربية وبشكل منظم كالتالي:
+
+🔬 نظرة عامة على الكود:
+- ما وظيفة هذا الكود؟
+- ما سير العمل (Workflow) الذي يمثله؟
+
+🐛 الثغرات المنطقية المكتشفة:
+
+لكل ثغرة:
+  📌 اسم الثغرة (مثل IDOR, Race Condition, Mass Assignment, إلخ)
+  ⚠️ درجة الخطورة: (حرجة/عالية/متوسطة/منخفضة)
+  📍 الموقع في الكود: (السطر أو الدالة)
+  💣 كيف يستغلها المخترق:
+    - الخطوات التفصيلية للاستغلال
+    - مثال على HTTP Request أو Payload
+  💥 التأثير: ما الضرر المحتمل؟
+
+✅ الكود المصحح:
+```
+[اكتب الكود المصحح الكامل مع تعليقات توضيحية]
+```
+
+🔍 فحوصات إضافية مطلوبة:
+- ما الاختبارات التي يجب إجراؤها للتأكد من الأمان؟
+- هل هناك ثغرات في الأجزاء غير المعروضة من الكود يجب الانتباه لها؟
+
+📊 تقييم أمني شامل:
+- درجة الأمان الكلية (0-100)
+- هل الكود جاهز للإنتاج؟ نعم/لا مع التبرير"""
     }
 
     prompt = prompts.get(analyze_type, prompts['security'])
