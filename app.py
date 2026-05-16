@@ -6770,16 +6770,24 @@ HTML_TEMPLATE = """
 
     <!-- === ACCOUNT CHANGE PASSWORD MODAL (Moved Globally) === -->
     <div id="change-password-modal" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;">
-        <div style="position:relative;background:#0a0a1e;border:1px solid rgba(168,85,247,0.4);border-radius:20px;padding:2rem;max-width:420px;width:90%;box-shadow:0 0 60px rgba(168,85,247,0.2);">
+        <div style="position:relative;background:#0a0a1e;border:1px solid rgba(168,85,247,0.4);border-radius:20px;padding:2rem;max-width:440px;width:90%;box-shadow:0 0 60px rgba(168,85,247,0.2);max-height:90vh;overflow-y:auto;">
             <button onclick="closeChangePasswordModal()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);color:#c084fc;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;font-size:1.1rem;line-height:1;font-weight:bold;z-index:10;" onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.transform='scale(1.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.transform='scale(1)'">
                 &times;
             </button>
             <div style="text-align:center;margin-bottom:1.5rem;">
                 <div style="font-size:2.5rem; filter: drop-shadow(0 0 10px #a855f7);">🔐</div>
-                <h3 style="color:#c084fc;font-weight:700;margin:0.5rem 0; font-size:1.25rem;">تغيير كلمة مرور الحساب</h3>
-                <p style="color:#6b7280;font-size:0.75rem;">يرجى إدخال كلمة المرور القديمة والجديدة لتحديث بيانات حسابك.</p>
+                <h3 style="color:#c084fc;font-weight:700;margin:0.5rem 0; font-size:1.25rem;">إعدادات الأمان والحماية</h3>
+                <p style="color:#6b7280;font-size:0.75rem;">يمكنك تغيير كلمة المرور وتفعيل المصادقة الثنائية (2FA) لزيادة أمان حسابك.</p>
             </div>
-            <div class="space-y-3">
+
+            <!-- Tabs Header -->
+            <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem; background:rgba(255,255,255,0.03); padding:0.4rem; border-radius:12px; border:1px solid rgba(168,85,247,0.1);">
+                <button id="cp-tab-pass" onclick="switchCpTab('pass')" style="flex:1; padding:0.6rem; border:none; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; transition:all 0.3s; background:linear-gradient(135deg,#a855f7,#7c3aed); color:white;">تغيير كلمة المرور</button>
+                <button id="cp-tab-2fa" onclick="switchCpTab('2fa')" style="flex:1; padding:0.6rem; border:none; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; transition:all 0.3s; background:transparent; color:#6b7280;">المصادقة الثنائية (2FA)</button>
+            </div>
+
+            <!-- Tab: Change Password -->
+            <div id="cp-section-pass" class="space-y-3">
                 <div style="margin-bottom:1rem;">
                     <label style="display:block;color:#94a3b8;font-size:0.7rem;margin-bottom:0.4rem;margin-right:0.5rem;">كلمة المرور الحالية</label>
                     <input id="cp-old-pass" type="password" placeholder="كلمة المرور الحالية..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='rgba(168,85,247,0.3)'">
@@ -6795,9 +6803,36 @@ HTML_TEMPLATE = """
                 </div>
                 <button onclick="doChangePassword()" style="width:100%;padding:0.85rem;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:700;cursor:pointer;font-size:0.95rem;box-shadow: 0 4px 15px rgba(124,58,237,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">تحديث كلمة المرور ✨</button>
             </div>
+
+            <!-- Tab: 2FA -->
+            <div id="cp-section-2fa" style="display:none;" class="space-y-4">
+                <div style="background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.2); border-radius:15px; padding:1.2rem; text-align:center;">
+                    <div id="cp-2fa-status-icon" style="font-size:2rem; margin-bottom:0.5rem;">🛡️</div>
+                    <div id="cp-2fa-status-text" style="font-weight:700; font-size:1rem; color:white; margin-bottom:0.3rem;">المصادقة الثنائية</div>
+                    <div id="cp-2fa-status-desc" style="font-size:0.7rem; color:#94a3b8; margin-bottom:1rem;">تضيف المصادقة الثنائية طبقة حماية إضافية لحسابك.</div>
+                    
+                    <button id="cp-2fa-toggle-btn" onclick="toggleUserTotp()" style="padding:0.7rem 1.5rem; border-radius:10px; font-weight:700; font-size:0.8rem; cursor:pointer; transition:all 0.3s; border:none;"></button>
+                </div>
+
+                <!-- 2FA Setup Form (Initially Hidden) -->
+                <div id="cp-2fa-setup-form" style="display:none; margin-top:1.5rem; border-top:1px solid rgba(168,85,247,0.1); pt:1.5rem;">
+                    <p style="color:#c084fc; font-size:0.75rem; text-align:center; font-weight:700; margin-bottom:1rem;">إعداد المصادقة الثنائية</p>
+                    <div id="cp-2fa-qr" style="background:white; padding:0.5rem; border-radius:12px; width:160px; height:160px; margin:0 auto 1rem;"></div>
+                    <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(168,85,247,0.2); padding:0.6rem; border-radius:10px; margin-bottom:1rem; text-align:center;">
+                        <span style="display:block; font-size:0.6rem; color:#6b7280; margin-bottom:0.2rem;">المفتاح السري (في حال لم يعمل الـ QR)</span>
+                        <code id="cp-2fa-secret" style="font-family:monospace; color:#a855f7; font-size:0.8rem; font-weight:bold; letter-spacing:1px; cursor:pointer;" onclick="navigator.clipboard.writeText(this.innerText); titanAlert('تم نسخ المفتاح السري 📋')"></code>
+                    </div>
+                    <div style="margin-bottom:1rem;">
+                        <input id="cp-2fa-code" type="text" maxlength="6" placeholder="أدخل الرمز (6 أرقام)..." style="width:100%;padding:0.8rem;background:#050510;border:1px solid rgba(168,85,247,0.3);border-radius:12px;color:white;outline:none;text-align:center;font-weight:bold;font-size:1.1rem;letter-spacing:4px;">
+                    </div>
+                    <button onclick="confirmUserTotp()" style="width:100%;padding:0.8rem;background:#a855f7;border:none;border-radius:10px;color:white;font-weight:700;cursor:pointer;font-size:0.85rem;">تأكيد التفعيل ✅</button>
+                </div>
+            </div>
+
             <div id="cp-error" style="display:none;margin-top:1rem;color:#f87171;font-size:0.75rem;text-align:center;padding:0.6rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px;"></div>
         </div>
     </div>
+
 
 
     <script>
@@ -6871,11 +6906,142 @@ HTML_TEMPLATE = """
             document.getElementById('cp-new-pass').value = '';
             document.getElementById('cp-new-pass2').value = '';
             document.getElementById('cp-error').style.display = 'none';
+            document.getElementById('cp-2fa-setup-form').style.display = 'none';
+            switchCpTab('pass');
             document.getElementById('change-password-modal').style.display = 'flex';
+            refresh2faStatus();
         }
         function closeChangePasswordModal() {
             document.getElementById('change-password-modal').style.display = 'none';
         }
+
+        function switchCpTab(tab) {
+            const passBtn = document.getElementById('cp-tab-pass');
+            const faBtn = document.getElementById('cp-tab-2fa');
+            const passSec = document.getElementById('cp-section-pass');
+            const faSec = document.getElementById('cp-section-2fa');
+            const errDiv = document.getElementById('cp-error');
+            
+            errDiv.style.display = 'none';
+
+            if (tab === 'pass') {
+                passBtn.style.background = 'linear-gradient(135deg,#a855f7,#7c3aed)';
+                passBtn.style.color = 'white';
+                faBtn.style.background = 'transparent';
+                faBtn.style.color = '#6b7280';
+                passSec.style.display = 'block';
+                faSec.style.display = 'none';
+            } else {
+                faBtn.style.background = 'linear-gradient(135deg,#a855f7,#7c3aed)';
+                faBtn.style.color = 'white';
+                passBtn.style.background = 'transparent';
+                passBtn.style.color = '#6b7280';
+                passSec.style.display = 'none';
+                faSec.style.display = 'block';
+            }
+        }
+
+        async function refresh2faStatus() {
+            try {
+                const r = await fetch('/api/auth/status');
+                const res = await r.json();
+                updateUser2faUi(res.isTotpEnabled);
+            } catch(e) {}
+        }
+
+        function updateUser2faUi(enabled) {
+            const icon = document.getElementById('cp-2fa-status-icon');
+            const text = document.getElementById('cp-2fa-status-text');
+            const desc = document.getElementById('cp-2fa-status-desc');
+            const btn = document.getElementById('cp-2fa-toggle-btn');
+            
+            if (enabled) {
+                icon.innerText = '✅';
+                text.innerText = 'المصادقة الثنائية مفعلة';
+                text.style.color = '#4ade80';
+                desc.innerText = 'حسابك محمي بنجاح باستخدام المصادقة الثنائية.';
+                btn.innerText = 'إيقاف تفعيل المصادقة الثنائية 🔓';
+                btn.style.background = 'rgba(239,68,68,0.1)';
+                btn.style.color = '#f87171';
+                btn.style.border = '1px solid rgba(239,68,68,0.2)';
+                btn.dataset.enabled = "true";
+            } else {
+                icon.innerText = '⚠️';
+                text.innerText = 'المصادقة الثنائية غير مفعلة';
+                text.style.color = '#f87171';
+                desc.innerText = 'حسابك أقل أماناً. ننصح بتفعيل المصادقة الثنائية فوراً.';
+                btn.innerText = 'تفعيل المصادقة الثنائية الآن 🔒';
+                btn.style.background = 'linear-gradient(135deg,#a855f7,#7c3aed)';
+                btn.style.color = 'white';
+                btn.style.border = 'none';
+                btn.dataset.enabled = "false";
+            }
+        }
+
+        let userTotpSecret = null;
+        async function toggleUserTotp() {
+            const btn = document.getElementById('cp-2fa-toggle-btn');
+            const setupForm = document.getElementById('cp-2fa-setup-form');
+            
+            if (btn.dataset.enabled === "true") {
+                if (!await titanConfirm('⚠️ هل أنت متأكد من رغبتك في إلغاء تفعيل المصادقة الثنائية؟')) return;
+                try {
+                    const r = await fetch('/api/auth/totp/disable', { method: 'POST' });
+                    const res = await r.json();
+                    if (res.success) {
+                        titanAlert('تم إلغاء تفعيل المصادقة الثنائية بنجاح 🔓');
+                        updateUser2faUi(false);
+                    } else {
+                        titanAlert(res.error || 'حدث خطأ ما', 'error');
+                    }
+                } catch(e) { titanAlert('فشل الاتصال بالخادم', 'error'); }
+            } else {
+                // Start setup
+                try {
+                    const r = await fetch('/api/auth/totp/setup', { method: 'POST' });
+                    const res = await r.json();
+                    if (res.success) {
+                        userTotpSecret = res.secret;
+                        document.getElementById('cp-2fa-secret').innerText = res.secret;
+                        document.getElementById('cp-2fa-qr').innerHTML = '';
+                        new QRCode(document.getElementById("cp-2fa-qr"), {
+                            text: res.uri,
+                            width: 160,
+                            height: 160
+                        });
+                        setupForm.style.display = 'block';
+                        btn.style.display = 'none';
+                    } else {
+                        titanAlert(res.error || 'حدث خطأ في الإعداد', 'error');
+                    }
+                } catch(e) { titanAlert('فشل الاتصال بالخادم', 'error'); }
+            }
+        }
+
+        async function confirmUserTotp() {
+            const code = document.getElementById('cp-2fa-code').value.trim();
+            if (!code || code.length !== 6) {
+                titanAlert('يرجى إدخال كود التحقق المكون من 6 أرقام', 'error');
+                return;
+            }
+            try {
+                const r = await fetch('/api/auth/totp/enable', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({secret: userTotpSecret, code: code})
+                });
+                const res = await r.json();
+                if (res.success) {
+                    titanAlert('تم تفعيل المصادقة الثنائية بنجاح! حسابك محمي الآن ✅');
+                    document.getElementById('cp-2fa-setup-form').style.display = 'none';
+                    document.getElementById('cp-2fa-toggle-btn').style.display = 'inline-block';
+                    updateUser2faUi(true);
+                } else {
+                    titanAlert(res.error || 'كود التحقق غير صحيح', 'error');
+                }
+            } catch(e) { titanAlert('فشل الاتصال بالخادم', 'error'); }
+        }
+
         async function doChangePassword() {
             const oldPass = document.getElementById('cp-old-pass').value;
             const newPass = document.getElementById('cp-new-pass').value;
@@ -6918,6 +7084,7 @@ HTML_TEMPLATE = """
                 errDiv.style.display = 'block';
             }
         }
+
 
         function switchAuthTab(tab) {
             const loginTab = document.getElementById('auth-tab-login');
