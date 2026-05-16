@@ -18300,7 +18300,26 @@ def video_stego_decode_route():
 
 @app.route('/api/audit-logs', methods=['GET'])
 def get_audit_logs():
-    return jsonify(AUDIT_LOGS)
+    """عرض سجلات الأمان (للمسؤولين فقط)"""
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    
+    conn = None
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        row = c.fetchone()
+        if not row or not row[0]:
+            add_audit_log("🚨 محاولة وصول غير مصرح", f"محاولة وصول لسجلات الأمان من مستخدم غير مسؤول (ID: {user_id})", username=session.get('username'))
+            return jsonify({"error": "Forbidden - Admin access required"}), 403
+            
+        return jsonify(AUDIT_LOGS)
+    except Exception as e:
+        print(f"[TITAN] Audit logs error: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn: conn.close()
 
 
 def _normalize_crypt_recommendation(rec: dict) -> dict:
@@ -23558,6 +23577,25 @@ def fake_identity_route():
 # --- Dashboard / System Stats ---
 @app.route('/api/dashboard/stats', methods=['GET'])
 def dashboard_stats():
+    """إحصائيات النظام وسجلات الأمان الأخيرة (للمسؤولين فقط)"""
+    user_id, err = _get_logged_in_user_id()
+    if err: return err
+    
+    # التحقق من صلاحيات الأدمن
+    conn_auth = None
+    try:
+        conn_auth = get_db_conn()
+        c_auth = conn_auth.cursor()
+        c_auth.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        row_auth = c_auth.fetchone()
+        if not row_auth or not row_auth[0]:
+            return jsonify({"error": "Forbidden - Admin access required"}), 403
+    except Exception as e:
+        print(f"[TITAN] Dashboard stats auth error: {e}")
+        return jsonify({"error": "Internal authentication error"}), 500
+    finally:
+        if conn_auth: conn_auth.close()
+
     global _dash_prev_net, _dash_prev_ts, _dash_prev_disk_io, _dash_prev_disk_io_ts, _dash_cpu_primed
     try:
         if not _dash_cpu_primed:
