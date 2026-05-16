@@ -8098,11 +8098,11 @@ HTML_TEMPLATE = """
                 if (typeof marked !== 'undefined' && marked.parse) {
                     htmlContent = marked.parse(text, { breaks: true, gfm: true });
                 } else {
-                    htmlContent = String(text).replace(/\n/g, '<br>');
+                    htmlContent = String(text).replace(/\\\\n/g, '<br>');
                 }
             } catch (err) {
                 console.error("Marked parsing error:", err);
-                htmlContent = String(text).replace(/\n/g, '<br>');
+                htmlContent = String(text).replace(/\\\\n/g, '<br>');
             }
             
             const tempDiv = document.createElement('div');
@@ -8174,7 +8174,7 @@ HTML_TEMPLATE = """
             const h4Elements = tempDiv.querySelectorAll('h4');
             h4Elements.forEach(el => {
                 el.className = "text-sm font-black text-indigo-400 mt-12 mb-6 border-b border-indigo-500/20 pb-3 flex items-center gap-3";
-                el.innerHTML = `<span class="w-2 h-2 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"></span> ${el.innerHTML}`;
+                el.innerHTML = '<span class="w-2 h-2 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"></span> ' + el.innerHTML;
             });
             
             // 4. Lists
@@ -8192,7 +8192,7 @@ HTML_TEMPLATE = """
             liElements.forEach(el => {
                 if(el.parentElement.tagName.toLowerCase() === 'ul') {
                     el.className = "flex items-start gap-3 transition-all hover:border-indigo-500";
-                    el.innerHTML = `<span class="text-indigo-400 font-black mt-1">›</span><span class="text-gray-200 font-medium tracking-wide flex-1">${el.innerHTML}</span>`;
+                    el.innerHTML = '<span class="text-indigo-400 font-black mt-1">›</span><span class="text-gray-200 font-medium tracking-wide flex-1">' + el.innerHTML + '</span>';
                 } else {
                     el.className = "text-gray-200 font-medium tracking-wide mb-2 transition-all hover:text-indigo-300";
                 }
@@ -17395,7 +17395,11 @@ HTML_TEMPLATE = """
                 if (data.analysis) {
                     try {
                         const formatted = formatAiResponse(data.analysis);
-                        resultEl.innerHTML = `<div class="ai-formatted-content p-2">${formatted}</div>`;
+                        const wrapper = document.createElement('div');
+                        wrapper.className = "ai-formatted-content p-2";
+                        wrapper.innerHTML = formatted;
+                        resultEl.innerHTML = '';
+                        resultEl.appendChild(wrapper);
                     } catch (formatErr) {
                         console.error("Format error:", formatErr);
                         resultEl.innerHTML = `<div class="p-4 bg-slate-900 border border-slate-700 rounded-xl whitespace-pre-wrap text-[11px]">${_osintEscape(data.analysis)}</div>`;
