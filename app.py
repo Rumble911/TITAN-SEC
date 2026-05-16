@@ -7337,12 +7337,11 @@ HTML_TEMPLATE = """
                     const vErr = document.getElementById('auth-verify-error');
                     vErr.textContent = 'حسابك غير مفعل، يرجى إدخال كود التحقق المرسل لإيميلك.';
                     vErr.style.display = 'block';
-                } else if (data.error === 'ACCOUNT_SUSPENDED' || (data.is_admin_lock && data.error === 'ACCOUNT_SUSPENDED')) {
-                    // عرض رسالة إيقاف الحساب (السبب المكتوب من الأدمن) + زر الدعم
+                } else if (data.is_admin_lock || data.error === 'ACCOUNT_SUSPENDED' || (data.message && data.message.includes('الإدارة'))) {
                     errEl.innerHTML = `
                         <div style="text-align: center; padding: 5px 0;">
-                            <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; color: #fca5a5;">🚨 تم إيقاف حسابك</div>
-                            <div style="font-size: 0.9rem; margin-bottom: 15px; opacity: 0.9; line-height: 1.4;">${data.message || 'تم إيقاف حسابك بسبب نشاط مشبوه.'}</div>
+                            <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; color: #fca5a5;">🚨 تم قفل حسابك بسبب نشاط مشبوه</div>
+                            <div style="font-size: 0.9rem; margin-bottom: 15px; opacity: 0.9; line-height: 1.4;">الرجاء التواصل مع الدعم الفني في أسرع وقت.</div>
                             <a href="mailto:titansuppotp@gmail.com" 
                                style="display: inline-block; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 10px 20px; border-radius: 12px; text-decoration: none; font-size: 0.95rem; font-weight: bold; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);">
                                📧 مراسلة الدعم الفني
@@ -7358,46 +7357,9 @@ HTML_TEMPLATE = """
                     btn.textContent = 'دخول إلى TITAN 🔐';
                     btn.disabled = false;
                 } else if (data.error === 'ACCOUNT_LOCKED') {
-                    // قفل الحساب المؤقت مع عداد تنازلي
-                    let timeLeft = data.seconds || 0;
-                    const updateTimer = () => {
-                        const m = Math.floor(timeLeft / 60);
-                        const s = timeLeft % 60;
-                        const timerStr = `${m}:${s < 10 ? '0' : ''}${s}`;
-                        
-                        errEl.innerHTML = `
-                            <div style="text-align: center; padding: 5px 0;">
-                                <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; color: #fca5a5;">🚨 تم قفل حسابك مؤقتاً</div>
-                                <div style="font-size: 0.9rem; margin-bottom: 10px; opacity: 0.9; line-height: 1.4;">${data.message}</div>
-                                <div style="font-size: 1.5rem; font-family: monospace; font-weight: bold; color: #f87171; margin-bottom: 15px; text-shadow: 0 0 10px rgba(248,113,113,0.3);">
-                                    ${timeLeft > 0 ? timerStr : 'جاري الفتح...'}
-                                </div>
-                                <a href="mailto:titansuppotp@gmail.com" 
-                                   style="display: inline-block; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 10px 20px; border-radius: 12px; text-decoration: none; font-size: 0.95rem; font-weight: bold; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);">
-                                   📧 مراسلة الدعم الفني
-                                </a>
-                            </div>
-                        `;
-                    };
-                    
-                    updateTimer();
-                    if (timeLeft > 0) {
-                        const timerInterval = setInterval(() => {
-                            timeLeft--;
-                            if (timeLeft <= 0) {
-                                clearInterval(timerInterval);
-                                updateTimer();
-                            } else {
-                                updateTimer();
-                            }
-                        }, 1000);
-                    }
-                    
-                    errEl.style.background = 'rgba(239, 68, 68, 0.15)';
-                    errEl.style.border = '1px solid rgba(239, 68, 68, 0.4)';
-                    errEl.style.backdropFilter = 'blur(10px)';
-                    errEl.style.padding = '15px';
-                    errEl.style.borderRadius = '15px';
+                    errEl.innerHTML = `🚨 حسابك مقفل مؤقتاً!<br>بسبب محاولات فاشلة. حاول مجدداً بعد <span class="font-bold font-mono text-red-300">${data.minutes || data.minutes_remaining || "?"} دقيقة</span>.`;
+                    errEl.style.background = 'rgba(239, 68, 68, 0.2)';
+                    errEl.style.border = '1px solid rgba(239, 68, 68, 0.6)';
                     errEl.style.display = 'block';
                     btn.textContent = 'دخول إلى TITAN 🔐';
                     btn.disabled = false;
@@ -13151,18 +13113,15 @@ HTML_TEMPLATE = """
                                 ` : ''}
 
                                 <div class="flex flex-wrap gap-2">
-                                    ${u.is_admin ? `
-                                        <div class="w-full text-center p-2.5 bg-purple-900/20 border border-purple-800/40 rounded-xl text-[10px] text-purple-300 font-bold flex items-center justify-center gap-2">
-                                            🛡️ حساب مسؤول محمي - لا يمكن تعديله
-                                        </div>
-                                    ` : `
-                                        ${(isSuspended || isLocked) ? 
-                                            `<button onclick="adminUserAction(${u.id}, '${isSuspended ? 'unsuspend' : 'unlock'}')" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-300 border border-green-800/50 p-2 rounded-xl text-[10px] font-bold">إلغاء القفل</button>` :
-                                            `<button onclick="showUserActionPrompt(${u.id}, 'suspend')" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-800/50 p-2 rounded-xl text-[10px] font-bold">إيقاف الحساب</button>
-                                             <button onclick="showUserActionPrompt(${u.id}, 'lock')" class="flex-1 bg-orange-900/40 hover:bg-orange-800/60 text-orange-300 border border-orange-800/50 p-2 rounded-xl text-[10px] font-bold">قفل مؤقت</button>`
-                                        }
-                                        <button onclick="adminUserAction(${u.id}, 'make_admin')" class="bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/50 p-2 rounded-xl text-[10px] font-bold">تعيين مسؤول</button>
-                                    `}
+                                    ${(isSuspended || isLocked) ? 
+                                        `<button onclick="adminUserAction(${u.id}, '${isSuspended ? 'unsuspend' : 'unlock'}')" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-300 border border-green-800/50 p-2 rounded-xl text-[10px] font-bold">إلغاء القفل</button>` :
+                                        `<button onclick="showUserActionPrompt(${u.id}, 'suspend')" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-800/50 p-2 rounded-xl text-[10px] font-bold">إيقاف الحساب</button>
+                                         <button onclick="showUserActionPrompt(${u.id}, 'lock')" class="flex-1 bg-orange-900/40 hover:bg-orange-800/60 text-orange-300 border border-orange-800/50 p-2 rounded-xl text-[10px] font-bold">قفل مؤقت</button>`
+                                    }
+                                    ${u.is_admin ? 
+                                        `<button onclick="adminUserAction(${u.id}, 'remove_admin')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 p-2 rounded-xl text-[10px] font-bold">إزالة مسؤول</button>` :
+                                        `<button onclick="adminUserAction(${u.id}, 'make_admin')" class="bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/50 p-2 rounded-xl text-[10px] font-bold">تعيين مسؤول</button>`
+                                    }
                                 </div>
                             </div>
                         `;
@@ -13177,23 +13136,15 @@ HTML_TEMPLATE = """
         async function showUserActionPrompt(userId, action) {
             const reason = prompt("يرجى إدخال سبب الإجراء (سيظهر للمستخدم):", "");
             if (reason === null) return; // Cancelled
-            
-            let duration = 0;
-            if (action === 'lock') {
-                const durStr = prompt("يرجى إدخال مدة القفل بالدقائق (أدخل 0 للقفل الدائم):", "30");
-                if (durStr === null) return;
-                duration = parseInt(durStr) || 0;
-            }
-            
-            adminUserAction(userId, action, reason, duration);
+            adminUserAction(userId, action, reason);
         }
 
-        async function adminUserAction(targetId, action, reason = '', duration = 0) {
+        async function adminUserAction(targetId, action, reason = '') {
             try {
                 const res = await fetch('/api/admin/users/' + targetId + '/action', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ action, reason, duration })
+                    body: JSON.stringify({ action, reason })
                 });
                 const data = await res.json();
                 if (!data.success) {
@@ -19245,20 +19196,10 @@ def admin_user_action(target_id):
         if not row or not row[0]:
             return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
 
-        # التحقق من أن الحساب المستهدف ليس مسؤولاً عند محاولة القفل أو الإيقاف
-        if action in ['lock', 'suspend', 'remove_admin']:
-            c.execute("SELECT is_admin FROM users WHERE id = %s", (target_id,))
-            target_row = c.fetchone()
-            if target_row and target_row[0]:
-                return jsonify({"success": False, "error": "لا يمكن تعديل أو قفل حساب مسؤول"}), 400
-
-        if (action == 'lock'):
-            duration_min = data.get('duration', 0)
-            if duration_min > 0:
-                lockout_until = (datetime.datetime.now() + datetime.timedelta(minutes=duration_min)).isoformat()
-            else:
-                lockout_until = "2099-12-31T23:59:59"
-            c.execute("UPDATE users SET lockout_until = %s, lock_reason = %s WHERE id = %s", (lockout_until, reason, target_id))
+        if action == 'lock':
+            # Set lockout_until to a far future date
+            far_future = "2099-12-31T23:59:59"
+            c.execute("UPDATE users SET lockout_until = %s, lock_reason = %s WHERE id = %s", (far_future, reason, target_id))
         elif action == 'unlock':
             c.execute("UPDATE users SET lockout_until = NULL, failed_attempts = 0, lock_reason = NULL WHERE id = %s", (target_id,))
         elif action == 'suspend':
@@ -23694,7 +23635,7 @@ def auth_login():
             return jsonify({
                 "error": "ACCOUNT_SUSPENDED",
                 "is_admin_lock": True,
-                "message": lock_reason or "تم إيقاف حسابك بسبب نشاط مشبوه، يرجى التواصل مع الدعم الفني."
+                "message": f"تم إيقاف هذا الحساب من قبل الإدارة. السبب: {lock_reason or 'غير محدد'}"
             }), 403
 
         # --- فحص الحظر (Account Lockout) ---
@@ -23702,15 +23643,15 @@ def auth_login():
             lo_dt = datetime.datetime.fromisoformat(lockout_until)
             if datetime.datetime.now() < lo_dt:
                 is_admin_lock = lo_dt.year > 2090
-                remaining_sec = int((lo_dt - datetime.datetime.now()).total_seconds())
-                msg = lock_reason or "تم قفل الحساب لمراجعة الأمان."
+                msg = f"الحساب مقفل. حاول مجدداً لاحقاً."
+                if is_admin_lock:
+                    msg = f"تم قفل الحساب بشكل دائم من قبل الإدارة. السبب: {lock_reason or 'غير محدد'}"
+                else:
+                    remaining = int((lo_dt - datetime.datetime.now()).total_seconds() // 60) + 1
+                    msg = f"الحساب مقفل. حاول مجدداً بعد {remaining} دقيقة."
+                    if lock_reason: msg += f" السبب: {lock_reason}"
                 
-                return jsonify({
-                    "error": "ACCOUNT_LOCKED", 
-                    "is_admin_lock": is_admin_lock, 
-                    "message": msg, 
-                    "seconds": remaining_sec
-                }), 429
+                return jsonify({"error": "ACCOUNT_LOCKED", "is_admin_lock": is_admin_lock, "message": msg}), 429
 
         if not verify_password(password, pw_hash):
             failed_attempts = (failed_attempts or 0) + 1
