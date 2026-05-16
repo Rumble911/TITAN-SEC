@@ -7357,15 +7357,47 @@ HTML_TEMPLATE = """
                     errEl.style.display = 'block';
                     btn.textContent = 'دخول إلى TITAN 🔐';
                     btn.disabled = false;
-                } else if (data.is_admin_lock || data.error === 'ACCOUNT_LOCKED') {
-                    // قفل الحساب (سنقوم بتعديله لاحقاً بناءً على طلبك)
-                    if (data.is_admin_lock) {
-                         errEl.innerHTML = `🚨 تم قفل حسابك من قبل الإدارة.<br><span style="font-size: 0.85rem; opacity: 0.8;">السبب: ${data.message || 'غير محدد'}</span>`;
-                    } else {
-                         errEl.innerHTML = `🚨 حسابك مقفل مؤقتاً!<br>بسبب محاولات فاشلة. حاول مجدداً بعد <span class="font-bold font-mono text-red-300">${data.minutes || data.minutes_remaining || "?"} دقيقة</span>.`;
+                } else if (data.error === 'ACCOUNT_LOCKED') {
+                    // قفل الحساب المؤقت مع عداد تنازلي
+                    let timeLeft = data.seconds || 0;
+                    const updateTimer = () => {
+                        const m = Math.floor(timeLeft / 60);
+                        const s = timeLeft % 60;
+                        const timerStr = `${m}:${s < 10 ? '0' : ''}${s}`;
+                        
+                        errEl.innerHTML = `
+                            <div style="text-align: center; padding: 5px 0;">
+                                <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; color: #fca5a5;">🚨 تم قفل حسابك مؤقتاً</div>
+                                <div style="font-size: 0.9rem; margin-bottom: 10px; opacity: 0.9; line-height: 1.4;">${data.message}</div>
+                                <div style="font-size: 1.5rem; font-family: monospace; font-weight: bold; color: #f87171; margin-bottom: 15px; text-shadow: 0 0 10px rgba(248,113,113,0.3);">
+                                    ${timeLeft > 0 ? timerStr : 'جاري الفتح...'}
+                                </div>
+                                <a href="mailto:titansuppotp@gmail.com" 
+                                   style="display: inline-block; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 10px 20px; border-radius: 12px; text-decoration: none; font-size: 0.95rem; font-weight: bold; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);">
+                                   📧 مراسلة الدعم الفني
+                                </a>
+                            </div>
+                        `;
+                    };
+                    
+                    updateTimer();
+                    if (timeLeft > 0) {
+                        const timerInterval = setInterval(() => {
+                            timeLeft--;
+                            if (timeLeft <= 0) {
+                                clearInterval(timerInterval);
+                                updateTimer();
+                            } else {
+                                updateTimer();
+                            }
+                        }, 1000);
                     }
-                    errEl.style.background = 'rgba(239, 68, 68, 0.2)';
-                    errEl.style.border = '1px solid rgba(239, 68, 68, 0.6)';
+                    
+                    errEl.style.background = 'rgba(239, 68, 68, 0.15)';
+                    errEl.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                    errEl.style.backdropFilter = 'blur(10px)';
+                    errEl.style.padding = '15px';
+                    errEl.style.borderRadius = '15px';
                     errEl.style.display = 'block';
                     btn.textContent = 'دخول إلى TITAN 🔐';
                     btn.disabled = false;
@@ -13145,15 +13177,23 @@ HTML_TEMPLATE = """
         async function showUserActionPrompt(userId, action) {
             const reason = prompt("يرجى إدخال سبب الإجراء (سيظهر للمستخدم):", "");
             if (reason === null) return; // Cancelled
-            adminUserAction(userId, action, reason);
+            
+            let duration = 0;
+            if (action === 'lock') {
+                const durStr = prompt("يرجى إدخال مدة القفل بالدقائق (أدخل 0 للقفل الدائم):", "30");
+                if (durStr === null) return;
+                duration = parseInt(durStr) || 0;
+            }
+            
+            adminUserAction(userId, action, reason, duration);
         }
 
-        async function adminUserAction(targetId, action, reason = '') {
+        async function adminUserAction(targetId, action, reason = '', duration = 0) {
             try {
                 const res = await fetch('/api/admin/users/' + targetId + '/action', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ action, reason })
+                    body: JSON.stringify({ action, reason, duration })
                 });
                 const data = await res.json();
                 if (!data.success) {
@@ -19212,10 +19252,13 @@ def admin_user_action(target_id):
             if target_row and target_row[0]:
                 return jsonify({"success": False, "error": "لا يمكن تعديل أو قفل حساب مسؤول"}), 400
 
-        if action == 'lock':
-            # Set lockout_until to a far future date
-            far_future = "2099-12-31T23:59:59"
-            c.execute("UPDATE users SET lockout_until = %s, lock_reason = %s WHERE id = %s", (far_future, reason, target_id))
+        if (action == 'lock'):
+            duration_min = data.get('duration', 0)
+            if duration_min > 0:
+                lockout_until = (datetime.datetime.now() + datetime.timedelta(minutes=duration_min)).isoformat()
+            else:
+                lockout_until = "2099-12-31T23:59:59"
+            c.execute("UPDATE users SET lockout_until = %s, lock_reason = %s WHERE id = %s", (lockout_until, reason, target_id))
         elif action == 'unlock':
             c.execute("UPDATE users SET lockout_until = NULL, failed_attempts = 0, lock_reason = NULL WHERE id = %s", (target_id,))
         elif action == 'suspend':
@@ -23659,15 +23702,15 @@ def auth_login():
             lo_dt = datetime.datetime.fromisoformat(lockout_until)
             if datetime.datetime.now() < lo_dt:
                 is_admin_lock = lo_dt.year > 2090
-                msg = f"الحساب مقفل. حاول مجدداً لاحقاً."
-                if is_admin_lock:
-                    msg = f"تم قفل الحساب بشكل دائم من قبل الإدارة. السبب: {lock_reason or 'غير محدد'}"
-                else:
-                    remaining = int((lo_dt - datetime.datetime.now()).total_seconds() // 60) + 1
-                    msg = f"الحساب مقفل. حاول مجدداً بعد {remaining} دقيقة."
-                    if lock_reason: msg += f" السبب: {lock_reason}"
+                remaining_sec = int((lo_dt - datetime.datetime.now()).total_seconds())
+                msg = lock_reason or "تم قفل الحساب لمراجعة الأمان."
                 
-                return jsonify({"error": "ACCOUNT_LOCKED", "is_admin_lock": is_admin_lock, "message": msg}), 429
+                return jsonify({
+                    "error": "ACCOUNT_LOCKED", 
+                    "is_admin_lock": is_admin_lock, 
+                    "message": msg, 
+                    "seconds": remaining_sec
+                }), 429
 
         if not verify_password(password, pw_hash):
             failed_attempts = (failed_attempts or 0) + 1
