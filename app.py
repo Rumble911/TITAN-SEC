@@ -7322,7 +7322,7 @@ HTML_TEMPLATE = """
                     if (data.new_device || data.geo_alert) {
                         titanAlert('⚠️ تنبيه: تم رصد دخول من جهاز أو موقع جديد. تم إرسال تنبيه إلى بريدك الإلكتروني لضمان أمان حسابك.');
                     }
-                    setAdminUi(!!data.isAdmin);
+                    setAdminUi(!!data.isAdmin, !!data.isMasterAdmin);
                     setAiBubbleVisibility(true);
                     btn.textContent = '✅ تم الدخول بنجاح!';
                     btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
@@ -7564,7 +7564,7 @@ HTML_TEMPLATE = """
                     
                     setTimeout(() => {
                         overlay.remove();
-                        setAdminUi(!!data.isAdmin);
+                        setAdminUi(!!data.isAdmin, !!data.isMasterAdmin);
                         setAiBubbleVisibility(true);
                         titanAlert("✅ تم التحقق بنجاح! مرحباً بك .", "success");
                         showAuthSuccess();
@@ -7642,12 +7642,24 @@ HTML_TEMPLATE = """
         }
 
         // تشغيل النبض تلقائياً عند التأكد من وجود جلسة
-        function setAdminUi(isAdmin) {
+        function setAdminUi(isAdmin, isMasterAdmin = false) {
             const adminBtn = document.getElementById('btn-admin');
             if (!adminBtn) return;
             if (isAdmin) {
                 adminBtn.classList.remove('hidden');
                 adminBtn.classList.add('flex');
+                
+                // التحكم في ظهور أقسام الإدارة المتقدمة
+                const userMgmtSection = document.getElementById('adminUsersList')?.parentElement;
+                const nukeSection = document.getElementById('admin-nuke-btn')?.parentElement;
+                
+                if (!isMasterAdmin) {
+                    if (userMgmtSection) userMgmtSection.classList.add('hidden');
+                    if (nukeSection) nukeSection.classList.add('hidden');
+                } else {
+                    if (userMgmtSection) userMgmtSection.classList.remove('hidden');
+                    if (nukeSection) nukeSection.classList.remove('hidden');
+                }
             } else {
                 adminBtn.classList.add('hidden');
                 adminBtn.classList.remove('flex');
@@ -13113,14 +13125,16 @@ HTML_TEMPLATE = """
                                 ` : ''}
 
                                 <div class="flex flex-wrap gap-2">
-                                    ${(isSuspended || isLocked) ? 
-                                        `<button onclick="adminUserAction(${u.id}, '${isSuspended ? 'unsuspend' : 'unlock'}')" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-300 border border-green-800/50 p-2 rounded-xl text-[10px] font-bold">إلغاء القفل</button>` :
-                                        `<button onclick="showUserActionPrompt(${u.id}, 'suspend')" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-800/50 p-2 rounded-xl text-[10px] font-bold">إيقاف الحساب</button>
-                                         <button onclick="showUserActionPrompt(${u.id}, 'lock')" class="flex-1 bg-orange-900/40 hover:bg-orange-800/60 text-orange-300 border border-orange-800/50 p-2 rounded-xl text-[10px] font-bold">قفل مؤقت</button>`
+                                    ${u.username === 'TITAN_MASTER_ADMIN' ? 
+                                        `<div class="flex-1 text-center p-2 rounded-xl bg-violet-900/20 border border-violet-800/30 text-violet-400 text-[10px] font-bold">🛡️ حساب محمي (ROOT)</div>` :
+                                        (isSuspended || isLocked) ? 
+                                            `<button onclick="adminUserAction(${u.id}, '${isSuspended ? 'unsuspend' : 'unlock'}')" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-300 border border-green-800/50 p-2 rounded-xl text-[10px] font-bold">إلغاء القفل</button>` :
+                                            `<button onclick="showUserActionPrompt(${u.id}, 'suspend')" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-800/50 p-2 rounded-xl text-[10px] font-bold">إيقاف الحساب</button>
+                                             <button onclick="showUserActionPrompt(${u.id}, 'lock')" class="flex-1 bg-orange-900/40 hover:bg-orange-800/60 text-orange-300 border border-orange-800/50 p-2 rounded-xl text-[10px] font-bold">قفل مؤقت</button>`
                                     }
-                                    ${u.is_admin ? 
+                                    ${u.username !== 'TITAN_MASTER_ADMIN' ? (u.is_admin ? 
                                         `<button onclick="adminUserAction(${u.id}, 'remove_admin')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 p-2 rounded-xl text-[10px] font-bold">إزالة مسؤول</button>` :
-                                        `<button onclick="adminUserAction(${u.id}, 'make_admin')" class="bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/50 p-2 rounded-xl text-[10px] font-bold">تعيين مسؤول</button>`
+                                        `<button onclick="adminUserAction(${u.id}, 'make_admin')" class="bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/50 p-2 rounded-xl text-[10px] font-bold">تعيين مسؤول</button>`) : ''
                                     }
                                 </div>
                             </div>
@@ -19142,11 +19156,14 @@ def admin_users_list():
     try:
         conn = get_db_conn()
         c = conn.cursor()
-        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        c.execute("SELECT is_admin, username FROM users WHERE id = %s", (user_id,))
         row = c.fetchone()
         if not row or not row[0]:
             return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
         
+        if row[1] != "TITAN_MASTER_ADMIN":
+            return jsonify({"success": False, "error": "قائمة المستخدمين متاحة للمسؤول الأساسي فقط"}), 403
+            
         c.execute("""
             SELECT id, username, email, is_verified, created_at, is_admin, 
                    failed_attempts, lockout_until, last_login_at, last_login_ip, 
@@ -19191,10 +19208,19 @@ def admin_user_action(target_id):
     try:
         conn = get_db_conn()
         c = conn.cursor()
-        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        c.execute("SELECT is_admin, username FROM users WHERE id = %s", (user_id,))
         row = c.fetchone()
         if not row or not row[0]:
             return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
+        
+        if row[1] != "TITAN_MASTER_ADMIN":
+            return jsonify({"success": False, "error": "إدارة المستخدمين متاحة للمسؤول الأساسي فقط"}), 403
+
+        # حماية حساب المسؤول الأساسي من أي تعديل
+        c.execute("SELECT username FROM users WHERE id = %s", (target_id,))
+        target_row = c.fetchone()
+        if target_row and target_row[0] == "TITAN_MASTER_ADMIN":
+            return jsonify({"success": False, "error": "لا يمكن تعديل أو حظر حساب المسؤول الأساسي نهائياً"}), 403
 
         if action == 'lock':
             # Set lockout_until to a far future date
