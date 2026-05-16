@@ -5029,7 +5029,10 @@ HTML_TEMPLATE = """
                     </div>
                     <div class="grid grid-cols-3 gap-2 w-full sm:w-auto sm:ml-auto">
                         <button id="ai-subtab-support" onclick="showAiSubTab('support')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Support</button>
-                        <button id="ai-subtab-analysis" onclick="showAiSubTab('analysis')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Analysis</button>
+                        <button id="ai-subtab-analysis" onclick="showAiSubTab('analysis')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-purple-500/30 text-purple-300 bg-purple-900/20 hover:bg-purple-600/30 flex items-center gap-2">
+                            <span>Analysis</span>
+                            <span class="text-[8px] bg-purple-600 text-white px-1.5 py-0.5 rounded-md animate-pulse">SOON</span>
+                        </button>
                         <button id="ai-subtab-chat" onclick="showAiSubTab('chat')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-purple-700/50 bg-purple-900/40 text-purple-300">Chat</button>
                     </div>
                 </div>
@@ -5113,147 +5116,50 @@ HTML_TEMPLATE = """
                 </div>
                 </div>
 
-                <div id="ai-sub-content-analysis" class="hidden space-y-4">
-
-                <!-- ===== Tool 1: AI Attack Path Mapper ===== -->
-                <div class="bg-gradient-to-br from-slate-900/80 to-red-950/30 p-5 rounded-2xl border border-red-900/40 relative overflow-hidden group">
-                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🕸️</div>
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-lg">🗺️</span>
-                        <h3 class="font-black text-red-400 text-sm tracking-wide">محلل مسارات الهجوم الذكي (AI Attack Path Mapper)</h3>
-                    </div>
-                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">الصق نتائج فحص الشبكة (Nmap, Nessus, إلخ) وسيقوم الذكاء الاصطناعي ببناء شجرة هجوم كاملة مع سيناريوهات الاختراق المتسلسلة من منظور Red Team.</p>
-                    <textarea id="attack-path-input" rows="5" placeholder="الصق نتائج الفحص هنا (مثال: Nmap scan results, open ports, services, versions)..."
-                        class="w-full bg-black/40 border border-red-900/30 text-gray-300 text-xs rounded-xl px-4 py-3 outline-none mb-3 resize-none font-mono focus:border-red-500/60 transition-colors placeholder-gray-600"></textarea>
-                    <div class="flex gap-2">
-                        <button onclick="analyzeAttackPath()" id="attack-path-btn" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 font-bold py-2.5 rounded-xl border border-red-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(239,68,68,0.15)] flex items-center justify-center gap-2">
-                            <span>⚔️</span> بناء شجرة الهجوم (Attack Tree)
-                        </button>
-                        <button onclick="document.getElementById('attack-path-input').value='';document.getElementById('attack-path-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
-                    </div>
-                    <div id="attack-path-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-red-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
-                </div>
-
-                <!-- ===== Tool 2: OSINT & Social Engineering Profiler ===== -->
-                <div class="bg-gradient-to-br from-slate-900/80 to-cyan-950/30 p-5 rounded-2xl border border-cyan-900/40 relative overflow-hidden group">
-                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🕵️</div>
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-lg">🔍</span>
-                        <h3 class="font-black text-cyan-400 text-sm tracking-wide">محلل البصمة الرقمية والهندسة الاجتماعية (OSINT Profiler)</h3>
-                    </div>
-                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">أدخل بريد إلكتروني أو اسم مستخدم أو نطاق وسيقوم الذكاء الاصطناعي ببناء ملف تعريف المخاطر البشرية مع سيناريوهات الهندسة الاجتماعية المحتملة للتوعية.</p>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
-                        <div>
-                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">نوع الهدف</label>
-                            <select id="osint-profiler-type" class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-cyan-500/60 transition-colors">
-                                <option value="email">📧 بريد إلكتروني</option>
-                                <option value="username">👤 اسم مستخدم</option>
-                                <option value="domain">🌐 نطاق (Domain)</option>
-                            </select>
+                <div id="ai-sub-content-analysis" class="hidden py-10 flex flex-col items-center justify-center relative overflow-hidden min-h-[500px]">
+                    <!-- Ambient Glow Backgrounds -->
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-purple-600/10 blur-[100px] rounded-full pointer-events-none"></div>
+                    <div class="absolute top-1/3 left-1/4 w-32 h-32 bg-indigo-600/10 blur-[80px] rounded-full pointer-events-none"></div>
+                    
+                    <div class="glass relative z-10 p-8 md:p-12 rounded-[2.5rem] border border-white/10 flex flex-col items-center text-center max-w-lg mx-auto shadow-2xl backdrop-blur-xl">
+                        <div class="w-28 h-28 mb-8 relative">
+                            <!-- Animated Shield/Pulse -->
+                            <div class="absolute inset-0 bg-purple-500/20 rounded-full animate-ping"></div>
+                            <div class="absolute inset-2 border-2 border-purple-500/40 rounded-full animate-[spin_8s_linear_infinite]"></div>
+                            <div class="absolute inset-4 border border-indigo-400/30 rounded-full animate-[spin_5s_linear_infinite_reverse]"></div>
+                            <div class="absolute inset-0 flex items-center justify-center text-6xl drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]">🌌</div>
                         </div>
-                        <div class="md:col-span-2">
-                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">الهدف</label>
-                            <input type="text" id="osint-profiler-input" placeholder="example@domain.com أو username أو domain.com"
-                                class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none focus:border-cyan-500/60 transition-colors placeholder-gray-600">
+                        
+                        <h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-indigo-300 to-purple-300 mb-4 tracking-tight drop-shadow-sm">قيد التطوير</h2>
+                        
+                        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-950/50 border border-purple-500/30 text-[9px] font-black text-purple-300 uppercase tracking-[0.2em] mb-8 shadow-inner">
+                            <span class="w-2 h-2 bg-purple-500 rounded-full animate-pulse shadow-[0_0_8px_#a855f7]"></span>
+                            TITAN AI v2.0 // NEXT-GEN SECURITY
                         </div>
-                    </div>
-                    <textarea id="osint-profiler-extra" rows="2" placeholder="(اختياري) أضف أي معلومات إضافية متاحة عن الهدف لتحسين التحليل..."
-                        class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none mb-3 resize-none focus:border-cyan-500/60 transition-colors placeholder-gray-600"></textarea>
-                    <div class="flex gap-2">
-                        <button onclick="analyzeOsintProfile()" id="osint-profiler-btn" class="flex-1 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 font-bold py-2.5 rounded-xl border border-cyan-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(6,182,212,0.15)] flex items-center justify-center gap-2">
-                            <span>🕵️</span> بناء ملف المخاطر البشرية
-                        </button>
-                        <button onclick="document.getElementById('osint-profiler-input').value='';document.getElementById('osint-profiler-extra').value='';document.getElementById('osint-profiler-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
-                    </div>
-                    <div id="osint-profiler-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-cyan-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
-                </div>
-
-                <!-- ===== Tool 3: Interactive Purple Team AI ===== -->
-                <div class="bg-gradient-to-br from-slate-900/80 to-purple-950/30 p-5 rounded-2xl border border-purple-900/40 relative overflow-hidden group">
-                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🟣</div>
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-lg">🟣</span>
-                        <h3 class="font-black text-purple-400 text-sm tracking-wide">مساعد الفريق البنفسجي التفاعلي (Purple Team AI)</h3>
-                    </div>
-                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">صف بيئة العمل أو النظام المستهدف وسيولد الذكاء الاصطناعي خطة مزدوجة: سكريبتات هجومية (Red Team) + قواعد اكتشاف دفاعية (Blue Team) في آن واحد.</p>
-                    <textarea id="purple-team-input" rows="4" placeholder="صف البيئة المستهدفة بالتفصيل... (مثال: خادم ويب Apache على Ubuntu مع قاعدة بيانات MySQL وتطبيق PHP، خلف جدار ناري pfSense)..."
-                        class="w-full bg-black/40 border border-purple-900/30 text-gray-300 text-xs rounded-xl px-4 py-3 outline-none mb-3 resize-none font-mono focus:border-purple-500/60 transition-colors placeholder-gray-600"></textarea>
-                    <div class="grid grid-cols-2 gap-2 mb-3">
-                        <div>
-                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">تركيز الهجوم</label>
-                            <select id="purple-team-focus" class="w-full bg-black/40 border border-purple-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-purple-500/60 transition-colors">
-                                <option value="full">🎯 شامل (كل النواقل)</option>
-                                <option value="web">🌐 تطبيقات الويب</option>
-                                <option value="network">🔌 الشبكة والبنية التحتية</option>
-                                <option value="privilege">⬆️ تصعيد الصلاحيات</option>
-                                <option value="lateral">↔️ الحركة الجانبية</option>
-                                <option value="exfil">📤 تسريب البيانات</option>
-                            </select>
+                        
+                        <p class="text-sm text-gray-400 leading-relaxed mb-10 max-w-sm font-medium text-center">
+                            نحن نقوم ببناء أقوى محرك تحليل أمني مدعوم بالذكاء الاصطناعي في المنطقة. 
+                            ترقبوا أدوات ثورية لتتبع التهديدات السيبرانية، كشف الثغرات المعقدة، والتحقيق الجنائي الرقمي التلقائي.
+                        </p>
+                        
+                        <div class="w-full bg-black/40 rounded-2xl p-5 border border-slate-800/50 flex items-center justify-between shadow-inner">
+                            <div class="flex flex-col items-start text-right">
+                                <span class="text-[9px] text-gray-500 font-extrabold uppercase tracking-widest mb-1">الحالة الراهنة</span>
+                                <span class="text-xs text-indigo-400 font-black flex items-center gap-2">
+                                    <span class="animate-bounce">⚡</span> تحسين خوارزميات التنبؤ
+                                </span>
+                            </div>
+                            <div class="flex -space-x-3">
+                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 border-2 border-slate-900 flex items-center justify-center text-xs shadow-lg">🤖</div>
+                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-blue-700 border-2 border-slate-900 flex items-center justify-center text-xs shadow-lg">🧠</div>
+                                <div class="w-9 h-9 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center text-[10px] shadow-lg text-gray-400 font-bold">+AI</div>
+                            </div>
                         </div>
-                        <div>
-                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">صيغة قواعد الاكتشاف</label>
-                            <select id="purple-team-defense-format" class="w-full bg-black/40 border border-purple-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-purple-500/60 transition-colors">
-                                <option value="yara">📋 YARA Rules</option>
-                                <option value="sigma">📋 Sigma Rules</option>
-                                <option value="splunk">🔍 Splunk Queries</option>
-                                <option value="snort">🛡️ Snort/Suricata Rules</option>
-                                <option value="all">📦 جميع الصيغ</option>
-                            </select>
+                        
+                        <div class="mt-8 text-[10px] text-slate-500 font-bold uppercase tracking-widest opacity-50">
+                            Available for Elite Users Only
                         </div>
                     </div>
-                    <div class="flex gap-2">
-                        <button onclick="analyzePurpleTeam()" id="purple-team-btn" class="flex-1 bg-purple-900/40 hover:bg-purple-800/60 text-purple-300 font-bold py-2.5 rounded-xl border border-purple-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(168,85,247,0.15)] flex items-center justify-center gap-2">
-                            <span>⚡</span> توليد خطة الهجوم والدفاع
-                        </button>
-                        <button onclick="document.getElementById('purple-team-input').value='';document.getElementById('purple-team-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
-                    </div>
-                    <div id="purple-team-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-purple-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
-                </div>
-
-                <!-- ===== Tool 4: Business Logic Flaw Hunter ===== -->
-                <div class="bg-gradient-to-br from-slate-900/80 to-amber-950/30 p-5 rounded-2xl border border-amber-900/40 relative overflow-hidden group">
-                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🐛</div>
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-lg">🐛</span>
-                        <h3 class="font-black text-amber-400 text-sm tracking-wide">صائد ثغرات المنطق البرمجي (Business Logic Flaw Hunter)</h3>
-                    </div>
-                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">الصق كوداً برمجياً وسيحلل الذكاء الاصطناعي المنطق خلف الكود ليكتشف ثغرات IDOR, Race Conditions, وغيرها مع كتابة الكود المصحح.</p>
-                    <div class="grid grid-cols-2 gap-2 mb-3">
-                        <div>
-                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">لغة البرمجة</label>
-                            <select id="logic-flaw-lang" class="w-full bg-black/40 border border-amber-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-amber-500/60 transition-colors">
-                                <option value="python">🐍 Python</option>
-                                <option value="php">🐘 PHP</option>
-                                <option value="javascript">🟨 JavaScript / Node.js</option>
-                                <option value="java">☕ Java</option>
-                                <option value="csharp">🔷 C#</option>
-                                <option value="go">🐹 Go</option>
-                                <option value="ruby">💎 Ruby</option>
-                                <option value="auto">🔮 كشف تلقائي</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">نوع الوظيفة</label>
-                            <select id="logic-flaw-context" class="w-full bg-black/40 border border-amber-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-amber-500/60 transition-colors">
-                                <option value="auto">🔮 كشف تلقائي</option>
-                                <option value="auth">🔐 مصادقة / تسجيل دخول</option>
-                                <option value="payment">💳 دفع / شراء</option>
-                                <option value="api">🔗 API Endpoint</option>
-                                <option value="file">📁 رفع / تحميل ملفات</option>
-                                <option value="admin">👑 لوحة إدارة</option>
-                                <option value="data">📊 معالجة بيانات</option>
-                            </select>
-                        </div>
-                    </div>
-                    <textarea id="logic-flaw-input" rows="8" placeholder="الصق الكود البرمجي هنا..."
-                        class="w-full bg-black/40 border border-amber-900/30 text-gray-300 text-xs rounded-xl px-4 py-3 outline-none mb-3 resize-none font-mono focus:border-amber-500/60 transition-colors placeholder-gray-600" style="tab-size:4"></textarea>
-                    <div class="flex gap-2">
-                        <button onclick="analyzeLogicFlaws()" id="logic-flaw-btn" class="flex-1 bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 font-bold py-2.5 rounded-xl border border-amber-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(245,158,11,0.15)] flex items-center justify-center gap-2">
-                            <span>🔬</span> تحليل المنطق البرمجي واكتشاف الثغرات
-                        </button>
-                        <button onclick="document.getElementById('logic-flaw-input').value='';document.getElementById('logic-flaw-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
-                    </div>
-                    <div id="logic-flaw-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-amber-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
                 </div>
 
                 </div>
