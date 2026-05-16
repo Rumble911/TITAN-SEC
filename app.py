@@ -124,16 +124,14 @@ AI_SYSTEM_PROMPT = """
 - تتكلم بضمير المتكلم المفرد: "أنا أعتقد..." / "برأيي..."
 - تتذكر إنك TITAN — شخصية فريدة وذكية وعندك أسلوبك الخاص
 
-قواعد الجودة والتنسيق (هام جداً):
+قواعد الجودة:
 - لا تختلق معلومات. إذا مش متأكد، قل "والله مش متأكد 100% بس..."
-- إذا السؤال تقني، اعطِ خطوات واضحة وعملية باستخدام التنسيقات (Markdown).
-- استخدم التنسيق المتقدم (Markdown): العناوين (## و ###)، القوائم النقطية والرقمية، النصوص العريضة (**نص**)، والاقتباسات.
-- استخدم كتل الأكواد (Code Blocks) للأوامر والسكريبتات فقط، ولا تضع ردك بالكامل داخل كتلة كود (Code Block) واحدة أبداً.
-- اربط ردودك بالأمن السيبراني لما يكون مناسب.
+- إذا السؤال تقني، اعطِ خطوات واضحة وعملية
+- اربط ردودك بالأمن السيبراني لما يكون مناسب
 - لغة الرد يجب أن تتبع لغة المستخدم: إذا سأل بالعربية أجب بالعربية، وإذا سأل بالإنجليزية أجب بالإنجليزية.
 - إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
 - إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: abdallahalqam4040@gmail.com
-- إجاباتك يجب أن تكون دقيقة وواضحة جداً، ولا تنهِ الرد بشكل مقطوع أبداً؛ تأكد من إكمال الإجابة واختم دائماً بخطوة عملية تالية واضحة أو بسؤال للمتابعة.
+- لا تنهِ الرد بشكل مقطوع؛ اختم دائماً بخطوة عملية تالية واضحة.
 
 قواعد الأمان:
 - ارفض أي طلب ضار أو غير قانوني بأسلوب لطيف
@@ -4168,7 +4166,6 @@ HTML_TEMPLATE = """
     <link rel="stylesheet" href="/tailwind.css?v=__TAILWIND_V__">
     __TAILWIND_PLAY_CDN__
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Tajawal', sans-serif; background: #070b19; color: white; margin: 0; overflow-x: hidden; cursor: crosshair; }
@@ -7913,93 +7910,6 @@ HTML_TEMPLATE = """
                     }
                 }, 180);
             }
-        }
-
-        function formatAiResponse(text) {
-            if (!text) return "";
-            
-            let htmlContent;
-            try {
-                htmlContent = marked.parse(text, { breaks: true, gfm: true });
-            } catch (err) {
-                console.error("Marked parsing error:", err);
-                htmlContent = text;
-            }
-            
-            // Create a temporary div to manipulate the DOM easily
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = htmlContent;
-            
-            // Apply Tailwind classes to elements
-            
-            // 1. Code Blocks
-            const preElements = tempDiv.querySelectorAll('pre code');
-            preElements.forEach(codeEl => {
-                const preEl = codeEl.parentElement;
-                const wrapper = document.createElement('div');
-                wrapper.className = "bg-black/95 border border-slate-700/60 rounded-2xl p-6 my-10 font-mono text-[11px] text-cyan-300 relative group shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-x-auto";
-                
-                wrapper.innerHTML = `
-                    <div class="absolute top-0 right-0 px-4 py-1.5 bg-slate-800/80 text-[10px] text-gray-400 rounded-bl-xl font-bold uppercase tracking-widest border-l border-b border-slate-700/50">TITAN-SNIPPET</div>
-                    <button onclick="copyToClipboard(this.parentElement.querySelector('code').innerText, this)" class="absolute top-3 right-3 p-2 rounded-xl bg-slate-800/80 text-gray-400 hover:text-white hover:bg-indigo-600/50 transition-all opacity-0 group-hover:opacity-100 z-10 shadow-lg">📋</button>
-                    <code class="block whitespace-pre font-mono leading-relaxed">${codeEl.innerHTML}</code>
-                `;
-                
-                preEl.parentNode.replaceChild(wrapper, preEl);
-            });
-            
-            // 2. Bold / Strong
-            const strongElements = tempDiv.querySelectorAll('strong');
-            strongElements.forEach(el => {
-                el.className = "text-white font-black bg-indigo-600/20 px-2 py-0.5 rounded-md border border-indigo-500/20 shadow-sm";
-            });
-            
-            // 3. Headers
-            const h3Elements = tempDiv.querySelectorAll('h3');
-            h3Elements.forEach(el => {
-                el.className = "text-lg font-black text-white mt-16 mb-8 border-l-4 border-indigo-600 pl-5 bg-gradient-to-r from-indigo-900/40 to-transparent py-4 rounded-r-2xl shadow-inner";
-            });
-            
-            const h4Elements = tempDiv.querySelectorAll('h4');
-            h4Elements.forEach(el => {
-                el.className = "text-sm font-black text-indigo-400 mt-12 mb-6 border-b border-indigo-500/20 pb-3 flex items-center gap-3";
-                el.innerHTML = `<span class="w-2 h-2 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"></span> ${el.innerHTML}`;
-            });
-            
-            // 4. Lists
-            const ulElements = tempDiv.querySelectorAll('ul');
-            ulElements.forEach(el => {
-                el.className = "space-y-4 my-6 ml-2 border-l-2 border-indigo-500/30 pl-4";
-            });
-            
-            const olElements = tempDiv.querySelectorAll('ol');
-            olElements.forEach(el => {
-                el.className = "space-y-4 my-6 ml-2 border-l-2 border-indigo-500/30 pl-4 list-decimal list-inside text-gray-300";
-            });
-            
-            const liElements = tempDiv.querySelectorAll('li');
-            liElements.forEach(el => {
-                if(el.parentElement.tagName.toLowerCase() === 'ul') {
-                    el.className = "flex items-start gap-3 transition-all hover:border-indigo-500";
-                    el.innerHTML = `<span class="text-indigo-400 font-black mt-1">›</span><span class="text-gray-200 font-medium tracking-wide flex-1">${el.innerHTML}</span>`;
-                } else {
-                    el.className = "text-gray-200 font-medium tracking-wide mb-2 transition-all hover:text-indigo-300";
-                }
-            });
-            
-            // 5. Paragraphs
-            const pElements = tempDiv.querySelectorAll('p');
-            pElements.forEach(el => {
-                el.className = "mb-8 leading-[2] text-gray-400 text-[12.5px] antialiased tracking-wide font-medium pl-1";
-            });
-            
-            // 6. Inline Code
-            const inlineCodeElements = Array.from(tempDiv.querySelectorAll('code')).filter(code => !code.closest('.bg-black\\/95'));
-            inlineCodeElements.forEach(el => {
-                el.className = "bg-indigo-900/40 text-indigo-300 px-1.5 py-0.5 rounded text-[11px] font-mono border border-indigo-500/30";
-            });
-
-            return tempDiv.innerHTML;
         }
 
         function setAiBubbleVisibility(isVisible) {
@@ -17164,13 +17074,9 @@ HTML_TEMPLATE = """
 
         async function _analysisToolCall(type, content, resultEl, btn, extraPayload = {}) {
             resultEl.classList.remove('hidden');
-            resultEl.innerHTML = '<div class="flex flex-col items-center justify-center py-10 gap-3 text-indigo-400 animate-pulse"><span class="text-3xl">🧬</span><span class="text-[10px] font-black uppercase tracking-[0.3em]">AI Engine Processing...</span></div>';
+            resultEl.textContent = '⏳ جاري التحليل بالذكاء الاصطناعي... قد يستغرق 30-90 ثانية...';
             resultEl.style.opacity = '0.6';
-            if (btn) {
-                btn.disabled = true;
-                btn.dataset.original = btn.innerHTML;
-                btn.innerHTML = '⏳ جاري المعالجة...';
-            }
+            if (btn) btn.disabled = true;
             try {
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
@@ -17179,20 +17085,12 @@ HTML_TEMPLATE = """
                 });
                 const data = await res.json();
                 resultEl.style.opacity = '1';
-                
-                if (data.analysis) {
-                    resultEl.innerHTML = `<div class="ai-formatted-content p-2">${formatAiResponse(data.analysis)}</div>`;
-                } else {
-                    resultEl.textContent = data.error || 'فشل التحليل';
-                }
+                resultEl.textContent = data.analysis || data.error || 'فشل التحليل';
             } catch(e) {
                 resultEl.style.opacity = '1';
-                resultEl.innerHTML = '<div class="text-red-400 p-4 border border-red-900/30 rounded-xl bg-red-900/10 text-center text-[10px] font-bold">❌ فشل الاتصال بخادم الذكاء الاصطناعي</div>';
+                resultEl.textContent = '❌ فشل الاتصال بالخادم - حاول مرة أخرى';
             } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = btn.dataset.original || btn.innerHTML;
-                }
+                if (btn) btn.disabled = false;
             }
         }
 
@@ -25686,7 +25584,7 @@ def ai_analyze():
         # === Tool 1: AI Attack Path Mapper ===
         'attack_path': f"""أنت محلل اختراق متقدم (Red Team Expert) ومحلل مسارات هجوم.
 
-المطلوب: حلل نتائج الفحص التالية وابنِ شجرة هجوم (Attack Tree) كاملة ومفصلة مستخدماً تنسيق Markdown بوضوح وجمالية (عناوين، قوائم، نصوص عريضة، وكتل برمجية للأوامر فقط). لا تضع إجابتك بالكامل داخل كتلة كود (Code Block) بل استخدم التنسيق بشكل حر.
+المطلوب: حلل نتائج الفحص التالية وابنِ شجرة هجوم (Attack Tree) كاملة ومفصلة.
 
 نتائج الفحص:
 ---
@@ -25695,32 +25593,31 @@ def ai_analyze():
 
 أجب بالعربية وبشكل منظم كالتالي:
 
-🎯 **ملخص سطح الهجوم (Attack Surface Summary):**
+🎯 ملخص سطح الهجوم (Attack Surface Summary):
 - عدد الخدمات المكتشفة والبورتات المفتوحة
 - تقييم الخطورة العام (حرج/عالي/متوسط/منخفض)
 
-🕸️ **شجرة مسارات الهجوم (Attack Paths):**
+🕸️ شجرة مسارات الهجوم (Attack Paths):
 لكل مسار هجوم ممكن، اكتب:
-* **المرحلة 1: نقطة الدخول الأولية (Initial Access)** – ما الثغرة وكيف يتم استغلالها
-* **المرحلة 2: التثبيت (Persistence)** – كيف يحافظ المهاجم على الوصول
-* **المرحلة 3: تصعيد الصلاحيات (Privilege Escalation)** – كيف يصل لصلاحيات أعلى
-* **المرحلة 4: الحركة الجانبية (Lateral Movement)** – كيف ينتقل لأنظمة أخرى
-* **المرحلة 5: الهدف النهائي (Objective)** – ما الذي يمكن تحقيقه
+  ├── المرحلة 1: نقطة الدخول الأولية (Initial Access) – ما الثغرة وكيف يتم استغلالها
+  ├── المرحلة 2: التثبيت (Persistence) – كيف يحافظ المهاجم على الوصول
+  ├── المرحلة 3: تصعيد الصلاحيات (Privilege Escalation) – كيف يصل لصلاحيات أعلى
+  ├── المرحلة 4: الحركة الجانبية (Lateral Movement) – كيف ينتقل لأنظمة أخرى
+  └── المرحلة 5: الهدف النهائي (Objective) – ما الذي يمكن تحقيقه
 
-⚡ **السيناريو الأخطر (Critical Attack Chain):**
-اشرح أخطر سيناريو اختراق متسلسل بربط الثغرات ببعضها.
+⚡ السيناريو الأخطر (Critical Attack Chain):
+اشرح أخطر سيناريو اختراق متسلسل بربط الثغرات ببعضها
 
-🛡️ **توصيات الحماية العاجلة:**
-رتب التوصيات حسب الأولوية.
+🛡️ توصيات الحماية العاجلة:
+رتب التوصيات حسب الأولوية
 
-📊 **تقييم CVSS التقديري لأخطر ثغرة:**
-قدّر درجة CVSS مع التبرير.""",
+📊 تقييم CVSS التقديري لأخطر ثغرة:
+قدّر درجة CVSS مع التبرير""",
 
-        # === Tool 2: OSINT & Social Engineering Profiler ===
         # === Tool 2: OSINT & Social Engineering Profiler ===
         'osint_profiler': f"""أنت خبير استخبارات مصادر مفتوحة (OSINT Expert) ومحلل هندسة اجتماعية متقدم.
 
-المطلوب: حلل الهدف التالي وابنِ ملف تعريف مخاطر بشرية شامل. استعمل تنسيق Markdown بوضوح (عناوين، قوائم، نصوص عريضة). لا تضع إجابتك بالكامل داخل كتلة كود (Code Block).
+المطلوب: حلل الهدف التالي وابنِ ملف تعريف مخاطر بشرية شامل.
 
 بيانات الهدف:
 ---
@@ -25729,34 +25626,34 @@ def ai_analyze():
 
 أجب بالعربية وبشكل منظم كالتالي:
 
-🔍 **تحليل البصمة الرقمية (Digital Footprint Analysis):**
-* ما المعلومات التي يمكن استنتاجها من هذا الهدف؟
-* المنصات المحتملة المرتبطة
-* نمط التسمية والاستخدام
+🔍 تحليل البصمة الرقمية (Digital Footprint Analysis):
+- ما المعلومات التي يمكن استنتاجها من هذا الهدف؟
+- المنصات المحتملة المرتبطة
+- نمط التسمية والاستخدام
 
-👤 **ملف تعريف المخاطر البشرية (Human Risk Profile):**
-* مستوى التعرض الرقمي (عالي/متوسط/منخفض)
-* نقاط الضعف البشرية المحتملة
-* احتمالية وجود تسريبات بيانات سابقة
+👤 ملف تعريف المخاطر البشرية (Human Risk Profile):
+- مستوى التعرض الرقمي (عالي/متوسط/منخفض)
+- نقاط الضعف البشرية المحتملة
+- احتمالية وجود تسريبات بيانات سابقة
 
-🎣 **سيناريوهات الهندسة الاجتماعية المحتملة (للتوعية):**
+🎣 سيناريوهات الهندسة الاجتماعية المحتملة (للتوعية):
 اكتب 3-4 سيناريوهات تصيد/هندسة اجتماعية واقعية يمكن أن تستهدف هذا الشخص/النطاق، مع شرح:
-* نوع الهجوم (Spear Phishing / Vishing / Pretexting / إلخ)
-* الطُّعم المحتمل (Lure) بناءً على الاهتمامات المستنتجة
-* نسبة نجاح تقديرية
+  - نوع الهجوم (Spear Phishing / Vishing / Pretexting / إلخ)
+  - الطُّعم المحتمل (Lure) بناءً على الاهتمامات المستنتجة
+  - نسبة نجاح تقديرية
 
-🛡️ **توصيات الحماية الشخصية:**
-* كيف يحمي الهدف نفسه من هذه السيناريوهات
-* إعدادات الخصوصية الموصى بها
-* خطوات عملية فورية
+🛡️ توصيات الحماية الشخصية:
+- كيف يحمي الهدف نفسه من هذه السيناريوهات
+- إعدادات الخصوصية الموصى بها
+- خطوات عملية فورية
 
-⚠️ **مؤشرات الاختراق المحتملة (IOCs to Watch):**
-* ما الذي يجب مراقبته لاكتشاف محاولات الاستهداف""",
+⚠️ مؤشرات الاختراق المحتملة (IOCs to Watch):
+- ما الذي يجب مراقبته لاكتشاف محاولات الاستهداف""",
 
         # === Tool 3: Interactive Purple Team AI ===
         'purple_team': f"""أنت مستشار أمن سيبراني متخصص في عمليات الفريق البنفسجي (Purple Team) يجمع بين الهجوم والدفاع.
 
-المطلوب: ولّد خطة مزدوجة (هجوم + دفاع) للبيئة التالية مستعملاً تنسيق Markdown بوضوح (عناوين، قوائم، نصوص عريضة). لا تضع إجابتك بالكامل داخل كتلة كود (Code Block).
+المطلوب: ولّد خطة مزدوجة (هجوم + دفاع) للبيئة التالية.
 
 وصف البيئة والمتطلبات:
 ---
@@ -25765,39 +25662,39 @@ def ai_analyze():
 
 أجب بالعربية وبشكل منظم كالتالي:
 
-🔴 **خطة الفريق الأحمر (Red Team – Attack Plan):**
+🔴 خطة الفريق الأحمر (Red Team – Attack Plan):
 
 لكل ناقل هجوم:
-* 📌 اسم الهجوم ونوعه (MITRE ATT&CK Technique ID)
-* 💻 الأوامر/السكريبتات الجاهزة للتنفيذ:
+  📌 اسم الهجوم ونوعه (MITRE ATT&CK Technique ID)
+  💻 الأوامر/السكريبتات الجاهزة للتنفيذ:
   ```
   [اكتب الأوامر أو السكريبت الكامل هنا]
   ```
-* 📝 شرح الخطوات والنتيجة المتوقعة
+  📝 شرح الخطوات والنتيجة المتوقعة
 
-🔵 **خطة الفريق الأزرق (Blue Team – Detection & Defense):**
+🔵 خطة الفريق الأزرق (Blue Team – Detection & Defense):
 
 لكل هجوم في الخطة الحمراء، اكتب قاعدة اكتشاف مقابلة:
-* 🛡️ قاعدة الاكتشاف:
+  🛡️ قاعدة الاكتشاف:
   ```
   [اكتب قاعدة YARA / Sigma / Splunk / Snort حسب المطلوب]
   ```
-* 📊 مؤشرات الاختراق (IOCs) المرتبطة
-* 🔔 إعدادات التنبيه الموصى بها
+  📊 مؤشرات الاختراق (IOCs) المرتبطة
+  🔔 إعدادات التنبيه الموصى بها
 
-🟣 **سيناريو المحاكاة الكامل (Purple Team Exercise):**
-* الجدول الزمني المقترح للتمرين
-* معايير النجاح/الفشل
-* نقاط القياس (Metrics)
+🟣 سيناريو المحاكاة الكامل (Purple Team Exercise):
+  - الجدول الزمني المقترح للتمرين
+  - معايير النجاح/الفشل
+  - نقاط القياس (Metrics)
 
-📋 **ملخص التوصيات:**
-* الفجوات الأمنية المكتشفة
-* أولويات التحسين""",
+📋 ملخص التوصيات:
+  - الفجوات الأمنية المكتشفة
+  - أولويات التحسين""",
 
         # === Tool 4: Business Logic Flaw Hunter ===
         'logic_flaw': f"""أنت خبير أمن تطبيقات متقدم (Application Security Expert) متخصص في اكتشاف ثغرات المنطق البرمجي (Business Logic Flaws).
 
-المطلوب: حلل الكود التالي بعمق لاكتشاف الثغرات المنطقية وليس فقط الأخطاء البنائية. استخدم تنسيق Markdown بوضوح. لا تضع إجابتك بالكامل داخل كتلة كود (Code Block).
+المطلوب: حلل الكود التالي بعمق لاكتشاف الثغرات المنطقية وليس فقط الأخطاء البنائية.
 
 الكود المُراد تحليله:
 ---
@@ -25806,33 +25703,33 @@ def ai_analyze():
 
 أجب بالعربية وبشكل منظم كالتالي:
 
-🔬 **نظرة عامة على الكود:**
-* ما وظيفة هذا الكود؟
-* ما سير العمل (Workflow) الذي يمثله؟
+🔬 نظرة عامة على الكود:
+- ما وظيفة هذا الكود؟
+- ما سير العمل (Workflow) الذي يمثله؟
 
-🐛 **الثغرات المنطقية المكتشفة:**
+🐛 الثغرات المنطقية المكتشفة:
 
 لكل ثغرة:
-* 📌 اسم الثغرة (مثل IDOR, Race Condition, Mass Assignment, إلخ)
-* ⚠️ درجة الخطورة: (حرجة/عالية/متوسطة/منخفضة)
-* 📍 الموقع في الكود: (السطر أو الدالة)
-* 💣 كيف يستغلها المخترق:
-  * الخطوات التفصيلية للاستغلال
-  * مثال على HTTP Request أو Payload
-* 💥 التأثير: ما الضرر المحتمل؟
+  📌 اسم الثغرة (مثل IDOR, Race Condition, Mass Assignment, إلخ)
+  ⚠️ درجة الخطورة: (حرجة/عالية/متوسطة/منخفضة)
+  📍 الموقع في الكود: (السطر أو الدالة)
+  💣 كيف يستغلها المخترق:
+    - الخطوات التفصيلية للاستغلال
+    - مثال على HTTP Request أو Payload
+  💥 التأثير: ما الضرر المحتمل؟
 
-✅ **الكود المصحح:**
+✅ الكود المصحح:
 ```
 [اكتب الكود المصحح الكامل مع تعليقات توضيحية]
 ```
 
-🔍 **فحوصات إضافية مطلوبة:**
-* ما الاختبارات التي يجب إجراؤها للتأكد من الأمان؟
-* هل هناك ثغرات في الأجزاء غير المعروضة من الكود يجب الانتباه لها؟
+🔍 فحوصات إضافية مطلوبة:
+- ما الاختبارات التي يجب إجراؤها للتأكد من الأمان؟
+- هل هناك ثغرات في الأجزاء غير المعروضة من الكود يجب الانتباه لها؟
 
-📊 **تقييم أمني شامل:**
-* درجة الأمان الكلية (0-100)
-* هل الكود جاهز للإنتاج؟ نعم/لا مع التبرير"""
+📊 تقييم أمني شامل:
+- درجة الأمان الكلية (0-100)
+- هل الكود جاهز للإنتاج؟ نعم/لا مع التبرير"""
     }
 
     prompt = prompts.get(analyze_type, prompts['security'])
