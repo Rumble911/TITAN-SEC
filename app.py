@@ -7380,7 +7380,7 @@ HTML_TEMPLATE = """
                         overlay.remove();
                         setAdminUi(!!data.isAdmin);
                         setAiBubbleVisibility(true);
-                        titanAlert("✅ تم التحقق بنجاح! مرحباً بك يا بطل.", "success");
+                        titanAlert("✅ تم التحقق بنجاح! مرحباً بك .", "success");
                         showAuthSuccess();
                     }, 500);
                 } else {
