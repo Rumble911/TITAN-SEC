@@ -5064,11 +5064,10 @@ HTML_TEMPLATE = """
                         <span class="text-xs text-gray-300 font-bold">لوحة التحكم</span>
                         <span class="text-[10px] px-2 py-1 rounded border border-emerald-700/50 bg-emerald-900/20 text-emerald-300">Online</span>
                     </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto sm:ml-auto">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full sm:w-auto sm:ml-auto">
                         <button id="ai-subtab-support" onclick="showAiSubTab('support')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Support</button>
                         <button id="ai-subtab-analysis" onclick="showAiSubTab('analysis')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Analysis</button>
                         <button id="ai-subtab-chat" onclick="showAiSubTab('chat')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-purple-700/50 bg-purple-900/40 text-purple-300">Chat</button>
-                        <button id="ai-subtab-settings" onclick="showAiSubTab('settings')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Settings</button>
                     </div>
                 </div>
 
@@ -5294,42 +5293,7 @@ HTML_TEMPLATE = """
                     <div id="logic-flaw-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-amber-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
                 </div>
 
-                <div id="ai-sub-content-settings" class="hidden space-y-4">
-                    <div class="bg-slate-900/70 rounded-2xl border border-purple-900/30 p-5 space-y-6">
-                        <h3 class="text-purple-300 text-sm font-bold flex items-center gap-2">
-                            <span>⚙️</span> إعدادات الذكاء الاصطناعي (AI Settings)
-                        </h3>
-                        
-                        <div class="space-y-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <label class="text-xs text-gray-300 font-bold block">الحد الأقصى للتوكنات (Max Tokens)</label>
-                                    <p class="text-[10px] text-gray-500">يتحكم في طول الرد (200 - 8000)</p>
-                                </div>
-                                <span id="ai-max-tokens-val" class="text-xs font-mono text-purple-400 bg-purple-900/20 px-2 py-1 rounded border border-purple-700/30">2000</span>
-                            </div>
-                            <input type="range" id="ai-max-tokens-slider" min="200" max="8000" step="100" value="2000" 
-                                oninput="document.getElementById('ai-max-tokens-val').textContent = this.value; localStorage.setItem('titan_ai_max_tokens', this.value)"
-                                class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500 transition-all hover:bg-slate-700">
-                        </div>
 
-                        <div class="space-y-3 pt-4 border-t border-slate-800">
-                            <label class="text-xs text-gray-300 font-bold block">أسلوب الرد (Response Style)</label>
-                            <select id="ai-response-style" onchange="localStorage.setItem('titan_ai_style', this.value)"
-                                class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none focus:border-purple-500/60 transition-colors">
-                                <option value="balanced">⚖️ متوازن (Balanced)</option>
-                                <option value="concise">⚡ مختصر جداً (Concise)</option>
-                                <option value="detailed">📝 مفصل وشامل (Detailed)</option>
-                            </select>
-                        </div>
-                        
-                        <div class="bg-purple-900/10 border border-purple-800/30 p-3 rounded-xl">
-                            <p class="text-[10px] text-purple-300/80 leading-relaxed italic">
-                                * ملاحظة: زيادة عدد التوكنات تسمح بإنتاج تقارير أمنية مفصلة ولكنها تزيد من وقت المعالجة. يتم حفظ الإعدادات تلقائياً في المتصفح.
-                            </p>
-                        </div>
-                    </div>
-                </div>
 
                 </div>
 
@@ -7716,28 +7680,17 @@ HTML_TEMPLATE = """
             }, 5 * 60 * 1000); // 5 دقائق بين كل نبضة
         }
 
-        function initAiSettings() {
-            const tokens = localStorage.getItem('titan_ai_max_tokens') || '2000';
-            const style = localStorage.getItem('titan_ai_style') || 'balanced';
-            const slider = document.getElementById('ai-max-tokens-slider');
-            const valLabel = document.getElementById('ai-max-tokens-val');
-            const styleSel = document.getElementById('ai-response-style');
-            if (slider) slider.value = tokens;
-            if (valLabel) valLabel.textContent = tokens;
-            if (styleSel) styleSel.value = style;
-        }
+
 
         function showAiSubTab(tab) {
-            const valid = ['chat', 'analysis', 'support', 'settings'];
+            const valid = ['chat', 'analysis', 'support'];
             const t = valid.includes(tab) ? tab : 'chat';
-            if (t === 'settings') initAiSettings();
             _aiActiveSubTab = t;
 
             const map = {
                 chat: document.getElementById('ai-sub-content-chat'),
                 analysis: document.getElementById('ai-sub-content-analysis'),
-                support: document.getElementById('ai-sub-content-support'),
-                settings: document.getElementById('ai-sub-content-settings')
+                support: document.getElementById('ai-sub-content-support')
             };
             Object.keys(map).forEach(k => {
                 const el = map[k];
@@ -7747,8 +7700,7 @@ HTML_TEMPLATE = """
             const btnMap = {
                 chat: document.getElementById('ai-subtab-chat'),
                 analysis: document.getElementById('ai-subtab-analysis'),
-                support: document.getElementById('ai-subtab-support'),
-                settings: document.getElementById('ai-subtab-settings')
+                support: document.getElementById('ai-subtab-support')
             };
             Object.keys(btnMap).forEach(k => {
                 const b = btnMap[k];
