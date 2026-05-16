@@ -7918,13 +7918,13 @@ HTML_TEMPLATE = """
         function formatAiResponse(text) {
             if (!text) return "";
             
-            // Configure marked options if needed
-            marked.setOptions({
-                breaks: true,
-                gfm: true
-            });
-            
-            let htmlContent = marked.parse(text);
+            let htmlContent;
+            try {
+                htmlContent = marked.parse(text, { breaks: true, gfm: true });
+            } catch (err) {
+                console.error("Marked parsing error:", err);
+                htmlContent = text;
+            }
             
             // Create a temporary div to manipulate the DOM easily
             const tempDiv = document.createElement('div');
