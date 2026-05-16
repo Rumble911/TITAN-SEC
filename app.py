@@ -4230,6 +4230,21 @@ HTML_TEMPLATE = """
             transition: box-shadow 0.12s ease, outline-color 0.12s ease;
         }
         
+        /* Custom Scrollbar for Premium Feel */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(79, 70, 229, 0.4); border-radius: 20px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(79, 70, 229, 0.7); }
+
+        /* AI Result Content Styling */
+        .ai-formatted-content {
+            font-family: 'Inter', sans-serif;
+            letter-spacing: -0.01em;
+        }
+        .ai-formatted-content p { margin-bottom: 2.5rem !important; }
+        .ai-formatted-content code { font-family: 'Fira Code', 'Cascadia Code', monospace !important; }
+        
+        
         /* Scanlines & CRT Effect */
         body::after { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); z-index: 999; background-size: 100% 2px, 3px 100%; pointer-events: none; }
         
@@ -5128,7 +5143,7 @@ HTML_TEMPLATE = """
                         </button>
                         <button onclick="document.getElementById('attack-path-input').value='';document.getElementById('attack-path-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
                     </div>
-                    <div id="attack-path-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-red-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                    <div id="attack-path-result" class="hidden custom-scrollbar mt-6 p-8 bg-black/80 rounded-[2rem] text-sm text-gray-300 border border-slate-800/50 leading-relaxed shadow-2xl max-h-[35rem] overflow-y-auto backdrop-blur-xl"></div>
                 </div>
 
                 <!-- ===== Tool 2: OSINT & Social Engineering Profiler ===== -->
@@ -5162,7 +5177,7 @@ HTML_TEMPLATE = """
                         </button>
                         <button onclick="document.getElementById('osint-profiler-input').value='';document.getElementById('osint-profiler-extra').value='';document.getElementById('osint-profiler-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
                     </div>
-                    <div id="osint-profiler-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-cyan-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                    <div id="osint-profiler-result" class="hidden custom-scrollbar mt-6 p-8 bg-black/80 rounded-[2rem] text-sm text-gray-300 border border-slate-800/50 leading-relaxed shadow-2xl max-h-[35rem] overflow-y-auto backdrop-blur-xl"></div>
                 </div>
 
                 <!-- ===== Tool 3: Interactive Purple Team AI ===== -->
@@ -5204,7 +5219,7 @@ HTML_TEMPLATE = """
                         </button>
                         <button onclick="document.getElementById('purple-team-input').value='';document.getElementById('purple-team-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
                     </div>
-                    <div id="purple-team-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-purple-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                    <div id="purple-team-result" class="hidden custom-scrollbar mt-6 p-8 bg-black/80 rounded-[2rem] text-sm text-gray-300 border border-slate-800/50 leading-relaxed shadow-2xl max-h-[35rem] overflow-y-auto backdrop-blur-xl"></div>
                 </div>
 
                 <!-- ===== Tool 4: Business Logic Flaw Hunter ===== -->
@@ -5250,7 +5265,7 @@ HTML_TEMPLATE = """
                         </button>
                         <button onclick="document.getElementById('logic-flaw-input').value='';document.getElementById('logic-flaw-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
                     </div>
-                    <div id="logic-flaw-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-amber-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                    <div id="logic-flaw-result" class="hidden custom-scrollbar mt-6 p-8 bg-black/80 rounded-[2rem] text-sm text-gray-300 border border-slate-800/50 leading-relaxed shadow-2xl max-h-[35rem] overflow-y-auto backdrop-blur-xl"></div>
                 </div>
 
                 </div>
@@ -17072,11 +17087,59 @@ HTML_TEMPLATE = """
 
         // ===== Analysis Tab: AI-Powered Security Tools =====
 
+        function formatAiResponse(text) {
+            if (!text) return "";
+            
+            // Escape HTML for security
+            const escDiv = document.createElement('div');
+            escDiv.textContent = text;
+            let escaped = escDiv.innerHTML;
+
+            // 1. Code Blocks
+            escaped = escaped.replace(/```([\s\S]*?)```/g, (match, code) => {
+                return `<div class="bg-black/95 border border-slate-700/60 rounded-2xl p-6 my-10 font-mono text-[11px] text-cyan-300 relative group shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-x-auto"><div class="absolute top-0 right-0 px-4 py-1.5 bg-slate-800/80 text-[10px] text-gray-400 rounded-bl-xl font-bold uppercase tracking-widest border-l border-b border-slate-700/50">TITAN-SNIPPET</div><button onclick="copyToClipboard(this.parentElement.querySelector('code').innerText, this)" class="absolute top-3 right-3 p-2 rounded-xl bg-slate-800/80 text-gray-400 hover:text-white hover:bg-indigo-600/50 transition-all opacity-0 group-hover:opacity-100 z-10 shadow-lg">📋</button><code class="block whitespace-pre font-mono leading-relaxed">${code.trim()}</code></div>`;
+            });
+            
+            // 2. Bold
+            escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-black bg-indigo-600/20 px-2 py-0.5 rounded-md border border-indigo-500/20 shadow-sm">$1</strong>');
+            
+            // 3. Bullet Points
+            escaped = escaped.replace(/^\s*[\-\*]\s+(.*)$/gm, '<div class="flex gap-4 my-4 pl-6 border-l-2 border-indigo-500/30 ml-2 transition-all hover:border-indigo-500"><span class="text-indigo-400 font-black text-lg">›</span><span class="text-gray-200 font-medium tracking-wide">$1</span></div>');
+            
+            // 4. Headers
+            escaped = escaped.replace(/^### (.*)$/gm, '<h4 class="text-sm font-black text-indigo-400 mt-12 mb-6 border-b border-indigo-500/20 pb-3 flex items-center gap-3"><span class="w-2 h-2 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"></span> $1</h4>');
+            escaped = escaped.replace(/^## (.*)$/gm, '<h3 class="text-lg font-black text-white mt-16 mb-8 border-l-4 border-indigo-600 pl-5 bg-gradient-to-r from-indigo-900/40 to-transparent py-4 rounded-r-2xl shadow-inner">$1</h3>');
+            
+            // 5. Paragraphs
+            const paragraphs = escaped.split(/\n\n+/);
+            return paragraphs.map(p => {
+                if (p.startsWith('<h') || p.startsWith('<div')) return p;
+                return `<p class="mb-10 leading-[2] text-gray-400 text-[12.5px] antialiased tracking-wide font-medium pl-1">${p.replace(/\n/g, '<br>')}</p>`;
+            }).join('');
+        }
+
+        async function copyToClipboard(text, btn) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const original = btn.textContent;
+                btn.textContent = "✅";
+                btn.classList.add('text-green-400');
+                setTimeout(() => {
+                    btn.textContent = original;
+                    btn.classList.remove('text-green-400');
+                }, 2000);
+            } catch(e) { titanAlert("فشل النسخ", "error"); }
+        }
+
         async function _analysisToolCall(type, content, resultEl, btn, extraPayload = {}) {
             resultEl.classList.remove('hidden');
-            resultEl.textContent = '⏳ جاري التحليل بالذكاء الاصطناعي... قد يستغرق 30-90 ثانية...';
+            resultEl.innerHTML = '<div class="flex flex-col items-center justify-center py-10 gap-3 text-indigo-400 animate-pulse"><span class="text-3xl">🧬</span><span class="text-[10px] font-black uppercase tracking-[0.3em]">AI Engine Processing...</span></div>';
             resultEl.style.opacity = '0.6';
-            if (btn) btn.disabled = true;
+            if (btn) {
+                btn.disabled = true;
+                btn.dataset.original = btn.innerHTML;
+                btn.innerHTML = '⏳ جاري المعالجة...';
+            }
             try {
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
@@ -17085,12 +17148,20 @@ HTML_TEMPLATE = """
                 });
                 const data = await res.json();
                 resultEl.style.opacity = '1';
-                resultEl.textContent = data.analysis || data.error || 'فشل التحليل';
+                
+                if (data.analysis) {
+                    resultEl.innerHTML = `<div class="ai-formatted-content p-2">${formatAiResponse(data.analysis)}</div>`;
+                } else {
+                    resultEl.textContent = data.error || 'فشل التحليل';
+                }
             } catch(e) {
                 resultEl.style.opacity = '1';
-                resultEl.textContent = '❌ فشل الاتصال بالخادم - حاول مرة أخرى';
+                resultEl.innerHTML = '<div class="text-red-400 p-4 border border-red-900/30 rounded-xl bg-red-900/10 text-center text-[10px] font-bold">❌ فشل الاتصال بخادم الذكاء الاصطناعي</div>';
             } finally {
-                if (btn) btn.disabled = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = btn.dataset.original;
+                }
             }
         }
 
