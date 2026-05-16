@@ -1402,7 +1402,7 @@ def _do_ai_prepare_messages(
 
     return clean_messages
 
-def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None) -> str:
+def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None, max_tokens: int = 1400) -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     messages: list[dict[str, object]] = _do_ai_prepare_messages(
@@ -1412,7 +1412,7 @@ def _call_do_ai(message: str, system_prompt: str | None = None, model: str | Non
 
     chunks: list[str] = []
     for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1400, model=model)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=max_tokens, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -8094,30 +8094,67 @@ HTML_TEMPLATE = """
             
             let htmlContent;
             try {
-                htmlContent = marked.parse(text, { breaks: true, gfm: true });
+                // Ensure marked is available
+                if (typeof marked !== 'undefined' && marked.parse) {
+                    htmlContent = marked.parse(text, { breaks: true, gfm: true });
+                } else {
+                    htmlContent = String(text).replace(/\n/g, '<br>');
+                }
             } catch (err) {
                 console.error("Marked parsing error:", err);
-                htmlContent = text;
+                htmlContent = String(text).replace(/\n/g, '<br>');
             }
             
-            // Create a temporary div to manipulate the DOM easily
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = htmlContent;
             
-            // Apply Tailwind classes to elements
-            
-            // 1. Code Blocks
+            // 1. Code Blocks - Handle safely without template literal interpolation
             const preElements = tempDiv.querySelectorAll('pre code');
             preElements.forEach(codeEl => {
                 const preEl = codeEl.parentElement;
+                if (!preEl || !preEl.parentNode) return;
+
                 const wrapper = document.createElement('div');
                 wrapper.className = "bg-black/95 border border-slate-700/60 rounded-2xl p-6 my-10 font-mono text-[11px] text-cyan-300 relative group shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-x-auto";
                 
-                wrapper.innerHTML = `
-                    <div class="absolute top-0 right-0 px-4 py-1.5 bg-slate-800/80 text-[10px] text-gray-400 rounded-bl-xl font-bold uppercase tracking-widest border-l border-b border-slate-700/50">TITAN-SNIPPET</div>
-                    <button onclick="copyToClipboard(this.parentElement.querySelector('code').innerText, this)" class="absolute top-3 right-3 p-2 rounded-xl bg-slate-800/80 text-gray-400 hover:text-white hover:bg-indigo-600/50 transition-all opacity-0 group-hover:opacity-100 z-10 shadow-lg">📋</button>
-                    <code class="block whitespace-pre font-mono leading-relaxed">${codeEl.innerHTML}</code>
-                `;
+                const header = document.createElement('div');
+                header.className = "absolute top-0 right-0 px-4 py-1.5 bg-slate-800/80 text-[10px] text-gray-400 rounded-bl-xl font-bold uppercase tracking-widest border-l border-b border-slate-700/50";
+                header.textContent = "TITAN-SNIPPET";
+                
+                const copyBtn = document.createElement('button');
+                copyBtn.className = "absolute top-3 right-3 p-2 rounded-xl bg-slate-800/80 text-gray-400 hover:text-white hover:bg-indigo-600/50 transition-all opacity-0 group-hover:opacity-100 z-10 shadow-lg";
+                copyBtn.innerHTML = "📋";
+                copyBtn.onclick = function() {
+                    const codeText = this.parentElement.querySelector('code').innerText;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(codeText).then(() => {
+                            const originalText = this.innerHTML;
+                            this.innerHTML = "✅";
+                            setTimeout(() => { this.innerHTML = originalText; }, 2000);
+                        });
+                    } else {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = codeText;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        try {
+                            document.execCommand('copy');
+                            this.innerHTML = "✅";
+                            setTimeout(() => { this.innerHTML = "📋"; }, 2000);
+                        } catch (err) {
+                            console.error('Fallback copy failed', err);
+                        }
+                        document.body.removeChild(textArea);
+                    }
+                };
+                
+                const codeNode = document.createElement('code');
+                codeNode.className = "block whitespace-pre font-mono leading-relaxed";
+                codeNode.innerHTML = codeEl.innerHTML; // Already escaped by marked
+                
+                wrapper.appendChild(header);
+                wrapper.appendChild(copyBtn);
+                wrapper.appendChild(codeNode);
                 
                 preEl.parentNode.replaceChild(wrapper, preEl);
             });
@@ -17351,17 +17388,25 @@ HTML_TEMPLATE = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({type, content, ...extraPayload})
                 });
-                const data = await res.json();
+                
+                const data = await _parseJsonOrThrow(res, 'التحليل الذكي');
                 resultEl.style.opacity = '1';
                 
                 if (data.analysis) {
-                    resultEl.innerHTML = `<div class="ai-formatted-content p-2">${formatAiResponse(data.analysis)}</div>`;
+                    try {
+                        const formatted = formatAiResponse(data.analysis);
+                        resultEl.innerHTML = `<div class="ai-formatted-content p-2">${formatted}</div>`;
+                    } catch (formatErr) {
+                        console.error("Format error:", formatErr);
+                        resultEl.innerHTML = `<div class="p-4 bg-slate-900 border border-slate-700 rounded-xl whitespace-pre-wrap text-[11px]">${_osintEscape(data.analysis)}</div>`;
+                    }
                 } else {
-                    resultEl.textContent = data.error || 'فشل التحليل';
+                    resultEl.innerHTML = `<div class="text-amber-400 p-4 border border-amber-900/30 rounded-xl bg-amber-900/10 text-center text-[10px] font-bold">⚠️ ${data.error || 'فشل التحليل - لم يتم إرجاع بيانات'}</div>`;
                 }
             } catch(e) {
                 resultEl.style.opacity = '1';
-                resultEl.innerHTML = '<div class="text-red-400 p-4 border border-red-900/30 rounded-xl bg-red-900/10 text-center text-[10px] font-bold">❌ فشل الاتصال بخادم الذكاء الاصطناعي</div>';
+                console.error("Analysis Connection Error:", e);
+                resultEl.innerHTML = `<div class="text-red-400 p-4 border border-red-900/30 rounded-xl bg-red-900/10 text-center text-[10px] font-bold">❌ فشل الاتصال بخادم الذكاء الاصطناعي<br><span class="text-[8px] opacity-50 mt-1 block">${e.message || e}</span></div>`;
             } finally {
                 if (btn) {
                     btn.disabled = false;
@@ -22763,7 +22808,10 @@ def chat_join():
         
     # إذا كان شخصاً جديداً
     if len(room["participants"]) >= room["limit"]:
-        _handle_intruder(room_id, sender, request.remote_addr)
+        # استخدام اسم الحساب الحقيقي إذا كان مسجلاً للدخول
+        account_user = session.get('username')
+        display_intruder = f"{account_user} (حساب مسجل)" if account_user else f"{sender} (زائر)"
+        _handle_intruder(room_id, display_intruder, request.remote_addr)
         return jsonify({"error": "⚠️ محاولة دخول غير مصرح بها! الغرفة في وضع التدمير الذاتي."}), 403
         
     room["participants"][participant_id] = sender
@@ -22818,7 +22866,10 @@ def chat_receive():
     # فحص المتسللين (شخص ثالث يحاول القراءة)
     if requester_id not in room["participants"]:
         if len(room["participants"]) >= room["limit"]:
-            _handle_intruder(room_id, requester_name, request.remote_addr)
+            # استخدام اسم الحساب الحقيقي إذا كان مسجلاً للدخول
+            account_user = session.get('username')
+            display_intruder = f"{account_user} (حساب مسجل)" if account_user else f"{requester_name} (زائر)"
+            _handle_intruder(room_id, display_intruder, request.remote_addr)
             return jsonify({"error": "Unauthorized Access! ⏳ Alert: Self-destruct in 5 seconds."}), 403
         return jsonify({"messages": [], "warning": "يرجى الانضمام للغرفة أولاً"})
 
@@ -26013,11 +26064,15 @@ def ai_analyze():
     if not DO_AI_KEY:
         return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
     try:
-        analysis = _call_do_ai(prompt, system_prompt=AI_SYSTEM_PROMPT)
+        print(f"[TITAN AI] Starting analysis for type: {analyze_type}")
+        # Increased max_tokens to 3000 for technical analysis to prevent excessive looping/timeouts
+        analysis = _call_do_ai(prompt, system_prompt=AI_SYSTEM_PROMPT, max_tokens=3000)
         add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
         return jsonify({"success": True, "analysis": analysis})
     except Exception as e:
-        print(f"[TITAN AI] Analyze error: {e}")
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"[TITAN AI] Analyze error: {e}\n{error_details}")
         return jsonify({"error": f"فشل التحليل: {str(e)}"}), 500
 
 
