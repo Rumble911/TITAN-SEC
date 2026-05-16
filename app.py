@@ -13260,9 +13260,8 @@ HTML_TEMPLATE = """
         }
 
         async function showUserActionPrompt(userId, action) {
-            const reason = prompt("يرجى إدخال سبب الإجراء (سيظهر للمستخدم):", "");
-            if (reason === null) return; // Cancelled
-            adminUserAction(userId, action, reason);
+            // تنفيذ الإجراء مباشرة بدون طلب سبب بناءً على طلب المستخدم
+            adminUserAction(userId, action, "");
         }
 
         async function adminUserAction(targetId, action, reason = '') {
