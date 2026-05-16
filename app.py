@@ -979,7 +979,7 @@ def _learning_build_custom_attack_from_ai(custom_attack_type: str, org_context: 
         "Never provide offensive instructions."
     )
     try:
-        raw = _call_do_ai(prompt, system_prompt=system)
+        raw = _call_do_ai(prompt, system_prompt=system, style='concise', max_tokens=800)
         parsed = None
         try:
             parsed = json.loads(raw)
@@ -1402,17 +1402,37 @@ def _do_ai_prepare_messages(
 
     return clean_messages
 
-def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None, max_tokens: int = 1400) -> str:
-    """استدعاء TITAN AI عبر DigitalOcean Agent"""
+def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None, max_tokens: int = 1400, style: str = 'balanced') -> str:
+    """استدعاء TITAN AI عبر DigitalOcean Agent مع مراعاة ميزانية التوكنات وأسلوب الرد"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
+    
+    # إضافة تعليمات الأسلوب وميزانية التوكنات
+    style_directives = {
+        'concise': "- IMPORTANT: Your response MUST be extremely concise and direct. Use as few tokens as possible.\n",
+        'detailed': "- IMPORTANT: Provide a highly detailed, comprehensive, and exhaustive analysis.\n",
+        'balanced': "- IMPORTANT: Provide a balanced, professional, and thorough response.\n"
+    }
+    directive = style_directives.get(style, style_directives['balanced'])
+    
+    budget_directive = (
+        f"- IMPORTANT: Your total token budget is strictly {max_tokens} tokens.\n"
+        "- Ensure your answer is FULLY COMPLETE and finished within this space.\n"
+        "- DO NOT stop in the middle of a sentence or leave thoughts unfinished.\n"
+    )
+    
+    sys_prompt += f"\n\n[STYLE & BUDGET DIRECTIVES]\n{directive}{budget_directive}\n"
+
     messages: list[dict[str, object]] = _do_ai_prepare_messages(
         [{"role": "user", "content": message}],
         system_prompt=sys_prompt,
     )
 
     chunks: list[str] = []
-    for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=max_tokens, model=model)
+    # If the user wants a very concise reply, we usually don't need continuation loops
+    max_loops = 1 if style == 'concise' else 3
+    
+    for i in range(max_loops):
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=50, max_tokens=max_tokens, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -1420,11 +1440,11 @@ def _call_do_ai(message: str, system_prompt: str | None = None, model: str | Non
         if finish_reason != 'length':
             break
 
-        # Ask model to continue exactly from the interruption point when token limit cuts output.
-        messages.append({
-            "role": "user",
-            "content": "Continue from the exact last sentence without repeating, and complete the answer to the end."
-        })
+        if i < max_loops - 1:
+            messages.append({
+                "role": "user",
+                "content": "You were cut off. Please finish your previous thought briefly and provide a final conclusion now."
+            })
 
     full_reply = "\n".join(chunks).strip()
     return _repair_garbled_ai_reply(full_reply, context_hint=message[:200])
@@ -1673,13 +1693,29 @@ def _call_do_ai_with_history(
     history_messages: list[dict[str, object]],
     system_prompt: str | None = None,
     model: str | None = None,
+    max_tokens: int = 2000,
+    style: str = 'balanced'
 ) -> str:
+    """استدعاء AI مع سجل المحادثة مع احترام ميزانية التوكنات"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
+    
+    style_directives = {
+        'concise': "- IMPORTANT: Be extremely concise.\n",
+        'detailed': "- IMPORTANT: Be highly detailed.\n",
+        'balanced': "- IMPORTANT: Be professional and balanced.\n"
+    }
+    directive = style_directives.get(style, style_directives['balanced'])
+    budget_msg = f"- IMPORTANT: Finish your entire response within {max_tokens} tokens. DO NOT truncate.\n"
+    
+    sys_prompt += f"\n\n[DIRECTIVES]\n{directive}{budget_msg}\n"
+    
     messages: list[dict[str, object]] = _do_ai_prepare_messages(history_messages or [], system_prompt=sys_prompt)
 
     chunks: list[str] = []
-    for _ in range(3):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=45, max_tokens=1600, model=model)
+    max_loops = 1 if style == 'concise' else 3
+    
+    for i in range(max_loops):
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=50, max_tokens=max_tokens, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -1687,10 +1723,11 @@ def _call_do_ai_with_history(
         if finish_reason != 'length':
             break
 
-        messages.append({
-            "role": "user",
-            "content": "Continue from the exact last sentence without repeating, and complete the answer to the end."
-        })
+        if i < max_loops - 1:
+            messages.append({
+                "role": "user",
+                "content": "Continue and complete your answer immediately."
+            })
 
     last_user = ''
     for m in reversed(history_messages or []):
@@ -5027,10 +5064,11 @@ HTML_TEMPLATE = """
                         <span class="text-xs text-gray-300 font-bold">لوحة التحكم</span>
                         <span class="text-[10px] px-2 py-1 rounded border border-emerald-700/50 bg-emerald-900/20 text-emerald-300">Online</span>
                     </div>
-                    <div class="grid grid-cols-3 gap-2 w-full sm:w-auto sm:ml-auto">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto sm:ml-auto">
                         <button id="ai-subtab-support" onclick="showAiSubTab('support')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Support</button>
                         <button id="ai-subtab-analysis" onclick="showAiSubTab('analysis')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Analysis</button>
                         <button id="ai-subtab-chat" onclick="showAiSubTab('chat')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-purple-700/50 bg-purple-900/40 text-purple-300">Chat</button>
+                        <button id="ai-subtab-settings" onclick="showAiSubTab('settings')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-700 text-gray-300 bg-slate-800/60 hover:bg-purple-600/20 hover:border-purple-500/40">Settings</button>
                     </div>
                 </div>
 
@@ -5254,6 +5292,43 @@ HTML_TEMPLATE = """
                         <button onclick="document.getElementById('logic-flaw-input').value='';document.getElementById('logic-flaw-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
                     </div>
                     <div id="logic-flaw-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-amber-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                </div>
+
+                <div id="ai-sub-content-settings" class="hidden space-y-4">
+                    <div class="bg-slate-900/70 rounded-2xl border border-purple-900/30 p-5 space-y-6">
+                        <h3 class="text-purple-300 text-sm font-bold flex items-center gap-2">
+                            <span>⚙️</span> إعدادات الذكاء الاصطناعي (AI Settings)
+                        </h3>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="text-xs text-gray-300 font-bold block">الحد الأقصى للتوكنات (Max Tokens)</label>
+                                    <p class="text-[10px] text-gray-500">يتحكم في طول الرد (200 - 8000)</p>
+                                </div>
+                                <span id="ai-max-tokens-val" class="text-xs font-mono text-purple-400 bg-purple-900/20 px-2 py-1 rounded border border-purple-700/30">2000</span>
+                            </div>
+                            <input type="range" id="ai-max-tokens-slider" min="200" max="8000" step="100" value="2000" 
+                                oninput="document.getElementById('ai-max-tokens-val').textContent = this.value; localStorage.setItem('titan_ai_max_tokens', this.value)"
+                                class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500 transition-all hover:bg-slate-700">
+                        </div>
+
+                        <div class="space-y-3 pt-4 border-t border-slate-800">
+                            <label class="text-xs text-gray-300 font-bold block">أسلوب الرد (Response Style)</label>
+                            <select id="ai-response-style" onchange="localStorage.setItem('titan_ai_style', this.value)"
+                                class="w-full bg-slate-800 border border-slate-700 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none focus:border-purple-500/60 transition-colors">
+                                <option value="balanced">⚖️ متوازن (Balanced)</option>
+                                <option value="concise">⚡ مختصر جداً (Concise)</option>
+                                <option value="detailed">📝 مفصل وشامل (Detailed)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="bg-purple-900/10 border border-purple-800/30 p-3 rounded-xl">
+                            <p class="text-[10px] text-purple-300/80 leading-relaxed italic">
+                                * ملاحظة: زيادة عدد التوكنات تسمح بإنتاج تقارير أمنية مفصلة ولكنها تزيد من وقت المعالجة. يتم حفظ الإعدادات تلقائياً في المتصفح.
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 </div>
@@ -7641,6 +7716,53 @@ HTML_TEMPLATE = """
             }, 5 * 60 * 1000); // 5 دقائق بين كل نبضة
         }
 
+        function initAiSettings() {
+            const tokens = localStorage.getItem('titan_ai_max_tokens') || '2000';
+            const style = localStorage.getItem('titan_ai_style') || 'balanced';
+            const slider = document.getElementById('ai-max-tokens-slider');
+            const valLabel = document.getElementById('ai-max-tokens-val');
+            const styleSel = document.getElementById('ai-response-style');
+            if (slider) slider.value = tokens;
+            if (valLabel) valLabel.textContent = tokens;
+            if (styleSel) styleSel.value = style;
+        }
+
+        function showAiSubTab(tab) {
+            const valid = ['chat', 'analysis', 'support', 'settings'];
+            const t = valid.includes(tab) ? tab : 'chat';
+            if (t === 'settings') initAiSettings();
+            _aiActiveSubTab = t;
+
+            const map = {
+                chat: document.getElementById('ai-sub-content-chat'),
+                analysis: document.getElementById('ai-sub-content-analysis'),
+                support: document.getElementById('ai-sub-content-support'),
+                settings: document.getElementById('ai-sub-content-settings')
+            };
+            Object.keys(map).forEach(k => {
+                const el = map[k];
+                if (el) el.classList.toggle('hidden', k !== t);
+            });
+
+            const btnMap = {
+                chat: document.getElementById('ai-subtab-chat'),
+                analysis: document.getElementById('ai-subtab-analysis'),
+                support: document.getElementById('ai-subtab-support'),
+                settings: document.getElementById('ai-subtab-settings')
+            };
+            Object.keys(btnMap).forEach(k => {
+                const b = btnMap[k];
+                if (!b) return;
+                if (k === t) {
+                    b.classList.remove('border-slate-700', 'text-gray-300', 'bg-slate-800/60');
+                    b.classList.add('border-purple-700/50', 'bg-purple-900/40', 'text-purple-300');
+                } else {
+                    b.classList.remove('border-purple-700/50', 'bg-purple-900/40', 'text-purple-300');
+                    b.classList.add('border-slate-700', 'text-gray-300', 'bg-slate-800/60');
+                }
+            });
+        }
+
         // تشغيل النبض تلقائياً عند التأكد من وجود جلسة
         function setAdminUi(isAdmin) {
             const adminBtn = document.getElementById('btn-admin');
@@ -7655,6 +7777,7 @@ HTML_TEMPLATE = """
                 if (adminSection) adminSection.classList.add('hidden');
             }
         }
+
 
         async function checkAuth() {
             try {
@@ -8816,7 +8939,9 @@ HTML_TEMPLATE = """
                         custom_attack_type: attackType,
                         org_context: orgContext,
                         training_level: trainingLevel,
-                        result_lang: resultLang
+                        result_lang: resultLang,
+                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '1400'),
+                        style: localStorage.getItem('titan_ai_style') || 'balanced'
                     })
                 });
                 const data = await _parseJsonOrThrow(res, 'Training AI coach chat');
@@ -13083,7 +13208,7 @@ HTML_TEMPLATE = """
                                         <div>
                                             <div class="text-sm font-bold text-white flex items-center gap-2">
                                                 ${_osintEscape(u.username)} 
-                                                ${u.is_admin ? '<span class="text-[10px] bg-red-900/50 text-red-300 px-1.5 rounded border border-red-800/30">ADMIN</span>' : ''}
+                                                ${(u.username === 'TITAN_MASTER_ADMIN' || u.id === 1) ? '<span class="text-[10px] bg-violet-900/50 text-violet-300 px-1.5 rounded border border-violet-800/30">ROOT</span>' : (u.is_admin ? '<span class="text-[10px] bg-red-900/50 text-red-300 px-1.5 rounded border border-red-800/30">ADMIN</span>' : '')}
                                             </div>
                                             <div class="text-[11px] text-gray-400">${_osintEscape(u.email || 'No email')}</div>
                                         </div>
@@ -13113,14 +13238,15 @@ HTML_TEMPLATE = """
                                 ` : ''}
 
                                 <div class="flex flex-wrap gap-2">
-                                    ${(isSuspended || isLocked) ? 
-                                        `<button onclick="adminUserAction(${u.id}, '${isSuspended ? 'unsuspend' : 'unlock'}')" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-300 border border-green-800/50 p-2 rounded-xl text-[10px] font-bold">إلغاء القفل</button>` :
-                                        `<button onclick="showUserActionPrompt(${u.id}, 'suspend')" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-800/50 p-2 rounded-xl text-[10px] font-bold">إيقاف الحساب</button>
-                                         <button onclick="showUserActionPrompt(${u.id}, 'lock')" class="flex-1 bg-orange-900/40 hover:bg-orange-800/60 text-orange-300 border border-orange-800/50 p-2 rounded-xl text-[10px] font-bold">قفل مؤقت</button>`
+                                    ${(u.username === 'TITAN_MASTER_ADMIN' || u.id === 1) ? 
+                                        `<div class="flex-1 text-center p-2 rounded-xl bg-violet-900/20 border border-violet-800/30 text-violet-400 text-[10px] font-bold">🛡️ حساب محمي (ROOT)</div>` :
+                                        (isSuspended || isLocked) ? 
+                                            `<button onclick="adminUserAction(${u.id}, '${isSuspended ? 'unsuspend' : 'unlock'}')" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-300 border border-green-800/50 p-2 rounded-xl text-[10px] font-bold">إلغاء القفل</button>` :
+                                            `<button onclick="showUserActionPrompt(${u.id}, 'suspend')" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-800/50 p-2 rounded-xl text-[10px] font-bold">إيقاف الحساب</button>`
                                     }
-                                    ${u.is_admin ? 
+                                    ${(u.username !== 'TITAN_MASTER_ADMIN' && u.id !== 1) ? (u.is_admin ? 
                                         `<button onclick="adminUserAction(${u.id}, 'remove_admin')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 p-2 rounded-xl text-[10px] font-bold">إزالة مسؤول</button>` :
-                                        `<button onclick="adminUserAction(${u.id}, 'make_admin')" class="bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/50 p-2 rounded-xl text-[10px] font-bold">تعيين مسؤول</button>`
+                                        `<button onclick="adminUserAction(${u.id}, 'make_admin')" class="bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/50 p-2 rounded-xl text-[10px] font-bold">تعيين مسؤول</button>`) : ''
                                     }
                                 </div>
                             </div>
@@ -14255,7 +14381,13 @@ HTML_TEMPLATE = """
                 const res = await fetch('/api/ctf/assistant', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ challenge_id: challengeId, question, attempt })
+                    body: JSON.stringify({ 
+                        challenge_id: challengeId, 
+                        question, 
+                        attempt,
+                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '1200'),
+                        style: localStorage.getItem('titan_ai_style') || 'balanced'
+                    })
                 });
                 const data = await _parseJsonOrThrow(res, 'CTF assistant');
                 if (!res.ok || !data.success) throw new Error(data.error || 'فشل مساعد AI.');
@@ -17037,7 +17169,9 @@ HTML_TEMPLATE = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         message: msg,
-                        conversation_id: window.__titanAiConversationId
+                        conversation_id: window.__titanAiConversationId,
+                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '2000'),
+                        style: localStorage.getItem('titan_ai_style') || 'balanced'
                     })
                 });
                 var data = await _parseJsonOrThrow(res, 'AI chat');
@@ -17405,7 +17539,13 @@ HTML_TEMPLATE = """
                 const res = await fetch('/api/ai/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type, content, ...extraPayload})
+                    body: JSON.stringify({
+                        type: type, 
+                        content: content, 
+                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '3000'),
+                        style: localStorage.getItem('titan_ai_style') || 'balanced',
+                        ...extraPayload 
+                    })
                 });
                 
                 const data = await _parseJsonOrThrow(res, 'التحليل الذكي');
@@ -18272,7 +18412,7 @@ def crypt_recommend_route():
     )
 
     try:
-        raw = _call_do_ai(advisor_prompt, system_prompt=advisor_system)
+        raw = _call_do_ai(advisor_prompt, system_prompt=advisor_system, style='concise', max_tokens=600)
         candidate = raw.strip()
         match = re.search(r'\{[\s\S]*\}', candidate)
         if match:
@@ -18998,11 +19138,11 @@ def admin_reset_system():
     try:
         conn = get_db_conn()
         c = conn.cursor()
-        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        c.execute("SELECT is_admin, username FROM users WHERE id = %s", (user_id,))
         row = c.fetchone()
         
-        if not row or not row[0]:
-            return jsonify({"error": "صلاحيات غير كافية. هذه العملية تتطلب حساب Root."}), 403
+        if not row or not row[0] or row[1] != "TITAN_MASTER_ADMIN":
+            return jsonify({"error": "صلاحيات غير كافية. هذه العملية تتطلب حساب المسؤول الأساسي فقط."}), 403
             
         # حذف كل شيء باستثناء الأدمن
         # 1. حذف الجلسات
@@ -19142,10 +19282,10 @@ def admin_users_list():
     try:
         conn = get_db_conn()
         c = conn.cursor()
-        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        c.execute("SELECT is_admin, username FROM users WHERE id = %s", (user_id,))
         row = c.fetchone()
-        if not row or not row[0]:
-            return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
+        if not row or not row[0] or row[1] != "TITAN_MASTER_ADMIN":
+            return jsonify({"success": False, "error": "قائمة المستخدمين متاحة للمسؤول الأساسي فقط"}), 403
         
         c.execute("""
             SELECT id, username, email, is_verified, created_at, is_admin, 
@@ -19191,10 +19331,16 @@ def admin_user_action(target_id):
     try:
         conn = get_db_conn()
         c = conn.cursor()
-        c.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        c.execute("SELECT is_admin, username FROM users WHERE id = %s", (user_id,))
         row = c.fetchone()
-        if not row or not row[0]:
-            return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
+        if not row or not row[0] or row[1] != "TITAN_MASTER_ADMIN":
+            return jsonify({"success": False, "error": "إدارة المستخدمين متاحة للمسؤول الأساسي فقط"}), 403
+
+        # حماية حساب المسؤول الأساسي من أي تعديل
+        c.execute("SELECT username FROM users WHERE id = %s", (target_id,))
+        target_row = c.fetchone()
+        if target_row and (target_row[0] == "TITAN_MASTER_ADMIN" or target_id == 1):
+            return jsonify({"success": False, "error": "لا يمكن تعديل أو حظر حساب المسؤول الأساسي نهائياً"}), 403
 
         if action == 'lock':
             # Set lockout_until to a far future date
@@ -25589,6 +25735,14 @@ def ctf_ai_assistant_route():
     challenge_id = (data.get('challenge_id') or '').strip()
     question = (data.get('question') or '').strip()
     attempt = (data.get('attempt') or '').strip()
+    
+    # تحصيل إعدادات التوكنات والأسلوب
+    try:
+        max_tokens = int(data.get('max_tokens') or 1200)
+    except:
+        max_tokens = 1200
+    style = str(data.get('style') or 'balanced').lower()
+
     if not challenge_id:
         return jsonify({"success": False, "error": "challenge_id required"}), 400
 
@@ -25621,7 +25775,7 @@ def ctf_ai_assistant_route():
     )
 
     try:
-        reply = _call_do_ai(user_prompt, system_prompt=ctf_system)
+        reply = _call_do_ai(user_prompt, system_prompt=ctf_system, max_tokens=max_tokens, style=style)
         add_audit_log("CTF AI Hint", f"challenge={challenge_id}", username=session.get('username', ''))
         return jsonify({
             "success": True,
@@ -25649,6 +25803,13 @@ def ai_chat():
     message = (data.get('message') or '').strip()
     model = (DO_AI_MODEL or 'tor1').strip()
     conversation_id = (data.get('conversation_id') or '').strip()
+    
+    # تحصيل إعدادات التوكنات والأسلوب
+    try:
+        max_tokens = int(data.get('max_tokens') or 2000)
+    except:
+        max_tokens = 2000
+    style = str(data.get('style') or 'balanced').lower()
 
     if not message:
         return jsonify({"error": "الرسالة مطلوبة"}), 400
@@ -25679,7 +25840,7 @@ def ai_chat():
         context_messages.append({"role": "user", "content": message})
 
         system_prompt = _build_ai_system_prompt(topic, user_text=message)
-        reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt, model=model)
+        reply = _call_do_ai_with_history(context_messages, system_prompt=system_prompt, model=model, max_tokens=max_tokens, style=style)
 
         now = datetime.datetime.now().isoformat()
         preview = _ai_trim_title(reply, 120)
@@ -25924,6 +26085,13 @@ def ai_analyze():
     data = request.json or {}
     analyze_type = data.get('type', 'security')
     content_to_analyze = data.get('content', '')
+    
+    # تحصيل إعدادات التوكنات والأسلوب
+    try:
+        max_tokens = int(data.get('max_tokens') or 3000)
+    except:
+        max_tokens = 3000
+    style = str(data.get('style') or 'balanced').lower()
     if not content_to_analyze:
         return jsonify({"error": "المحتوى مطلوب"}), 400
 
@@ -26092,8 +26260,8 @@ def ai_analyze():
         return jsonify({"error": "DO_AI_KEY غير مضبوط"}), 500
     try:
         print(f"[TITAN AI] Starting analysis for type: {analyze_type}")
-        # Increased max_tokens to 3000 for technical analysis to prevent excessive looping/timeouts
-        analysis = _call_do_ai(prompt, system_prompt=AI_SYSTEM_PROMPT, max_tokens=3000)
+        # Increased max_tokens based on user settings to prevent excessive looping/timeouts
+        analysis = _call_do_ai(prompt, system_prompt=AI_SYSTEM_PROMPT, max_tokens=max_tokens, style=style)
         add_audit_log("AI تحليل 🤖", f"تحليل {analyze_type}", username=session.get('username', ''))
         return jsonify({"success": True, "analysis": analysis})
     except Exception as e:
@@ -26257,6 +26425,13 @@ def learning_coach_chat_route():
     if not message:
         return jsonify({'success': False, 'error': 'message مطلوب'}), 400
 
+    # تحصيل إعدادات التوكنات والأسلوب
+    try:
+        max_tokens = int(data.get('max_tokens') or 1400)
+    except:
+        max_tokens = 1400
+    style = str(data.get('style') or 'balanced').lower()
+
     custom_attack_type = str(data.get('custom_attack_type') or '').strip()
     org_context = str(data.get('org_context') or '').strip()
     training_level = str(data.get('training_level') or 'intermediate').strip().lower()
@@ -26304,7 +26479,7 @@ def learning_coach_chat_route():
     )
 
     try:
-        reply = _call_do_ai(safe_prompt, system_prompt=safe_system)
+        reply = _call_do_ai(safe_prompt, system_prompt=safe_system, max_tokens=max_tokens, style=style)
         add_audit_log('Learning Coach Chat', f'level={training_level} attack={custom_attack_type[:80]}', username=session.get('username', ''))
         return jsonify({'success': True, 'reply': reply, 'training_level': training_level, 'result_lang': result_lang})
     except Exception as e:
