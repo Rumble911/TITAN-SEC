@@ -7337,11 +7337,12 @@ HTML_TEMPLATE = """
                     const vErr = document.getElementById('auth-verify-error');
                     vErr.textContent = 'حسابك غير مفعل، يرجى إدخال كود التحقق المرسل لإيميلك.';
                     vErr.style.display = 'block';
-                } else if (data.is_admin_lock || data.error === 'ACCOUNT_SUSPENDED' || (data.message && data.message.includes('الإدارة'))) {
+                } else if (data.error === 'ACCOUNT_SUSPENDED' || (data.is_admin_lock && data.error === 'ACCOUNT_SUSPENDED')) {
+                    // عرض رسالة إيقاف الحساب (السبب المكتوب من الأدمن) + زر الدعم
                     errEl.innerHTML = `
                         <div style="text-align: center; padding: 5px 0;">
-                            <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; color: #fca5a5;">🚨 تم قفل حسابك بسبب نشاط مشبوه</div>
-                            <div style="font-size: 0.9rem; margin-bottom: 15px; opacity: 0.9; line-height: 1.4;">الرجاء التواصل مع الدعم الفني في أسرع وقت.</div>
+                            <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; color: #fca5a5;">🚨 تم إيقاف حسابك</div>
+                            <div style="font-size: 0.9rem; margin-bottom: 15px; opacity: 0.9; line-height: 1.4;">${data.message || 'تم إيقاف حسابك بسبب نشاط مشبوه.'}</div>
                             <a href="mailto:titansuppotp@gmail.com" 
                                style="display: inline-block; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 10px 20px; border-radius: 12px; text-decoration: none; font-size: 0.95rem; font-weight: bold; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);">
                                📧 مراسلة الدعم الفني
@@ -7356,8 +7357,13 @@ HTML_TEMPLATE = """
                     errEl.style.display = 'block';
                     btn.textContent = 'دخول إلى TITAN 🔐';
                     btn.disabled = false;
-                } else if (data.error === 'ACCOUNT_LOCKED') {
-                    errEl.innerHTML = `🚨 حسابك مقفل مؤقتاً!<br>بسبب محاولات فاشلة. حاول مجدداً بعد <span class="font-bold font-mono text-red-300">${data.minutes || data.minutes_remaining || "?"} دقيقة</span>.`;
+                } else if (data.is_admin_lock || data.error === 'ACCOUNT_LOCKED') {
+                    // قفل الحساب (سنقوم بتعديله لاحقاً بناءً على طلبك)
+                    if (data.is_admin_lock) {
+                         errEl.innerHTML = `🚨 تم قفل حسابك من قبل الإدارة.<br><span style="font-size: 0.85rem; opacity: 0.8;">السبب: ${data.message || 'غير محدد'}</span>`;
+                    } else {
+                         errEl.innerHTML = `🚨 حسابك مقفل مؤقتاً!<br>بسبب محاولات فاشلة. حاول مجدداً بعد <span class="font-bold font-mono text-red-300">${data.minutes || data.minutes_remaining || "?"} دقيقة</span>.`;
+                    }
                     errEl.style.background = 'rgba(239, 68, 68, 0.2)';
                     errEl.style.border = '1px solid rgba(239, 68, 68, 0.6)';
                     errEl.style.display = 'block';
@@ -13113,15 +13119,18 @@ HTML_TEMPLATE = """
                                 ` : ''}
 
                                 <div class="flex flex-wrap gap-2">
-                                    ${(isSuspended || isLocked) ? 
-                                        `<button onclick="adminUserAction(${u.id}, '${isSuspended ? 'unsuspend' : 'unlock'}')" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-300 border border-green-800/50 p-2 rounded-xl text-[10px] font-bold">إلغاء القفل</button>` :
-                                        `<button onclick="showUserActionPrompt(${u.id}, 'suspend')" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-800/50 p-2 rounded-xl text-[10px] font-bold">إيقاف الحساب</button>
-                                         <button onclick="showUserActionPrompt(${u.id}, 'lock')" class="flex-1 bg-orange-900/40 hover:bg-orange-800/60 text-orange-300 border border-orange-800/50 p-2 rounded-xl text-[10px] font-bold">قفل مؤقت</button>`
-                                    }
-                                    ${u.is_admin ? 
-                                        `<button onclick="adminUserAction(${u.id}, 'remove_admin')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 p-2 rounded-xl text-[10px] font-bold">إزالة مسؤول</button>` :
-                                        `<button onclick="adminUserAction(${u.id}, 'make_admin')" class="bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/50 p-2 rounded-xl text-[10px] font-bold">تعيين مسؤول</button>`
-                                    }
+                                    ${u.is_admin ? `
+                                        <div class="w-full text-center p-2.5 bg-purple-900/20 border border-purple-800/40 rounded-xl text-[10px] text-purple-300 font-bold flex items-center justify-center gap-2">
+                                            🛡️ حساب مسؤول محمي - لا يمكن تعديله
+                                        </div>
+                                    ` : `
+                                        ${(isSuspended || isLocked) ? 
+                                            `<button onclick="adminUserAction(${u.id}, '${isSuspended ? 'unsuspend' : 'unlock'}')" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-300 border border-green-800/50 p-2 rounded-xl text-[10px] font-bold">إلغاء القفل</button>` :
+                                            `<button onclick="showUserActionPrompt(${u.id}, 'suspend')" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-800/50 p-2 rounded-xl text-[10px] font-bold">إيقاف الحساب</button>
+                                             <button onclick="showUserActionPrompt(${u.id}, 'lock')" class="flex-1 bg-orange-900/40 hover:bg-orange-800/60 text-orange-300 border border-orange-800/50 p-2 rounded-xl text-[10px] font-bold">قفل مؤقت</button>`
+                                        }
+                                        <button onclick="adminUserAction(${u.id}, 'make_admin')" class="bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/50 p-2 rounded-xl text-[10px] font-bold">تعيين مسؤول</button>
+                                    `}
                                 </div>
                             </div>
                         `;
@@ -19196,6 +19205,13 @@ def admin_user_action(target_id):
         if not row or not row[0]:
             return jsonify({"success": False, "error": "صلاحيات غير كافية"}), 403
 
+        # التحقق من أن الحساب المستهدف ليس مسؤولاً عند محاولة القفل أو الإيقاف
+        if action in ['lock', 'suspend', 'remove_admin']:
+            c.execute("SELECT is_admin FROM users WHERE id = %s", (target_id,))
+            target_row = c.fetchone()
+            if target_row and target_row[0]:
+                return jsonify({"success": False, "error": "لا يمكن تعديل أو قفل حساب مسؤول"}), 400
+
         if action == 'lock':
             # Set lockout_until to a far future date
             far_future = "2099-12-31T23:59:59"
@@ -23635,7 +23651,7 @@ def auth_login():
             return jsonify({
                 "error": "ACCOUNT_SUSPENDED",
                 "is_admin_lock": True,
-                "message": f"تم إيقاف هذا الحساب من قبل الإدارة. السبب: {lock_reason or 'غير محدد'}"
+                "message": lock_reason or "تم إيقاف حسابك بسبب نشاط مشبوه، يرجى التواصل مع الدعم الفني."
             }), 403
 
         # --- فحص الحظر (Account Lockout) ---
