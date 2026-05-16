@@ -132,7 +132,7 @@ AI_SYSTEM_PROMPT = """
 - اربط ردودك بالأمن السيبراني لما يكون مناسب.
 - لغة الرد يجب أن تتبع لغة المستخدم: إذا سأل بالعربية أجب بالعربية، وإذا سأل بالإنجليزية أجب بالإنجليزية.
 - إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
-- إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: abdallahalqam4040@gmail.com
+- إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: titansuppotp@gmail.com
 - إجاباتك يجب أن تكون دقيقة وواضحة جداً، ولا تنهِ الرد بشكل مقطوع أبداً؛ تأكد من إكمال الإجابة واختم دائماً بخطوة عملية تالية واضحة أو بسؤال للمتابعة.
 
 قواعد الأمان:
@@ -7337,10 +7337,29 @@ HTML_TEMPLATE = """
                     const vErr = document.getElementById('auth-verify-error');
                     vErr.textContent = 'حسابك غير مفعل، يرجى إدخال كود التحقق المرسل لإيميلك.';
                     vErr.style.display = 'block';
+                } else if (data.is_admin_lock || data.error === 'ACCOUNT_SUSPENDED' || (data.message && data.message.includes('الإدارة'))) {
+                    errEl.innerHTML = `
+                        <div style="text-align: center; padding: 5px 0;">
+                            <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; color: #fca5a5;">🚨 تم قفل حسابك بسبب نشاط مشبوه</div>
+                            <div style="font-size: 0.9rem; margin-bottom: 15px; opacity: 0.9; line-height: 1.4;">الرجاء التواصل مع الدعم الفني في أسرع وقت.</div>
+                            <a href="mailto:titansuppotp@gmail.com" 
+                               style="display: inline-block; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 10px 20px; border-radius: 12px; text-decoration: none; font-size: 0.95rem; font-weight: bold; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);">
+                               📧 مراسلة الدعم الفني
+                            </a>
+                        </div>
+                    `;
+                    errEl.style.background = 'rgba(239, 68, 68, 0.15)';
+                    errEl.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                    errEl.style.backdropFilter = 'blur(10px)';
+                    errEl.style.padding = '15px';
+                    errEl.style.borderRadius = '15px';
+                    errEl.style.display = 'block';
+                    btn.textContent = 'دخول إلى TITAN 🔐';
+                    btn.disabled = false;
                 } else if (data.error === 'ACCOUNT_LOCKED') {
                     errEl.innerHTML = `🚨 حسابك مقفل مؤقتاً!<br>بسبب محاولات فاشلة. حاول مجدداً بعد <span class="font-bold font-mono text-red-300">${data.minutes || data.minutes_remaining || "?"} دقيقة</span>.`;
-                    errEl.style.background = 'rgba(239, 68, 68, 0.3)';
-                    errEl.style.border = '1px solid rgba(239, 68, 68, 0.8)';
+                    errEl.style.background = 'rgba(239, 68, 68, 0.2)';
+                    errEl.style.border = '1px solid rgba(239, 68, 68, 0.6)';
                     errEl.style.display = 'block';
                     btn.textContent = 'دخول إلى TITAN 🔐';
                     btn.disabled = false;
@@ -23613,22 +23632,26 @@ def auth_login():
 
         # --- فحص الإيقاف (Account Suspension) ---
         if is_suspended:
-            return jsonify({"error": "ACCOUNT_SUSPENDED",
-                            "message": f"تم إيقاف هذا الحساب من قبل الإدارة. السبب: {lock_reason or 'غير محدد'}"}), 403
+            return jsonify({
+                "error": "ACCOUNT_SUSPENDED",
+                "is_admin_lock": True,
+                "message": f"تم إيقاف هذا الحساب من قبل الإدارة. السبب: {lock_reason or 'غير محدد'}"
+            }), 403
 
         # --- فحص الحظر (Account Lockout) ---
         if lockout_until:
             lo_dt = datetime.datetime.fromisoformat(lockout_until)
             if datetime.datetime.now() < lo_dt:
+                is_admin_lock = lo_dt.year > 2090
                 msg = f"الحساب مقفل. حاول مجدداً لاحقاً."
-                if lo_dt.year > 2090:
+                if is_admin_lock:
                     msg = f"تم قفل الحساب بشكل دائم من قبل الإدارة. السبب: {lock_reason or 'غير محدد'}"
                 else:
                     remaining = int((lo_dt - datetime.datetime.now()).total_seconds() // 60) + 1
                     msg = f"الحساب مقفل. حاول مجدداً بعد {remaining} دقيقة."
                     if lock_reason: msg += f" السبب: {lock_reason}"
                 
-                return jsonify({"error": "ACCOUNT_LOCKED", "message": msg}), 429
+                return jsonify({"error": "ACCOUNT_LOCKED", "is_admin_lock": is_admin_lock, "message": msg}), 429
 
         if not verify_password(password, pw_hash):
             failed_attempts = (failed_attempts or 0) + 1
