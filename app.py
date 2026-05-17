@@ -6526,7 +6526,7 @@ HTML_TEMPLATE = """
                                             <span id="idColor" class="text-lg font-bold text-amber-400"></span>
                                         </div>
                                         <div class="text-center md:text-right">
-                                            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Primary Asset</span>
+                                            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Vehicle Type</span>
                                             <span id="idVehicle" class="text-lg font-bold text-gray-400 truncate max-w-[150px] inline-block"></span>
                                         </div>
                                     </div>
@@ -17661,6 +17661,10 @@ HTML_TEMPLATE = """
                 setEl('idWeight', data.weight);
                 setEl('idBlood', data.blood_type);
                 setEl('idColor', data.color);
+                const colorEl = document.getElementById('idColor');
+                if (colorEl) {
+                    colorEl.style.color = data.color_hex || '#FBBF24';
+                }
                 setEl('idVehicle', data.vehicle);
 
                 setEl('idCcType', data.cc_type ? data.cc_type.toUpperCase() : '');
@@ -23439,11 +23443,22 @@ def fake_identity_route():
             _int_banks = ["JP Morgan Chase", "HSBC", "Citibank", "Bank of America", "Barclays", "Standard Chartered", "Wells Fargo", "Goldman Sachs"]
             bank_name = random.choice(_int_banks)
 
-        # color_name قد يفشل مع بعض اللغات
-        try:
-            color = fake.color_name()
-        except Exception:
-            color = fake_en.color_name()
+        colors_map = {
+            "Red": "#EF4444",
+            "Blue": "#3B82F6",
+            "Green": "#10B981",
+            "Yellow": "#FBBF24",
+            "Purple": "#A78BFA",
+            "Pink": "#F472B6",
+            "Orange": "#FB923C",
+            "Cyan": "#22D3EE",
+            "Teal": "#2DD4BF",
+            "Lime": "#A3E635",
+            "Silver": "#9CA3AF",
+            "Gold": "#F59E0B"
+        }
+        color_name = random.choice(list(colors_map.keys()))
+        color_hex = colors_map[color_name]
 
         name_en = _arabic_name_to_english(full_name) if _contains_arabic_text(full_name) else ''
 
@@ -23470,8 +23485,9 @@ def fake_identity_route():
             'height': f"{random.randint(150, 195)} cm",
             'weight': f"{random.randint(50, 100)} kg",
             'blood_type': random.choice(["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"]),
-            'color': color,
-            'vehicle': fake_en.word().title() + ' ' + str(random.randint(2000, 2024)),
+            'color': color_name,
+            'color_hex': color_hex,
+            'vehicle': random.choice(["BMW M4", "Audi R8", "Supra", "GT-R", "Tesla 3", "Mustang", "Taycan", "G-Wagon", "Corvette", "Camaro", "Ferrari", "Porsche"]) + ' ' + str(random.randint(2015, 2026)),
 
             'cc_type': 'Visa',
             'credit_card': fake_en.credit_card_number(card_type='visa'),
