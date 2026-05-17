@@ -16072,15 +16072,31 @@ HTML_TEMPLATE = """
             }
             display.scrollTop = display.scrollHeight;
 
-            await fetch('/api/chat/send', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    room_id: currentRoomId, 
-                    sender: currentUser, 
-                    participant_id: burnChatParticipantId,
-                    msg: encryptedMsg
-                })
-            });
+            try {
+                const res = await fetch('/api/chat/send', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        room_id: currentRoomId, 
+                        sender: currentUser, 
+                        participant_id: burnChatParticipantId,
+                        msg: encryptedMsg
+                    })
+                });
+                if (res.status === 403) {
+                    if(burnChatTimer) clearInterval(burnChatTimer);
+                    titanAlert("🚨 تم كشف محاولة دخول غير مصرح بها! لقد تم إرسال بريد إلكتروني إلى المسؤول (Administrator) للتحقيق في هذه الحادثة. سيتم إخراجك من الموقع فوراً لحماية النظام!", "error");
+                    setTimeout(async () => {
+                        try {
+                            await fetch('/api/auth/logout', { method: 'POST' });
+                        } catch(e) {}
+                        window.location.reload();
+                    }, 4000);
+                    return;
+                }
+                pollBurnChat();
+            } catch(e) {
+                console.error("Encryption Transmission Failed:", e);
+            }
             soundManager.success();
         }
 
@@ -16165,6 +16181,16 @@ HTML_TEMPLATE = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({room_id: roomId, sender: user, participant_id: burnChatParticipantId, limit: 2})
                 });
+                if (res.status === 403) {
+                    titanAlert("🚨 تم كشف محاولة دخول غير مصرح بها! لقد تم إرسال بريد إلكتروني إلى المسؤول (Administrator) للتحقيق في هذه الحادثة. سيتم إخراجك من الموقع فوراً لحماية النظام!", "error");
+                    setTimeout(async () => {
+                        try {
+                            await fetch('/api/auth/logout', { method: 'POST' });
+                        } catch(e) {}
+                        window.location.reload();
+                    }, 4000);
+                    return;
+                }
                 const data = await res.json();
                 if (!data.success) {
                     return titanAlert(data.error || "تعذر الانضمام: الغرفة ممتلئة!", "error");
@@ -16192,7 +16218,7 @@ HTML_TEMPLATE = """
             soundManager.success();
             
             if(burnChatTimer) clearInterval(burnChatTimer);
-            burnChatTimer = setInterval(pollBurnChat, 2000);
+            burnChatTimer = setInterval(pollBurnChat, 350);
         }
 
         async function sendBurnChat() {
@@ -16223,7 +16249,7 @@ HTML_TEMPLATE = """
             // Encrypt and Send
             const encryptedMsg = e2eEncrypt(msg, encryptKey);
             try {
-                await fetch('/api/chat/send', {
+                const res = await fetch('/api/chat/send', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         room_id: currentRoomId, 
@@ -16232,6 +16258,18 @@ HTML_TEMPLATE = """
                         msg: encryptedMsg
                     })
                 });
+                if (res.status === 403) {
+                    if(burnChatTimer) clearInterval(burnChatTimer);
+                    titanAlert("🚨 تم كشف محاولة دخول غير مصرح بها! لقد تم إرسال بريد إلكتروني إلى المسؤول (Administrator) للتحقيق في هذه الحادثة. سيتم إخراجك من الموقع فوراً لحماية النظام!", "error");
+                    setTimeout(async () => {
+                        try {
+                            await fetch('/api/auth/logout', { method: 'POST' });
+                        } catch(e) {}
+                        window.location.reload();
+                    }, 4000);
+                    return;
+                }
+                pollBurnChat();
             } catch(e) {
                 console.error("Encryption Transmission Failed:", e);
             }
@@ -16325,6 +16363,17 @@ HTML_TEMPLATE = """
             
             try {
                 const res = await fetch(`/api/chat/receive?room_id=${currentRoomId}&requester=${currentUser}&participant_id=${burnChatParticipantId}`);
+                if (res.status === 403) {
+                    if(burnChatTimer) clearInterval(burnChatTimer);
+                    titanAlert("🚨 تم كشف محاولة دخول غير مصرح بها! لقد تم إرسال بريد إلكتروني إلى المسؤول (Administrator) للتحقيق في هذه الحادثة. سيتم إخراجك من الموقع فوراً لحماية النظام!", "error");
+                    setTimeout(async () => {
+                        try {
+                            await fetch('/api/auth/logout', { method: 'POST' });
+                        } catch(e) {}
+                        window.location.reload();
+                    }, 4000);
+                    return;
+                }
                 const data = await res.json();
 
                 if (data.destroyed) {
