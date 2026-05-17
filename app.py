@@ -1208,33 +1208,7 @@ def _detect_user_lang(text: str) -> str:
 
 
 def _repair_garbled_ai_reply(raw_reply: str, context_hint: str = '') -> str:
-    cleaned = _sanitize_ai_reply(raw_reply)
-    if not _looks_garbled_ai_text(cleaned):
-        return cleaned
-
-    # Ask model to rewrite only language quality (no meaning drift) when output is garbled.
-    repair_prompt = (
-        "أنت مدقق لغوي عربي تقني. أعد كتابة النص التالي بلغة عربية صحيحة وواضحة دون تغيير المعنى. "
-        "ممنوع أي حروف مشوّهة أو رموز غير مفهومة. حافظ على المصطلحات الأمنية التقنية.\n\n"
-        f"السياق: {context_hint or 'إجابة أمن سيبراني للمستخدم'}\n\n"
-        f"النص الخام:\n{cleaned}"
-    )
-    repair_messages: list[dict[str, object]] = [
-        {
-            "role": "user",
-            "content": repair_prompt,
-        },
-    ]
-    try:
-        fixed, _ = _do_ai_chat_completion(repair_messages, timeout_seconds=25, max_tokens=1200)
-        fixed_clean = _sanitize_ai_reply(fixed)
-        if fixed_clean and not _looks_garbled_ai_text(fixed_clean):
-            return fixed_clean
-    except Exception:
-        pass
-
-    # Last-safe fallback.
-    return "أعتذر، حدث تشويش في توليد النص. أعد إرسال سؤالك وسأجيبك بصياغة عربية سليمة وواضحة."
+    return _sanitize_ai_reply(raw_reply)
 
 _dash_metrics_lock = threading.Lock()
 _dash_prev_net = None
