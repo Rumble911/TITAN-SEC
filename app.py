@@ -23473,8 +23473,8 @@ def fake_identity_route():
             'color': color,
             'vehicle': fake_en.word().title() + ' ' + str(random.randint(2000, 2024)),
 
-            'cc_type': fake_en.credit_card_provider(),
-            'credit_card': fake_en.credit_card_number(card_type='visa' if random.random() > 0.5 else 'mastercard'),
+            'cc_type': 'Visa',
+            'credit_card': fake_en.credit_card_number(card_type='visa'),
             'cc_expire': fake_en.credit_card_expire(),
             'cc_cvv': fake_en.credit_card_security_code(),
 
