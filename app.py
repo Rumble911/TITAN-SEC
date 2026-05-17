@@ -130,7 +130,7 @@ AI_SYSTEM_PROMPT = """
 - استخدم التنسيق المتقدم (Markdown): العناوين (## و ###)، القوائم النقطية والرقمية، النصوص العريضة (**نص**)، والاقتباسات.
 - استخدم كتل الأكواد (Code Blocks) للأوامر والسكريبتات فقط، ولا تضع ردك بالكامل داخل كتلة كود (Code Block) واحدة أبداً.
 - اربط ردودك بالأمن السيبراني لما يكون مناسب.
-- لغة الرد يجب أن تتبع لغة المستخدم: إذا سأل بالعربية أجب بالعربية، وإذا سأل بالإنجليزية أجب بالإنجليزية.
+- لغة الرد يجب أن تكون العربية مائة بالمائة وبشكل صارم للغاية. يُمنع منعاً باتاً الرد باللغة الإنجليزية تحت أي ظرف من الظروف، حتى لو قام المستخدم بسؤالك باللغة الإنجليزية أو استخدام مصطلحات إنجليزية. إذا كانت هناك مصطلحات تقنية إنجليزية ضرورية، اكتبها باللغة العربية أو ضعها بين قوسين بجانب ترجمتها العربية، ولكن يجب أن يكون نص الرد بالكامل باللغة العربية وبشكل صارم ومحكم للغاية.
 - إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
 - إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: titansuppotp@gmail.com
 - إجاباتك يجب أن تكون دقيقة وواضحة جداً، ولا تنهِ الرد بشكل مقطوع أبداً؛ تأكد من إكمال الإجابة واختم دائماً بخطوة عملية تالية واضحة أو بسؤال للمتابعة.
@@ -299,7 +299,7 @@ def _learning_awareness_profile(attack: dict) -> dict:
 
 
 def _learning_normalize_lang(raw: str) -> str:
-    return 'en' if str(raw or '').strip().lower() == 'en' else 'ar'
+    return 'ar'
 
 
 def _learning_build_training_checklist(attack: dict, awareness: dict, analysis: dict, org_context: str, lang: str = 'ar') -> list[str]:
@@ -1198,12 +1198,6 @@ def _looks_garbled_ai_text(text: str) -> bool:
 
 
 def _detect_user_lang(text: str) -> str:
-    t = text or ''
-    ar = len(_AR_CHARS_RE.findall(t))
-    en = len(_LATIN_CHARS_RE.findall(t))
-    # Prefer English when it clearly dominates, otherwise Arabic by default.
-    if en >= 8 and en > (ar * 1.3):
-        return 'en'
     return 'ar'
 
 
@@ -1380,21 +1374,27 @@ def _call_do_ai(message: str, system_prompt: str | None = None, model: str | Non
     """استدعاء TITAN AI عبر DigitalOcean Agent مع مراعاة ميزانية التوكنات وأسلوب الرد"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     
-    # إضافة تعليمات الأسلوب وميزانية التوكنات
+    # إضافة تعليمات الأسلوب وميزانية التوكنات باللغة العربية لضمان الالتزام بالعربية
     style_directives = {
-        'concise': "- IMPORTANT: Your response MUST be extremely concise and direct. Use as few tokens as possible.\n",
-        'detailed': "- IMPORTANT: Provide a highly detailed, comprehensive, and exhaustive analysis.\n",
-        'balanced': "- IMPORTANT: Provide a balanced, professional, and thorough response.\n"
+        'concise': "- هام: يجب أن يكون ردك مختصراً ومباشراً للغاية. استخدم أقل عدد ممكن من التوكنات.\n",
+        'detailed': "- هام: قدم تحليلاً مفصلاً وشاملاً ووافياً للغاية.\n",
+        'balanced': "- هام: قدم رداً متوازناً ومهنياً وشاملاً.\n"
     }
     directive = style_directives.get(style, style_directives['balanced'])
     
     budget_directive = (
-        f"- IMPORTANT: Your total token budget is strictly {max_tokens} tokens.\n"
-        "- Ensure your answer is FULLY COMPLETE and finished within this space.\n"
-        "- DO NOT stop in the middle of a sentence or leave thoughts unfinished.\n"
+        f"- هام: ميزانية التوكنات الإجمالية الخاصة بك هي {max_tokens} توكن بشكل صارم.\n"
+        "- تأكد من أن إجابتك كاملة تماماً ومنتهية في هذه المساحة.\n"
+        "- لا تتوقف في منتصف الجملة أو تترك الأفكار غير مكتملة.\n"
     )
     
-    sys_prompt += f"\n\n[STYLE & BUDGET DIRECTIVES]\n{directive}{budget_directive}\n"
+    arabic_enforcement = (
+        "- هام جداً وصارم: يجب أن تكون الإجابة والرد باللغة العربية مائة بالمائة (100% عربي). "
+        "يُمنع منعاً باتاً استخدام اللغة الإنجليزية أو الرد بها، حتى لو كانت الأسئلة بالإنجليزية. "
+        "ترجم أي مصطلح أو فكرة إلى العربية فوراً.\n"
+    )
+    
+    sys_prompt += f"\n\n[STYLE & BUDGET DIRECTIVES]\n{directive}{budget_directive}{arabic_enforcement}\n"
 
     messages: list[dict[str, object]] = _do_ai_prepare_messages(
         [{"role": "user", "content": message}],
@@ -1417,7 +1417,7 @@ def _call_do_ai(message: str, system_prompt: str | None = None, model: str | Non
         if i < max_loops - 1:
             messages.append({
                 "role": "user",
-                "content": "You were cut off. Please finish your previous thought briefly and provide a final conclusion now."
+                "content": "تم قطع إجابتك بسبب طولها. يرجى إكمال فكرتك السابقة باختصار وتقديم الاستنتاج النهائي باللغة العربية الآن وبشكل كامل."
             })
 
     full_reply = "\n".join(chunks).strip()
@@ -1640,12 +1640,7 @@ def _classify_ai_topic(text: str) -> str:
 
 
 def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
-    lang = _detect_user_lang(user_text)
-    lang_rule = (
-        "- Reply strictly in English for this request (no Arabic).\n"
-        if lang == 'en' else
-        "- أجب بالعربية الواضحة لهذا الطلب (بدون تحويل الرد للإنجليزية).\n"
-    )
+    lang_rule = "- أجب باللغة العربية مائة بالمائة وبشكل صارم للغاية وبلا تهاون. يُمنع منعاً باتاً الرد باللغة الإنجليزية تحت أي ظرف، حتى لو قام المستخدم بسؤالك باللغة الإنجليزية أو استخدم مصطلحات إنجليزية.\n"
     kb_context = _build_titan_kb_context(user_text, topic)
     return (
         AI_SYSTEM_PROMPT
@@ -1673,15 +1668,22 @@ def _call_do_ai_with_history(
     """استدعاء AI مع سجل المحادثة مع احترام ميزانية التوكنات"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     
+    # إضافة تعليمات الأسلوب وميزانية التوكنات باللغة العربية لضمان الالتزام بالعربية
     style_directives = {
-        'concise': "- IMPORTANT: Be extremely concise.\n",
-        'detailed': "- IMPORTANT: Be highly detailed.\n",
-        'balanced': "- IMPORTANT: Be professional and balanced.\n"
+        'concise': "- هام: كن مختصراً للغاية.\n",
+        'detailed': "- هام: كن مفصلاً للغاية.\n",
+        'balanced': "- هام: كن مهنياً ومتوازناً.\n"
     }
     directive = style_directives.get(style, style_directives['balanced'])
-    budget_msg = f"- IMPORTANT: Finish your entire response within {max_tokens} tokens. DO NOT truncate.\n"
+    budget_msg = f"- هام: يرجى إنهاء إجابتك بالكامل في حدود {max_tokens} توكن. لا تقطع الرد.\n"
     
-    sys_prompt += f"\n\n[DIRECTIVES]\n{directive}{budget_msg}\n"
+    arabic_enforcement = (
+        "- هام جداً وصارم: يجب أن تكون الإجابة والرد باللغة العربية مائة بالمائة (100% عربي). "
+        "يُمنع منعاً باتاً استخدام اللغة الإنجليزية أو الرد بها، حتى لو كانت الأسئلة بالإنجليزية. "
+        "ترجم أي مصطلح أو فكرة إلى العربية فوراً.\n"
+    )
+    
+    sys_prompt += f"\n\n[DIRECTIVES]\n{directive}{budget_msg}{arabic_enforcement}\n"
     
     messages: list[dict[str, object]] = _do_ai_prepare_messages(history_messages or [], system_prompt=sys_prompt)
 
@@ -1700,7 +1702,7 @@ def _call_do_ai_with_history(
         if i < max_loops - 1:
             messages.append({
                 "role": "user",
-                "content": "Continue and complete your answer immediately."
+                "content": "تابع وأكمل إجابتك فوراً باللغة العربية بشكل كامل."
             })
 
     last_user = ''
