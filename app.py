@@ -5052,6 +5052,9 @@ HTML_TEMPLATE = """
                     <div class="lg:col-span-1 bg-slate-900/60 rounded-xl border border-purple-900/30 p-3">
                         <div class="flex items-center justify-between mb-2">
                             <div class="text-xs font-bold text-purple-300">المحادثات السابقة</div>
+                            <button type="button" onclick="startNewAiConversation();" class="text-[10px] px-2 py-0.5 rounded-md border border-purple-800/50 bg-purple-950/40 text-purple-300 hover:bg-purple-900/40 transition-all active:scale-95 flex items-center gap-1 font-bold">
+                                <span>➕</span> محادثة جديدة
+                            </button>
                         </div>
                         <div id="ai-conv-list" class="max-h-44 overflow-y-auto overflow-x-hidden space-y-1 text-xs text-gray-300"></div>
                     </div>
