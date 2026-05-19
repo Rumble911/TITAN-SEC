@@ -130,7 +130,7 @@ AI_SYSTEM_PROMPT = """
 - استخدم التنسيق المتقدم (Markdown): العناوين (## و ###)، القوائم النقطية والرقمية، النصوص العريضة (**نص**)، والاقتباسات.
 - استخدم كتل الأكواد (Code Blocks) للأوامر والسكريبتات فقط، ولا تضع ردك بالكامل داخل كتلة كود (Code Block) واحدة أبداً.
 - اربط ردودك بالأمن السيبراني لما يكون مناسب.
-- لغة الرد يجب أن تكون العربية مائة بالمائة وبشكل صارم للغاية. يُمنع منعاً باتاً الرد باللغة الإنجليزية تحت أي ظرف من الظروف، حتى لو قام المستخدم بسؤالك باللغة الإنجليزية أو استخدام مصطلحات إنجليزية. إذا كانت هناك مصطلحات تقنية إنجليزية ضرورية، اكتبها باللغة العربية أو ضعها بين قوسين بجانب ترجمتها العربية، ولكن يجب أن يكون نص الرد بالكامل باللغة العربية وبشكل صارم ومحكم للغاية.
+- الرد بالعربية بسبب ناتبع المستخدم. موارد تقنية مثل أسماء الأدوات يمكن أن تبقى بالإنجليزية اذا اطلبها المستخدم.
 - إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
 - إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: titansuppotp@gmail.com
 - إجاباتك يجب أن تكون دقيقة وواضحة جداً، ولا تنهِ الرد بشكل مقطوع أبداً؛ تأكد من إكمال الإجابة واختم دائماً بخطوة عملية تالية واضحة أو بسؤال للمتابعة.
@@ -1383,18 +1383,11 @@ def _call_do_ai(message: str, system_prompt: str | None = None, model: str | Non
     directive = style_directives.get(style, style_directives['balanced'])
     
     budget_directive = (
-        f"- هام: ميزانية التوكنات الإجمالية الخاصة بك هي {max_tokens} توكن بشكل صارم.\n"
-        "- تأكد من أن إجابتك كاملة تماماً ومنتهية في هذه المساحة.\n"
-        "- لا تتوقف في منتصف الجملة أو تترك الأفكار غير مكتملة.\n"
+        f"- الرد بالكامل في حدود {max_tokens} توكن.\n"
+        "- اكمل الرد بالكامل بدون قطع.\n"
     )
     
-    arabic_enforcement = (
-        "- هام جداً وصارم: يجب أن تكون الإجابة والرد باللغة العربية مائة بالمائة (100% عربي). "
-        "يُمنع منعاً باتاً استخدام اللغة الإنجليزية أو الرد بها، حتى لو كانت الأسئلة بالإنجليزية. "
-        "ترجم أي مصطلح أو فكرة إلى العربية فوراً.\n"
-    )
-    
-    sys_prompt += f"\n\n[STYLE & BUDGET DIRECTIVES]\n{directive}{budget_directive}{arabic_enforcement}\n"
+    sys_prompt += f"\n\n[STYLE & BUDGET DIRECTIVES]\n{directive}{budget_directive}\n"
 
     messages: list[dict[str, object]] = _do_ai_prepare_messages(
         [{"role": "user", "content": message}],
@@ -1640,7 +1633,7 @@ def _classify_ai_topic(text: str) -> str:
 
 
 def _build_ai_system_prompt(topic: str, user_text: str = '') -> str:
-    lang_rule = "- أجب باللغة العربية مائة بالمائة وبشكل صارم للغاية وبلا تهاون. يُمنع منعاً باتاً الرد باللغة الإنجليزية تحت أي ظرف، حتى لو قام المستخدم بسؤالك باللغة الإنجليزية أو استخدم مصطلحات إنجليزية.\n"
+    lang_rule = "- الرد بالعربية. مصطلحات تقنية يمكن أن تبقى بالإنجليزية اذا لازمة.\n"
     kb_context = _build_titan_kb_context(user_text, topic)
     return (
         AI_SYSTEM_PROMPT
@@ -1675,15 +1668,9 @@ def _call_do_ai_with_history(
         'balanced': "- هام: كن مهنياً ومتوازناً.\n"
     }
     directive = style_directives.get(style, style_directives['balanced'])
-    budget_msg = f"- هام: يرجى إنهاء إجابتك بالكامل في حدود {max_tokens} توكن. لا تقطع الرد.\n"
+    budget_msg = f"- الحد الأقصى {max_tokens} توكن للرد. املأ الرد بالكامل.\n"
     
-    arabic_enforcement = (
-        "- هام جداً وصارم: يجب أن تكون الإجابة والرد باللغة العربية مائة بالمائة (100% عربي). "
-        "يُمنع منعاً باتاً استخدام اللغة الإنجليزية أو الرد بها، حتى لو كانت الأسئلة بالإنجليزية. "
-        "ترجم أي مصطلح أو فكرة إلى العربية فوراً.\n"
-    )
-    
-    sys_prompt += f"\n\n[DIRECTIVES]\n{directive}{budget_msg}{arabic_enforcement}\n"
+    sys_prompt += f"\n\n[DIRECTIVES]\n{directive}{budget_msg}\n"
     
     messages: list[dict[str, object]] = _do_ai_prepare_messages(history_messages or [], system_prompt=sys_prompt)
 
@@ -6684,10 +6671,7 @@ HTML_TEMPLATE = """
                                                 <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Degree</span>
                                                 <p id="idEduDegree" class="text-xs font-bold text-blue-400"></p>
                                             </div>
-                                            <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
-                                                <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">GPA</span>
-                                                <p id="idEduGpa" class="text-sm font-mono text-green-400 font-black"></p>
-                                            </div>
+
                                         </div>
                                     </div>
                                 </div>
@@ -17723,7 +17707,6 @@ HTML_TEMPLATE = """
                 
                 setEl('idEduUni', data.edu_uni);
                 setEl('idEduDegree', data.edu_degree);
-                setEl('idEduGpa', data.edu_gpa);
                 
                 // Show area and restore opacity
                 resArea.classList.remove('hidden');
@@ -17778,7 +17761,7 @@ CVV: ${getVal('idCcCvv')}
 [بيانات السفر والتعليم]
 رقم جواز السفر: ${getVal('idPassportNo')} (ينتهي في: ${getVal('idPassportExpire')})
 المؤسسة التعليمية: ${getVal('idEduUni')}
-الدرجة العلمية: ${getVal('idEduDegree')} (المعدل: ${getVal('idEduGpa')})
+الدرجة العلمية: ${getVal('idEduDegree')}
 
 [البيانات البنكية]
 البنك: ${getVal('idBankName')}
@@ -23652,7 +23635,6 @@ def fake_identity_route():
             'edu_uni': (random.choice(["جامعة العلوم والتكنولوجيا", "الجامعة الأردنية", "جامعة القاهرة", "جامعة الملك سعود", "جامعة دبي"]) if lang.startswith('ar_') else fake_en.company() + " University"),
             'edu_degree': random.choice(["بكالوريوس", "ماستر", "دكتوراة"]) if lang.startswith('ar_') else random.choice(["Bachelor's Degree", "Master's Degree", "PhD"]),
             'edu_year': random.randint(2010, 2024),
-            'edu_gpa': f"{random.uniform(2.5, 4.0):.2f}/4.0",
 
             'username': username_base,
             'password': password_fake,
