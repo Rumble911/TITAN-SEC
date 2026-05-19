@@ -130,7 +130,13 @@ AI_SYSTEM_PROMPT = """
 - استخدم التنسيق المتقدم (Markdown): العناوين (## و ###)، القوائم النقطية والرقمية، النصوص العريضة (**نص**)، والاقتباسات.
 - استخدم كتل الأكواد (Code Blocks) للأوامر والسكريبتات فقط، ولا تضع ردك بالكامل داخل كتلة كود (Code Block) واحدة أبداً.
 - اربط ردودك بالأمن السيبراني لما يكون مناسب.
-- لغة الرد يجب أن تكون العربية مائة بالمائة وبشكل صارم للغاية. يُمنع منعاً باتاً الرد باللغة الإنجليزية تحت أي ظرف من الظروف، حتى لو قام المستخدم بسؤالك باللغة الإنجليزية أو استخدام مصطلحات إنجليزية. إذا كانت هناك مصطلحات تقنية إنجليزية ضرورية، اكتبها باللغة العربية أو ضعها بين قوسين بجانب ترجمتها العربية، ولكن يجب أن يكون نص الرد بالكامل باللغة العربية وبشكل صارم ومحكم للغاية.
+**- قاعدة اللغة العربية (حتمية صارمة - لا استثناء)**:
+  * ردك يجب أن يكون عربياً 100% بدون أي استثناء مهما كانت اللغة الأصلية للمستخدم.
+  * يُمنع منعاً باتاً: الإنجليزية، العبرية، أي لغة أجنبية ثانية، أو خليط لغوي.
+  * إذا أرسل المستخدم عبري أو إنجليزي أو خليط: أنت تترجم كل شيء لعربي وترد عربي فقط.
+  * مصطلحات تقنية ضرورية فقط: اكتبها عربي أو بين قوسين (مثال: API - واجهة البرمجة).
+  * أي كلمة إنجليزية أو عبرية أو أجنبية تظهر في ردك = فشل تام في المهمة.
+  * الالتزام: عربي 100% أو لا ترد على الإطلاق.
 - إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
 - إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: titansuppotp@gmail.com
 - إجاباتك يجب أن تكون دقيقة وواضحة جداً، ولا تنهِ الرد بشكل مقطوع أبداً؛ تأكد من إكمال الإجابة واختم دائماً بخطوة عملية تالية واضحة أو بسؤال للمتابعة.
@@ -1154,7 +1160,7 @@ def _build_titan_kb_context(user_text: str, topic: str, max_items: int = 6, max_
 
 
 def _sanitize_ai_reply(text: str) -> str:
-    """Clean noisy model output and enforce readable Arabic-friendly text."""
+    """Clean noisy model output and enforce 100% Arabic-only text with no foreign languages."""
     reply = (text or '').strip()
     if not reply:
         return "عذراً، لم أتمكن من توليد رد واضح. أعد صياغة سؤالك وسأجيبك بدقة."
@@ -1162,17 +1168,23 @@ def _sanitize_ai_reply(text: str) -> str:
     # Remove non-printable control characters that may appear in malformed outputs.
     reply = _CTRL_CHARS_RE.sub('', reply)
 
+    # Remove CJK characters (Chinese, Japanese, Korean)
     cjk_count = len(_CJK_CHARS_RE.findall(reply))
     if cjk_count >= 1:
         reply = _CJK_CHARS_RE.sub('', reply)
         reply = re.sub(r'\s{2,}', ' ', reply).strip()
+
+    # Remove Hebrew characters completely (U+0590 to U+05FF)
+    reply = re.sub(r'[\u0590-\u05FF]+', '', reply)
+    reply = re.sub(r'\s+', ' ', reply).strip()
 
     # Normalize noisy spacing/newline artifacts.
     reply = re.sub(r'\r\n?', '\n', reply)
     reply = re.sub(r'\n{3,}', '\n\n', reply)
     reply = re.sub(r'[ \t]{2,}', ' ', reply).strip()
 
-    if not reply:
+    # If reply is too short after cleaning, it was likely mostly foreign text
+    if not reply or len(reply) < 10:
         return "تم اكتشاف ناتج غير واضح من النموذج. أرسل سؤالك مرة ثانية وسأعطيك إجابة عربية دقيقة."
     return reply
 
@@ -1182,6 +1194,10 @@ def _looks_garbled_ai_text(text: str) -> bool:
     if not t:
         return True
     if _MOJIBAKE_RE.search(t):
+        return True
+
+    # Check for Hebrew characters - if found, it's garbled (we want Arabic only)
+    if re.search(r'[\u0590-\u05FF]', t):
         return True
 
     printable = len([ch for ch in t if not ch.isspace()])
@@ -1376,9 +1392,9 @@ def _call_do_ai(message: str, system_prompt: str | None = None, model: str | Non
     
     # إضافة تعليمات الأسلوب وميزانية التوكنات باللغة العربية لضمان الالتزام بالعربية
     style_directives = {
-        'concise': "- هام: يجب أن يكون ردك مختصراً ومباشراً للغاية. استخدم أقل عدد ممكن من التوكنات.\n",
-        'detailed': "- هام: قدم تحليلاً مفصلاً وشاملاً ووافياً للغاية.\n",
-        'balanced': "- هام: قدم رداً متوازناً ومهنياً وشاملاً.\n"
+        'concise': "- هام: يجب أن يكون ردك مختصراً ومباشراً للغاية وعربياً 100% بدون لغات أجنبية. استخدم أقل عدد ممكن من التوكنات.\n",
+        'detailed': "- هام: قدم تحليلاً مفصلاً وشاملاً ووافياً للغاية بالعربية فقط، بدون أي كلمة إنجليزية أو أجنبية.\n",
+        'balanced': "- هام: قدم رداً متوازناً ومهنياً وشاملاً باللغة العربية 100% بدون استثناء أو لغات ثانية.\n"
     }
     directive = style_directives.get(style, style_directives['balanced'])
     
@@ -1394,7 +1410,7 @@ def _call_do_ai(message: str, system_prompt: str | None = None, model: str | Non
         "ترجم أي مصطلح أو فكرة إلى العربية فوراً.\n"
     )
     
-    sys_prompt += f"\n\n[STYLE & BUDGET DIRECTIVES]\n{directive}{budget_directive}{arabic_enforcement}\n"
+    sys_prompt += f"\n\n[STYLE & BUDGET DIRECTIVES]\n{directive}{budget_directive}{arabic_enforcement}\n\n⚠️ **تحذير نهائي**: أي رد يحتوي على عبري أو إنجليزي أو لغة ثانية سيكون فشلاً في مهمتك. الالتزام بالعربية 100% هو المطلب الأول والأخير. لا تفشل في هذا."}
 
     messages: list[dict[str, object]] = _do_ai_prepare_messages(
         [{"role": "user", "content": message}],
