@@ -5131,60 +5131,7 @@ HTML_TEMPLATE = """
 
                 <div id="ai-sub-content-analysis" class="hidden space-y-4">
 
-                <!-- ===== Tool 1: AI Attack Path Mapper ===== -->
-                <div class="bg-gradient-to-br from-slate-900/80 to-red-950/30 p-5 rounded-2xl border border-red-900/40 relative overflow-hidden group">
-                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🕸️</div>
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-lg">🗺️</span>
-                        <h3 class="font-black text-red-400 text-sm tracking-wide">محلل مسارات الهجوم الذكي (AI Attack Path Mapper)</h3>
-                    </div>
-                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">الصق نتائج فحص الشبكة (Nmap, Nessus, إلخ) وسيقوم الذكاء الاصطناعي ببناء شجرة هجوم كاملة مع سيناريوهات الاختراق المتسلسلة من منظور Red Team.</p>
-                    <textarea id="attack-path-input" rows="5" placeholder="الصق نتائج الفحص هنا (مثال: Nmap scan results, open ports, services, versions)..."
-                        class="w-full bg-black/40 border border-red-900/30 text-gray-300 text-xs rounded-xl px-4 py-3 outline-none mb-3 resize-none font-mono focus:border-red-500/60 transition-colors placeholder-gray-600"></textarea>
-                    <div class="flex gap-2">
-                        <button onclick="analyzeAttackPath()" id="attack-path-btn" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 font-bold py-2.5 rounded-xl border border-red-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(239,68,68,0.15)] flex items-center justify-center gap-2">
-                            <span>⚔️</span> بناء شجرة الهجوم (Attack Tree)
-                        </button>
-                        <button onclick="document.getElementById('attack-path-input').value='';document.getElementById('attack-path-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
-                    </div>
-                    <div id="attack-path-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-red-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
-                </div>
-
-                <!-- ===== Tool 2: OSINT & Social Engineering Profiler ===== -->
-                <div class="bg-gradient-to-br from-slate-900/80 to-cyan-950/30 p-5 rounded-2xl border border-cyan-900/40 relative overflow-hidden group">
-                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🕵️</div>
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-lg">🔍</span>
-                        <h3 class="font-black text-cyan-400 text-sm tracking-wide">محلل البصمة الرقمية والهندسة الاجتماعية (OSINT Profiler)</h3>
-                    </div>
-                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">أدخل بريد إلكتروني أو اسم مستخدم أو نطاق وسيقوم الذكاء الاصطناعي ببناء ملف تعريف المخاطر البشرية مع سيناريوهات الهندسة الاجتماعية المحتملة للتوعية.</p>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
-                        <div>
-                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">نوع الهدف</label>
-                            <select id="osint-profiler-type" class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-cyan-500/60 transition-colors">
-                                <option value="email">📧 بريد إلكتروني</option>
-                                <option value="username">👤 اسم مستخدم</option>
-                                <option value="domain">🌐 نطاق (Domain)</option>
-                            </select>
-                        </div>
-                        <div class="md:col-span-2">
-                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">الهدف</label>
-                            <input type="text" id="osint-profiler-input" placeholder="example@domain.com أو username أو domain.com"
-                                class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none focus:border-cyan-500/60 transition-colors placeholder-gray-600">
-                        </div>
-                    </div>
-                    <textarea id="osint-profiler-extra" rows="2" placeholder="(اختياري) أضف أي معلومات إضافية متاحة عن الهدف لتحسين التحليل..."
-                        class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none mb-3 resize-none focus:border-cyan-500/60 transition-colors placeholder-gray-600"></textarea>
-                    <div class="flex gap-2">
-                        <button onclick="analyzeOsintProfile()" id="osint-profiler-btn" class="flex-1 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 font-bold py-2.5 rounded-xl border border-cyan-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(6,182,212,0.15)] flex items-center justify-center gap-2">
-                            <span>🕵️</span> بناء ملف المخاطر البشرية
-                        </button>
-                        <button onclick="document.getElementById('osint-profiler-input').value='';document.getElementById('osint-profiler-extra').value='';document.getElementById('osint-profiler-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
-                    </div>
-                    <div id="osint-profiler-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-cyan-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
-                </div>
-
-                <!-- ===== Tool 3: Interactive Purple Team AI ===== -->
+                <!-- ===== Tool 1: Interactive Purple Team AI ===== -->
                 <div class="bg-gradient-to-br from-slate-900/80 to-purple-950/30 p-5 rounded-2xl border border-purple-900/40 relative overflow-hidden group">
                     <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🟣</div>
                     <div class="flex items-center gap-2 mb-3">
@@ -5224,6 +5171,59 @@ HTML_TEMPLATE = """
                         <button onclick="document.getElementById('purple-team-input').value='';document.getElementById('purple-team-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
                     </div>
                     <div id="purple-team-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-purple-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                </div>
+
+                <!-- ===== Tool 2: AI Attack Path Mapper ===== -->
+                <div class="bg-gradient-to-br from-slate-900/80 to-red-950/30 p-5 rounded-2xl border border-red-900/40 relative overflow-hidden group">
+                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🕸️</div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">🗺️</span>
+                        <h3 class="font-black text-red-400 text-sm tracking-wide">محلل مسارات الهجوم الذكي (AI Attack Path Mapper)</h3>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">الصق نتائج فحص الشبكة (Nmap, Nessus, إلخ) وسيقوم الذكاء الاصطناعي ببناء شجرة هجوم كاملة مع سيناريوهات الاختراق المتسلسلة من منظور Red Team.</p>
+                    <textarea id="attack-path-input" rows="5" placeholder="الصق نتائج الفحص هنا (مثال: Nmap scan results, open ports, services, versions)..."
+                        class="w-full bg-black/40 border border-red-900/30 text-gray-300 text-xs rounded-xl px-4 py-3 outline-none mb-3 resize-none font-mono focus:border-red-500/60 transition-colors placeholder-gray-600"></textarea>
+                    <div class="flex gap-2">
+                        <button onclick="analyzeAttackPath()" id="attack-path-btn" class="flex-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 font-bold py-2.5 rounded-xl border border-red-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(239,68,68,0.15)] flex items-center justify-center gap-2">
+                            <span>⚔️</span> بناء شجرة الهجوم (Attack Tree)
+                        </button>
+                        <button onclick="document.getElementById('attack-path-input').value='';document.getElementById('attack-path-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
+                    </div>
+                    <div id="attack-path-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-red-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
+                </div>
+
+                <!-- ===== Tool 3: OSINT & Social Engineering Profiler ===== -->
+                <div class="bg-gradient-to-br from-slate-900/80 to-cyan-950/30 p-5 rounded-2xl border border-cyan-900/40 relative overflow-hidden group">
+                    <div class="absolute -top-6 -right-6 text-7xl opacity-[0.04] group-hover:opacity-[0.08] transition-opacity select-none pointer-events-none">🕵️</div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">🔍</span>
+                        <h3 class="font-black text-cyan-400 text-sm tracking-wide">محلل البصمة الرقمية والهندسة الاجتماعية (OSINT Profiler)</h3>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">أدخل بريد إلكتروني أو اسم مستخدم أو نطاق وسيقوم الذكاء الاصطناعي ببناء ملف تعريف المخاطر البشرية مع سيناريوهات الهندسة الاجتماعية المحتملة للتوعية.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                        <div>
+                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">نوع الهدف</label>
+                            <select id="osint-profiler-type" class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-cyan-500/60 transition-colors">
+                                <option value="email">📧 بريد إلكتروني</option>
+                                <option value="username">👤 اسم مستخدم</option>
+                                <option value="domain">🌐 نطاق (Domain)</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="text-[9px] text-gray-500 font-bold mb-1 block">الهدف</label>
+                            <input type="text" id="osint-profiler-input" placeholder="example@domain.com أو username أو domain.com"
+                                class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none focus:border-cyan-500/60 transition-colors placeholder-gray-600">
+                        </div>
+                    </div>
+                    <textarea id="osint-profiler-extra" rows="2" placeholder="(اختياري) أضف أي معلومات إضافية متاحة عن الهدف لتحسين التحليل..."
+                        class="w-full bg-black/40 border border-cyan-900/30 text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none mb-3 resize-none focus:border-cyan-500/60 transition-colors placeholder-gray-600"></textarea>
+                    <div class="flex gap-2">
+                        <button onclick="analyzeOsintProfile()" id="osint-profiler-btn" class="flex-1 bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 font-bold py-2.5 rounded-xl border border-cyan-800/40 text-xs transition-all hover:shadow-[0_0_20px_rgba(6,182,212,0.15)] flex items-center justify-center gap-2">
+                            <span>🕵️</span> بناء ملف المخاطر البشرية
+                        </button>
+                        <button onclick="document.getElementById('osint-profiler-input').value='';document.getElementById('osint-profiler-extra').value='';document.getElementById('osint-profiler-result').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-gray-500 text-xs hover:text-gray-300 transition-colors">مسح</button>
+                    </div>
+                    <div id="osint-profiler-result" class="hidden mt-4 p-4 bg-black/50 rounded-xl text-xs text-gray-300 border border-cyan-900/20 leading-relaxed whitespace-pre-wrap font-mono max-h-[28rem] overflow-y-auto"></div>
                 </div>
 
                 <!-- ===== Tool 4: Business Logic Flaw Hunter ===== -->
