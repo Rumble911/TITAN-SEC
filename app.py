@@ -18835,10 +18835,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             escaped = escaped.replace(/^## (.*)$/gm, '<h3 class="text-[20px] font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-indigo-300 to-cyan-300 mt-10 mb-4 border-r-4 border-purple-500 pr-3.5 bg-gradient-to-l from-purple-950/25 to-transparent py-2.5 rounded-l-2xl shadow-sm select-none">$1</h3>');
 
             // 5. Paragraphs
-            const paragraphs = escaped.split(/\n\n+/);
+            const paragraphs = escaped.split(/\\n\\n+/);
             return paragraphs.map(p => {
                 if (p.startsWith('<h') || p.startsWith('<div')) return p;
-                return `<p class="mb-5 leading-[2.1] text-slate-100 text-[15.5px] antialiased tracking-wide font-normal pr-1 select-text">${p.replace(/\n/g, '<br>')}</p>`;
+                return `<p class="mb-5 leading-[2.1] text-slate-100 text-[15.5px] antialiased tracking-wide font-normal pr-1 select-text">${p.replace(/\\n/g, '<br>')}</p>`;
             }).join('');
         }
 
