@@ -979,7 +979,7 @@ def _learning_build_custom_attack_from_ai(custom_attack_type: str, org_context: 
         "Never provide offensive instructions."
     )
     try:
-        raw = _call_do_ai(prompt, system_prompt=system, style='concise', max_tokens=800)
+        raw = _call_do_ai(prompt, system_prompt=system, style='concise', max_tokens=500)
         parsed = None
         try:
             parsed = json.loads(raw)
@@ -1275,7 +1275,7 @@ def _dash_public_ip_cached():
 def _do_ai_chat_completion(
     messages: list[dict[str, object]],
     timeout_seconds: int = 45,
-    max_tokens: int = 1400,
+    max_tokens: int = 650,
     model: str | None = None,
 ) -> tuple[str, str]:
     headers = {'Content-Type': 'application/json'}
@@ -1370,7 +1370,7 @@ def _do_ai_prepare_messages(
 
     return clean_messages
 
-def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None, max_tokens: int = 1400, style: str = 'balanced') -> str:
+def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None, max_tokens: int = 650, style: str = 'balanced') -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent مع مراعاة ميزانية التوكنات وأسلوب الرد"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     
@@ -1449,7 +1449,7 @@ def _call_do_ai_multimodal(
 
     chunks: list[str] = []
     for _ in range(2):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=60, max_tokens=1600, model=model)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=60, max_tokens=750, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -1662,7 +1662,7 @@ def _call_do_ai_with_history(
     history_messages: list[dict[str, object]],
     system_prompt: str | None = None,
     model: str | None = None,
-    max_tokens: int = 2000,
+    max_tokens: int = 850,
     style: str = 'balanced'
 ) -> str:
     """استدعاء AI مع سجل المحادثة مع احترام ميزانية التوكنات"""
@@ -8871,7 +8871,7 @@ HTML_TEMPLATE = """
                         org_context: orgContext,
                         training_level: trainingLevel,
                         result_lang: resultLang,
-                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '1400'),
+                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '650'),
                         style: localStorage.getItem('titan_ai_style') || 'balanced'
                     })
                 });
@@ -14315,7 +14315,7 @@ HTML_TEMPLATE = """
                         challenge_id: challengeId, 
                         question, 
                         attempt,
-                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '1200'),
+                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '550'),
                         style: localStorage.getItem('titan_ai_style') || 'balanced'
                     })
                 });
@@ -18395,7 +18395,7 @@ def crypt_recommend_route():
     )
 
     try:
-        raw = _call_do_ai(advisor_prompt, system_prompt=advisor_system, style='concise', max_tokens=600)
+        raw = _call_do_ai(advisor_prompt, system_prompt=advisor_system, style='concise', max_tokens=400)
         candidate = raw.strip()
         match = re.search(r'\{[\s\S]*\}', candidate)
         if match:
@@ -25846,9 +25846,9 @@ def ctf_ai_assistant_route():
     
     # تحصيل إعدادات التوكنات والأسلوب
     try:
-        max_tokens = int(data.get('max_tokens') or 1200)
+        max_tokens = int(data.get('max_tokens') or 550)
     except:
-        max_tokens = 1200
+        max_tokens = 550
     style = str(data.get('style') or 'balanced').lower()
 
     if not challenge_id:
