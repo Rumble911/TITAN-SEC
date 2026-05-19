@@ -5062,7 +5062,7 @@ HTML_TEMPLATE = """
                     <div class="lg:col-span-2 bg-slate-900/60 rounded-xl border border-indigo-900/30 p-3 space-y-2">
                         <div class="flex items-center justify-between gap-2 flex-wrap">
                             <div class="text-xs font-bold text-indigo-300">إجراءات سريعة</div>
-                            <button type="button" onclick="loadAiConversations(); startNewAiConversation(); updateQuickActions(); updateBottomQuickActions();" class="text-[11px] px-2.5 py-1 rounded-lg border border-indigo-800/50 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30 transition-all active:scale-95" id="ai-quick-refresh-btn">🔄 تحديث</button>
+                            <button type="button" onclick="loadAiConversations(); updateQuickActions(); updateBottomQuickActions();" class="text-[11px] px-2.5 py-1 rounded-lg border border-indigo-800/50 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-800/30 transition-all active:scale-95" id="ai-quick-refresh-btn">🔄 تحديث</button>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="ai-quick-actions-container">
                             <!-- سيتم ملء هذا ديناميكياً -->
