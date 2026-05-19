@@ -130,13 +130,7 @@ AI_SYSTEM_PROMPT = """
 - استخدم التنسيق المتقدم (Markdown): العناوين (## و ###)، القوائم النقطية والرقمية، النصوص العريضة (**نص**)، والاقتباسات.
 - استخدم كتل الأكواد (Code Blocks) للأوامر والسكريبتات فقط، ولا تضع ردك بالكامل داخل كتلة كود (Code Block) واحدة أبداً.
 - اربط ردودك بالأمن السيبراني لما يكون مناسب.
-**- قاعدة اللغة العربية (حتمية صارمة - لا استثناء)**:
-  * ردك يجب أن يكون عربياً 100% بدون أي استثناء مهما كانت اللغة الأصلية للمستخدم.
-  * يُمنع منعاً باتاً: الإنجليزية، العبرية، أي لغة أجنبية ثانية، أو خليط لغوي.
-  * إذا أرسل المستخدم عبري أو إنجليزي أو خليط: أنت تترجم كل شيء لعربي وترد عربي فقط.
-  * مصطلحات تقنية ضرورية فقط: اكتبها عربي أو بين قوسين (مثال: API - واجهة البرمجة).
-  * أي كلمة إنجليزية أو عبرية أو أجنبية تظهر في ردك = فشل تام في المهمة.
-  * الالتزام: عربي 100% أو لا ترد على الإطلاق.
+- لغة الرد يجب أن تكون العربية مائة بالمائة وبشكل صارم للغاية. يُمنع منعاً باتاً الرد باللغة الإنجليزية تحت أي ظرف من الظروف، حتى لو قام المستخدم بسؤالك باللغة الإنجليزية أو استخدام مصطلحات إنجليزية. إذا كانت هناك مصطلحات تقنية إنجليزية ضرورية، اكتبها باللغة العربية أو ضعها بين قوسين بجانب ترجمتها العربية، ولكن يجب أن يكون نص الرد بالكامل باللغة العربية وبشكل صارم ومحكم للغاية.
 - إذا السؤال عن مسار مهني/دورات/شهادات، أعطِ خطة كاملة حتى النهاية (مستوى مبتدئ -> متوسط -> متقدم) واذكر الشهادات المناسبة مثل CEH و CISSP و Security+ بحسب مستوى المستخدم.
 - إذا طلب المستخدم "إيميل الدعم" أو "بريد الدعم" أو "support email" فالإجابة يجب أن تتضمن هذا البريد حرفيًا: titansuppotp@gmail.com
 - إجاباتك يجب أن تكون دقيقة وواضحة جداً، ولا تنهِ الرد بشكل مقطوع أبداً؛ تأكد من إكمال الإجابة واختم دائماً بخطوة عملية تالية واضحة أو بسؤال للمتابعة.
@@ -985,7 +979,7 @@ def _learning_build_custom_attack_from_ai(custom_attack_type: str, org_context: 
         "Never provide offensive instructions."
     )
     try:
-        raw = _call_do_ai(prompt, system_prompt=system, style='concise', max_tokens=500)
+        raw = _call_do_ai(prompt, system_prompt=system, style='concise', max_tokens=800)
         parsed = None
         try:
             parsed = json.loads(raw)
@@ -1160,7 +1154,7 @@ def _build_titan_kb_context(user_text: str, topic: str, max_items: int = 6, max_
 
 
 def _sanitize_ai_reply(text: str) -> str:
-    """Clean noisy model output and enforce 100% Arabic-only text with no foreign languages."""
+    """Clean noisy model output and enforce readable Arabic-friendly text."""
     reply = (text or '').strip()
     if not reply:
         return "عذراً، لم أتمكن من توليد رد واضح. أعد صياغة سؤالك وسأجيبك بدقة."
@@ -1168,23 +1162,17 @@ def _sanitize_ai_reply(text: str) -> str:
     # Remove non-printable control characters that may appear in malformed outputs.
     reply = _CTRL_CHARS_RE.sub('', reply)
 
-    # Remove CJK characters (Chinese, Japanese, Korean)
     cjk_count = len(_CJK_CHARS_RE.findall(reply))
     if cjk_count >= 1:
         reply = _CJK_CHARS_RE.sub('', reply)
         reply = re.sub(r'\s{2,}', ' ', reply).strip()
-
-    # Remove Hebrew characters completely (U+0590 to U+05FF)
-    reply = re.sub(r'[\u0590-\u05FF]+', '', reply)
-    reply = re.sub(r'\s+', ' ', reply).strip()
 
     # Normalize noisy spacing/newline artifacts.
     reply = re.sub(r'\r\n?', '\n', reply)
     reply = re.sub(r'\n{3,}', '\n\n', reply)
     reply = re.sub(r'[ \t]{2,}', ' ', reply).strip()
 
-    # If reply is too short after cleaning, it was likely mostly foreign text
-    if not reply or len(reply) < 10:
+    if not reply:
         return "تم اكتشاف ناتج غير واضح من النموذج. أرسل سؤالك مرة ثانية وسأعطيك إجابة عربية دقيقة."
     return reply
 
@@ -1194,10 +1182,6 @@ def _looks_garbled_ai_text(text: str) -> bool:
     if not t:
         return True
     if _MOJIBAKE_RE.search(t):
-        return True
-
-    # Check for Hebrew characters - if found, it's garbled (we want Arabic only)
-    if re.search(r'[\u0590-\u05FF]', t):
         return True
 
     printable = len([ch for ch in t if not ch.isspace()])
@@ -1291,7 +1275,7 @@ def _dash_public_ip_cached():
 def _do_ai_chat_completion(
     messages: list[dict[str, object]],
     timeout_seconds: int = 45,
-    max_tokens: int = 650,
+    max_tokens: int = 1400,
     model: str | None = None,
 ) -> tuple[str, str]:
     headers = {'Content-Type': 'application/json'}
@@ -1386,15 +1370,15 @@ def _do_ai_prepare_messages(
 
     return clean_messages
 
-def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None, max_tokens: int = 650, style: str = 'balanced') -> str:
+def _call_do_ai(message: str, system_prompt: str | None = None, model: str | None = None, max_tokens: int = 1400, style: str = 'balanced') -> str:
     """استدعاء TITAN AI عبر DigitalOcean Agent مع مراعاة ميزانية التوكنات وأسلوب الرد"""
     sys_prompt = (system_prompt or AI_SYSTEM_PROMPT).strip()
     
     # إضافة تعليمات الأسلوب وميزانية التوكنات باللغة العربية لضمان الالتزام بالعربية
     style_directives = {
-        'concise': "- هام: يجب أن يكون ردك مختصراً ومباشراً للغاية وعربياً 100% بدون لغات أجنبية. استخدم أقل عدد ممكن من التوكنات.\n",
-        'detailed': "- هام: قدم تحليلاً مفصلاً وشاملاً ووافياً للغاية بالعربية فقط، بدون أي كلمة إنجليزية أو أجنبية.\n",
-        'balanced': "- هام: قدم رداً متوازناً ومهنياً وشاملاً باللغة العربية 100% بدون استثناء أو لغات ثانية.\n"
+        'concise': "- هام: يجب أن يكون ردك مختصراً ومباشراً للغاية. استخدم أقل عدد ممكن من التوكنات.\n",
+        'detailed': "- هام: قدم تحليلاً مفصلاً وشاملاً ووافياً للغاية.\n",
+        'balanced': "- هام: قدم رداً متوازناً ومهنياً وشاملاً.\n"
     }
     directive = style_directives.get(style, style_directives['balanced'])
     
@@ -1410,7 +1394,7 @@ def _call_do_ai(message: str, system_prompt: str | None = None, model: str | Non
         "ترجم أي مصطلح أو فكرة إلى العربية فوراً.\n"
     )
     
-    sys_prompt += f"\n\n[STYLE & BUDGET DIRECTIVES]\n{directive}{budget_directive}{arabic_enforcement}\n\n⚠️ **تحذير نهائي**: أي رد يحتوي على عبري أو إنجليزي أو لغة ثانية سيكون فشلاً في مهمتك. الالتزام بالعربية 100% هو المطلب الأول والأخير. لا تفشل في هذا."}
+    sys_prompt += f"\n\n[STYLE & BUDGET DIRECTIVES]\n{directive}{budget_directive}{arabic_enforcement}\n"
 
     messages: list[dict[str, object]] = _do_ai_prepare_messages(
         [{"role": "user", "content": message}],
@@ -1465,7 +1449,7 @@ def _call_do_ai_multimodal(
 
     chunks: list[str] = []
     for _ in range(2):
-        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=60, max_tokens=750, model=model)
+        chunk, finish_reason = _do_ai_chat_completion(messages, timeout_seconds=60, max_tokens=1600, model=model)
         if chunk:
             chunks.append(chunk)
             messages.append({"role": "assistant", "content": chunk})
@@ -1678,7 +1662,7 @@ def _call_do_ai_with_history(
     history_messages: list[dict[str, object]],
     system_prompt: str | None = None,
     model: str | None = None,
-    max_tokens: int = 850,
+    max_tokens: int = 2000,
     style: str = 'balanced'
 ) -> str:
     """استدعاء AI مع سجل المحادثة مع احترام ميزانية التوكنات"""
@@ -8887,7 +8871,7 @@ HTML_TEMPLATE = """
                         org_context: orgContext,
                         training_level: trainingLevel,
                         result_lang: resultLang,
-                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '650'),
+                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '1400'),
                         style: localStorage.getItem('titan_ai_style') || 'balanced'
                     })
                 });
@@ -14331,7 +14315,7 @@ HTML_TEMPLATE = """
                         challenge_id: challengeId, 
                         question, 
                         attempt,
-                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '550'),
+                        max_tokens: parseInt(localStorage.getItem('titan_ai_max_tokens') || '1200'),
                         style: localStorage.getItem('titan_ai_style') || 'balanced'
                     })
                 });
@@ -18411,7 +18395,7 @@ def crypt_recommend_route():
     )
 
     try:
-        raw = _call_do_ai(advisor_prompt, system_prompt=advisor_system, style='concise', max_tokens=400)
+        raw = _call_do_ai(advisor_prompt, system_prompt=advisor_system, style='concise', max_tokens=600)
         candidate = raw.strip()
         match = re.search(r'\{[\s\S]*\}', candidate)
         if match:
@@ -25862,9 +25846,9 @@ def ctf_ai_assistant_route():
     
     # تحصيل إعدادات التوكنات والأسلوب
     try:
-        max_tokens = int(data.get('max_tokens') or 550)
+        max_tokens = int(data.get('max_tokens') or 1200)
     except:
-        max_tokens = 550
+        max_tokens = 1200
     style = str(data.get('style') or 'balanced').lower()
 
     if not challenge_id:
