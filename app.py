@@ -2745,32 +2745,63 @@ _TXT_HIDE_ZERO = '\u200b'
 _TXT_HIDE_ONE = '\u200c'
 
 
-def hide_secret_in_txt(container_text: str, secret_text: str) -> str:
-    raw = (secret_text or '').encode('utf-8')
-    bits = ''.join(format(b, '08b') for b in raw)
-    payload = ''.join(_TXT_HIDE_ONE if bit == '1' else _TXT_HIDE_ZERO for bit in bits)
-    return (container_text or '') + _TXT_HIDE_PREFIX + payload + _TXT_HIDE_SUFFIX
-
-
-def extract_secret_from_txt(container_text: str) -> str:
-    text = container_text or ''
-    start = text.find(_TXT_HIDE_PREFIX)
-    end = text.find(_TXT_HIDE_SUFFIX, start + len(_TXT_HIDE_PREFIX)) if start != -1 else -1
-    if start == -1 or end == -1:
-        return ''
-
-    hidden = text[start + len(_TXT_HIDE_PREFIX):end]
-    bits = ''.join('1' if ch == _TXT_HIDE_ONE else ('0' if ch == _TXT_HIDE_ZERO else '') for ch in hidden)
-    if not bits:
-        return ''
-    usable = len(bits) - (len(bits) % 8)
-    if usable <= 0:
-        return ''
-    raw = bytes(int(bits[i:i+8], 2) for i in range(0, usable, 8))
+def hide_secret_in_txt(container_text: str, secret_text: str, password: str = '') -> str:
+    """إخفاء نص سري في نص عام مع دعم كلمة سر"""
     try:
-        return raw.decode('utf-8')
-    except Exception:
-        return raw.decode('latin-1', errors='ignore')
+        secret = secret_text or ''
+        if password:
+            salt = os.urandom(16)
+            key = derive_key(password, salt)
+            f = Fernet(key)
+            encrypted = f.encrypt(secret.encode('utf-8'))
+            secret = base64.urlsafe_b64encode(salt + encrypted).decode()
+            secret = 'ENC:' + secret
+        
+        raw = secret.encode('utf-8')
+        bits = ''.join(format(b, '08b') for b in raw)
+        payload = ''.join(_TXT_HIDE_ONE if bit == '1' else _TXT_HIDE_ZERO for bit in bits)
+        return (container_text or '') + _TXT_HIDE_PREFIX + payload + _TXT_HIDE_SUFFIX
+    except Exception as e:
+        raise ValueError(f"خطأ في إخفاء النص: {str(e)}")
+
+
+def extract_secret_from_txt(container_text: str, password: str = '') -> str:
+    """استخراج نص سري من نص عام مع دعم كلمة سر"""
+    try:
+        text = container_text or ''
+        start = text.find(_TXT_HIDE_PREFIX)
+        end = text.find(_TXT_HIDE_SUFFIX, start + len(_TXT_HIDE_PREFIX)) if start != -1 else -1
+        if start == -1 or end == -1:
+            return ''
+
+        hidden = text[start + len(_TXT_HIDE_PREFIX):end]
+        bits = ''.join('1' if ch == _TXT_HIDE_ONE else ('0' if ch == _TXT_HIDE_ZERO else '') for ch in hidden)
+        if not bits:
+            return ''
+        usable = len(bits) - (len(bits) % 8)
+        if usable <= 0:
+            return ''
+        raw = bytes(int(bits[i:i+8], 2) for i in range(0, usable, 8))
+        
+        try:
+            result = raw.decode('utf-8')
+        except Exception:
+            result = raw.decode('latin-1', errors='ignore')
+        
+        if result.startswith('ENC:') and password:
+            try:
+                enc_data = base64.urlsafe_b64decode(result[4:])
+                salt = enc_data[:16]
+                encrypted = enc_data[16:]
+                key = derive_key(password, salt)
+                f = Fernet(key)
+                return f.decrypt(encrypted).decode('utf-8')
+            except Exception as e:
+                raise ValueError(f"كلمة السر خاطئة: {str(e)}")
+        
+        return result
+    except Exception as e:
+        raise ValueError(f"خطأ في استخراج النص: {str(e)}")
 
 # --- ميزات الخصوصية المتقدمة (Privacy & Steganography) ---
 
@@ -3577,34 +3608,37 @@ def check_leaked_emailpass(email: str, password: str) -> dict:
 def wave_lsb_encode(wav_bytes: bytes, secret_data: str, filename: str = "") -> bytes:
     """إخفاء نص في ملف صوتي (WAV LSB أو EOF للأنواع المضغوطة)."""
     try:
-        # Marker for extraction
+        # Marker for extraction with length header
+        secret_bytes = secret_data.encode('utf-8')
         marker = b'##TITAN_SECURE##'
-        full_secret = secret_data.encode('utf-8') + marker
+        secret_len = len(secret_bytes).to_bytes(4, byteorder='big')
+        full_secret = secret_len + secret_bytes + marker
 
         lower_name = (filename or '').lower()
-        eof_exts = ('.mp3', '.webm', '.ogg', '.m4a', '.aac')
+        eof_exts = ('.mp3', '.webm', '.ogg', '.m4a', '.aac', '.flac', '.m4b')
         if lower_name.endswith(eof_exts):
-            # EOF append mode for compressed formats and browser recordings
-            return wav_bytes + marker + secret_data.encode('utf-8')
+            # EOF append mode for compressed formats
+            return wav_bytes + marker + secret_len + secret_bytes
 
         # WAV Steganography: Modify frames
         try:
             with wave.open(io.BytesIO(wav_bytes), 'rb') as wav:
                 params = wav.getparams()
                 frames = bytearray(wav.readframes(wav.getnframes()))
-        except Exception:
+        except Exception as e:
             # Fallback for unknown/unsupported container types
-            return wav_bytes + marker + secret_data.encode('utf-8')
+            return wav_bytes + marker + secret_len + secret_bytes
 
         # Convert to bitstream
         bits = ''.join(format(b, '08b') for b in full_secret)
         
-        if len(bits) > len(frames):
-            raise ValueError("النص كبير جداً بالنسبة لملف الصوت المحدد!")
+        if len(bits) > len(frames) * 8:
+            raise ValueError(f"النص كبير جداً! يحتاج إلى {len(bits)} بت، الملف يوفر {len(frames) * 8} بت فقط")
 
-        # Apply LSB
+        # Apply LSB with error checking
         for i, bit in enumerate(bits):
-            frames[i] = (frames[i] & ~1) | int(bit)
+            if i < len(frames):
+                frames[i] = (frames[i] & ~1) | int(bit)
 
         out = io.BytesIO()
         with wave.open(out, 'wb') as wav_out:
@@ -3619,37 +3653,64 @@ def wave_lsb_decode(wav_bytes: bytes, filename: str = "") -> str:
     """استخراج النص المخفي من ملف صوتي (WAV LSB أو EOF)."""
     try:
         marker = b'##TITAN_SECURE##'
-
         lower_name = (filename or '').lower()
-        eof_exts = ('.mp3', '.webm', '.ogg', '.m4a', '.aac')
+        
+        # Try EOF marker extraction first (works for all formats)
+        if marker in wav_bytes:
+            try:
+                parts = wav_bytes.split(marker)
+                if len(parts) >= 2:
+                    # Try to read length header
+                    payload = parts[-1]
+                    if len(payload) >= 4:
+                        try:
+                            secret_len = int.from_bytes(payload[:4], byteorder='big')
+                            if 0 < secret_len <= len(payload) - 4:
+                                secret = payload[4:4+secret_len]
+                                return secret.decode('utf-8', errors='ignore')
+                        except Exception:
+                            pass
+                    # Fallback: try to decode the entire payload
+                    if payload:
+                        return payload.decode('utf-8', errors='ignore')
+            except Exception as e:
+                pass
+
+        # For compressed formats, always use EOF
+        eof_exts = ('.mp3', '.webm', '.ogg', '.m4a', '.aac', '.flac', '.m4b')
         if lower_name.endswith(eof_exts):
-            if marker in wav_bytes:
-                return wav_bytes.split(marker)[-1].decode('utf-8', errors='ignore')
             return "لم يتم العثور على بيانات مخفية في الملف الصوتي."
 
-        # WAV LSB Decode
+        # Try WAV LSB Decode for uncompressed WAV files
         try:
             with wave.open(io.BytesIO(wav_bytes), 'rb') as wav:
                 frames = bytearray(wav.readframes(wav.getnframes()))
-        except Exception:
-            # As a safe fallback, try EOF marker extraction
-            if marker in wav_bytes:
-                return wav_bytes.split(marker)[-1].decode('utf-8', errors='ignore')
+        except Exception as e:
             return "تعذر تحليل تنسيق الصوت أو لا توجد بيانات مخفية."
 
-        bits = [str(f & 1) for f in frames]
+        # Extract LSB bits
+        bits = [str(f & 1) for f in frames[:min(len(frames), 10000)]]
         byte_list = []
-        # Reconstruct bytes
-        for i in range(0, len(bits), 8):
-            if i + 8 > len(bits): break
+        
+        # Try to reconstruct bytes
+        for i in range(0, len(bits) - 7, 8):
             byte_val = int(''.join(bits[i:i+8]), 2)
             byte_list.append(byte_val)
+            # Check if we've found the marker
+            if len(byte_list) >= len(marker):
+                if bytes(byte_list[-len(marker):]) == marker:
+                    # Found marker, extract secret
+                    raw_result = bytes(byte_list[:-len(marker)])
+                    if len(raw_result) >= 4:
+                        try:
+                            secret_len = int.from_bytes(raw_result[:4], byteorder='big')
+                            if 0 < secret_len <= len(raw_result) - 4:
+                                secret = raw_result[4:4+secret_len]
+                                return secret.decode('utf-8', errors='ignore')
+                        except Exception:
+                            pass
         
-        raw_result = bytes(byte_list)
-        if marker in raw_result:
-            return raw_result.split(marker)[0].decode('utf-8', errors='ignore')
-        
-        return "لم يتم العثور على بصمة نص مخفي في ملف الصوت."
+        return "لم يتم العثور على بيانات مخفية في ملف الصوت."
     except Exception as e:
         return f"خطأ في تحليل البيانات: {str(e)}"
 
@@ -18239,8 +18300,8 @@ def audio_stego_decode_route():
         file_bytes = file.read()
         hidden_data = wave_lsb_decode(file_bytes, filename)
         add_audit_log("استخراج صوتي (Audio Stego)", f"محاولة استخراج من {filename}")
-        if "لم يتم العثور" in hidden_data or "خطأ" in hidden_data:
-             return jsonify({"success": True, "hidden_data": None, "error": hidden_data})
+        if not hidden_data or "لم يتم العثور" in hidden_data or "خطأ" in hidden_data or "تعذر" in hidden_data:
+             return jsonify({"success": True, "hidden_data": None, "error": hidden_data if hidden_data else "لم يتم العثور على بيانات مخفية"})
         return jsonify({"success": True, "hidden_data": hidden_data})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -18552,13 +18613,14 @@ def text_hide_encode_route():
         return jsonify({"success": False, "error": "الامتداد المدعوم هو TXT فقط"}), 400
 
     secret = (request.form.get('secret') or '').strip()
+    password = (request.form.get('password') or '').strip()
     if not secret:
         return jsonify({"success": False, "error": "النص السري مطلوب"}), 400
 
     try:
         content = file.read().decode('utf-8', errors='replace')
-        merged = hide_secret_in_txt(content, secret)
-        add_audit_log("TXT Hide", f"إخفاء نص داخل {filename}", username=session.get('username', ''))
+        merged = hide_secret_in_txt(content, secret, password)
+        add_audit_log("TXT Hide", f"إخفاء نص داخل {filename}" + (" (مشفر)" if password else ""), username=session.get('username', ''))
         return send_file(
             io.BytesIO(merged.encode('utf-8')),
             mimetype='text/plain; charset=utf-8',
@@ -18578,9 +18640,10 @@ def text_hide_decode_route():
     if not filename.lower().endswith('.txt'):
         return jsonify({"success": False, "error": "الامتداد المدعوم هو TXT فقط"}), 400
 
+    password = (request.form.get('password') or '').strip()
     try:
         content = file.read().decode('utf-8', errors='replace')
-        secret = extract_secret_from_txt(content)
+        secret = extract_secret_from_txt(content, password)
         add_audit_log("TXT Reveal", f"استخراج نص من {filename}", username=session.get('username', ''))
         return jsonify({"success": True, "secret": secret})
     except Exception as e:
@@ -19768,35 +19831,7 @@ def view_burn_note(note_id):
         ''', 404
 
 # --- مسارات الإضافات للحزمة الثالثة المتقدمة (Audio & Privacy) ---
-
-@app.route('/api/audio/stego/encode', methods=['POST'])
-def audio_stego_encode():
-    file = request.files['file']
-    filename = file.filename or 'audio.wav'
-    text = request.form['text']
-    try:
-        processed_data = wave_lsb_encode(file.read(), text, filename)
-        add_audit_log("إخفاء في الصوت 🎵", f"تم إخفاء بيانات في {filename}")
-        mimetype = 'audio/mpeg' if filename.lower().endswith('.mp3') else 'audio/wav'
-        return send_file(
-            io.BytesIO(processed_data),
-            mimetype=mimetype,
-            as_attachment=True,
-            download_name="stego_" + filename
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.route('/api/audio/stego/decode', methods=['POST'])
-def audio_stego_decode():
-    file = request.files['file']
-    filename = file.filename or 'audio.wav'
-    try:
-        decoded_text = wave_lsb_decode(file.read(), filename)
-        add_audit_log("استخراج من الصوت 🎵", f"محاولة فك تشفير {filename}")
-        return jsonify({"success": True, "hidden_data": decoded_text})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+# تم دمج المسارات المكررة - تم حذف النسخة المكررة من الملف
 
 @app.route('/api/pdf/clean', methods=['POST'])
 def pdf_clean_route():
