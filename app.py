@@ -2789,80 +2789,115 @@ def remove_image_metadata(img_bytes: bytes) -> bytes:
 
 def lsb_encode(img_bytes: bytes, secret_data: str) -> bytes:
     """إخفاء نص في بيانات الصورة (Least Significant Bit)"""
-    img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
-    width, height = img.size
-    
-    # تحويل النص لـ UTF-8 ثم لـ Binary مع علامة نهاية
-    binary_data = ''.join([format(b, "08b") for b in secret_data.encode('utf-8')]) + '1111111111111110'
-    
-    if len(binary_data) > width * height * 3:
-        raise ValueError("البيانات كبيرة جداً بالنسبة لهذه الصورة!")
+    try:
+        img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
+        width, height = img.size
         
-    pixels = img.load()
-    if pixels is None:
-        raise ValueError("تعذر الوصول إلى بيانات البكسلات في الصورة")
-    data_idx = 0
-    
-    for y in range(height):
-        for x in range(width):
-            if data_idx < len(binary_data):
-                r, g, b, a = pixels[x, y]  # type: ignore
-                # تعديل R
-                r = (r & ~1) | int(binary_data[data_idx])  # type: ignore
-                data_idx += 1
+        # تحويل النص لـ UTF-8 ثم لـ Binary مع علامة نهاية
+        binary_data = ''.join([format(b, "08b") for b in secret_data.encode('utf-8')]) + '1111111111111110'
+        
+        if len(binary_data) > width * height * 3:
+            raise ValueError(f"البيانات كبيرة جداً! الحد الأقصى {width * height * 3} بت، الحالي {len(binary_data)} بت")
+            
+        pixels = img.load()
+        if pixels is None:
+            raise ValueError("تعذر الوصول إلى بيانات البكسلات في الصورة")
+        
+        data_idx = 0
+        
+        for y in range(height):
+            for x in range(width):
                 if data_idx < len(binary_data):
+                    try:
+                        r, g, b, a = pixels[x, y]  # type: ignore
+                    except Exception:
+                        continue
+                    
+                    # تعديل R
+                    if data_idx < len(binary_data):
+                        r = (r & ~1) | int(binary_data[data_idx])  # type: ignore
+                        data_idx += 1
+                    
                     # تعديل G
-                    g = (g & ~1) | int(binary_data[data_idx])  # type: ignore
-                    data_idx += 1
-                if data_idx < len(binary_data):
+                    if data_idx < len(binary_data):
+                        g = (g & ~1) | int(binary_data[data_idx])  # type: ignore
+                        data_idx += 1
+                    
                     # تعديل B
-                    b = (b & ~1) | int(binary_data[data_idx])  # type: ignore
-                    data_idx += 1
-                pixels[x, y] = (r, g, b, a)
-            else:
+                    if data_idx < len(binary_data):
+                        b = (b & ~1) | int(binary_data[data_idx])  # type: ignore
+                        data_idx += 1
+                    
+                    try:
+                        pixels[x, y] = (r, g, b, a)
+                    except Exception:
+                        pass
+                else:
+                    break
+            
+            if data_idx >= len(binary_data):
                 break
-        if data_idx >= len(binary_data): break
         
-    out = io.BytesIO()
-    img.save(out, format="PNG") # PNG يحافظ على البكسلات بدقة
-    return out.getvalue()
+        # التحقق من أن جميع البيانات تم إدراجها
+        if data_idx < len(binary_data):
+            raise ValueError("فشل إدراج جميع البيانات في الصورة")
+        
+        out = io.BytesIO()
+        img.save(out, format="PNG", optimize=False)
+        out.seek(0)
+        return out.getvalue()
+    except Exception as e:
+        raise ValueError(f"فشل التشفير: {str(e)}")
 
 def lsb_decode(img_bytes: bytes) -> str:
     """استخراج النص المخفي من الصورة"""
-    img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
-    width, height = img.size
-    pixels = img.load()
-    if pixels is None:
-        return "تعذر قراءة بكسلات الصورة."
-    
-    bits: list[int] = []
-    for y in range(height):
-        for x in range(width):
-            r, g, b, a = pixels[x, y]  # type: ignore
-            bits.append(r & 1)  # type: ignore
-            bits.append(g & 1)
-            bits.append(b & 1)
-    
-    # Search for the end marker 1111111111111110 in the bitstream
-    END_MARKER = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0]
-    for i in range(len(bits) - 15):
-        if bits[i:i+16] == END_MARKER:  # type: ignore[misc]
-            # All bits before this marker are our message
-            data_bits: list[int] = bits[:i]  # type: ignore[misc]
-            # Only take complete bytes
-            num_bytes = len(data_bits) // 8
-            if num_bytes == 0:
-                return "لم يتم العثور على بيانات مخفية!"
-            byte_data = bytes([int(''.join(str(b) for b in data_bits[j*8:(j+1)*8]), 2) for j in range(num_bytes)])
-            try:
-                return byte_data.decode('utf-8')
-            except UnicodeDecodeError:
+    try:
+        img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
+        width, height = img.size
+        pixels = img.load()
+        if pixels is None:
+            return "تعذر قراءة بكسلات الصورة."
+        
+        bits: list[int] = []
+        for y in range(height):
+            for x in range(width):
                 try:
-                    return byte_data.decode('latin-1')
+                    r, g, b, a = pixels[x, y]  # type: ignore
+                    bits.append(r & 1)  # type: ignore
+                    bits.append(g & 1)
+                    bits.append(b & 1)
                 except Exception:
-                    return "فشل استخراج النص: الصورة لا تحتوي على بيانات مخفية بواسطة هذه الأداة."
-                
-    return "لم يتم العثور على بيانات مخفية في هذه الصورة!"
+                    continue
+        
+        if len(bits) < 16:
+            return "لم يتم العثور على بيانات مخفية في هذه الصورة!"
+        
+        # Search for the end marker 1111111111111110 in the bitstream
+        END_MARKER = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0]
+        for i in range(len(bits) - 15):
+            if bits[i:i+16] == END_MARKER:  # type: ignore[misc]
+                # All bits before this marker are our message
+                data_bits: list[int] = bits[:i]  # type: ignore[misc]
+                # Only take complete bytes
+                num_bytes = len(data_bits) // 8
+                if num_bytes == 0:
+                    return "لم يتم العثور على بيانات مخفية!"
+                try:
+                    byte_data = bytes([int(''.join(str(b) for b in data_bits[j*8:(j+1)*8]), 2) for j in range(num_bytes)])
+                    # محاولة فك التشفير
+                    try:
+                        return byte_data.decode('utf-8')
+                    except UnicodeDecodeError:
+                        try:
+                            return byte_data.decode('latin-1')
+                        except Exception:
+                            return byte_data.decode('utf-8', errors='ignore')
+                except Exception as be:
+                    return f"فشل معالجة البيانات: {str(be)}"
+                    
+        return "لم يتم العثور على بيانات مخفية في هذه الصورة!"
+    except Exception as e:
+        return f"خطأ في قراءة الصورة: {str(e)}"
 
 
 # --- فحص الإيميل عبر IPQualityScore API ---
@@ -5528,6 +5563,29 @@ HTML_TEMPLATE = """
                                         <button onclick="processText('decrypt')" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg font-bold border border-slate-600">فك التشفير</button>
                                         <button onclick="copyCryptText()" class="titan-gradient p-2 rounded-lg font-bold">نسخ النتائج</button>
                                         <button onclick="clearCryptText()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-2 text-sm font-bold">مسح سريع</button>
+                                    </div>
+                                </div>
+
+                                <!-- NEW: Encrypt Text in File -->
+                                <div class="rounded-2xl border border-amber-900/40 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-amber-950/20 p-4 mt-4">
+                                    <h3 class="text-sm font-black text-amber-300 mb-3">🔐 تشفير النص في ملف نصي</h3>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label class="block text-xs text-gray-400 mb-1">النص المراد تشفيره</label>
+                                            <textarea id="encryptFileText" rows="3" class="w-full p-3 rounded-xl bg-slate-950/80 border border-amber-900/40 mb-2 text-sm outline-none focus:ring-2 focus:ring-amber-600/50" placeholder="اكتب النص الذي تريد تشفيره..."></textarea>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-400 mb-1">كلمة السر</label>
+                                            <input type="password" id="encryptFilePass" class="w-full p-3 rounded-xl bg-slate-950/80 border border-amber-900/40 text-sm outline-none focus:ring-2 focus:ring-amber-600/50" placeholder="أدخل كلمة سر قوية...">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-400 mb-1">ملف نصي اختياري (أو سيتم إنشاء ملف جديد)</label>
+                                            <input type="file" id="encryptFileInput" accept=".txt" class="w-full text-xs text-gray-400 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-600/10 file:text-amber-400 hover:file:bg-amber-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                                        </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            <button onclick="encryptTextInFile()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 p-2 rounded-lg font-bold">تشفير وحفظ 🔒</button>
+                                            <button onclick="decryptTextFromFile()" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg font-bold border border-slate-600">فك التشفير 🔓</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -12255,6 +12313,61 @@ HTML_TEMPLATE = """
             if(data.error) titanAlert(data.error); else document.getElementById('cryptText').value = data.result;
         }
 
+        async function encryptTextInFile() {
+            const text = document.getElementById('encryptFileText').value.trim();
+            const pass = document.getElementById('encryptFilePass').value.trim();
+            const fileInput = document.getElementById('encryptFileInput');
+            
+            if (!text) return titanAlert('يرجى إدخال النص المراد تشفيره');
+            if (!pass) return titanAlert('يرجى إدخال كلمة السر');
+            
+            const formData = new FormData();
+            formData.append('text', text);
+            formData.append('password', pass);
+            if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
+            
+            try {
+                const res = await fetch('/api/text/encrypt-in-file', { method: 'POST', body: formData });
+                if (!res.ok) throw new Error((await res.json()).error || 'فشل التشفير');
+                
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'encrypted_text.txt';
+                a.click();
+                
+                titanAlert('✅ تم تشفير النص وحفظ الملف بنجاح');
+                document.getElementById('encryptFileText').value = '';
+            } catch (e) {
+                titanAlert('❌ ' + e.message);
+            }
+        }
+
+        async function decryptTextFromFile() {
+            const pass = document.getElementById('encryptFilePass').value.trim();
+            const fileInput = document.getElementById('encryptFileInput');
+            
+            if (!fileInput.files[0]) return titanAlert('يرجى اختيار ملف');
+            if (!pass) return titanAlert('يرجى إدخال كلمة السر');
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('password', pass);
+            
+            try {
+                const res = await fetch('/api/text/decrypt-from-file', { method: 'POST', body: formData });
+                const data = await res.json();
+                
+                if (data.error) throw new Error(data.error);
+                
+                document.getElementById('encryptFileText').value = data.text;
+                titanAlert('✅ تم فك التشفير بنجاح');
+            } catch (e) {
+                titanAlert('❌ ' + e.message);
+            }
+        }
+
         function _cryptAdvisorRenderBubble(role, text) {
             const flow = document.getElementById('cryptAiChatFlow');
             if (!flow) return;
@@ -17613,7 +17726,8 @@ HTML_TEMPLATE = """
             const src = 'data:image/png;base64,' + d.qr;
             document.getElementById('qrImg').src = src;
             document.getElementById('qrDownload').href = src;
-            document.getElementById('qrResult').classList.remove('hidden');
+            document.getElementById('qrResult').classList.add('hidden');
+            document.getElementById('qrResult2').classList.remove('hidden');
         }
 
         async function decodeQR() {
@@ -18197,17 +18311,22 @@ def stego_encode_route():
 def stego_decode_route():
     file = request.files.get('file')
     if not file:
-        return jsonify({"error": "يرجى اختيار صورة أولاً"}), 400
+        return jsonify({"error": "يرجى اختيار صورة أولاً", "success": False}), 400
     filename = file.filename or 'image.png'
     try:
         raw = file.read()
         if not _looks_like_image_bytes(raw):
-            return jsonify({"error": "الملف المرفوع ليس صورة صالحة"}), 400
+            return jsonify({"error": "الملف المرفوع ليس صورة صالحة", "success": False}), 400
         decoded_text = lsb_decode(raw)
-        add_audit_log("فك إخفاء (Stego)", f"محاولة استخراج نص من {filename}")
-        return jsonify({"result": decoded_text})
+        # التحقق من الأخطاء الشائعة في الاستخراج
+        error_keywords = ["لم يتم العثور", "تعذر", "فشل في", "خطأ في"]
+        is_error = any(keyword in decoded_text for keyword in error_keywords)
+        if is_error:
+            return jsonify({"error": decoded_text, "success": False}), 400
+        add_audit_log("فك إخفاء (Stego)", f"تم استخراج نص بنجاح من {filename}")
+        return jsonify({"result": decoded_text, "success": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": str(e), "success": False}), 400
 
 @app.route('/api/audio/stego/encode', methods=['POST'])
 def audio_stego_encode_route():
@@ -18551,7 +18670,8 @@ def text_hide_encode_route():
     if not filename.lower().endswith('.txt'):
         return jsonify({"success": False, "error": "الامتداد المدعوم هو TXT فقط"}), 400
 
-    secret = (request.form.get('secret') or '').strip()
+    # قبول 'text' أو 'secret' من الطلب
+    secret = (request.form.get('text') or request.form.get('secret') or '').strip()
     if not secret:
         return jsonify({"success": False, "error": "النص السري مطلوب"}), 400
 
@@ -18585,6 +18705,75 @@ def text_hide_decode_route():
         return jsonify({"success": True, "secret": secret})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
+
+@app.route('/api/text/encrypt-in-file', methods=['POST'])
+def encrypt_text_in_file():
+    """تشفير نص وحفظه في ملف (مع ملف أساسي اختياري)"""
+    text = (request.form.get('text') or '').strip()
+    password = (request.form.get('password') or '').strip()
+    
+    if not text or not password:
+        return jsonify({"error": "النص وكلمة السر مطلوبان"}), 400
+    
+    try:
+        # تشفير النص
+        encrypted = encrypt_text_with_method(text, password, 'fernet', {})
+        
+        # قراءة محتوى الملف الأساسي إن وجد
+        base_content = ""
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and file.filename:
+                base_content = file.read().decode('utf-8', errors='replace')
+        
+        # إنشاء ملف النتيجة
+        final_content = base_content + "\n\n" + "=== ENCRYPTED TEXT START ===" + "\n" + encrypted + "\n" + "=== ENCRYPTED TEXT END ===" if base_content else "=== ENCRYPTED TEXT START ===" + "\n" + encrypted + "\n" + "=== ENCRYPTED TEXT END ==="
+        
+        add_audit_log("تشفير النص في ملف", "تم تشفير نص وحفظه في ملف", username=session.get('username', ''))
+        
+        return send_file(
+            io.BytesIO(final_content.encode('utf-8')),
+            mimetype='text/plain; charset=utf-8',
+            as_attachment=True,
+            download_name='encrypted_text.txt'
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/text/decrypt-from-file', methods=['POST'])
+def decrypt_text_from_file():
+    """فك تشفير نص من ملف"""
+    if 'file' not in request.files:
+        return jsonify({"error": "يرجى اختيار ملف"}), 400
+    
+    password = (request.form.get('password') or '').strip()
+    if not password:
+        return jsonify({"error": "كلمة السر مطلوبة"}), 400
+    
+    try:
+        file = request.files['file']
+        content = file.read().decode('utf-8', errors='replace')
+        
+        # البحث عن النص المشفر
+        start_marker = "=== ENCRYPTED TEXT START ==="
+        end_marker = "=== ENCRYPTED TEXT END ==="
+        
+        start_idx = content.find(start_marker)
+        end_idx = content.find(end_marker)
+        
+        if start_idx == -1 or end_idx == -1:
+            return jsonify({"error": "لم يتم العثور على نص مشفر في الملف"}), 400
+        
+        encrypted_text = content[start_idx + len(start_marker):end_idx].strip()
+        
+        # فك التشفير
+        decrypted = decrypt_text_with_method(encrypted_text, password, 'auto')
+        
+        add_audit_log("فك تشفير النص من ملف", "تم فك تشفير نص بنجاح", username=session.get('username', ''))
+        
+        return jsonify({"text": decrypted, "success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route('/api/ip', methods=['POST'])
 def ip_check():
