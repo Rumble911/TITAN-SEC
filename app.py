@@ -19915,7 +19915,7 @@ def text_hide_encode_route():
     if not filename.lower().endswith('.txt'):
         return jsonify({"success": False, "error": "الامتداد المدعوم هو TXT فقط"}), 400
 
-    secret = (request.form.get('secret') or request.form.get('text') or '').strip()
+    secret = (request.form.get('secret') or '').strip()
     if not secret:
         return jsonify({"success": False, "error": "النص السري مطلوب"}), 400
 
