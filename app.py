@@ -5615,10 +5615,6 @@ HTML_TEMPLATE = """
                                      <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">2. الرسالة المراد إخفاؤها</label>
                                      <textarea id="txtSecretText" rows="3" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-emerald-500 outline-none transition-all" placeholder="اكتب رسالتك السرية هنا..."></textarea>
                                  </div>
-                                 <div>
-                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">3. كلمة السر (اختيارية - للتشفير الإضافي)</label>
-                                     <input type="password" id="txtEncryptPass" placeholder="أدخل كلمة سر (أو اترك فارغة)..." class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-emerald-500 outline-none transition-all">
-                                 </div>
                                  <button onclick="processFileLab('encode')" class="w-full titan-gradient py-3 rounded-xl font-black shadow-lg shadow-emerald-900/20 transition-transform active:scale-95">إخفاء البيانات 🔒</button>
                              </div>
                         </div>
@@ -5630,10 +5626,6 @@ HTML_TEMPLATE = """
                                  <div>
                                      <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">ملف TXT المشفر</label>
                                      <input type="file" id="txtFileDecrypt" accept=".txt" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-600/10 file:text-amber-400 hover:file:bg-amber-600/20 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
-                                 </div>
-                                 <div>
-                                     <label class="block text-[10px] text-gray-500 mb-1 uppercase tracking-wider">كلمة السر (إذا كان مشفراً)</label>
-                                     <input type="password" id="txtDecodePass" placeholder="أدخل كلمة السر..." class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm focus:border-amber-500 outline-none transition-all">
                                  </div>
                                  <button onclick="processFileLab('decode')" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg shadow-amber-900/20 transition-transform active:scale-95">استخراج البيانات 🔓</button>
                                  <div class="mt-4 p-4 rounded-xl bg-slate-950/80 border border-slate-800 min-h-[100px]">
@@ -18016,7 +18008,6 @@ UUID: ${getVal('idUuid')}
                     if (!file) return titanAlert('يرجى اختيار ملف للتحليل.');
 
                     formData.append('file', file);
-                    if (pass) formData.append('password', pass);
                     const res = await fetch(config.urlDecode, { method: 'POST', body: formData });
                     const data = await res.json();
                     if (!data.success) throw new Error(data.error || 'فشل الاستخراج');
@@ -18142,8 +18133,8 @@ UUID: ${getVal('idUuid')}
 
         async function processFileLab(action) {
             await _commonStegoProcess('text', action, {
-                fileIn: 'txtFileEncrypt', textIn: 'txtSecretText', passIn: 'txtEncryptPass',
-                fileOut: 'txtFileDecrypt', passOut: 'txtDecodePass', resultDiv: 'txtDecodedResult',
+                fileIn: 'txtFileEncrypt', textIn: 'txtSecretText', passIn: null,
+                fileOut: 'txtFileDecrypt', passOut: null, resultDiv: 'txtDecodedResult',
                 urlEncode: '/api/text-hide/encode', urlDecode: '/api/text-hide/decode'
             });
         }
@@ -18683,17 +18674,11 @@ def text_hide_encode_route():
     secret = (request.form.get('text') or request.form.get('secret') or '').strip()
     if not secret:
         return jsonify({"success": False, "error": "النص السري مطلوب"}), 400
-    
-    password = (request.form.get('password') or '').strip()
 
     try:
-        # تشفير النص إذا تم إدخال كلمة سر
-        if password:
-            secret = encrypt_text_with_method(secret, password, 'fernet', {})
-        
         content = file.read().decode('utf-8', errors='replace')
         merged = hide_secret_in_txt(content, secret)
-        add_audit_log("TXT Hide", f"إخفاء نص داخل {filename}" + (" (مشفر)" if password else ""), username=session.get('username', ''))
+        add_audit_log("TXT Hide", f"إخفاء نص داخل {filename}", username=session.get('username', ''))
         return send_file(
             io.BytesIO(merged.encode('utf-8')),
             mimetype='text/plain; charset=utf-8',
@@ -18712,22 +18697,10 @@ def text_hide_decode_route():
     filename = file.filename or 'text.txt'
     if not filename.lower().endswith('.txt'):
         return jsonify({"success": False, "error": "الامتداد المدعوم هو TXT فقط"}), 400
-    
-    password = (request.form.get('password') or '').strip()
 
     try:
         content = file.read().decode('utf-8', errors='replace')
         secret = extract_secret_from_txt(content)
-        
-        # إذا كان النص مشفراً (يبدأ بـ TITAN_SECURE:)
-        if secret and secret.startswith('TITAN_SECURE:'):
-            if not password:
-                return jsonify({"success": False, "error": "المحتوى مشفر. يرجى إدخال كلمة السر."}), 400
-            try:
-                secret = decrypt_text_with_method(secret, password, 'auto')
-            except Exception as decrypt_err:
-                return jsonify({"success": False, "error": f"فشل فك التشفير: كلمة السر قد تكون خاطئة"}), 400
-        
         add_audit_log("TXT Reveal", f"استخراج نص من {filename}", username=session.get('username', ''))
         return jsonify({"success": True, "secret": secret})
     except Exception as e:
